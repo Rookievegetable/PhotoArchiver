@@ -1,0 +1,12 @@
+PySide6
+pandas
+openpyxl
+opencv-python
+Pillow
+insightface
+onnxruntime
+SQLAlchemy
+alembic
+loguru
+watchdog
+pydantic-settings
