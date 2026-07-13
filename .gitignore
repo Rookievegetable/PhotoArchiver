@@ -216,3 +216,64 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# ============================================================
+# PhotoArchiver
+# ============================================================
+
+# AI Models
+models/
+
+# Application logs
+logs/
+
+# Runtime cache
+temp/
+tmp/
+
+# Runtime database
+*.db
+*.sqlite
+*.sqlite3
+
+# Local configuration
+config/local.toml
+config/local.yaml
+config/local.yml
+
+# User environment
+.env.local
+
+# Output
+output/
+
+# Archive workspace
+workspace/
+
+# Face cache
+face_cache/
+
+# Thumbnail cache
+thumbnails/
+
+# OCR cache
+ocr_cache/
+
+# Export
+exports/
+
+# Generated reports
+reports/
+
+# Benchmark
+benchmark/
+
+# IDE
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
