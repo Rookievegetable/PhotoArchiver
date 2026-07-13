@@ -11,6 +11,11 @@ from photo_archiver.infrastructure.filesystem import (
     LocalPhotoFileScanner,
     PillowPhotoMetadataReader,
 )
+from photo_archiver.infrastructure.image import (
+    ContentHashCalculator,
+    PillowThumbnailGenerator,
+    ThumbnailCache,
+)
 from photo_archiver.infrastructure.importers import ExcelPersonImportReader, TxtPersonImportReader
 from photo_archiver.infrastructure.repositories import (
     InMemoryFolderRepository,
@@ -19,15 +24,18 @@ from photo_archiver.infrastructure.repositories import (
 )
 
 __all__ = [
+    "ContentHashCalculator",
     "ExcelPersonImportReader",
     "InMemoryFolderRepository",
     "InMemoryPersonRepository",
     "InMemoryPhotoRepository",
     "LocalPhotoFileScanner",
     "PillowPhotoMetadataReader",
+    "PillowThumbnailGenerator",
     "SQLiteConnectionProvider",
     "SQLiteFolderRepository",
     "SQLitePersonRepository",
     "SQLitePhotoRepository",
     "TxtPersonImportReader",
+    "ThumbnailCache",
 ]
