@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 import sqlite3
+import threading
 from typing import Optional
 
 
@@ -30,23 +31,42 @@ class SQLiteConnectionProvider:
     """Create SQLite connections and initialize the repository schema.
 
     When a transaction is active (entered via :meth:`transaction`), :meth:`connect`
-    reuses the single active connection so that repository operations participate
-    in the same transaction boundary and commit atomically on success.
+    reuses the single active connection bound to the **current thread** so that
+    repository operations participate in the same transaction boundary and commit
+    atomically on success. Per-thread binding keeps ``sqlite3.Connection`` usage
+    single-threaded (sqlite3.Connection is not thread-safe across threads) while
+    still allowing concurrent worker tasks to each open their own transaction.
     """
 
     def __init__(self, database_path: Path | str) -> None:
-        """Store the SQLite database path."""
+        """Store the SQLite database path and per-thread transaction state."""
         self.database_path = Path(database_path) if database_path != ":memory:" else Path(":memory:")
-        self._active_connection: Optional[sqlite3.Connection] = None
+        self._thread_local = threading.local()
+
+    @property
+    def _active_connection(self) -> Optional[sqlite3.Connection]:
+        """Return the transaction connection bound to the current thread, if any."""
+        return getattr(self._thread_local, "connection", None)
+
+    @_active_connection.setter
+    def _active_connection(self, value: Optional[sqlite3.Connection]) -> None:
+        """Bind or clear the transaction connection for the current thread."""
+        if value is None:
+            if hasattr(self._thread_local, "connection"):
+                del self._thread_local.connection
+        else:
+            self._thread_local.connection = value
 
     def connect(self) -> sqlite3.Connection | _SharedConnection:
         """Return a SQLite connection configured for repository use.
 
-        If a transaction is active, returns a wrapper bound to the shared connection
-        so callers can use ``with`` without closing the transaction-owned connection.
+        If a transaction is active on the current thread, returns a wrapper bound
+        to the shared connection so callers can use ``with`` without closing the
+        transaction-owned connection.
         """
-        if self._active_connection is not None:
-            return _SharedConnection(self._active_connection)
+        active = self._active_connection
+        if active is not None:
+            return _SharedConnection(active)
         connection = sqlite3.connect(str(self.database_path))
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
@@ -56,12 +76,13 @@ class SQLiteConnectionProvider:
     def transaction(self) -> Iterator[sqlite3.Connection]:
         """Bind a single connection as the transaction scope for nested repository calls.
 
-        On normal exit the connection is committed; on exception it is rolled back.
-        The connection is closed in either case and the provider is restored to
-        per-call connection mode.
+        The connection is bound to the current thread; concurrent threads may open
+        their own transactions independently. On normal exit the connection is
+        committed; on exception it is rolled back. The connection is closed in
+        either case and the provider is restored to per-call connection mode.
         """
         if self._active_connection is not None:
-            raise RuntimeError("Nested SQLite transactions are not supported")
+            raise RuntimeError("Nested SQLite transactions are not supported on a single thread")
 
         connection = sqlite3.connect(str(self.database_path))
         connection.row_factory = sqlite3.Row
