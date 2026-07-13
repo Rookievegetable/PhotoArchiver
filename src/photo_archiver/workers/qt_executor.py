@@ -1,0 +1,76 @@
+"""Qt executor for running worker tasks outside the UI thread."""
+
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
+
+from photo_archiver.workers.events import (
+    TaskCancelled,
+    TaskCompleted,
+    TaskEvent,
+    TaskFailed,
+    TaskProgress,
+    TaskStarted,
+)
+from photo_archiver.workers.task import WorkerTask, WorkerTaskCancelled
+
+
+class QtWorkerSignals(QObject):
+    """Qt signals emitted from worker task events."""
+
+    event = Signal(object)
+    started = Signal(object)
+    progress = Signal(object)
+    completed = Signal(object)
+    failed = Signal(object)
+    cancelled = Signal(object)
+
+
+class QtWorkerRunnable(QRunnable):
+    """QRunnable adapter that executes a WorkerTask in a Qt thread pool."""
+
+    def __init__(self, task: WorkerTask[object]) -> None:
+        """Initialize the runnable with a worker task."""
+        super().__init__()
+        self.task = task
+        self.signals = QtWorkerSignals()
+        self.task.subscribe(self._emit_task_event)
+
+    def cancel(self, reason: str = "") -> None:
+        """Request cooperative cancellation for the wrapped task."""
+        self.task.cancel(reason)
+
+    @Slot()
+    def run(self) -> None:
+        """Run the task in a background Qt thread."""
+        try:
+            self.task.run()
+        except WorkerTaskCancelled:
+            return
+        except Exception:
+            return
+
+    def _emit_task_event(self, event: TaskEvent) -> None:
+        self.signals.event.emit(event)
+        if isinstance(event, TaskStarted):
+            self.signals.started.emit(event)
+        elif isinstance(event, TaskProgress):
+            self.signals.progress.emit(event)
+        elif isinstance(event, TaskCompleted):
+            self.signals.completed.emit(event)
+        elif isinstance(event, TaskFailed):
+            self.signals.failed.emit(event)
+        elif isinstance(event, TaskCancelled):
+            self.signals.cancelled.emit(event)
+
+
+class QtWorkerExecutor:
+    """Submit worker tasks to a Qt thread pool."""
+
+    def __init__(self, thread_pool: QThreadPool | None = None) -> None:
+        """Initialize the executor with the provided or global thread pool."""
+        self._thread_pool = thread_pool or QThreadPool.globalInstance()
+
+    def submit(self, task: WorkerTask[object]) -> QtWorkerRunnable:
+        """Submit a task for background execution and return its runnable handle."""
+        runnable = QtWorkerRunnable(task)
+        self._thread_pool.start(runnable)
+        return runnable
