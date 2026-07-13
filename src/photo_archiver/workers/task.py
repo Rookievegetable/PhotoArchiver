@@ -1,9 +1,11 @@
 """Worker task primitives.
 
 The worker layer coordinates long-running application use cases and emits
-progress-friendly events for presentation adapters. It intentionally contains no
-domain decisions and does not depend on PySide6, so it can be tested
-synchronously and later wrapped by Qt-specific executors.
+progress-friendly events for presentation adapters. This module intentionally
+contains no domain decisions and does not depend on PySide6, so it can be
+tested synchronously and later wrapped by Qt-specific executors in
+``qt_executor.py`` (per DEP-040 the Qt threading boundary is authorized for
+the workers layer).
 """
 
 from abc import ABC, abstractmethod

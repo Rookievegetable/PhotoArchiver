@@ -2,7 +2,7 @@
 
 from photo_archiver.application.commands import ImportPeopleCommand, ScanAndRegisterPhotosCommand
 from photo_archiver.application.dtos import ImportPeopleResult, ScanAndRegisterPhotosResult
-from photo_archiver.application.services import ScanAndRegisterPhotosService
+from photo_archiver.application.ports import ProgressReporter
 from photo_archiver.application.use_cases import ImportPeopleUseCase, ScanAndRegisterPhotosUseCase
 from photo_archiver.workers.task import WorkerTask
 
@@ -44,11 +44,17 @@ class ScanAndRegisterPhotosTask(WorkerTask[ScanAndRegisterPhotosResult]):
         self._command = command
 
     def execute(self) -> ScanAndRegisterPhotosResult:
-        """Execute the scan use case with per-item progress streamed through the task."""
+        """Execute the scan use case with per-item progress streamed through the task.
+
+        Capability-sniffs for ``bind_progress_reporter`` via ``getattr`` so the
+        worker layer depends only on the ``ScanAndRegisterPhotosUseCase`` Protocol
+        and the ``ProgressReporter`` port, never on a concrete service class.
+        """
         self.raise_if_cancelled()
         self.report_progress("Scanning photos")
-        if isinstance(self._use_case, ScanAndRegisterPhotosService):
-            with self._use_case.bind_progress_reporter(self):
+        binder = getattr(self._use_case, "bind_progress_reporter", None)
+        if binder is not None:
+            with binder(self):
                 result = self._use_case.execute(self._command)
         else:
             result = self._use_case.execute(self._command)

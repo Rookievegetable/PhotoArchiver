@@ -4,8 +4,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from loguru import logger
+
 from photo_archiver.application.commands import ScanAndRegisterPhotosCommand
-from photo_archiver.application.dtos import ScanAndRegisterPhotosResult
+from photo_archiver.application.dtos import PhotoScanItem, ScanAndRegisterPhotosResult
 from photo_archiver.application.ports import (
     PhotoFileScanner,
     PhotoMetadataReader,
@@ -15,6 +17,8 @@ from photo_archiver.application.ports import (
 from photo_archiver.application.use_cases import ScanAndRegisterPhotosUseCase
 from photo_archiver.domain import Folder, FolderRepository, Photo, PhotoPath, PhotoPathBase, PhotoRepository
 
+# Report progress at most every N items to avoid flooding the event stream.
+# First and last items always report so small batches stay visible to the UI.
 _PROGRESS_REPORT_INTERVAL = 10
 
 
@@ -49,6 +53,7 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
                 supported_extensions=command.supported_extensions,
             )
         except OSError as exc:
+            logger.warning("Scan failed for {}: {}", folder_path, exc)
             return ScanAndRegisterPhotosResult(failed_count=1, errors=(str(exc),))
 
         if self._unit_of_work is not None:
@@ -61,7 +66,7 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
         self,
         folder_path: Path,
         display_name: str | None,
-        scan_items: list,
+        scan_items: list[PhotoScanItem],
     ) -> ScanAndRegisterPhotosResult:
         """Run the registration loop within (or outside) a unit-of-work scope."""
         total = len(scan_items)
@@ -112,8 +117,17 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
         )
 
     def _report(self, current: int, total: int, message: str) -> None:
-        """Forward progress to the reporter when one is bound."""
-        if self._progress_reporter is None or current % _PROGRESS_REPORT_INTERVAL != 0:
+        """Forward progress to the reporter when one is bound.
+
+        Always reports the first and last items so small batches (total below
+        the interval) still surface visible progress to the UI; intermediate
+        items report every ``_PROGRESS_REPORT_INTERVAL`` steps to avoid flooding.
+        """
+        if self._progress_reporter is None:
+            return
+        is_boundary = current == 1 or current == total
+        is_interval = current % _PROGRESS_REPORT_INTERVAL == 0
+        if not (is_boundary or is_interval):
             return
         self._progress_reporter.report(current, total, message)
 

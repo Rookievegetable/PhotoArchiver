@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -81,14 +80,14 @@ class MainWindow(QMainWindow):
             return
         self._progress.setValue(0)
         self._status_label.setText(f"Scanning {folder} ...")
-        self._scan_controller.scan_folder(Path(folder))
-        if self._scan_controller._current_runnable is not None:
-            self._scan_controller.wire(self._scan_controller._current_runnable)
-            signals = self._scan_controller._current_runnable.signals
-            signals.started.connect(self._on_started)
-            signals.progress.connect(self._on_progress)
-            signals.completed.connect(self._on_completed)
-            signals.failed.connect(self._on_failed)
+        runnable = self._scan_controller.scan_folder(Path(folder))
+        ScanController.connect_signals(
+            runnable,
+            self._on_started,
+            self._on_progress,
+            self._on_completed,
+            self._on_failed,
+        )
 
     def _on_started(self, event: TaskStarted) -> None:
         """Reflect task start in the status bar."""
@@ -114,4 +113,4 @@ class MainWindow(QMainWindow):
         """Surface task failure in a modal and reset progress."""
         self._progress.setValue(0)
         self._status_label.setText("Scan failed.")
-        QMessageBox.warning(self, "Scan Failed", str(event.error))
+        QMessageBox.warning(self, "Scan Failed", "The scan could not complete. Check the log for details.")
