@@ -4,6 +4,9 @@ from photo_archiver.infrastructure.database.sqlite_connection import SQLiteConne
 from photo_archiver.infrastructure.database.sqlite_folder_repository import SQLiteFolderRepository
 from photo_archiver.infrastructure.database.sqlite_person_repository import SQLitePersonRepository
 from photo_archiver.infrastructure.database.sqlite_photo_repository import SQLitePhotoRepository
+from photo_archiver.infrastructure.database.sqlite_recognition_repository import (
+    SQLiteRecognitionRepository,
+)
 from photo_archiver.infrastructure.database.sqlite_unit_of_work import SQLiteUnitOfWork
 
 __all__ = [
@@ -11,5 +14,6 @@ __all__ = [
     "SQLiteFolderRepository",
     "SQLitePersonRepository",
     "SQLitePhotoRepository",
+    "SQLiteRecognitionRepository",
     "SQLiteUnitOfWork",
 ]

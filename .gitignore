@@ -220,8 +220,14 @@ __marimo__/
 # PhotoArchiver
 # ============================================================
 
-# AI Models
+# AI Models — fetched via scripts/download_models.py, never committed
 models/
+resources/models/*.onnx
+resources/models/*.params
+resources/models/*.bin
+resources/models/*.xml
+resources/models/*.zip
+resources/models/*.tar.gz
 
 # Application logs
 logs/

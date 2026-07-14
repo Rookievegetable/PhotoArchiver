@@ -144,6 +144,22 @@ class SQLiteConnectionProvider:
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_photos_folder_id ON photos(folder_id);
+
+                CREATE TABLE IF NOT EXISTS recognition_results (
+                    id TEXT PRIMARY KEY,
+                    photo_id TEXT NOT NULL,
+                    person_id TEXT,
+                    status TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(photo_id) REFERENCES photos(id) ON DELETE CASCADE,
+                    FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_recognition_results_photo_id
+                    ON recognition_results(photo_id);
+                CREATE INDEX IF NOT EXISTS idx_recognition_results_person_id
+                    ON recognition_results(person_id);
                 """
             )
-            connection.execute("PRAGMA user_version = 1")
+            connection.execute("PRAGMA user_version = 2")

@@ -1,10 +1,11 @@
-"""Contract tests for the Step 8 recognition ports and stub detector.
+"""Contract tests for the Step 8 recognition ports.
 
 These tests verify the three ``FaceDetector`` / ``FaceRecognizer`` /
 ``PersonMatcher`` ports are runtime-checkable Protocols and that minimal
-adapters satisfy them. They also lock the :class:`InsightFaceDetector` stub
-contract so Step 9 cannot silently break the public API when it wires the
-real model.
+adapters satisfy them. Step 9 replaced the InsightFaceDetector stub with
+the real InsightFace-backed detector, so the detector contract is now
+verified through ``InsightFaceDetector.model_available`` rather than a
+bare constructor call — the real detector needs a loaded model pack.
 """
 
 from pathlib import Path
@@ -12,7 +13,7 @@ from uuid import uuid4
 
 import pytest
 
-from photo_archiver.ai import FaceDetectionUnavailable, InsightFaceDetector
+from photo_archiver.ai import InsightFaceDetector
 from photo_archiver.application.dtos import (
     FaceDetectionItem,
     FaceDetectionResult,
@@ -69,17 +70,22 @@ def test_person_matcher_is_runtime_checkable_protocol() -> None:
     assert isinstance(_MatcherImpl(), PersonMatcher)
 
 
-def test_insightface_detector_satisfies_face_detector_port() -> None:
-    """The Step 8 stub detector must conform to the FaceDetector port."""
-    detector = InsightFaceDetector()
-    assert isinstance(detector, FaceDetector)
+def test_insightface_detector_model_available_returns_false_for_missing_dir(
+    tmp_path: Path,
+) -> None:
+    """model_available must return False when the model pack is absent."""
+    missing = tmp_path / "nonexistent_models"
+    assert InsightFaceDetector.model_available(missing) is False
 
 
-def test_insightface_detector_stub_raises_detection_unavailable() -> None:
-    """The stub detector must reject detection until Step 9 wires the model."""
-    detector = InsightFaceDetector()
-    with pytest.raises(FaceDetectionUnavailable):
-        detector.detect(Path("/nonexistent/photo.jpg"))
+def test_insightface_detector_from_model_path_raises_model_not_found(
+    tmp_path: Path,
+) -> None:
+    """from_model_path must raise ModelNotFound when the pack is missing."""
+    from photo_archiver.ai import ModelNotFound
+
+    with pytest.raises(ModelNotFound):
+        InsightFaceDetector.from_model_path(tmp_path / "empty_models")
 
 
 def test_face_box_rejects_invalid_geometry() -> None:

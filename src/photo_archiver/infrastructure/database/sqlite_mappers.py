@@ -6,6 +6,7 @@ from sqlite3 import Row
 from uuid import UUID
 
 from photo_archiver.domain import Folder, Person, PersonIdentity, Photo, PhotoMetadata, PhotoPath
+from photo_archiver.domain.entities import MatchStatus, RecognitionResult
 from photo_archiver.domain.value_objects import PhotoPathBase
 
 
@@ -88,3 +89,23 @@ def photo_from_row(row: Row) -> Photo:
         original_name=row["original_name"],
         created_at=text_to_datetime(row["created_at"]),
     )
+
+
+def recognition_result_from_row(row: Row) -> RecognitionResult:
+    """Convert a SQLite row to a RecognitionResult entity.
+
+    The entity is rebuilt in the already-finalized state when ``status`` is
+    ``approved`` or ``rejected`` by directly setting the field, since the
+    public ``approve``/``reject`` methods refuse to transition a finalized
+    result. This keeps the reconstructed entity's invariant intact without
+    re-running the user-review workflow.
+    """
+    status = MatchStatus(row["status"])
+    result = RecognitionResult.__new__(RecognitionResult)
+    result.photo_id = UUID(row["photo_id"])
+    result.confidence = row["confidence"]
+    result.id = UUID(row["id"])
+    result.person_id = UUID(row["person_id"]) if row["person_id"] is not None else None
+    result.status = status
+    result.created_at = text_to_datetime(row["created_at"])
+    return result

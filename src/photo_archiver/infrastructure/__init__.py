@@ -5,6 +5,7 @@ from photo_archiver.infrastructure.database import (
     SQLiteFolderRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
+    SQLiteRecognitionRepository,
     SQLiteUnitOfWork,
 )
 from photo_archiver.infrastructure.filesystem import (
@@ -36,6 +37,8 @@ __all__ = [
     "SQLiteFolderRepository",
     "SQLitePersonRepository",
     "SQLitePhotoRepository",
+    "SQLiteRecognitionRepository",
+    "SQLiteUnitOfWork",
     "TxtPersonImportReader",
     "ThumbnailCache",
 ]

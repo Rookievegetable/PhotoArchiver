@@ -6,12 +6,22 @@ import sqlite3
 
 import pytest
 
-from photo_archiver.domain import Folder, Person, PersonIdentity, Photo, PhotoMetadata, PhotoPath
+from photo_archiver.domain import (
+    Folder,
+    MatchStatus,
+    Person,
+    PersonIdentity,
+    Photo,
+    PhotoMetadata,
+    PhotoPath,
+    RecognitionResult,
+)
 from photo_archiver.infrastructure import (
     SQLiteConnectionProvider,
     SQLiteFolderRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
+    SQLiteRecognitionRepository,
 )
 
 
@@ -46,7 +56,7 @@ def test_sqlite_schema_sets_user_version(tmp_path: Path) -> None:
     with provider.connect() as connection:
         user_version = connection.execute("PRAGMA user_version").fetchone()[0]
 
-    assert user_version == 1
+    assert user_version == 2
 
 
 def test_sqlite_person_repository_upserts_by_id(tmp_path: Path) -> None:
@@ -149,3 +159,93 @@ def test_sqlite_photo_folder_foreign_key_sets_folder_id_to_null(tmp_path: Path) 
     persisted_photo = photo_repository.find_by_id(photo.id)
     assert persisted_photo is not None
     assert persisted_photo.folder_id is None
+
+
+def test_sqlite_recognition_repository_round_trips_result(tmp_path: Path) -> None:
+    """Persist and retrieve recognition results through the SQLite repository."""
+    provider = create_provider(tmp_path)
+    folder_repository = SQLiteFolderRepository(provider)
+    photo_repository = SQLitePhotoRepository(provider)
+    recognition_repository = SQLiteRecognitionRepository(provider)
+
+    folder = Folder(path=PhotoPath("school"), total_photos=1)
+    folder_repository.add(folder)
+    photo = Photo(path=PhotoPath("school/event.jpg"), folder_id=folder.id)
+    photo_repository.add(photo)
+
+    result = RecognitionResult(photo_id=photo.id, confidence=0.8)
+    recognition_repository.add(result)
+
+    assert recognition_repository.find_by_id(result.id) == result
+    assert recognition_repository.list_by_photo(photo.id) == [result]
+    assert recognition_repository.list_pending() == [result]
+
+
+def test_sqlite_recognition_repository_upserts_by_id(tmp_path: Path) -> None:
+    """Adding the same result id replaces persisted fields."""
+    provider = create_provider(tmp_path)
+    folder_repository = SQLiteFolderRepository(provider)
+    photo_repository = SQLitePhotoRepository(provider)
+    recognition_repository = SQLiteRecognitionRepository(provider)
+
+    folder = Folder(path=PhotoPath("school"), total_photos=1)
+    folder_repository.add(folder)
+    photo = Photo(path=PhotoPath("school/event.jpg"), folder_id=folder.id)
+    photo_repository.add(photo)
+
+    result = RecognitionResult(photo_id=photo.id, confidence=0.7)
+    recognition_repository.add(result)
+    updated = RecognitionResult(
+        id=result.id,
+        photo_id=photo.id,
+        confidence=0.9,
+        created_at=result.created_at,
+    )
+    recognition_repository.add(updated)
+
+    assert recognition_repository.find_by_id(result.id) == updated
+
+
+def test_sqlite_recognition_repository_update_status(tmp_path: Path) -> None:
+    """update_status must persist the new review status."""
+    provider = create_provider(tmp_path)
+    folder_repository = SQLiteFolderRepository(provider)
+    photo_repository = SQLitePhotoRepository(provider)
+    recognition_repository = SQLiteRecognitionRepository(provider)
+
+    folder = Folder(path=PhotoPath("school"), total_photos=1)
+    folder_repository.add(folder)
+    photo = Photo(path=PhotoPath("school/event.jpg"), folder_id=folder.id)
+    photo_repository.add(photo)
+
+    result = RecognitionResult(photo_id=photo.id, confidence=0.8)
+    recognition_repository.add(result)
+    recognition_repository.update_status(result.id, MatchStatus.APPROVED)
+
+    persisted = recognition_repository.find_by_id(result.id)
+    assert persisted is not None
+    assert persisted.status is MatchStatus.APPROVED
+    assert recognition_repository.list_pending() == []
+
+
+def test_sqlite_recognition_repository_list_pending_filters_status(tmp_path: Path) -> None:
+    """list_pending must only return PENDING results."""
+    provider = create_provider(tmp_path)
+    folder_repository = SQLiteFolderRepository(provider)
+    photo_repository = SQLitePhotoRepository(provider)
+    recognition_repository = SQLiteRecognitionRepository(provider)
+
+    folder = Folder(path=PhotoPath("school"), total_photos=2)
+    folder_repository.add(folder)
+    photo1 = Photo(path=PhotoPath("school/a.jpg"), folder_id=folder.id)
+    photo2 = Photo(path=PhotoPath("school/b.jpg"), folder_id=folder.id)
+    photo_repository.add(photo1)
+    photo_repository.add(photo2)
+
+    pending = RecognitionResult(photo_id=photo1.id, confidence=0.6)
+    approved = RecognitionResult(photo_id=photo2.id, confidence=0.9)
+    approved.approve()
+    recognition_repository.add(pending)
+    recognition_repository.add(approved)
+
+    assert recognition_repository.list_pending() == [pending]
