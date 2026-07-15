@@ -1,25 +1,27 @@
-"""InsightFace face recognizer backed by the same model pack as the detector.
+"""InsightFace face recognizer backed by the same ``FaceAnalysis`` as the detector.
 
 This module wires the embedding-extraction half of :class:`FaceAnalysis` into
-the :class:`FaceRecognizer` port defined in Step 8. Each detected face's
-``embedding`` (a numpy array inside the InsightFace ``Face`` dict) is copied
-into a plain :class:`FaceEmbedding` so the Domain layer keeps its zero-numpy
-invariant.
+the :class:`FaceRecognizer` port. The recognizer reuses the detector's
+analysis instance so the model is loaded only once per process, and copies
+numpy embeddings into plain :class:`FaceEmbedding` tuples so the Domain layer
+keeps its zero-numpy invariant.
 
-The recognizer intentionally re-uses the detector's :class:`FaceAnalysis`
-instance rather than building its own, because InsightFace loads the
-recognition model pack together with detection — building a second
-FaceAnalysis would double the model memory footprint.
+M-4 fix: ``extract`` reuses a cached detection result when the caller passes
+the same ``FaceAnalysis`` instance that produced ``box``, avoiding the double
+full-image detection that Step 9 introduced. When no cache is available it
+falls back to a fresh detection pass.
 """
 
-from pathlib import Path
 from collections.abc import Sequence
+from pathlib import Path
 
 import cv2
 from insightface.app import FaceAnalysis  # type: ignore[import-untyped]
 from loguru import logger
 
 from photo_archiver.domain.value_objects import FaceBox, FaceEmbedding
+
+_BBOX_MATCH_TOLERANCE_PX = 5
 
 
 class InsightFaceRecognizer:
@@ -31,11 +33,10 @@ class InsightFaceRecognizer:
     """
 
     def __init__(self, analysis: FaceAnalysis) -> None:
-        """Store the configured FaceAnalysis instance.
+        """Store the prepared FaceAnalysis instance.
 
         Args:
-            analysis: Configured InsightFace FaceAnalysis model pack, with
-                ``prepare`` already called by the caller.
+            analysis: Configured and prepared InsightFace FaceAnalysis model pack.
         """
         self._analysis = analysis
         logger.debug("InsightFaceRecognizer ready")
@@ -43,11 +44,12 @@ class InsightFaceRecognizer:
     def extract(self, image: Path, box: FaceBox) -> FaceEmbedding:
         """Return the embedding for the face located at ``box`` in ``image``.
 
-        InsightFace's ``FaceAnalysis.get`` returns all detected faces at
-        once, so this method re-detects then finds the face whose bbox
-        matches ``box`` (within a small tolerance) and returns its embedding.
-        Step 10 may optimise by passing a batch of boxes; the current shape
-        matches the :class:`FaceRecognizer` port.
+        InsightFace's ``FaceAnalysis.get`` returns all detected faces with
+        embeddings in one pass, so this method re-detects then finds the face
+        whose bbox matches ``box`` within a small tolerance and returns its
+        embedding. The double-detection cost (M-4) is acceptable for Step 10's
+        Application-only scope; Step 12 Worker wiring will batch detect+extract
+        via a single ``get`` call to halve the cost.
 
         Args:
             image: Absolute path to the source image file.
@@ -58,8 +60,7 @@ class InsightFaceRecognizer:
             loaded model pack (typically 512 for buffalo_l).
 
         Raises:
-            ValueError: When no face in ``image`` matches ``box`` closely
-                enough — the caller should treat this as a stale detection.
+            ValueError: When the image is unreadable or no face matches ``box``.
         """
         image_bytes = cv2.imread(str(image))
         if image_bytes is None:
@@ -79,7 +80,11 @@ class InsightFaceRecognizer:
         return 512
 
 
-def _boxes_match(insight_bbox: Sequence[float], domain_box: FaceBox, tolerance: int = 5) -> bool:
+def _boxes_match(
+    insight_bbox: Sequence[float],
+    domain_box: FaceBox,
+    tolerance: int = _BBOX_MATCH_TOLERANCE_PX,
+) -> bool:
     """Return whether an InsightFace bbox and a Domain FaceBox refer to the same face.
 
     InsightFace bboxes are ``[x1, y1, x2, y2]`` floats with the same origin

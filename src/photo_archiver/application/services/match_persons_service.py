@@ -28,9 +28,7 @@ from photo_archiver.application.ports import (
 from photo_archiver.application.use_cases import MatchPersonsUseCase
 from photo_archiver.domain import (
     FaceEmbedding,
-    Person,
-    PersonRepository,
-    PhotoRepository,
+    FaceEmbeddingRepository,
     RecognitionRepository,
     RecognitionResult,
 )
@@ -47,32 +45,25 @@ class MatchPersonsService(MatchPersonsUseCase):
         detector: FaceDetector,
         recognizer: FaceRecognizer,
         matcher: PersonMatcher,
-        person_repository: PersonRepository,
-        photo_repository: PhotoRepository,
+        face_embedding_repository: FaceEmbeddingRepository,
         recognition_repository: RecognitionRepository,
-        match_threshold: float,
         progress_reporter: ProgressReporter | None = None,
     ) -> None:
-        """Initialize the service with ports, repositories and the configured threshold.
+        """Initialize the service with ports and repositories.
 
         Args:
             detector: Face detection port (Step 9 InsightFace-backed).
             recognizer: Face embedding extraction port (Step 9 InsightFace-backed).
             matcher: Person matching port (Step 9 cosine-similarity-backed).
-            person_repository: Known persons lookup for candidate embeddings.
-            photo_repository: Photo lookup for batch resolution.
+            face_embedding_repository: Known person embeddings lookup.
             recognition_repository: Persistence target for match results.
-            match_threshold: Minimum cosine similarity for a successful match,
-                in ``[0.0, 1.0]``.
             progress_reporter: Optional progress stream for Worker/UI feedback.
         """
         self._detector = detector
         self._recognizer = recognizer
         self._matcher = matcher
-        self._person_repository = person_repository
-        self._photo_repository = photo_repository
+        self._face_embedding_repository = face_embedding_repository
         self._recognition_repository = recognition_repository
-        self._match_threshold = match_threshold
         self._progress_reporter = progress_reporter
 
     def execute(self, command: MatchPersonsCommand) -> tuple[MatchResult, ...]:
@@ -109,19 +100,11 @@ class MatchPersonsService(MatchPersonsUseCase):
     def _build_candidate_embeddings(self) -> dict[UUID, FaceEmbedding]:
         """Return ``person_id → embedding`` for every known person.
 
-        Step 10 assumes each person has at most one canonical embedding stored
-        on the person aggregate. When Step 10 wiring later adds a
-        ``FaceEmbeddingRepository``, this method will switch to query it; for
-        now candidates are built from persons that carry an embedding field
-        (empty by default since Person does not yet hold embeddings).
+        Candidates are queried from :class:`FaceEmbeddingRepository`, which
+        Step 10 Major fix M-1 introduced to replace the broken
+        ``getattr(person, "face_embedding")`` path that always returned empty.
         """
-        persons: list[Person] = self._person_repository.list_all()
-        candidates: dict[UUID, FaceEmbedding] = {}
-        for person in persons:
-            embedding = getattr(person, "face_embedding", None)
-            if embedding is not None and person.id is not None:
-                candidates[person.id] = embedding
-        return candidates
+        return self._face_embedding_repository.list_all()
 
     def _match_one(
         self,
@@ -133,9 +116,12 @@ class MatchPersonsService(MatchPersonsUseCase):
         boxes = self._detector.detect(image)
         if not boxes:
             logger.debug("No faces detected in photo {}", photo_id)
-            return MatchResult(photo_id=photo_id, box=None)  # type: ignore[arg-type]
+            return MatchResult(photo_id=photo_id, box=None)
 
-        box = boxes[0]  # Top-1: first detected face only per裁决 #5
+        # Top-1 per裁决 #5: pick the face with the highest detection confidence.
+        # InsightFace's detect order is observed to be descending by det_score,
+        # but that is an implementation detail — max() locks the semantic.
+        box = max(boxes, key=lambda b: b.confidence or 0.0)
         embedding = self._recognizer.extract(image, box)
         match = self._matcher.match(embedding, candidates)
 
@@ -156,7 +142,7 @@ class MatchPersonsService(MatchPersonsUseCase):
             person_id,
             confidence,
         )
-        return MatchResult(photo_id=photo_id, box=box)  # type: ignore[arg-type]
+        return MatchResult(photo_id=photo_id, box=box)
 
     def _report(self, current: int, total: int, message: str) -> None:
         """Forward progress to the reporter when one is bound.

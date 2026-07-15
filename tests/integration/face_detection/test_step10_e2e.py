@@ -29,25 +29,28 @@ from photo_archiver.domain import (
 )
 from photo_archiver.infrastructure import (
     SQLiteConnectionProvider,
+    SQLiteFaceEmbeddingRepository,
     SQLiteFolderRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
     SQLiteRecognitionRepository,
 )
+from photo_archiver.infrastructure.ai import InsightFaceLoader
 
 _ROOT = Path(__file__).resolve().parents[2]
 _MODEL_ROOT = _ROOT / "resources" / "models"
 _SAMPLE_IMAGE = _ROOT / "tests" / "integration" / "resources" / "sample_face.jpg"
 
 pytestmark = pytest.mark.skipif(
-    not (InsightFaceDetector.model_available(_MODEL_ROOT) and _SAMPLE_IMAGE.exists()),
+    not (InsightFaceLoader(_MODEL_ROOT).is_available() and _SAMPLE_IMAGE.exists()),
     reason="InsightFace model pack or sample image missing — run download_models.py",
 )
 
 
 @pytest.fixture(scope="module")
 def detector() -> InsightFaceDetector:
-    return InsightFaceDetector.from_model_path(_MODEL_ROOT)
+    analysis = InsightFaceLoader(_MODEL_ROOT).load()
+    return InsightFaceDetector(analysis)
 
 
 @pytest.fixture(scope="module")
@@ -77,18 +80,16 @@ def test_end_to_end_detect_match_review_persist(
 ) -> None:
     """Full pipeline: detect → extract → match → persist → approve."""
     provider, target_photo_id = photo_id
-    person_repo = SQLitePersonRepository(provider)
     recognition_repo = SQLiteRecognitionRepository(provider)
+    embedding_repo = SQLiteFaceEmbeddingRepository(provider)
 
     matcher = CosinePersonMatcher(threshold=0.40)
     service = MatchPersonsService(
         detector=detector,
         recognizer=recognizer,
         matcher=matcher,
-        person_repository=person_repo,
-        photo_repository=SQLitePhotoRepository(provider),
+        face_embedding_repository=embedding_repo,
         recognition_repository=recognition_repo,
-        match_threshold=0.40,
     )
     command = MatchPersonsCommand(
         photo_ids=(target_photo_id,), images=(_SAMPLE_IMAGE,)

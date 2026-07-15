@@ -56,7 +56,7 @@ def test_sqlite_schema_sets_user_version(tmp_path: Path) -> None:
     with provider.connect() as connection:
         user_version = connection.execute("PRAGMA user_version").fetchone()[0]
 
-    assert user_version == 2
+    assert user_version == 3
 
 
 def test_sqlite_person_repository_upserts_by_id(tmp_path: Path) -> None:

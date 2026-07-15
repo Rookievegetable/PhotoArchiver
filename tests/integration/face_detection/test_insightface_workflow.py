@@ -20,9 +20,9 @@ from photo_archiver.ai import (
     CosinePersonMatcher,
     InsightFaceDetector,
     InsightFaceRecognizer,
-    ModelNotFound,
 )
 from photo_archiver.domain.value_objects import FaceBox
+from photo_archiver.infrastructure.ai import InsightFaceLoader, ModelPackMissing
 
 _ROOT = Path(__file__).resolve().parents[2]
 _MODEL_ROOT = _ROOT / "resources" / "models"
@@ -31,7 +31,7 @@ _SAMPLE_IMAGE = _ROOT / "tests" / "integration" / "resources" / "sample_face.jpg
 
 def _model_available() -> bool:
     """Return whether the buffalo_l model pack is present."""
-    return InsightFaceDetector.model_available(_MODEL_ROOT)
+    return InsightFaceLoader(_MODEL_ROOT).is_available()
 
 
 def _sample_available() -> bool:
@@ -51,7 +51,8 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def detector() -> InsightFaceDetector:
     """Build a detector bound to the local model pack."""
-    return InsightFaceDetector.from_model_path(_MODEL_ROOT)
+    analysis = InsightFaceLoader(_MODEL_ROOT).load()
+    return InsightFaceDetector(analysis)
 
 
 @pytest.fixture(scope="module")
@@ -92,10 +93,10 @@ def test_detector_returns_empty_for_unreadable_image(detector: InsightFaceDetect
     assert boxes == []
 
 
-def test_detector_raises_model_not_found_for_empty_dir(tmp_path: Path) -> None:
-    """from_model_path must raise ModelNotFound when the pack is missing."""
-    with pytest.raises(ModelNotFound):
-        InsightFaceDetector.from_model_path(tmp_path / "empty_models")
+def test_detector_raises_model_pack_missing_for_empty_dir(tmp_path: Path) -> None:
+    """InsightFaceLoader.load must raise ModelPackMissing when the pack is missing."""
+    with pytest.raises(ModelPackMissing):
+        InsightFaceLoader(tmp_path / "empty_models").load()
 
 
 def test_matcher_round_trips_real_embedding(

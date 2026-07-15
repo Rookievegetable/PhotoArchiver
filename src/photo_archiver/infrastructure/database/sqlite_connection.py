@@ -160,6 +160,13 @@ class SQLiteConnectionProvider:
                     ON recognition_results(photo_id);
                 CREATE INDEX IF NOT EXISTS idx_recognition_results_person_id
                     ON recognition_results(person_id);
+
+                CREATE TABLE IF NOT EXISTS person_embeddings (
+                    person_id TEXT PRIMARY KEY,
+                    embedding BLOB NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE CASCADE
+                );
                 """
             )
-            connection.execute("PRAGMA user_version = 2")
+            connection.execute("PRAGMA user_version = 3")

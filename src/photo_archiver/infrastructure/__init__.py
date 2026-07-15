@@ -2,6 +2,7 @@
 
 from photo_archiver.infrastructure.database import (
     SQLiteConnectionProvider,
+    SQLiteFaceEmbeddingRepository,
     SQLiteFolderRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
@@ -34,6 +35,7 @@ __all__ = [
     "PillowPhotoMetadataReader",
     "PillowThumbnailGenerator",
     "SQLiteConnectionProvider",
+    "SQLiteFaceEmbeddingRepository",
     "SQLiteFolderRepository",
     "SQLitePersonRepository",
     "SQLitePhotoRepository",

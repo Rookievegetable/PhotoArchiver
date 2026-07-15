@@ -7,6 +7,7 @@ from photo_archiver.domain.exceptions import (
     ValidationError,
 )
 from photo_archiver.domain.repositories import (
+    FaceEmbeddingRepository,
     FolderRepository,
     PersonRepository,
     PhotoRepository,
@@ -24,6 +25,7 @@ from photo_archiver.domain.value_objects import (
 __all__ = [
     "FaceBox",
     "FaceEmbedding",
+    "FaceEmbeddingRepository",
     "Folder",
     "FolderRepository",
     "MatchStatus",

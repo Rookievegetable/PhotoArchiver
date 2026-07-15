@@ -70,22 +70,24 @@ def test_person_matcher_is_runtime_checkable_protocol() -> None:
     assert isinstance(_MatcherImpl(), PersonMatcher)
 
 
-def test_insightface_detector_model_available_returns_false_for_missing_dir(
+def test_insightface_loader_is_available_returns_false_for_missing_dir(
     tmp_path: Path,
 ) -> None:
-    """model_available must return False when the model pack is absent."""
+    """InsightFaceLoader.is_available must return False when the model pack is absent."""
+    from photo_archiver.infrastructure.ai import InsightFaceLoader
+
     missing = tmp_path / "nonexistent_models"
-    assert InsightFaceDetector.model_available(missing) is False
+    assert InsightFaceLoader(missing).is_available() is False
 
 
-def test_insightface_detector_from_model_path_raises_model_not_found(
+def test_insightface_loader_raises_model_pack_missing(
     tmp_path: Path,
 ) -> None:
-    """from_model_path must raise ModelNotFound when the pack is missing."""
-    from photo_archiver.ai import ModelNotFound
+    """InsightFaceLoader.load must raise ModelPackMissing when the pack is missing."""
+    from photo_archiver.infrastructure.ai import InsightFaceLoader, ModelPackMissing
 
-    with pytest.raises(ModelNotFound):
-        InsightFaceDetector.from_model_path(tmp_path / "empty_models")
+    with pytest.raises(ModelPackMissing):
+        InsightFaceLoader(tmp_path / "empty_models").load()
 
 
 def test_face_box_rejects_invalid_geometry() -> None:

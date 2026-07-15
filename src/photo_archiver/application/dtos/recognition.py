@@ -72,6 +72,6 @@ class MatchResult:
     """Outcome of matching one face embedding against known persons."""
 
     photo_id: UUID
-    box: FaceBox
+    box: FaceBox | None = None
     best: MatchCandidate | None = None
     candidates: tuple[MatchCandidate, ...] = field(default_factory=tuple)

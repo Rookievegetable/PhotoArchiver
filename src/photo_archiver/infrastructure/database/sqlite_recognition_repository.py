@@ -1,5 +1,6 @@
 """SQLite implementation of the recognition result repository interface."""
 
+from datetime import datetime
 from uuid import UUID
 
 from photo_archiver.domain import MatchStatus, RecognitionResult, RecognitionRepository
@@ -39,7 +40,7 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                     str(result.person_id) if result.person_id is not None else None,
                     result.status.value,
                     result.confidence,
-                    datetime_to_text(result.created_at),  # type: ignore[arg-type]  # see RecognitionResult.__post_init__
+                    datetime_to_text(self._require_created_at(result)),
                 ),
             )
 
@@ -77,3 +78,16 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                 "UPDATE recognition_results SET status = ? WHERE id = ?",
                 (status.value, str(result_id)),
             )
+
+    @staticmethod
+    def _require_created_at(result: RecognitionResult) -> datetime:
+        """Return the result's created_at, asserting it is set.
+
+        RecognitionResult.__post_init__ guarantees created_at is populated on
+        construction, but the type signature is ``datetime | None``. This
+        helper makes the invariant explicit at the persistence boundary so a
+        future refactor that bypasses __post_init__ cannot silently pass
+        ``None`` into SQLite serialization.
+        """
+        assert result.created_at is not None, "RecognitionResult.created_at must be set"
+        return result.created_at  # type: ignore[return-value]

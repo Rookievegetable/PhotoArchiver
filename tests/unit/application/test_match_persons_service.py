@@ -9,10 +9,7 @@ from photo_archiver.application.commands import MatchPersonsCommand
 from photo_archiver.application.services import MatchPersonsService
 from photo_archiver.domain import (
     FaceEmbedding,
-    Person,
-    PersonIdentity,
-    PersonRepository,
-    PhotoRepository,
+    FaceEmbeddingRepository,
     RecognitionRepository,
 )
 
@@ -49,40 +46,20 @@ class _StubMatcher:
         return self._result
 
 
-class _StubPersonRepository(PersonRepository):
-    """Minimal PersonRepository for service tests."""
+class _StubFaceEmbeddingRepository(FaceEmbeddingRepository):
+    """Minimal FaceEmbeddingRepository for service tests."""
 
-    def __init__(self, people: list[Person]) -> None:
-        self._people = people
+    def __init__(self, candidates: dict) -> None:
+        self._candidates = candidates
 
-    def add(self, person: Person) -> None:
+    def save(self, person_id, embedding: FaceEmbedding) -> None:
         raise NotImplementedError
 
-    def find_by_id(self, person_id):
-        raise NotImplementedError
+    def find_by_person(self, person_id) -> FaceEmbedding | None:
+        return self._candidates.get(person_id)
 
-    def find_by_identity(self, identity: PersonIdentity):
-        raise NotImplementedError
-
-    def list_all(self) -> list[Person]:
-        return self._people
-
-
-class _StubPhotoRepository(PhotoRepository):
-    def add(self, photo) -> None:
-        raise NotImplementedError
-
-    def find_by_id(self, photo_id):
-        raise NotImplementedError
-
-    def find_by_path(self, path):
-        raise NotImplementedError
-
-    def list_all(self) -> list:
-        return []
-
-    def list_by_folder_id(self, folder_id) -> list:
-        return []
+    def list_all(self) -> dict:
+        return self._candidates
 
 
 class _StubRecognitionRepository(RecognitionRepository):
@@ -109,23 +86,20 @@ def _build_service(
     detector_boxes: dict[Path, list],
     embedding: FaceEmbedding,
     matcher_result: tuple | None,
-    people: list[Person] | None = None,
+    candidates: dict | None = None,
 ) -> tuple[MatchPersonsService, _StubMatcher, _StubRecognitionRepository]:
     """Wire a MatchPersonsService with stubbed ports."""
     detector = _StubDetector(detector_boxes)
     recognizer = _StubRecognizer(embedding)
     matcher = _StubMatcher(matcher_result)
-    person_repo = _StubPersonRepository(people or [])
-    photo_repo = _StubPhotoRepository()
+    embedding_repo = _StubFaceEmbeddingRepository(candidates or {})
     recognition_repo = _StubRecognitionRepository()
     service = MatchPersonsService(
         detector=detector,
         recognizer=recognizer,
         matcher=matcher,
-        person_repository=person_repo,
-        photo_repository=photo_repo,
+        face_embedding_repository=embedding_repo,
         recognition_repository=recognition_repo,
-        match_threshold=0.40,
     )
     return service, matcher, recognition_repo
 
