@@ -22,6 +22,9 @@ DEFAULT_MAX_WORKERS = 4
 MIN_MAX_WORKERS = 1
 MAX_MAX_WORKERS = 32
 SQLITE_URL_PREFIX = "sqlite:///"
+DEFAULT_MATCH_THRESHOLD = 0.40
+MIN_MATCH_THRESHOLD = 0.0
+MAX_MATCH_THRESHOLD = 1.0
 
 
 class AppSettings(BaseSettings):
@@ -50,6 +53,7 @@ class AppSettings(BaseSettings):
     photo_root: Path | None = Field(default=None)
     output_root: Path | None = Field(default=None)
     max_workers: int = Field(default=DEFAULT_MAX_WORKERS)
+    match_threshold: float = Field(default=DEFAULT_MATCH_THRESHOLD)
 
     @field_validator("log_level", mode="before")
     @classmethod
@@ -101,6 +105,17 @@ class AppSettings(BaseSettings):
             raise ValueError(
                 "MAX_WORKERS must be between "
                 f"{MIN_MAX_WORKERS} and {MAX_MAX_WORKERS}. Received: {value}"
+            )
+        return value
+
+    @field_validator("match_threshold")
+    @classmethod
+    def validate_match_threshold(cls, value: float) -> float:
+        """Ensure the match threshold stays within the supported similarity range."""
+        if not MIN_MATCH_THRESHOLD <= value <= MAX_MATCH_THRESHOLD:
+            raise ValueError(
+                "MATCH_THRESHOLD must be between "
+                f"{MIN_MATCH_THRESHOLD} and {MAX_MATCH_THRESHOLD}. Received: {value}"
             )
         return value
 
