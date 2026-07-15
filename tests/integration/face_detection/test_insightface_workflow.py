@@ -58,7 +58,7 @@ def detector() -> InsightFaceDetector:
 @pytest.fixture(scope="module")
 def recognizer(detector: InsightFaceDetector) -> InsightFaceRecognizer:
     """Build a recognizer reusing the detector's model analysis instance."""
-    return InsightFaceRecognizer(detector._analysis)  # type: ignore[attr-defined]
+    return InsightFaceRecognizer(detector.analysis)
 
 
 def test_detector_finds_face_in_sample(detector: InsightFaceDetector) -> None:

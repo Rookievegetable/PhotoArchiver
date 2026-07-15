@@ -35,6 +35,16 @@ class InsightFaceDetector:
         self._analysis = analysis
         logger.debug("InsightFaceDetector ready")
 
+    @property
+    def analysis(self) -> FaceAnalysis:
+        """Expose the underlying FaceAnalysis for recognizer reuse.
+
+        Step 10 integration tests and the recognizer benefit from sharing the
+        single loaded analysis instance. Exposing it as a property rather than
+        letting callers peek ``_analysis`` keeps the coupling documented.
+        """
+        return self._analysis
+
     def detect(self, image: Path) -> list[FaceBox]:
         """Return the bounding boxes of all faces found in ``image``.
 

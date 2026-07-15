@@ -21,7 +21,7 @@ class MatchStatus(str, Enum):
     REJECTED = "rejected"
 
 
-@dataclass(slots=True)
+@dataclass(slots=True)  # NOT frozen: approve()/reject() mutate status
 class RecognitionResult:
     """Represent the outcome of matching a detected face to a person.
 

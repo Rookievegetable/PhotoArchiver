@@ -13,6 +13,9 @@ from loguru import logger
 
 from photo_archiver.domain.value_objects import FaceEmbedding
 
+# Matcher-only default; production wiring injects AppSettings.match_threshold
+# (default 0.40) per裁决 #3. This constant exists so CosinePersonMatcher can be
+# constructed standalone in unit tests without pulling settings infrastructure.
 _DEFAULT_THRESHOLD = 0.4
 
 

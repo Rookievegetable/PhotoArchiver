@@ -55,7 +55,7 @@ def detector() -> InsightFaceDetector:
 
 @pytest.fixture(scope="module")
 def recognizer(detector: InsightFaceDetector) -> InsightFaceRecognizer:
-    return InsightFaceRecognizer(detector._analysis)  # type: ignore[attr-defined]
+    return InsightFaceRecognizer(detector.analysis)
 
 
 @pytest.fixture()

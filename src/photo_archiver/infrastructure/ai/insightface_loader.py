@@ -70,6 +70,8 @@ class InsightFaceLoader:
                 f"InsightFace model pack not found at {self.pack_path}; run "
                 "scripts/download_models.py to fetch it"
             )
+        # FaceAnalysis's `root` is the parent directory of the named pack;
+        # it internally joins `root/name` to locate model files.
         analysis = FaceAnalysis(name=self._name, root=str(self._model_root))
         analysis.prepare(
             ctx_id=0,

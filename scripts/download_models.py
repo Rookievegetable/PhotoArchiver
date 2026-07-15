@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """PhotoArchiver model fetcher.
 
 Downloads the InsightFace ``buffalo_l`` model pack into

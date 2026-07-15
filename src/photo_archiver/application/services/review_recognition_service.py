@@ -100,7 +100,9 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
             result.approve()
         else:
             result.reject()
-        self._recognition_repository.add(result)
+        # update_status persists only the status column, avoiding the wider
+        # upsert that add() would perform (which could overwrite photo_id/person_id).
+        self._recognition_repository.update_status(result.id, target)
         logger.info("Recognition result {} -> {}", result_id, target.value)
         return result
 

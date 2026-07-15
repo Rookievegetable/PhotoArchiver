@@ -95,10 +95,15 @@ def recognition_result_from_row(row: Row) -> RecognitionResult:
     """Convert a SQLite row to a RecognitionResult entity.
 
     The entity is rebuilt in the already-finalized state when ``status`` is
-    ``approved`` or ``rejected`` by directly setting the field, since the
-    public ``approve``/``reject`` methods refuse to transition a finalized
-    result. This keeps the reconstructed entity's invariant intact without
-    re-running the user-review workflow.
+    ``approved`` or ``rejected`` by directly setting the field via ``__new__``
+    (bypassing ``__post_init__``), since the public ``approve``/``reject``
+    methods refuse to transition a finalized result. This keeps the
+    reconstructed entity's invariant intact without re-running the user-review
+    workflow.
+
+    Fragility note: ``__new__`` reflection bypasses ``__post_init__``, so if
+    RecognitionResult gains fields or changes initialization logic this mapper
+    must be updated in lockstep to avoid silently dropping columns.
     """
     status = MatchStatus(row["status"])
     result = RecognitionResult.__new__(RecognitionResult)

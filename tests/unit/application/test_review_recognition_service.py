@@ -31,7 +31,12 @@ class _RecordingRecognitionRepository(RecognitionRepository):
         raise NotImplementedError
 
     def update_status(self, result_id, status) -> None:
-        raise NotImplementedError
+        result = self._results.get(result_id)
+        if result is None:
+            return
+        # Bypass approve()/reject() guards — service already transitioned the entity.
+        result.status = status
+        self.added.append(result)
 
 
 def _make_result(photo_id=None, status: MatchStatus = MatchStatus.PENDING) -> RecognitionResult:
