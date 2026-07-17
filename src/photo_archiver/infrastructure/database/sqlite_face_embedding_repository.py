@@ -1,6 +1,14 @@
-"""SQLite implementation of the face embedding repository interface."""
+"""SQLite implementation of the face embedding repository interface.
 
-import pickle
+Embeddings are serialized as JSON arrays (``tuple[float, ...]`` → list) in
+a TEXT column. JSON is used rather than pickle because pickle deserialization
+is an arbitrary-code-execution vector (SEC-030): the SQLite database is not
+inside the project's trust boundary — a malicious model pack, backup tampering
+or disk access could otherwise craft a pickle payload that ``pickle.loads``
+would execute. JSON deserialization is data-only and cannot run code.
+"""
+
+import json
 from datetime import datetime
 from uuid import UUID
 
@@ -10,14 +18,21 @@ from photo_archiver.infrastructure.database.sqlite_mappers import datetime_to_te
 
 
 class SQLiteFaceEmbeddingRepository(FaceEmbeddingRepository):
-    """Persist per-person face embeddings in SQLite."""
+    """Persist per-person face embeddings in SQLite as JSON arrays."""
 
     def __init__(self, connection_provider: SQLiteConnectionProvider) -> None:
         """Initialize the repository with a connection provider."""
         self._connection_provider = connection_provider
 
     def save(self, person_id: UUID, embedding: FaceEmbedding) -> None:
-        """Persist or replace the canonical embedding for a person via upsert."""
+        """Persist or replace the canonical embedding for a person via upsert.
+
+        Args:
+            person_id: The person identifier.
+            embedding: The face embedding to store; its tuple is serialized as
+                a JSON array so the column stays human-readable and safe to
+                deserialize.
+        """
         with self._connection_provider.connect() as connection:
             connection.execute(
                 """
@@ -29,13 +44,21 @@ class SQLiteFaceEmbeddingRepository(FaceEmbeddingRepository):
                 """,
                 (
                     str(person_id),
-                    pickle.dumps(embedding.vector),
+                    json.dumps(list(embedding.vector)),
                     datetime_to_text(datetime.now()),
                 ),
             )
 
     def find_by_person(self, person_id: UUID) -> FaceEmbedding | None:
-        """Return the canonical embedding for a person, or ``None``."""
+        """Return the canonical embedding for a person, or ``None``.
+
+        Args:
+            person_id: The person identifier.
+
+        Returns:
+            A :class:`FaceEmbedding` rebuilt from the stored JSON array, or
+            ``None`` when no row exists.
+        """
         with self._connection_provider.connect() as connection:
             row = connection.execute(
                 "SELECT embedding FROM person_embeddings WHERE person_id = ?",
@@ -43,15 +66,21 @@ class SQLiteFaceEmbeddingRepository(FaceEmbeddingRepository):
             ).fetchone()
         if row is None:
             return None
-        return FaceEmbedding(pickle.loads(row["embedding"]))
+        return FaceEmbedding(tuple(json.loads(row["embedding"])))
 
     def list_all(self) -> dict[UUID, FaceEmbedding]:
-        """Return a ``person_id → embedding`` mapping for all known persons."""
+        """Return a ``person_id → embedding`` mapping for all known persons.
+
+        Returns:
+            A dict covering every persisted embedding. Empty when no person
+            has a stored embedding.
+        """
         with self._connection_provider.connect() as connection:
             rows = connection.execute(
                 "SELECT person_id, embedding FROM person_embeddings"
             ).fetchall()
         return {
-            UUID(row["person_id"]): FaceEmbedding(pickle.loads(row["embedding"]))
+            UUID(row["person_id"]): FaceEmbedding(tuple(json.loads(row["embedding"])))
             for row in rows
         }
+

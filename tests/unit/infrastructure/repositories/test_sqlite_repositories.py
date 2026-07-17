@@ -7,6 +7,7 @@ import sqlite3
 import pytest
 
 from photo_archiver.domain import (
+    FaceEmbedding,
     Folder,
     MatchStatus,
     Person,
@@ -18,6 +19,7 @@ from photo_archiver.domain import (
 )
 from photo_archiver.infrastructure import (
     SQLiteConnectionProvider,
+    SQLiteFaceEmbeddingRepository,
     SQLiteFolderRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
@@ -249,3 +251,66 @@ def test_sqlite_recognition_repository_list_pending_filters_status(tmp_path: Pat
     recognition_repository.add(approved)
 
     assert recognition_repository.list_pending() == [pending]
+
+
+def test_sqlite_face_embedding_repository_round_trips_embedding(tmp_path: Path) -> None:
+    """Persist and retrieve a face embedding through the SQLite repository."""
+    provider = create_provider(tmp_path)
+    person_repo = SQLitePersonRepository(provider)
+    embedding_repo = SQLiteFaceEmbeddingRepository(provider)
+
+    person = Person(name="Alice")
+    person_repo.add(person)
+    embedding = FaceEmbedding((0.1, 0.2, 0.3, 0.4))
+    embedding_repo.save(person.id, embedding)
+
+    retrieved = embedding_repo.find_by_person(person.id)
+    assert retrieved is not None
+    assert retrieved.vector == embedding.vector
+    assert retrieved.dimension == 4
+
+
+def test_sqlite_face_embedding_repository_upserts_by_person(tmp_path: Path) -> None:
+    """Saving the same person twice must replace the embedding."""
+    provider = create_provider(tmp_path)
+    person_repo = SQLitePersonRepository(provider)
+    embedding_repo = SQLiteFaceEmbeddingRepository(provider)
+
+    person = Person(name="Bob")
+    person_repo.add(person)
+    embedding_repo.save(person.id, FaceEmbedding((0.1, 0.2)))
+    embedding_repo.save(person.id, FaceEmbedding((0.9, 0.8)))
+
+    retrieved = embedding_repo.find_by_person(person.id)
+    assert retrieved is not None
+    assert retrieved.vector == (0.9, 0.8)
+
+
+def test_sqlite_face_embedding_repository_find_missing_returns_none(tmp_path: Path) -> None:
+    """find_by_person must return None when no embedding is stored."""
+    provider = create_provider(tmp_path)
+    embedding_repo = SQLiteFaceEmbeddingRepository(provider)
+    from uuid import uuid4
+
+    assert embedding_repo.find_by_person(uuid4()) is None
+
+
+def test_sqlite_face_embedding_repository_list_all(tmp_path: Path) -> None:
+    """list_all must return every persisted embedding keyed by person_id."""
+    provider = create_provider(tmp_path)
+    person_repo = SQLitePersonRepository(provider)
+    embedding_repo = SQLiteFaceEmbeddingRepository(provider)
+
+    person1 = Person(name="Carol")
+    person2 = Person(name="Dave")
+    person_repo.add(person1)
+    person_repo.add(person2)
+    e1 = FaceEmbedding((0.1, 0.2))
+    e2 = FaceEmbedding((0.3, 0.4))
+    embedding_repo.save(person1.id, e1)
+    embedding_repo.save(person2.id, e2)
+
+    all_embeddings = embedding_repo.list_all()
+    assert len(all_embeddings) == 2
+    assert all_embeddings[person1.id] == e1
+    assert all_embeddings[person2.id] == e2
