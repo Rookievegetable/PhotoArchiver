@@ -21,6 +21,14 @@ class RecognitionRepository(Protocol):
     def list_pending(self) -> list[RecognitionResult]:
         """Return all recognition results awaiting user review."""
 
+    def list_approved_by_person(self, person_id: UUID) -> list[RecognitionResult]:
+        """Return all APPROVED recognition results for the given person.
+
+        Used by Step 11 ArchivePlanner to gather a person's approved photos
+        for归档组织。Results are ordered by ``created_at`` then ``id`` so
+        the planner produces a stable archive ordering under re-invocation.
+        """
+
     def update_status(self, result_id: UUID, status: MatchStatus) -> int:
         """Transition a recognition result's review status.
 

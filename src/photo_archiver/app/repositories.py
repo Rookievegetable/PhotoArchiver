@@ -3,12 +3,20 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from photo_archiver.domain import FolderRepository, PersonRepository, PhotoRepository
+from photo_archiver.domain import (
+    ArchiveRecordRepository,
+    FolderRepository,
+    PersonRepository,
+    PhotoRepository,
+    RecognitionRepository,
+)
 from photo_archiver.infrastructure import (
+    SQLiteArchiveRecordRepository,
     SQLiteConnectionProvider,
     SQLiteFolderRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
+    SQLiteRecognitionRepository,
 )
 
 
@@ -20,6 +28,8 @@ class ApplicationRepositories:
     folders: FolderRepository
     people: PersonRepository
     photos: PhotoRepository
+    archive_records: ArchiveRecordRepository
+    recognition: RecognitionRepository
 
 
 def build_sqlite_repositories(database_path: Path) -> ApplicationRepositories:
@@ -36,4 +46,6 @@ def build_sqlite_repositories(database_path: Path) -> ApplicationRepositories:
         folders=SQLiteFolderRepository(connection_provider),
         people=SQLitePersonRepository(connection_provider),
         photos=SQLitePhotoRepository(connection_provider),
+        archive_records=SQLiteArchiveRecordRepository(connection_provider),
+        recognition=SQLiteRecognitionRepository(connection_provider),
     )

@@ -25,6 +25,8 @@ SQLITE_URL_PREFIX = "sqlite:///"
 DEFAULT_MATCH_THRESHOLD = 0.40
 MIN_MATCH_THRESHOLD = 0.0
 MAX_MATCH_THRESHOLD = 1.0
+DEFAULT_ARCHIVE_CONFLICT_STRATEGY = "skip"
+VALID_ARCHIVE_CONFLICT_STRATEGIES = ("skip", "overwrite", "rename")
 
 
 class AppSettings(BaseSettings):
@@ -52,6 +54,8 @@ class AppSettings(BaseSettings):
     model_path: Path = Field(default=DEFAULT_MODEL_PATH)
     photo_root: Path | None = Field(default=None)
     output_root: Path | None = Field(default=None)
+    archive_root: Path | None = Field(default=None)
+    archive_conflict_strategy: str = Field(default=DEFAULT_ARCHIVE_CONFLICT_STRATEGY)
     max_workers: int = Field(default=DEFAULT_MAX_WORKERS)
     match_threshold: float = Field(default=DEFAULT_MATCH_THRESHOLD)
 
@@ -73,7 +77,7 @@ class AppSettings(BaseSettings):
             raise ValueError("Path configuration values must not be empty")
         return Path(str(value))
 
-    @field_validator("photo_root", "output_root", mode="before")
+    @field_validator("photo_root", "output_root", "archive_root", mode="before")
     @classmethod
     def validate_optional_path(cls, value: object) -> Path | None:
         """Convert optional path values, treating blank values as unset."""
@@ -119,6 +123,18 @@ class AppSettings(BaseSettings):
             )
         return value
 
+    @field_validator("archive_conflict_strategy")
+    @classmethod
+    def validate_archive_conflict_strategy(cls, value: str) -> str:
+        """Ensure the archive conflict strategy is one of the supported modes."""
+        normalized = str(value).strip().lower()
+        if normalized not in VALID_ARCHIVE_CONFLICT_STRATEGIES:
+            raise ValueError(
+                "ARCHIVE_CONFLICT_STRATEGY must be one of "
+                f"{VALID_ARCHIVE_CONFLICT_STRATEGIES}. Received: {value}"
+            )
+        return normalized
+
     @property
     def effective_log_level(self) -> str:
         """Return the normalized runtime log level.
@@ -151,3 +167,7 @@ class AppSettings(BaseSettings):
         # would hide the actual AI dependency (P2-b fix).
         if self.output_root is not None:
             self.output_root.mkdir(parents=True, exist_ok=True)
+        # archive_root 不在此无条件 mkdir：归档前 ArchivePlanner /
+        # ArchiveExecutor 会显式校验并创建，避免静默落盘到未配置的默认路径。
+        if self.archive_root is not None:
+            self.archive_root.mkdir(parents=True, exist_ok=True)

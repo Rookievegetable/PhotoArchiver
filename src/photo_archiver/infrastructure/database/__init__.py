@@ -1,5 +1,8 @@
 """SQLite database infrastructure for PhotoArchiver."""
 
+from photo_archiver.infrastructure.database.sqlite_archive_record_repository import (
+    SQLiteArchiveRecordRepository,
+)
 from photo_archiver.infrastructure.database.sqlite_connection import SQLiteConnectionProvider
 from photo_archiver.infrastructure.database.sqlite_face_embedding_repository import (
     SQLiteFaceEmbeddingRepository,
@@ -13,6 +16,7 @@ from photo_archiver.infrastructure.database.sqlite_recognition_repository import
 from photo_archiver.infrastructure.database.sqlite_unit_of_work import SQLiteUnitOfWork
 
 __all__ = [
+    "SQLiteArchiveRecordRepository",
     "SQLiteConnectionProvider",
     "SQLiteFaceEmbeddingRepository",
     "SQLiteFolderRepository",

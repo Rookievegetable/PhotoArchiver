@@ -141,6 +141,7 @@ class SQLiteConnectionProvider:
                     folder_id TEXT,
                     original_name TEXT,
                     created_at TEXT NOT NULL,
+                    captured_at TEXT,
                     metadata_width INTEGER,
                     metadata_height INTEGER,
                     metadata_file_size_bytes INTEGER,
@@ -174,6 +175,24 @@ class SQLiteConnectionProvider:
                     created_at TEXT NOT NULL,
                     FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE CASCADE
                 );
+
+                CREATE TABLE IF NOT EXISTS archive_records (
+                    id TEXT PRIMARY KEY,
+                    photo_id TEXT NOT NULL,
+                    target_archive_root TEXT NOT NULL,
+                    target_person_name TEXT NOT NULL,
+                    target_event_or_date TEXT NOT NULL,
+                    target_original_name TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    archived_at TEXT,
+                    error TEXT,
+                    FOREIGN KEY(photo_id) REFERENCES photos(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_archive_records_photo_id
+                    ON archive_records(photo_id);
+                CREATE INDEX IF NOT EXISTS idx_archive_records_status
+                    ON archive_records(status);
                 """
             )
-            connection.execute("PRAGMA user_version = 3")
+            connection.execute("PRAGMA user_version = 4")

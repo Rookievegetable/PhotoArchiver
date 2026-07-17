@@ -1,12 +1,17 @@
 """Application layer public API for PhotoArchiver."""
 
 from photo_archiver.application.commands import (
+    ArchivePhotosCommand,
     ImportPeopleCommand,
     RegisterPhotoCommand,
     ScanAndRegisterPhotosCommand,
     ScanPhotoFolderCommand,
 )
 from photo_archiver.application.dtos import (
+    ArchiveOutcome,
+    ArchivePlan,
+    ArchivePlanItem,
+    ArchiveResult,
     ImportPeopleResult,
     PersonImportRow,
     PhotoScanItem,
@@ -15,6 +20,7 @@ from photo_archiver.application.dtos import (
     ScanPhotoFolderResult,
 )
 from photo_archiver.application.ports import (
+    ArchivePathBuilder,
     PersonImportReader,
     PhotoFileScanner,
     PhotoMetadataReader,
@@ -22,12 +28,17 @@ from photo_archiver.application.ports import (
     UnitOfWork,
 )
 from photo_archiver.application.services import (
+    ArchiveExecutor,
+    ArchivePathBuilderService,
+    ArchivePhotosService,
+    ArchivePlanner,
     ImportPeopleService,
     RegisterPhotoService,
     ScanAndRegisterPhotosService,
     ScanPhotoFolderService,
 )
 from photo_archiver.application.use_cases import (
+    ArchivePhotosUseCase,
     ImportPeopleUseCase,
     RegisterPhotoUseCase,
     ScanAndRegisterPhotosUseCase,
@@ -35,6 +46,17 @@ from photo_archiver.application.use_cases import (
 )
 
 __all__ = [
+    "ArchiveExecutor",
+    "ArchiveOutcome",
+    "ArchivePathBuilder",
+    "ArchivePathBuilderService",
+    "ArchivePhotosCommand",
+    "ArchivePhotosService",
+    "ArchivePhotosUseCase",
+    "ArchivePlan",
+    "ArchivePlanItem",
+    "ArchivePlanner",
+    "ArchiveResult",
     "ImportPeopleCommand",
     "ImportPeopleResult",
     "ImportPeopleService",

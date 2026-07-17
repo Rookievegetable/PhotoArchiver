@@ -1,12 +1,21 @@
 """Domain model public API for PhotoArchiver."""
 
-from photo_archiver.domain.entities import Folder, MatchStatus, Person, Photo, RecognitionResult
+from photo_archiver.domain.entities import (
+    ArchiveRecord,
+    ArchiveStatus,
+    Folder,
+    MatchStatus,
+    Person,
+    Photo,
+    RecognitionResult,
+)
 from photo_archiver.domain.exceptions import (
     PhotoArchiverDomainError,
     RepositoryError,
     ValidationError,
 )
 from photo_archiver.domain.repositories import (
+    ArchiveRecordRepository,
     FaceEmbeddingRepository,
     FolderRepository,
     PersonRepository,
@@ -14,6 +23,7 @@ from photo_archiver.domain.repositories import (
     RecognitionRepository,
 )
 from photo_archiver.domain.value_objects import (
+    ArchivePath,
     FaceBox,
     FaceEmbedding,
     PersonIdentity,
@@ -23,6 +33,10 @@ from photo_archiver.domain.value_objects import (
 )
 
 __all__ = [
+    "ArchivePath",
+    "ArchiveRecord",
+    "ArchiveRecordRepository",
+    "ArchiveStatus",
     "FaceBox",
     "FaceEmbedding",
     "FaceEmbeddingRepository",

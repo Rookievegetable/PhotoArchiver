@@ -47,7 +47,7 @@
 | 8 AI 检测端口 + DTO | ✅ 已完成 | `8d245ab` |
 | 9 AI InsightFace 实现 + 识别闭环 | ✅ 已完成 | `75a865d` |
 | 10 用户复核数据模型 | ✅ 已完成 | `947b428` |
-| 11 归档组织 + 去重 | ⛔ **未开始** — 待裁决 §6.1 | — |
+| 11 归档组织 + 去重 | ✅ **已完成** — Planner→Plan→Executor 拆分 + captured_at 领域字段 + archive_root 独立配置 + --dry-run | 本会话 |
 | 12 完整 UI 工作台 | ⛔ 未开始 | — |
 | 13 设置持久化 | ⛔ 未开始 | — |
 
@@ -66,8 +66,8 @@
 | # | 裁决 | 落地状态 |
 |---|---|---|
 | 1 | recognition_results 表 Schema：id, photo_id, person_id, status, confidence, created_at，FK photos/people | ✅ Step 9 |
-| 2 | 归档目录命名：`{archive_root}/{person_name}/{event_or_date}/{original_name}` | ⛔ Step 11 待落代码 |
-| 3 | 路径冲突策略：默认 skip，可配 overwrite / rename | ⛔ Step 11 待落代码 |
+| 2 | 归档目录命名：`{archive_root}/{person_name}/{event_or_date}/{original_name}` | ✅ Step 11 |
+| 3 | 路径冲突策略：默认 skip，可配 overwrite / rename | ✅ Step 11 |
 | 4 | AI 模型文件位置：`resources/models/`，不提交 Git，走 download_models.py | ✅ Step 9 |
 | 5 | 缩略图缓存目录：`data/cache/thumbnails/` | ✅ Step 7 |
 | 6 | Git：每 Step 完成后独立提交 | ✅ 全程遵守 |
@@ -104,11 +104,24 @@
 
 ### 6.1 Phase 2 Step 11 启动需 3 项裁决
 
-| # | 待裁决 | 我的建议 |
+| # | 待裁决 | 我的建议 | 裁决落码 |
+|---|---|---|---|
+| 1 | `archive_root` 配置位置：走既有 `AppSettings.output_root`（默认 None）还是新增独立 `AppSettings.archive_root`？ | 新增独立字段，语义更清晰 | ✅ 裁决接受：新增 `AppSettings.archive_root` + `archive_conflict_strategy`，`.env.example` 加 `ARCHIVE_ROOT=` / `ARCHIVE_CONFLICT_STRATEGY=skip` |
+| 2 | `{event_or_date}` 段来源：从 `Photo.created_at` 取日期（格式？）还是留空跳过？ | 取 EXIF DateTimeOriginal 或文件 mtime，格式 YYYY-MM-DD | ✅ 裁决升级：**不让 ArchiveService 直接解析 EXIF**——新增 `Photo.captured_at` + `PhotoMetadata.captured_at` 领域字段，由 PillowPhotoMetadataReader 在导入阶段统一填充（EXIF DateTimeOriginal → mtime 链式降级），Archive 只消费领域数据。ArchivePathBuilder 在缺 captured_at 时落 `unknown-date` 占位段 |
+| 3 | dry-run 模式：本轮就建 `--dry-run` 旗标只 log 不 copy/move，还是推迟？ | 本轮建，roadmap Step 11 验收列了"dry-run 建议" | ✅ 裁决升级：**不只是 bool + 日志**——拆 `ArchivePlanner` → `ArchivePlan` → `ArchiveExecutor` 三段，CLI/UI/测试共用同一套归档计划。dry_run 路径在 Executor 内落 DRY_RUN 状态 + ArchiveRecord 落库，可预审整批归档计划 |
+
+**Step 11 落地清单**（本会话）：
+
+| 层 | 新建 | 改动 |
 |---|---|---|
-| 1 | `archive_root` 配置位置：走既有 `AppSettings.output_root`（默认 None）还是新增独立 `AppSettings.archive_root`？ | 新增独立字段，语义更清晰 |
-| 2 | `{event_or_date}` 段来源：从 `Photo.created_at` 取日期（格式？）还是留空跳过？ | 取 EXIF DateTimeOriginal 或文件 mtime，格式 YYYY-MM-DD |
-| 3 | dry-run 模式：本轮就建 `--dry-run` 旗标只 log 不 copy/move，还是推迟？ | 本轮建，roadmap Step 11 验收列了"dry-run 建议" |
+| Domain | `value_objects/archive_path.py`（ArchivePath）、`entities/archive.py`（ArchiveRecord + ArchiveStatus）、`repositories/archive_record_repository.py` | `Photo` 加 `captured_at`、`PhotoMetadata` 加 `captured_at`、`RecognitionRepository` 加 `list_approved_by_person`、3 个 `__init__` 装配 |
+| Application | `ports/archive_path_builder.py`、`commands/archive.py`、`dtos/archive.py`（ArchivePlan/ArchivePlanItem/ArchiveOutcome/ArchiveResult）、`use_cases/archive.py`、`services/archive_path_builder_service.py` / `archive_planner.py` / `archive_executor.py` / `archive_photos_service.py` | 5 个 `__init__` 装配 |
+| Infrastructure | `database/sqlite_archive_record_repository.py` | Schema PRAGMA v3 → v4（photos.captured_at 列 + archive_records 表）、mappers、photo_repository、recognition_repository、PillowPhotoMetadataReader 加 EXIF 读取、settings 加 archive_root/conflict_strategy、.env.example、3 个 `__init__` 装配 |
+| App | — | `app/repositories.py` 加 `recognition` + `archive_records` 持位、`app/services.py` 装配 ArchivePhotosService |
+| CLI | — | `main.py` 加 `archive` subparser + `--archive-root` / `--conflict-strategy` / `--dry-run` 旗 |
+| 测试 | 6 新文件：`test_archive_path.py` / `test_archive_path_builder.py` / `test_archive_planner.py` / `test_archive_executor.py` / `test_archive_photos_service.py` / `tests/integration/test_step11_archive_e2e.py` | `test_sqlite_repositories.py` 断言 PRAGMA v3 → v4 |
+
+**基线变化**：pytest 143 passed / 8 skipped → **183 passed / 8 skipped**（净增 40，0 回归）；本轮引入 15 文件 ruff/mypy clean；既有 19 mypy + 2 ruff 飘带持平（交接 §6.3 决策不顺带修）。
 
 ### 6.2 样例图与模型包（集成测试前置）
 

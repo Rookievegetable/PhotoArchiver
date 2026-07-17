@@ -1,17 +1,36 @@
-"""Pillow-based implementation of the photo metadata reader port."""
+"""Pillow-based implementation of the photo metadata reader port.
+
+EXIF DateTimeOriginal 读取（落 Phase 2 Step 11 裁决 #2 链式降级）：
+    EXIF DateTimeOriginal → PhotoMetadata.modified_at（文件 mtime）→ None
+Archive 阶段只消费 ``Photo.captured_at`` 领域字段，本适配器是该字段的
+唯一数据源。EXIF 字段号 36868（DateTimeOriginal）是相机原生记录，
+可信度最高；缺 EXIF 时回退 mtime（扫描过程中转存/拷贝会破坏 mtime，
+不可靠但好过留 None）。
+"""
 
 from datetime import datetime
 from pathlib import Path
 
+from loguru import logger
+
 from photo_archiver.application.ports import PhotoMetadataReader
 from photo_archiver.domain import PhotoMetadata
+
+# Pillow EXIF tag id for DateTimeOriginal (相机原生拍摄时刻)。
+# 用整数 id 而非字符串 tag 名以兼容旧 Pillow 版本对本名的差异。
+_EXIF_TAG_DATETIME_ORIGINAL = 36868
 
 
 class PillowPhotoMetadataReader(PhotoMetadataReader):
     """Read basic image metadata using Pillow."""
 
     def read(self, path: Path) -> PhotoMetadata:
-        """Return image dimensions and filesystem metadata for a photo."""
+        """Return image dimensions, filesystem metadata, and captured_at for a photo.
+
+        captured_at 降级链：EXIF DateTimeOriginal → 文件 mtime → None。
+        EXIF 解析失败不抛错（只 log warning），mtime 兜底——保持本适配器
+        对"无 EXIF 图片"（如 PNG、被剥离 EXIF 的 JPG）的非致命容忍。
+        """
         try:
             from PIL import Image, UnidentifiedImageError
         except ImportError as exc:
@@ -26,15 +45,56 @@ class PillowPhotoMetadataReader(PhotoMetadataReader):
         try:
             with Image.open(image_path) as image:
                 width, height = image.size
+                captured_at = self._extract_captured_at(image, image_path)
         except UnidentifiedImageError as exc:
             raise ValueError(f"Unsupported or invalid image file: {image_path}") from exc
         except OSError as exc:
             raise ValueError(f"Failed to read image metadata: {image_path}") from exc
 
         stat = image_path.stat()
+        modified_at = datetime.fromtimestamp(stat.st_mtime)
+        # EXIF 缺失时用 mtime 兜底；EXIF 异常时 captured_at 已为 None，同样兜底。
+        if captured_at is None:
+            captured_at = modified_at
         return PhotoMetadata(
             width=width,
             height=height,
             file_size_bytes=stat.st_size,
-            modified_at=datetime.fromtimestamp(stat.st_mtime),
+            modified_at=modified_at,
+            captured_at=captured_at,
         )
+
+    @staticmethod
+    def _extract_captured_at(image, image_path: Path) -> datetime | None:
+        """Try to read EXIF DateTimeOriginal, returning None on any failure.
+
+        Args:
+            image: An open PIL Image instance.
+            image_path: The path being read, for log context only.
+
+        Returns:
+            The parsed datetime, or None when EXIF is absent / unparsable.
+        """
+        try:
+            exif_data = image.getexif()
+        except (AttributeError, OSError, ValueError) as exc:
+            # getexif() 可在某些 Pillow 版本对无 EXIF 格式抛 ValueError；
+            # OSError 涉及读文件底層；AttributeError 防御性兼容。
+            logger.debug("No EXIF block for {}: {}", image_path, exc)
+            return None
+        if not exif_data:
+            return None
+        raw_value = exif_data.get(_EXIF_TAG_DATETIME_ORIGINAL)
+        if raw_value is None:
+            return None
+        try:
+            # EXIF DateTime 格式：'YYYY:MM:DD HH:MM:SS'（冒号分隔日期段）
+            return datetime.strptime(raw_value, "%Y:%m:%d %H:%M:%S")
+        except (TypeError, ValueError) as exc:
+            logger.warning(
+                "Unparsable EXIF DateTimeOriginal for {}: {} ({})",
+                image_path,
+                raw_value,
+                exc,
+            )
+            return None

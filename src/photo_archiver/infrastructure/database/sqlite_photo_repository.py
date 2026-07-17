@@ -32,19 +32,21 @@ class SQLitePhotoRepository(PhotoRepository):
                     folder_id,
                     original_name,
                     created_at,
+                    captured_at,
                     metadata_width,
                     metadata_height,
                     metadata_file_size_bytes,
                     metadata_modified_at,
                     metadata_content_hash
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     raw_path = excluded.raw_path,
                     path_base = excluded.path_base,
                     folder_id = excluded.folder_id,
                     original_name = excluded.original_name,
                     created_at = excluded.created_at,
+                    captured_at = excluded.captured_at,
                     metadata_width = excluded.metadata_width,
                     metadata_height = excluded.metadata_height,
                     metadata_file_size_bytes = excluded.metadata_file_size_bytes,
@@ -58,6 +60,7 @@ class SQLitePhotoRepository(PhotoRepository):
                     str(photo.folder_id) if photo.folder_id is not None else None,
                     photo.original_name,
                     datetime_to_text(photo.created_at),
+                    datetime_to_text(photo.captured_at) if photo.captured_at is not None else None,
                     metadata.width if metadata is not None else None,
                     metadata.height if metadata is not None else None,
                     metadata.file_size_bytes if metadata is not None else None,

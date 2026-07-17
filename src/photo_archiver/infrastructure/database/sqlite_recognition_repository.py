@@ -71,6 +71,22 @@ class SQLiteRecognitionRepository(RecognitionRepository):
             ).fetchall()
         return [recognition_result_from_row(row) for row in rows]
 
+    def list_approved_by_person(self, person_id: UUID) -> list[RecognitionResult]:
+        """Return all APPROVED recognition results for the given person.
+
+        Used by Step 11 ArchivePlanner to gather a person's approved photos
+        for归档组织。Ordered by ``created_at`` then ``id`` so the planner
+        produces a stable archive ordering under re-invocation.
+        """
+        with self._connection_provider.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM recognition_results "
+                "WHERE person_id = ? AND status = ? "
+                "ORDER BY created_at, id",
+                (str(person_id), MatchStatus.APPROVED.value),
+            ).fetchall()
+        return [recognition_result_from_row(row) for row in rows]
+
     def update_status(self, result_id: UUID, status: MatchStatus) -> int:
         """Transition a recognition result's review status.
 

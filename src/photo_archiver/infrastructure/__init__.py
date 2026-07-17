@@ -5,6 +5,7 @@ from photo_archiver.infrastructure.ai import (
     ModelPackMissing,
 )
 from photo_archiver.infrastructure.database import (
+    SQLiteArchiveRecordRepository,
     SQLiteConnectionProvider,
     SQLiteFaceEmbeddingRepository,
     SQLiteFolderRepository,
@@ -40,6 +41,7 @@ __all__ = [
     "ModelPackMissing",
     "PillowPhotoMetadataReader",
     "PillowThumbnailGenerator",
+    "SQLiteArchiveRecordRepository",
     "SQLiteConnectionProvider",
     "SQLiteFaceEmbeddingRepository",
     "SQLiteFolderRepository",

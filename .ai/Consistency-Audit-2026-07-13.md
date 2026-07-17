@@ -141,6 +141,17 @@
 | R-2 | SQLite 目录归属 | 迁移至 `infrastructure/database/` | ✅ 已执行并验证 |
 | R-3 | COD-005 行宽 88 vs pyproject 100 | 统一为 100 | ✅ 已执行并验证 |
 
+### 5.1 Phase 2 Step 11 裁决落代码（2026-07-18）
+
+| # | 裁决内容 | 落地 |
+|---|---|---|
+| S11-1 | `AppSettings.archive_root` 独立字段（不复用 `output_root`） | ✅ settings 加 `archive_root: Path \| None` + `archive_conflict_strategy: str`（默认 skip），`.env.example` 加 `ARCHIVE_ROOT=` / `ARCHIVE_CONFLICT_STRATEGY=skip` |
+| S11-2 | `Archive` 不解析 EXIF——新增 `Photo.captured_at` / `PhotoMetadata.captured_at` 领域字段，由导入阶段 PillowPhotoMetadataReader 统一填充（EXIF DateTimeOriginal → mtime 链式降级），Archive 只消费领域数据 | ✅ Domain 加字段，PillowPhotoMetadataReader 加 EXIF 读取（tag id 36868），Schema `photos` 加 `captured_at TEXT` 列（PRAGMA v3 → v4） |
+| S11-3 | 拆 `ArchivePlanner` → `ArchivePlan` → `ArchiveExecutor`，CLI/UI/测试共用同一套归档计划；`--dry-run` 落 DRY_RUN 状态 + ArchiveRecord 落库可预审 | ✅ Application 层三段拆分 + DTO 闭环（ArchivePlanItem/ArchivePlan/ArchiveOutcome/ArchiveResult）+ Executor 落 ArchiveRecord + CLI `archive --dry-run` 旗 |
+
+**新增 Domain 公开 API**：`ArchivePath`（值对象）、`ArchiveRecord` + `ArchiveStatus`（实体）、`ArchiveRecordRepository`（仓储 Protocol）、`RecognitionRepository.list_approved_by_person`（Protocol 扩展）。
+**Schema 改动**：PRAGMA `user_version` v3 → v4，`photos.captured_at TEXT` 列 + `archive_records` 表（6 列 + 2 索引）。
+
 ---
 
 ## 6. 待裁决事项

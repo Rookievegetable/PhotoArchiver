@@ -7,6 +7,7 @@ from uuid import UUID
 
 from photo_archiver.domain import Folder, Person, PersonIdentity, Photo, PhotoMetadata, PhotoPath
 from photo_archiver.domain.entities import MatchStatus, RecognitionResult
+from photo_archiver.domain.entities.archive import ArchiveRecord, ArchiveStatus
 from photo_archiver.domain.value_objects import PhotoPathBase
 
 
@@ -81,6 +82,11 @@ def photo_from_row(row: Row) -> Photo:
         )
 
     folder_id = UUID(row["folder_id"]) if row["folder_id"] is not None else None
+    captured_at = (
+        text_to_datetime(row["captured_at"])
+        if row["captured_at"] is not None
+        else None
+    )
     return Photo(
         id=UUID(row["id"]),
         path=columns_to_path(row["raw_path"], row["path_base"]),
@@ -88,6 +94,7 @@ def photo_from_row(row: Row) -> Photo:
         metadata=metadata,
         original_name=row["original_name"],
         created_at=text_to_datetime(row["created_at"]),
+        captured_at=captured_at,
     )
 
 
@@ -114,3 +121,35 @@ def recognition_result_from_row(row: Row) -> RecognitionResult:
     result.status = status
     result.created_at = text_to_datetime(row["created_at"])
     return result
+
+
+def archive_record_from_row(row: Row) -> ArchiveRecord:
+    """Convert a SQLite row to an ArchiveRecord entity.
+
+    The entity is rebuilt already-finalized (past PLANNED) by directly setting
+    fields via ``__new__`` (bypassing ``__post_init__``), since the public
+    ``mark_*`` methods refuse to re-transition a finalized record. This keeps
+    the reconstructed entity's invariant intact without re-running the archive
+    workflow.
+
+    Fragility note: ``__new__`` reflection bypasses ``__post_init__``, so if
+    ArchiveRecord gains fields or changes initialization logic this mapper
+    must be updated in lockstep to avoid silently dropping columns.
+    """
+    status = ArchiveStatus(row["status"])
+    archived_at = (
+        text_to_datetime(row["archived_at"])
+        if row["archived_at"] is not None
+        else None
+    )
+    record = ArchiveRecord.__new__(ArchiveRecord)
+    record.photo_id = UUID(row["photo_id"])
+    record.target_archive_root = row["target_archive_root"]
+    record.target_person_name = row["target_person_name"]
+    record.target_event_or_date = row["target_event_or_date"]
+    record.target_original_name = row["target_original_name"]
+    record.status = status
+    record.id = UUID(row["id"])
+    record.archived_at = archived_at
+    record.error = row["error"]
+    return record
