@@ -57,7 +57,7 @@ class InsightFaceLoader:
 
     def is_available(self) -> bool:
         """Return whether the named model pack is present and non-empty."""
-        return self.pack_path.exists() and bool(list(self.pack_path.iterdir()))
+        return self.pack_path.exists() and any(self.pack_path.iterdir())
 
     def load(self) -> FaceAnalysis:
         """Build and prepare a ``FaceAnalysis`` instance from the model pack.

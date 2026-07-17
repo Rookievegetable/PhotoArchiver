@@ -21,5 +21,11 @@ class RecognitionRepository(Protocol):
     def list_pending(self) -> list[RecognitionResult]:
         """Return all recognition results awaiting user review."""
 
-    def update_status(self, result_id: UUID, status: MatchStatus) -> None:
-        """Transition a recognition result's review status."""
+    def update_status(self, result_id: UUID, status: MatchStatus) -> int:
+        """Transition a recognition result's review status.
+
+        Returns:
+            The number of rows affected (1 on hit, 0 when the result id is
+            missing). Callers SHOULD treat 0 as a concurrent-deletion signal
+            rather than silently assuming success.
+        """

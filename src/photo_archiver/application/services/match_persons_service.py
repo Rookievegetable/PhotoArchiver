@@ -80,6 +80,9 @@ class MatchPersonsService(MatchPersonsUseCase):
             raise ValueError("MatchPersonsCommand photo_ids and images length mismatch")
 
         candidates = self._build_candidate_embeddings()
+        # Memory note: candidates dict驻留整批次周期。Step 12 接入 Worker 时若批量大
+        # (数百张), list_all() 返回每 person 512 float 的 dict 可能占数十 MB——
+        # Step 12 应改为分批 lazy 加载或 snapshot 时用, 本轮 Application-only 范围可接受.
         results: list[MatchResult] = []
         total = len(command.photo_ids)
 
@@ -101,8 +104,8 @@ class MatchPersonsService(MatchPersonsUseCase):
         """Return ``person_id → embedding`` for every known person.
 
         Candidates are queried from :class:`FaceEmbeddingRepository`, which
-        Step 10 Major fix M-1 introduced to replace the broken
-        ``getattr(person, "face_embedding")`` path that always returned empty.
+        replaces the earlier broken ``getattr(person, "face_embedding")``
+        path that always returned empty because Person has no such field.
         """
         return self._face_embedding_repository.list_all()
 

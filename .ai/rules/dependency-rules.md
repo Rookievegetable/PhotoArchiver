@@ -363,7 +363,7 @@ Approved libraries:
 
 ONNX Runtime is approved as the AI model runtime when InsightFace models require it; it MUST remain inside the `ai/` layer or `infrastructure/` adapters and MUST NOT leak into Domain or Presentation.
 
-Note: `insightface` pulls transitive dependencies (scikit-image, scipy, networkx, protobuf, onnx) that are not individually approved in this list — they are引入ed transitively through the `insightface` approval and MUST NOT be imported directly by project code outside of what `insightface` itself requires. Direct imports of these transitive deps in project source require separate approval.
+Note: `insightface` pulls transitive dependencies (scikit-image, scipy, networkx, protobuf, onnx) that are not individually approved in this list — they are引入ed transitively through the `insightface` approval. Project code MUST NOT directly import these transitive dependencies; only insightface's own internals may use them. Direct imports of these transitive deps in project source require separate approval.
 
 Additional third-party dependencies require project approval.
 

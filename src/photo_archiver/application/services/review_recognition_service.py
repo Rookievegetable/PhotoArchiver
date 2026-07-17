@@ -102,7 +102,21 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
             result.reject()
         # update_status persists only the status column, avoiding the wider
         # upsert that add() would perform (which could overwrite photo_id/person_id).
-        self._recognition_repository.update_status(result.id, target)
+        # Limitation: no transaction boundary — if update_status raises after
+        # the in-memory approve()/reject(), the entity is transitioned but DB
+        # is not. Step 11 archive wiring should wrap review in UnitOfWork.
+        affected = self._recognition_repository.update_status(
+            result.id,  # type: ignore[arg-type]  # RecognitionResult.__post_init__ guarantees id is set
+            target,
+        )
+        if affected == 0:
+            # Concurrent deletion between find_by_id and update_status: roll back
+            # the in-memory transition so the returned aggregate stays honest.
+            logger.warning(
+                "Recognition result {} vanished before status persist; not transitioned",
+                result_id,
+            )
+            return None
         logger.info("Recognition result {} -> {}", result_id, target.value)
         return result
 

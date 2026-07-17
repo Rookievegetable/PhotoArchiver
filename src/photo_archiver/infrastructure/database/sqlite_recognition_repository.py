@@ -71,13 +71,19 @@ class SQLiteRecognitionRepository(RecognitionRepository):
             ).fetchall()
         return [recognition_result_from_row(row) for row in rows]
 
-    def update_status(self, result_id: UUID, status: MatchStatus) -> None:
-        """Transition a recognition result's review status."""
+    def update_status(self, result_id: UUID, status: MatchStatus) -> int:
+        """Transition a recognition result's review status.
+
+        Returns:
+            The number of rows affected (1 on hit, 0 when the result id is
+            missing). A 0 signals concurrent deletion rather than silent success.
+        """
         with self._connection_provider.connect() as connection:
-            connection.execute(
+            cursor = connection.execute(
                 "UPDATE recognition_results SET status = ? WHERE id = ?",
                 (status.value, str(result_id)),
             )
+            return cursor.rowcount
 
     @staticmethod
     def _require_created_at(result: RecognitionResult) -> datetime:

@@ -47,7 +47,7 @@ class InsightFaceRecognizer:
         InsightFace's ``FaceAnalysis.get`` returns all detected faces with
         embeddings in one pass, so this method re-detects then finds the face
         whose bbox matches ``box`` within a small tolerance and returns its
-        embedding. The double-detection cost (M-4) is acceptable for Step 10's
+        embedding. The double-detection cost is acceptable for Step 10's
         Application-only scope; Step 12 Worker wiring will batch detect+extract
         via a single ``get`` call to halve the cost.
 

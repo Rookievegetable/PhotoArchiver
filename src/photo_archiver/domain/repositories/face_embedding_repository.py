@@ -14,7 +14,13 @@ from photo_archiver.domain.value_objects import FaceEmbedding
 
 
 class FaceEmbeddingRepository(Protocol):
-    """Define persistence operations for per-person face embeddings."""
+    """Define persistence operations for per-person face embeddings.
+
+    Not decorated ``@runtime_checkable`` (unlike FaceDetector/Recognizer/
+    Matcher) because repositories are never ``isinstance``-checked at runtime —
+    callers wire concrete adapters by construction, so the check overhead is
+    unwanted. Mirrors RecognitionRepository's convention.
+    """
 
     def save(self, person_id: UUID, embedding: FaceEmbedding) -> None:
         """Persist or replace the canonical embedding for a person."""

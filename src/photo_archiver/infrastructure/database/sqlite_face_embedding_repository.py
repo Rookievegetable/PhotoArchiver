@@ -33,6 +33,9 @@ class SQLiteFaceEmbeddingRepository(FaceEmbeddingRepository):
                 a JSON array so the column stays human-readable and safe to
                 deserialize.
         """
+        # datetime.now() is tz-naive, matching RecognitionResult.__post_init__
+        # convention; the project has no tz mandate yet so we stay consistent
+        # with the existing entity timestamps rather than introducing tz here.
         with self._connection_provider.connect() as connection:
             connection.execute(
                 """
@@ -74,6 +77,10 @@ class SQLiteFaceEmbeddingRepository(FaceEmbeddingRepository):
         Returns:
             A dict covering every persisted embedding. Empty when no person
             has a stored embedding.
+
+        Scalability note: full table scan with per-row JSON decode. Acceptable
+        for Step 10's person volume; Step 12 Worker should add pagination or
+        lazy loading when person count reaches thousands (512 floats each).
         """
         with self._connection_provider.connect() as connection:
             rows = connection.execute(

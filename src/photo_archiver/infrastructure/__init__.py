@@ -1,5 +1,9 @@
 """Infrastructure adapters for PhotoArchiver."""
 
+from photo_archiver.infrastructure.ai import (
+    InsightFaceLoader,
+    ModelPackMissing,
+)
 from photo_archiver.infrastructure.database import (
     SQLiteConnectionProvider,
     SQLiteFaceEmbeddingRepository,
@@ -31,7 +35,9 @@ __all__ = [
     "InMemoryFolderRepository",
     "InMemoryPersonRepository",
     "InMemoryPhotoRepository",
+    "InsightFaceLoader",
     "LocalPhotoFileScanner",
+    "ModelPackMissing",
     "PillowPhotoMetadataReader",
     "PillowThumbnailGenerator",
     "SQLiteConnectionProvider",

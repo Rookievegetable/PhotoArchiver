@@ -30,13 +30,14 @@ class _RecordingRecognitionRepository(RecognitionRepository):
     def list_pending(self) -> list:
         raise NotImplementedError
 
-    def update_status(self, result_id, status) -> None:
+    def update_status(self, result_id, status) -> int:
         result = self._results.get(result_id)
         if result is None:
-            return
+            return 0
         # Bypass approve()/reject() guards — service already transitioned the entity.
         result.status = status
         self.added.append(result)
+        return 1
 
 
 def _make_result(photo_id=None, status: MatchStatus = MatchStatus.PENDING) -> RecognitionResult:
@@ -77,6 +78,19 @@ def test_approve_returns_none_for_missing_result() -> None:
     repo = _RecordingRecognitionRepository({})
     service = ReviewRecognitionService(repo)
     assert service.approve(uuid4()) is None
+
+
+def test_approve_returns_none_when_update_affects_zero_rows() -> None:
+    """approve must return None when update_status signals concurrent deletion (0 rows)."""
+
+    class _VanishingRepo(_RecordingRecognitionRepository):
+        def update_status(self, result_id, status) -> int:
+            return 0  # simulate concurrent deletion
+
+    result = _make_result()
+    repo = _VanishingRepo({result.id: result})
+    service = ReviewRecognitionService(repo)
+    assert service.approve(result.id) is None
 
 
 def test_approve_returns_none_for_finalized_result() -> None:

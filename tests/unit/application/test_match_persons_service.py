@@ -53,7 +53,7 @@ class _StubFaceEmbeddingRepository(FaceEmbeddingRepository):
         self._candidates = candidates
 
     def save(self, person_id, embedding: FaceEmbedding) -> None:
-        raise NotImplementedError
+        self._candidates[person_id] = embedding
 
     def find_by_person(self, person_id) -> FaceEmbedding | None:
         return self._candidates.get(person_id)
