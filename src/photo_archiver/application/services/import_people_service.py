@@ -5,6 +5,7 @@ from photo_archiver.application.dtos import ImportPeopleResult, PersonImportRow
 from photo_archiver.application.ports import PersonImportReader
 from photo_archiver.application.use_cases import ImportPeopleUseCase
 from photo_archiver.domain import Person, PersonIdentity, PersonRepository
+from photo_archiver.domain.exceptions import ValidationError
 
 
 class ImportPeopleService(ImportPeopleUseCase):
@@ -41,7 +42,7 @@ class ImportPeopleService(ImportPeopleUseCase):
                 )
                 self._repository.add(person)
                 imported_ids.append(person.id)
-            except Exception as exc:  # noqa: BLE001 - keep row-level import resilient.
+            except (ValueError, ValidationError) as exc:  # noqa: BLE001 - keep row-level import resilient.
                 errors.append(self._format_row_error(row, exc))
 
         return ImportPeopleResult(

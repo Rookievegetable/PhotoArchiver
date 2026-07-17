@@ -43,12 +43,19 @@ class RegisterPhotoService(RegisterPhotoUseCase):
 
     @staticmethod
     def _build_photo_path(path: Path) -> PhotoPath:
-        """Build a domain photo path with the correct path base."""
-        path = Path(path)
-        if path.is_absolute():
-            return PhotoPath(
-                raw_path=path.expanduser().resolve(strict=False),
-                base=PhotoPathBase.ABSOLUTE,
-            )
-        normalized_path = Path(path.as_posix())
-        return PhotoPath(raw_path=normalized_path, base=PhotoPathBase.PHOTO_ROOT)
+        """Build a domain photo path with the correct path base.
+
+        Absolute paths are resolved (expanduser + non-strict resolve) so drive
+        letter / symlink forms normalize. Relative paths are kept relative —
+        only expanduser + lexical normalize — so the PHOTO_ROOT base stays
+        meaningful and cross-platform separator handling stays consistent
+        (P2-d fix: avoid as_posix mismatch between absolute/relative branches).
+        """
+        raw = Path(path)
+        if raw.is_absolute():
+            normalized = raw.expanduser().resolve(strict=False)
+            base = PhotoPathBase.ABSOLUTE
+        else:
+            normalized = raw.expanduser()
+            base = PhotoPathBase.PHOTO_ROOT
+        return PhotoPath(raw_path=normalized, base=base)

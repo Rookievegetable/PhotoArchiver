@@ -77,9 +77,21 @@ class QtWorkerRunnable(QRunnable):
 class QtWorkerExecutor:
     """Submit worker tasks to a Qt thread pool."""
 
-    def __init__(self, thread_pool: QThreadPool | None = None) -> None:
-        """Initialize the executor with the provided or global thread pool."""
+    def __init__(
+        self,
+        thread_pool: QThreadPool | None = None,
+        max_workers: int | None = None,
+    ) -> None:
+        """Initialize the executor with the provided or global thread pool.
+
+        Args:
+            thread_pool: Optional QThreadPool; defaults to the global instance.
+            max_workers: Optional concurrency cap forwarded to the pool's
+                ``setMaxThreadCount``. When ``None`` the pool keeps its default.
+        """
         self._thread_pool = thread_pool or QThreadPool.globalInstance()
+        if max_workers is not None:
+            self._thread_pool.setMaxThreadCount(max_workers)
 
     def submit(self, task: WorkerTask[object]) -> QtWorkerRunnable:
         """Submit a task for background execution and return its runnable handle."""

@@ -16,15 +16,23 @@ class ThumbnailCache:
 
         Args:
             cache_root: Directory under which thumbnail files are stored.
+                Created eagerly so callers never need to bootstrap it.
         """
         self._root = Path(cache_root)
+        self._root.mkdir(parents=True, exist_ok=True)
 
-    def resolve(self, source: Path, size: int) -> Path:
+    def resolve(self, source: Path, size: int) -> Path | None:
         """Return the cache file path for the given source and size.
 
-        Does not guarantee the file exists; callers should render on miss.
+        Returns ``None`` when the source file does not exist (``stat`` fails)
+        so callers can skip rendering instead of crashing. When the source
+        exists, the cache path is derived from a hash of source path + size +
+        mtime + file size so renamed or edited photos invalidate automatically.
         """
-        stat = source.stat()
+        try:
+            stat = source.stat()
+        except FileNotFoundError:
+            return None
         key = f"{source.resolve(strict=False)}|{size}|{stat.st_mtime_ns}|{stat.st_size}"
         digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
         ext = source.suffix.lower() or ".jpg"

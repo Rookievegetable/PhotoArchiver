@@ -146,5 +146,7 @@ def test_ensure_runtime_directories_creates_expected_paths(
 
     assert (tmp_path / "logs").is_dir()
     assert (tmp_path / "data").is_dir()
-    assert (tmp_path / "models").is_dir()
+    # model_path is intentionally NOT created by ensure_runtime_directories
+    # (P2-b): InsightFaceLoader / download_models.py own it.
+    assert not (tmp_path / "models").exists()
     assert (tmp_path / "exports").is_dir()

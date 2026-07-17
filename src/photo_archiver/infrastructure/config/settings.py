@@ -146,6 +146,8 @@ class AppSettings(BaseSettings):
         """Create directories required for logging and local data storage."""
         self.log_directory.mkdir(parents=True, exist_ok=True)
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
-        self.model_path.mkdir(parents=True, exist_ok=True)
+        # model_path is intentionally NOT created here: InsightFaceLoader and
+        # scripts/download_models.py own it, and creating it unconditionally
+        # would hide the actual AI dependency (P2-b fix).
         if self.output_root is not None:
             self.output_root.mkdir(parents=True, exist_ok=True)

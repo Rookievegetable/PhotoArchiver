@@ -80,6 +80,13 @@ class SQLiteConnectionProvider:
         their own transactions independently. On normal exit the connection is
         committed; on exception it is rolled back. The connection is closed in
         either case and the provider is restored to per-call connection mode.
+
+        Nested transactions on the same thread are NOT supported — SQLite
+        SAVEPOINTs are deliberately avoided to keep the boundary simple and
+        single-threaded. Callers MUST NOT enter a second ``transaction()`` scope
+        inside an active one; a RuntimeError is raised to make the violation
+        explicit. Code that needs retry-within-transaction should open a fresh
+        provider rather than nesting.
         """
         if self._active_connection is not None:
             raise RuntimeError("Nested SQLite transactions are not supported on a single thread")
