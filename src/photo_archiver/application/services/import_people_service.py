@@ -41,14 +41,14 @@ class ImportPeopleService(ImportPeopleUseCase):
                     note=row.note,
                 )
                 self._repository.add(person)
-                imported_ids.append(person.id)
+                imported_ids.append(person.id)  # type: ignore[arg-type]  # Person.__post_init__ guarantees id is set
             except (ValueError, ValidationError) as exc:  # noqa: BLE001 - keep row-level import resilient.
                 errors.append(self._format_row_error(row, exc))
 
         return ImportPeopleResult(
             imported_count=len(imported_ids),
             skipped_count=skipped_count,
-            person_ids=tuple(imported_ids),
+            person_ids=tuple(imported_ids),  # type: ignore[arg-type]  # Person.__post_init__ guarantees ids are set
             errors=tuple(errors),
         )
 

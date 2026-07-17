@@ -26,7 +26,10 @@ class RegisterPhotoService(RegisterPhotoUseCase):
         photo_path = self._build_photo_path(command.path)
         existing_photo = self._repository.find_by_path(photo_path)
         if existing_photo is not None:
-            return RegisterPhotoResult(photo_id=existing_photo.id, created=False)
+            return RegisterPhotoResult(
+                photo_id=existing_photo.id,  # type: ignore[arg-type]  # Photo.__post_init__ guarantees id is set
+                created=False,
+            )
 
         metadata = None
         if self._metadata_reader is not None:
@@ -39,7 +42,10 @@ class RegisterPhotoService(RegisterPhotoUseCase):
             original_name=command.original_name,
         )
         self._repository.add(photo)
-        return RegisterPhotoResult(photo_id=photo.id, created=True)
+        return RegisterPhotoResult(
+            photo_id=photo.id,  # type: ignore[arg-type]  # Photo.__post_init__ guarantees id is set
+            created=True,
+        )
 
     @staticmethod
     def _build_photo_path(path: Path) -> PhotoPath:
