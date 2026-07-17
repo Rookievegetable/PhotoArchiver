@@ -59,6 +59,11 @@ class MainWindow(QMainWindow):
         scan_action.triggered.connect(self._on_scan_clicked)
         toolbar.addAction(scan_action)
 
+        self._cancel_action = QAction("Cancel Scan", self)
+        self._cancel_action.setEnabled(False)
+        self._cancel_action.triggered.connect(self._on_cancel_clicked)
+        toolbar.addAction(self._cancel_action)
+
     def _build_central(self) -> None:
         """Create the central progress placeholder."""
         self._progress = QProgressBar(self)
@@ -80,7 +85,9 @@ class MainWindow(QMainWindow):
             return
         self._progress.setValue(0)
         self._status_label.setText(f"Scanning {folder} ...")
+        self._cancel_action.setEnabled(True)
         runnable = self._scan_controller.scan_folder(Path(folder))
+        self._active_runnable = runnable
         ScanController.connect_signals(
             runnable,
             self._on_started,
@@ -88,6 +95,14 @@ class MainWindow(QMainWindow):
             self._on_completed,
             self._on_failed,
         )
+
+    def _on_cancel_clicked(self) -> None:
+        """Request cooperative cancellation for the active scan task."""
+        runnable = getattr(self, "_active_runnable", None)
+        if runnable is not None:
+            runnable.cancel("User requested cancel")
+            self._cancel_action.setEnabled(False)
+            self._status_label.setText("Cancelling ...")
 
     def _on_started(self, event: TaskStarted) -> None:
         """Reflect task start in the status bar."""
@@ -100,6 +115,7 @@ class MainWindow(QMainWindow):
 
     def _on_completed(self, event: TaskCompleted) -> None:
         """Reflect task completion and surface result statistics."""
+        self._cancel_action.setEnabled(False)
         result = event.result
         message = (
             f"Scan complete: discovered={result.discovered_count}, "
@@ -110,7 +126,12 @@ class MainWindow(QMainWindow):
         self._progress.setValue(_PROGRESS_RESOLUTION)
 
     def _on_failed(self, event: TaskFailed) -> None:
-        """Surface task failure in a modal and reset progress."""
+        """Surface task failure with the concrete error message and reset progress."""
+        self._cancel_action.setEnabled(False)
         self._progress.setValue(0)
         self._status_label.setText("Scan failed.")
-        QMessageBox.warning(self, "Scan Failed", "The scan could not complete. Check the log for details.")
+        QMessageBox.warning(
+            self,
+            "Scan Failed",
+            f"The scan could not complete:\n{event.message}\n\nCheck the log for details.",
+        )

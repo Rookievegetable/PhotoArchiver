@@ -1,6 +1,7 @@
 """Qt executor for running worker tasks outside the UI thread."""
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
+from loguru import logger
 
 from photo_archiver.workers.events import (
     TaskCancelled,
@@ -40,12 +41,23 @@ class QtWorkerRunnable(QRunnable):
 
     @Slot()
     def run(self) -> None:
-        """Run the task in a background Qt thread."""
+        """Run the task in a background Qt thread.
+
+        WorkerTask.run() already emits TaskFailed and re-raises on exception,
+        so this wrapper only catches the re-raised exception to keep Qt thread
+        exit clean. A debug log line is left here so thread-layer crashes are
+        observable in logs even though the task layer has already reported.
+        """
         try:
             self.task.run()
         except WorkerTaskCancelled:
             return
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 - task layer already emitted TaskFailed
+            logger.debug(
+                "QtWorkerRunnable task '{}' ended with exception (already emitted as TaskFailed): {}",
+                self.task.name,
+                exc,
+            )
             return
 
     def _emit_task_event(self, event: TaskEvent) -> None:

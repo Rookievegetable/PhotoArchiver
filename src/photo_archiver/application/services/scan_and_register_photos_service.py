@@ -72,6 +72,13 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
         total = len(scan_items)
         folder = self._get_or_create_folder(folder_path, display_name)
 
+        # Pre-fetch existing photo paths for this folder once to avoid N+1
+        # find_by_path queries inside the scan loop (P1-b fix). Path comparison
+        # happens in memory against the fetched set.
+        existing_paths = {
+            photo.path for photo in self._photo_repository.list_by_folder_id(folder.id)
+        }
+
         registered_count = 0
         skipped_count = 0
         errors: list[str] = []
@@ -79,7 +86,7 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
         for index, item in enumerate(scan_items, start=1):
             photo_path = self._absolute_path(item.path)
             path_value = self._photo_path(photo_path)
-            if self._photo_repository.find_by_path(path_value) is not None:
+            if path_value in existing_paths:
                 skipped_count += 1
                 self._report(index, total, "Skipping existing photo")
                 continue
@@ -100,6 +107,7 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
                 original_name=item.original_name or photo_path.name,
             )
             self._photo_repository.add(photo)
+            existing_paths.add(path_value)
             registered_count += 1
             self._report(index, total, "Registered photo")
 
