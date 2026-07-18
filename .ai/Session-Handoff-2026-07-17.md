@@ -48,7 +48,7 @@
 | 9 AI InsightFace 实现 + 识别闭环 | ✅ 已完成 | `75a865d` |
 | 10 用户复核数据模型 | ✅ 已完成 | `947b428` |
 | 11 归档组织 + 去重 | ✅ **已完成** — Planner→Plan→Executor 拆分 + captured_at 领域字段 + archive_root 独立配置 + --dry-run | 本会话 |
-| 12 完整 UI 工作台 | ⛔ 未开始 | — |
+| 12 完整 UI 工作台 | ✅ **已完成** — MainWindow 重构（4 toolbar action + 照片列表 + 缩略图）；4 controller（ImportPeople/Archive/Review/PhotoList）；ArchivePhotosTask；ArchivePreviewDialog | 本会话 |
 | 13 设置持久化 | ⛔ 未开始 | — |
 
 ### 2.2 数据库 Schema 版本

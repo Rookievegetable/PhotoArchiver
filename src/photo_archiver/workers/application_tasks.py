@@ -1,9 +1,20 @@
 """Worker task wrappers for application use cases."""
 
-from photo_archiver.application.commands import ImportPeopleCommand, ScanAndRegisterPhotosCommand
-from photo_archiver.application.dtos import ImportPeopleResult, ScanAndRegisterPhotosResult
-from photo_archiver.application.ports import ProgressReporter
-from photo_archiver.application.use_cases import ImportPeopleUseCase, ScanAndRegisterPhotosUseCase
+from photo_archiver.application.commands import (
+    ArchivePhotosCommand,
+    ImportPeopleCommand,
+    ScanAndRegisterPhotosCommand,
+)
+from photo_archiver.application.dtos import (
+    ArchiveResult,
+    ImportPeopleResult,
+    ScanAndRegisterPhotosResult,
+)
+from photo_archiver.application.use_cases import (
+    ArchivePhotosUseCase,
+    ImportPeopleUseCase,
+    ScanAndRegisterPhotosUseCase,
+)
 from photo_archiver.workers.task import WorkerTask
 
 
@@ -63,5 +74,37 @@ class ScanAndRegisterPhotosTask(WorkerTask[ScanAndRegisterPhotosResult]):
             "Photo scan finished",
             current=result.registered_count + result.skipped_count + result.failed_count,
             total=result.discovered_count,
+        )
+        return result
+
+
+class ArchivePhotosTask(WorkerTask[ArchiveResult]):
+    """Run the archive photos use case as a worker task.
+
+    Streams coarse two-phase progress: planning (unknown total) then executing
+    (per-photo via the result's outcomes). Archive is a batch operation without
+    a natural per-item event hook in Step 11's Planner/Executor split — the
+    planner is side-effect free and the executor runs synchronously inside the
+    service. This task therefore emits two coarse progress updates rather than
+    streaming per-item, matching the ImportPeopleTask precedent.
+    """
+
+    def __init__(self, use_case: ArchivePhotosUseCase, command: ArchivePhotosCommand) -> None:
+        """Initialize the task with its application use case and command."""
+        super().__init__("archive_photos")
+        self._use_case = use_case
+        self._command = command
+
+    def execute(self) -> ArchiveResult:
+        """Execute the archive use case with coarse planning/executing progress."""
+        self.raise_if_cancelled()
+        self.report_progress("Planning archive")
+        result = self._use_case.execute(self._command)
+        self.raise_if_cancelled()
+        archived_total = result.archived_count + result.skipped_count + result.dry_run_count
+        self.report_progress(
+            "Archive finished",
+            current=archived_total,
+            total=result.planned_count,
         )
         return result

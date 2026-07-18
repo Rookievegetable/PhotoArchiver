@@ -7,6 +7,7 @@ from loguru import logger
 from photo_archiver.app.context import ApplicationContext
 from photo_archiver.app.repositories import build_sqlite_repositories
 from photo_archiver.app.services import build_application_services
+from photo_archiver.app.ui_assembly import build_ui_controllers
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.infrastructure.logging import configure_logging, log_application_startup
 from photo_archiver.workers import QtWorkerExecutor
@@ -57,9 +58,12 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
         )
         raise
     worker_executor = QtWorkerExecutor()
+    ui_controllers = build_ui_controllers(services, repositories, resolved_settings)
     return ApplicationContext(
         settings=resolved_settings,
         repositories=repositories,
         services=services,
         worker_executor=worker_executor,
+        review_controller=ui_controllers.review,
+        photo_list_controller=ui_controllers.photo_list,
     )

@@ -10,6 +10,7 @@ from photo_archiver.application import (
     ArchivePlanner,
     ImportPeopleService,
     RegisterPhotoService,
+    ReviewRecognitionService,
     ScanAndRegisterPhotosService,
     ScanPhotoFolderService,
 )
@@ -33,6 +34,7 @@ class ApplicationServices:
     scan_photo_folder: ScanPhotoFolderService
     scan_and_register_photos: ScanAndRegisterPhotosService
     archive_photos: ArchivePhotosService
+    review_recognition: ReviewRecognitionService
 
 
 def build_application_services(repositories: ApplicationRepositories) -> ApplicationServices:
@@ -71,4 +73,5 @@ def build_application_services(repositories: ApplicationRepositories) -> Applica
             unit_of_work=unit_of_work,
         ),
         archive_photos=archive_photos_service,
+        review_recognition=ReviewRecognitionService(repositories.recognition),
     )

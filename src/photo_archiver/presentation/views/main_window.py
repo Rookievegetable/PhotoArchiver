@@ -1,4 +1,12 @@
-"""Main application window."""
+"""Main application window — Step 12 complete workbench.
+
+Toolbar: [Import People] [Scan Folder] [Review Pending] [Archive]
+Central: QListView of photos with thumbnails (PhotoListModel)
+Status:  progress bar + status label
+
+每个 toolbar action 接对应 controller，长耗时走 QtWorkerExecutor，
+短耗时（review approve/reject、archive preview）同步调。
+"""
 
 from pathlib import Path
 
@@ -11,72 +19,172 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QStatusBar,
     QToolBar,
+    QListView,
+    QVBoxLayout,
+    QWidget,
 )
 
 from photo_archiver.app.context import ApplicationContext
-from photo_archiver.presentation.controllers import ScanController
+from photo_archiver.presentation.controllers import (
+    ArchiveController,
+    ImportPeopleController,
+    ScanController,
+)
+from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
+from photo_archiver.presentation.views.photo_list_model import PhotoListModel
 from photo_archiver.workers.events import TaskCompleted, TaskFailed, TaskProgress, TaskStarted
 
 DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
-
 _PROGRESS_RESOLUTION = 100
 
 
 class MainWindow(QMainWindow):
     """Main window for the PhotoArchiver desktop application.
 
-    The window owns no business logic; it delegates button actions to a
-    :class:`ScanController` and reflects worker task events in widgets.
+    The window owns no business logic; it delegates button actions to controllers
+    and reflects worker task events in widgets. Step 12 expanded the toolbar
+    from scan-only to the full闭环 (import / scan / review / archive) and
+    replaced the bare progress placeholder with a photo list.
     """
 
     def __init__(self, context: ApplicationContext) -> None:
         """Initialize the main window with the runtime application context.
 
         Args:
-            context: Assembled runtime context providing services and worker executor.
+            context: Assembled runtime context providing services, worker executor,
+                and the controllers assembled in :meth:`_build_controllers`.
         """
         super().__init__()
         self.setWindowTitle("PhotoArchiver")
         self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         self._context = context
-        self._scan_controller = ScanController(
-            context.services.scan_and_register_photos,
-            context.worker_executor,
-            parent=self,
-        )
-
+        self._build_controllers()
         self._build_toolbar()
         self._build_central()
         self._build_status()
+        self._active_runnable = None  # tracks the currently running worker
+
+    def _build_controllers(self) -> None:
+        """Assemble the four controllers from context services + worker executor."""
+        self._scan_controller = ScanController(
+            self._context.services.scan_and_register_photos,
+            self._context.worker_executor,
+            parent=self,
+        )
+        self._import_controller = ImportPeopleController(
+            self._context.services.import_people,
+            self._context.worker_executor,
+            parent=self,
+        )
+        # ArchiveController needs the planner directly for preview() — we reach
+        # into the service's planner rather than widening ApplicationContext for
+        # one component. This is a narrow intentional coupling.
+        self._archive_controller = ArchiveController(
+            self._context.services.archive_photos._planner,  # type: ignore[attr-defined]
+            self._context.services.archive_photos,
+            self._context.worker_executor,
+            parent=self,
+        )
+        self._review_controller = self._context.review_controller  # set by bootstrap
 
     def _build_toolbar(self) -> None:
-        """Create the primary action toolbar."""
+        """Create the primary action toolbar covering the full闭环."""
         toolbar = QToolBar("Main", self)
         self.addToolBar(toolbar)
+
+        import_action = QAction("Import People", self)
+        import_action.triggered.connect(self._on_import_clicked)
+        toolbar.addAction(import_action)
 
         scan_action = QAction("Scan Folder", self)
         scan_action.triggered.connect(self._on_scan_clicked)
         toolbar.addAction(scan_action)
 
-        self._cancel_action = QAction("Cancel Scan", self)
+        review_action = QAction("Review Pending", self)
+        review_action.triggered.connect(self._on_review_clicked)
+        toolbar.addAction(review_action)
+
+        archive_action = QAction("Archive", self)
+        archive_action.triggered.connect(self._on_archive_clicked)
+        toolbar.addAction(archive_action)
+
+        self._cancel_action = QAction("Cancel Task", self)
         self._cancel_action.setEnabled(False)
         self._cancel_action.triggered.connect(self._on_cancel_clicked)
         toolbar.addAction(self._cancel_action)
 
     def _build_central(self) -> None:
-        """Create the central progress placeholder."""
+        """Create the central photo list with a placeholder label above."""
+        central = QWidget(self)
+        layout = QVBoxLayout(central)
+
+        self._photo_list_model = PhotoListModel(parent=self)
+        self._photo_list = QListView(self)
+        self._photo_list.setModel(self._photo_list_model)
+        layout.addWidget(self._photo_list)
+
+        self.setCentralWidget(central)
+
+    def _build_status(self) -> None:
+        """Create the status bar with a progress bar and persistent label."""
+        self._status = QStatusBar(self)
+        self.setStatusBar(self._status)
         self._progress = QProgressBar(self)
         self._progress.setRange(0, _PROGRESS_RESOLUTION)
         self._progress.setValue(0)
-        self.setCentralWidget(self._progress)
-
-    def _build_status(self) -> None:
-        """Create the status bar with a persistent status label."""
-        self._status = QStatusBar(self)
-        self.setStatusBar(self._status)
+        self._status.addPermanentWidget(self._progress)
         self._status_label = QLabel("Ready", self)
         self._status.addWidget(self._status_label)
+
+    # ---- Worker task slots ----
+
+    def _connect_task_signals(self, runnable) -> None:
+        """Wire the runnable's signals to the shared task slots and track it."""
+        self._active_runnable = runnable
+        ImportPeopleController.connect_signals(
+            runnable,
+            self._on_started,  # type: ignore[arg-type]  # Qt Slot vs Callable variance, existing convention
+            self._on_progress,  # type: ignore[arg-type]
+            self._on_completed,  # type: ignore[arg-type]
+            self._on_failed,  # type: ignore[arg-type]
+        )
+        self._cancel_action.setEnabled(True)
+
+    def _on_started(self, event: TaskStarted) -> None:
+        """Reflect task start in the status bar."""
+        self._status_label.setText(f"{event.task_name} started ...")
+
+    def _on_progress(self, event: TaskProgress) -> None:
+        """Update the progress bar from task progress events."""
+        if event.current is not None and event.total and event.total > 0:
+            self._progress.setValue(int(event.current * _PROGRESS_RESOLUTION / event.total))
+        elif event.message:
+            self._status_label.setText(event.message)
+
+    def _on_completed(self, event: TaskCompleted) -> None:
+        """Reflect task completion and refresh the photo list."""
+        self._cancel_action.setEnabled(False)
+        self._progress.setValue(_PROGRESS_RESOLUTION)
+        self._status_label.setText(f"{event.task_name} complete")
+        self._refresh_photo_list()
+
+    def _on_failed(self, event: TaskFailed) -> None:
+        """Surface task failure with the concrete error message and reset progress."""
+        self._cancel_action.setEnabled(False)
+        self._progress.setValue(0)
+        self._status_label.setText(f"{event.task_name} failed.")
+        QMessageBox.warning(self, f"{event.task_name.title()} Failed", event.message)
+
+    def _on_cancel_clicked(self) -> None:
+        """Request cooperative cancellation for the active task."""
+        runnable = getattr(self, "_active_runnable", None)
+        if runnable is not None:
+            runnable.cancel("User requested cancel")
+            self._cancel_action.setEnabled(False)
+            self._status_label.setText("Cancelling ...")
+
+    # ---- Toolbar actions ----
 
     def _on_scan_clicked(self) -> None:
         """Open a folder picker and start the scan workflow."""
@@ -85,53 +193,81 @@ class MainWindow(QMainWindow):
             return
         self._progress.setValue(0)
         self._status_label.setText(f"Scanning {folder} ...")
-        self._cancel_action.setEnabled(True)
         runnable = self._scan_controller.scan_folder(Path(folder))
-        self._active_runnable = runnable
-        ScanController.connect_signals(
-            runnable,
-            self._on_started,
-            self._on_progress,
-            self._on_completed,
-            self._on_failed,
+        self._connect_task_signals(runnable)
+
+    def _on_import_clicked(self) -> None:
+        """Open a file picker and start the people-import workflow."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select People File", "", "People files (*.txt *.xlsx *.xls)"
         )
-
-    def _on_cancel_clicked(self) -> None:
-        """Request cooperative cancellation for the active scan task."""
-        runnable = getattr(self, "_active_runnable", None)
-        if runnable is not None:
-            runnable.cancel("User requested cancel")
-            self._cancel_action.setEnabled(False)
-            self._status_label.setText("Cancelling ...")
-
-    def _on_started(self, event: TaskStarted) -> None:
-        """Reflect task start in the status bar."""
-        self._status_label.setText("Scan started ...")
-
-    def _on_progress(self, event: TaskProgress) -> None:
-        """Update the progress bar from task progress events."""
-        if event.current is not None and event.total and event.total > 0:
-            self._progress.setValue(int(event.current * _PROGRESS_RESOLUTION / event.total))
-
-    def _on_completed(self, event: TaskCompleted) -> None:
-        """Reflect task completion and surface result statistics."""
-        self._cancel_action.setEnabled(False)
-        result = event.result
-        message = (
-            f"Scan complete: discovered={result.discovered_count}, "
-            f"registered={result.registered_count}, skipped={result.skipped_count}, "
-            f"failed={result.failed_count}"
-        )
-        self._status_label.setText(message)
-        self._progress.setValue(_PROGRESS_RESOLUTION)
-
-    def _on_failed(self, event: TaskFailed) -> None:
-        """Surface task failure with the concrete error message and reset progress."""
-        self._cancel_action.setEnabled(False)
+        if not path:
+            return
         self._progress.setValue(0)
-        self._status_label.setText("Scan failed.")
-        QMessageBox.warning(
+        self._status_label.setText(f"Importing {path} ...")
+        runnable = self._import_controller.import_from(Path(path))
+        self._connect_task_signals(runnable)
+
+    def _on_review_clicked(self) -> None:
+        """Show pending recognition results in a blocking info dialog.
+
+        Step 12 裁决 A: approve/reject are synchronous DB operations (<10ms);
+        a full review panel is out of scope this round — surfacing the pending
+        count here lets the user know whether archive is meaningful yet.
+        """
+        pending = self._review_controller.list_pending()
+        if not pending:
+            QMessageBox.information(self, "Review", "No pending recognition results.")
+            return
+        QMessageBox.information(
             self,
-            "Scan Failed",
-            f"The scan could not complete:\n{event.message}\n\nCheck the log for details.",
+            "Review",
+            f"{len(pending)} pending result(s). Use the CLI or a future review panel "
+            "to approve/reject them; archive only covers APPROVED photos.",
         )
+
+    def _on_archive_clicked(self) -> None:
+        """Open the archive preview dialog; on accept, start the archive task."""
+        archive_root = self._context.settings.archive_root
+        if archive_root is None:
+            QMessageBox.warning(
+                self,
+                "Archive",
+                "ARCHIVE_ROOT is not configured. Set it in .env or use the CLI --archive-root flag.",
+            )
+            return
+        plan = self._archive_controller.preview(archive_root, ())
+        if plan.planned_count == 0:
+            QMessageBox.information(
+                self,
+                "Archive",
+                f"Nothing to archive (skipped={plan.skipped_count}). "
+                "Approve recognition results first via the Review button.",
+            )
+            return
+        dialog = ArchivePreviewDialog(plan, archive_root, self)
+        if not dialog.exec():
+            return
+        self._progress.setValue(0)
+        self._status_label.setText("Archiving ...")
+        runnable = self._archive_controller.execute(
+            archive_root,
+            person_ids=dialog.person_ids,
+            conflict_strategy=dialog.conflict_strategy,
+            dry_run=dialog.dry_run,
+        )
+        self._connect_task_signals(runnable)
+
+    def _refresh_photo_list(self) -> None:
+        """Reload photos from the repository into the model.
+
+        Called after any task completes so newly-scanned or archived photos
+        surface without a manual refresh. Thumbnails load lazily via the
+        PhotoListController when the list view asks for them.
+        """
+        if not hasattr(self, "_photo_list_controller"):
+            return  # controller not wired (tests may construct MainWindow minimally)
+        photos = self._photo_list_controller.list_photos()
+        self._photo_list_model.load_photos(photos)
+        for photo in photos:
+            self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)

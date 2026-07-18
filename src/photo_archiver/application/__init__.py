@@ -34,6 +34,7 @@ from photo_archiver.application.services import (
     ArchivePlanner,
     ImportPeopleService,
     RegisterPhotoService,
+    ReviewRecognitionService,
     ScanAndRegisterPhotosService,
     ScanPhotoFolderService,
 )
@@ -41,6 +42,7 @@ from photo_archiver.application.use_cases import (
     ArchivePhotosUseCase,
     ImportPeopleUseCase,
     RegisterPhotoUseCase,
+    ReviewRecognitionUseCase,
     ScanAndRegisterPhotosUseCase,
     ScanPhotoFolderUseCase,
 )
@@ -71,6 +73,8 @@ __all__ = [
     "RegisterPhotoResult",
     "RegisterPhotoService",
     "RegisterPhotoUseCase",
+    "ReviewRecognitionService",
+    "ReviewRecognitionUseCase",
     "ScanAndRegisterPhotosCommand",
     "ScanAndRegisterPhotosResult",
     "ScanAndRegisterPhotosService",

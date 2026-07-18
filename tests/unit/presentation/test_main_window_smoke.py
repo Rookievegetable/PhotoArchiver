@@ -1,4 +1,4 @@
-"""Smoke tests for MainWindow and ScanController wiring."""
+"""Smoke tests for MainWindow and controller wiring (Step 12 expanded)."""
 
 import pytest
 
@@ -11,12 +11,17 @@ from pathlib import Path
 # MainWindow pulls app.context.ApplicationContext during its own import.
 from photo_archiver.app import bootstrap_application  # noqa: F401
 from photo_archiver.infrastructure.config import AppSettings
-from photo_archiver.presentation.controllers import ScanController
+from photo_archiver.presentation.controllers import (
+    ArchiveController,
+    ImportPeopleController,
+    ReviewController,
+    ScanController,
+)
 from photo_archiver.presentation.views.main_window import MainWindow
 
 
 def test_main_window_constructs_with_context(qtbot, tmp_path: Path) -> None:
-    """MainWindow should construct and expose expected widgets."""
+    """MainWindow should construct with the full Step 12 controller set."""
     settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'smoke.db'}")
     settings.ensure_runtime_directories()
     context = bootstrap_application(settings)
@@ -24,6 +29,19 @@ def test_main_window_constructs_with_context(qtbot, tmp_path: Path) -> None:
     qtbot.addWidget(window)
     assert window.windowTitle() == "PhotoArchiver"
     assert window.centralWidget() is not None
+
+
+def test_main_window_exposes_four_controllers(qtbot, tmp_path: Path) -> None:
+    """MainWindow should assemble scan/import/archive/review controllers."""
+    settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'smoke2.db'}")
+    settings.ensure_runtime_directories()
+    context = bootstrap_application(settings)
+    window = MainWindow(context)
+    qtbot.addWidget(window)
+    assert isinstance(window._scan_controller, ScanController)
+    assert isinstance(window._import_controller, ImportPeopleController)
+    assert isinstance(window._archive_controller, ArchiveController)
+    assert isinstance(window._review_controller, ReviewController)
 
 
 def test_scan_controller_connect_signals_wires_slots(qtbot) -> None:
