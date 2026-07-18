@@ -54,11 +54,18 @@ class ArchivePath:
                 raise ValidationError(f"ArchivePath {name} segment must not be empty")
 
         # 段内不得含路径分隔符——archive_root 豁免（它是路径前缀）。
+        # review M-3 fix: also reject ".." so person_name/original_name cannot
+        # escape the naming-rule hierarchy via parent-directory traversal even
+        # when separators are absent (e.g. person_name=".." would climb out).
         for name in ("person_name", "event_or_date", "original_name"):
             value = segments[name].strip()
             if "/" in value or "\\" in value:
                 raise ValidationError(
                     f"ArchivePath {name} segment must not contain path separators"
+                )
+            if value == ".." or value == ".":
+                raise ValidationError(
+                    f"ArchivePath {name} segment must not be a parent-directory reference"
                 )
 
         object.__setattr__(self, "archive_root", self.archive_root.strip())

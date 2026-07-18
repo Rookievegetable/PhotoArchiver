@@ -47,11 +47,13 @@ def build_application_services(repositories: ApplicationRepositories) -> Applica
         recognition_repository=repositories.recognition,
         archive_record_repository=repositories.archive_records,
     )
-    archive_executor = ArchiveExecutor(repositories.archive_records)
+    archive_executor = ArchiveExecutor(
+        repositories.archive_records,
+        unit_of_work=unit_of_work,
+    )
     archive_photos_service = ArchivePhotosService(
         planner=archive_planner,
         executor=archive_executor,
-        unit_of_work=unit_of_work,
         default_conflict_strategy=DEFAULT_ARCHIVE_CONFLICT_STRATEGY,
     )
 

@@ -72,19 +72,26 @@ class SQLiteArchiveRecordRepository(ArchiveRecordRepository):
         return archive_record_from_row(row) if row is not None else None
 
     def find_by_photo(self, photo_id: UUID) -> ArchiveRecord | None:
-        """Return the most recent archive record for the given photo.
+        """Return the most recent SUCCESS archive record for the given photo.
 
-        Order by ``archived_at DESC, id DESC`` so re-archived photos surface
-        the latest attempt; PLANNED records (NULL archived_at) sink to the
-        end via NULLS LAST semantics on SQLite (NULL sorts first ASC, last
-        DESC), which is acceptable for "has this been archived recently?"
-        queries.
+        review M-2 fix: filter to success states (ARCHIVED/SKIPPED/RENAMED/OVERWRITTEN)
+        so historical FAILED / PLANNED / DRY_RUN rows don't block retries — the
+        planner checks this to decide "already archived?" and FAILED should be
+        re-attemptable. Ordered by archived_at DESC, id DESC for recency.
         """
+        success_states = (
+            ArchiveStatus.ARCHIVED.value,
+            ArchiveStatus.SKIPPED.value,
+            ArchiveStatus.RENAMED.value,
+            ArchiveStatus.OVERWRITTEN.value,
+        )
+        placeholders = ",".join("?" for _ in success_states)
         with self._connection_provider.connect() as connection:
             row = connection.execute(
-                "SELECT * FROM archive_records WHERE photo_id = ? "
-                "ORDER BY archived_at DESC, id DESC LIMIT 1",
-                (str(photo_id),),
+                f"SELECT * FROM archive_records WHERE photo_id = ? "
+                f"AND status IN ({placeholders}) "
+                f"ORDER BY archived_at DESC, id DESC LIMIT 1",
+                (str(photo_id), *success_states),
             ).fetchone()
         return archive_record_from_row(row) if row is not None else None
 

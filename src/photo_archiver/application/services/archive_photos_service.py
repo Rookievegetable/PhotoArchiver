@@ -16,7 +16,6 @@ from loguru import logger
 
 from photo_archiver.application.commands import ArchivePhotosCommand
 from photo_archiver.application.dtos import ArchiveResult
-from photo_archiver.application.ports import UnitOfWork
 from photo_archiver.application.services.archive_executor import ArchiveExecutor
 from photo_archiver.application.services.archive_planner import ArchivePlanner
 from photo_archiver.application.use_cases import ArchivePhotosUseCase
@@ -27,29 +26,33 @@ from photo_archiver.infrastructure.config import (
 
 
 class ArchivePhotosService(ArchivePhotosUseCase):
-    """Orchestrate the archive workflow with a transactional boundary."""
+    """Orchestrate the archive workflow.
+
+    Transaction boundary (review M-1 fix): the executor owns its own UnitOfWork
+    so PLANNED + finalized records commit atomically. The service no longer wraps
+    executor.execute() in a UoW to avoid nested-transaction crashes (SQLiteUnitOfWork
+    raises RuntimeError on nesting). Planner is read-only at plan time so it
+    does not need a transaction boundary.
+    """
 
     def __init__(
         self,
         planner: ArchivePlanner,
         executor: ArchiveExecutor,
-        unit_of_work: UnitOfWork | None = None,
         default_conflict_strategy: str = DEFAULT_ARCHIVE_CONFLICT_STRATEGY,
     ) -> None:
-        """Initialize the service with planner, executor, and optional UoW.
+        """Initialize the service with planner, executor, and default conflict strategy.
 
         Args:
             planner: Builds the ArchivePlan from approved recognitions.
             executor: Performs the filesystem copy + ArchiveRecord persistence.
-            unit_of_work: Optional transactional scope; when None, executor runs
-                without a transaction boundary (each ArchiveRecord.add commits
-                independently per the SQLite connection provider's default mode).
+                The executor SHOULD own its own UnitOfWork so the per-batch
+                PLANNED → finalized transitions commit atomically.
             default_conflict_strategy: Used when command.conflict_strategy is None.
                 Defaults to AppSettings.archive_conflict_strategy's default.
         """
         self._planner = planner
         self._executor = executor
-        self._unit_of_work = unit_of_work
         self._default_conflict_strategy = default_conflict_strategy
 
     def execute(self, command: ArchivePhotosCommand) -> ArchiveResult:
@@ -75,14 +78,6 @@ class ArchivePhotosService(ArchivePhotosUseCase):
                 plan.skipped_count,
             )
             return ArchiveResult(planned_count=0)
-
-        if self._unit_of_work is not None:
-            with self._unit_of_work:
-                return self._executor.execute(
-                    plan,
-                    conflict_strategy=conflict_strategy,
-                    dry_run=command.dry_run,
-                )
 
         return self._executor.execute(
             plan,

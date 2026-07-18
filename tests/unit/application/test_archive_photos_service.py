@@ -1,8 +1,11 @@
-"""Tests for ArchivePhotosService — 裁决 #3 编排：Planner → Executor + UoW.
+"""Tests for ArchivePhotosService — 裁决 #3 编排：Planner → Executor.
 
 用 fake planner / fake executor 隔离编排逻辑本身；planner 与 executor
 各自的契约由 test_archive_planner.py / test_archive_executor.py 覆盖。
-本测试只验：command 解析、conflict_strategy 默认值、UoW 包边界、空 plan 早返.
+本测试只验：command 解析、conflict_strategy 默认值、空 plan 早返、dry_run 透传。
+
+review M-1 fix: UoW 已下沉到 ArchiveExecutor 内部，Service 不再持 UoW，
+故原 wraps_executor_in_unit_of_work 测试不再适用，删除。
 """
 
 from pathlib import Path
@@ -43,19 +46,6 @@ class _FakeExecutor:
     def execute(self, plan, conflict_strategy, dry_run=False):
         self.calls.append((plan, conflict_strategy, dry_run))
         return self._result
-
-
-class _RecordingUoW:
-    """UnitOfWork stub recording __enter__/__exit__ in order, no commit/rollback."""
-    def __init__(self) -> None:
-        self.events: list[str] = []
-
-    def __enter__(self):
-        self.events.append("enter")
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self.events.append("exit")
 
 
 def _empty_plan() -> ArchivePlan:
@@ -153,35 +143,17 @@ def test_service_rejects_invalid_conflict_strategy() -> None:
         ))
 
 
-def test_service_wraps_executor_in_unit_of_work_when_provided() -> None:
-    """When UoW is bound, executor runs inside __enter__/__exit__ transactional scope."""
-    planner = _FakePlanner(_nonempty_plan())
-    executor = _FakeExecutor(_archived_result())
-    uow = _RecordingUoW()
-    service = ArchivePhotosService(
-        planner=planner,  # type: ignore[arg-type]
-        executor=executor,  # type: ignore[arg-type]
-        unit_of_work=uow,  # type: ignore[arg-type]
-    )
-    service.execute(ArchivePhotosCommand(archive_root=Path("/archive")))
-    assert uow.events == ["enter", "exit"]
-    assert len(executor.calls) == 1
-
-
 def test_service_skips_executor_when_plan_empty() -> None:
-    """Empty plan short-circuits — executor not called, UoW not entered."""
+    """Empty plan short-circuits — executor not called."""
     planner = _FakePlanner(_empty_plan())
     executor = _FakeExecutor(_archived_result())
-    uow = _RecordingUoW()
     service = ArchivePhotosService(
         planner=planner,  # type: ignore[arg-type]
         executor=executor,  # type: ignore[arg-type]
-        unit_of_work=uow,  # type: ignore[arg-type]
     )
     result = service.execute(ArchivePhotosCommand(archive_root=Path("/archive")))
     assert result.planned_count == 0
     assert executor.calls == []
-    assert uow.events == []
 
 
 def test_service_passes_dry_run_flag_to_executor() -> None:

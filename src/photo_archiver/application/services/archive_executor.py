@@ -17,12 +17,14 @@ from pathlib import Path
 from loguru import logger
 
 from photo_archiver.application.dtos import ArchiveOutcome, ArchivePlan, ArchiveResult
+from photo_archiver.application.ports import UnitOfWork
 from photo_archiver.domain import ArchiveRecord, ArchiveRecordRepository
 from photo_archiver.domain.entities.archive import ArchiveStatus
 from photo_archiver.domain.value_objects import ArchivePath
 
-# rename 策略下目标已存在时的后缀；裁决 #3 落地：保留原名 + .archived-N 段。
-_RENAME_CONFLICT_SUFFIX = "archived"
+# rename 策略下目标已存在时的后缀；裁决 #3 落地：保留原名 + .dup-N 段。
+# 用 dup 而非 archived，避免与 ArchiveStatus.ARCHIVED 字面混淆（review m-5）。
+_RENAME_CONFLICT_SUFFIX = "dup"
 
 
 class ArchiveExecutor:
@@ -32,18 +34,31 @@ class ArchiveExecutor:
     filesystem and the only one that writes ArchiveRecord aggregates. Keeping
     these two responsibilities together means the persisted record always
     reflects what actually happened on disk, even under partial failures.
+
+    Transaction boundary (review M-1 fix): the executor accepts an optional
+    UnitOfWork and wraps the entire batch so the per-item "PLANNED → finalized"
+    ArchiveRecord transitions commit atomically. Without a UoW the two add()
+    calls per item commit independently, leaving orphan PLANNED rows on crash.
+    Callers reusing the executor without a UoW MUST wrap it themselves.
     """
 
     def __init__(
         self,
         archive_record_repository: ArchiveRecordRepository,
+        unit_of_work: UnitOfWork | None = None,
     ) -> None:
         """Initialize the executor with its persistence target.
 
         Args:
             archive_record_repository: Where per-item ArchiveRecord aggregates land.
+            unit_of_work: Optional transactional scope. When provided the executor
+                wraps the whole batch so PLANNED + finalized records commit atomically.
+                When None the executor runs without a transaction boundary — callers
+                reuse it WITHOUT a UoW MUST wrap the execute() call in their own UoW
+                to avoid orphan PLANNED rows on mid-batch crash.
         """
         self._archive_record_repository = archive_record_repository
+        self._unit_of_work = unit_of_work
 
     def execute(
         self,
@@ -56,9 +71,23 @@ class ArchiveExecutor:
         Args:
             plan: The ArchivePlanner-produced plan (immutable side-effect free DTO).
             conflict_strategy: skip | overwrite | rename — controls target-exists behavior.
-            dry_run: When True, log intended operations without touching the filesystem;
-                records still persist as DRY_RUN so callers can inspect the plan outcome.
+            dry_run: When True, log intended operations without touching the filesystem.
+                Records still persist as DRY_RUN so callers can inspect the plan outcome
+                AND so re-runs can detect "this photo was dry-run previewed" — the record
+                is the executor's only durable signal of having previewed the item.
         """
+        if self._unit_of_work is not None:
+            with self._unit_of_work:
+                return self._execute_batch(plan, conflict_strategy, dry_run)
+        return self._execute_batch(plan, conflict_strategy, dry_run)
+
+    def _execute_batch(
+        self,
+        plan: ArchivePlan,
+        conflict_strategy: str,
+        dry_run: bool,
+    ) -> ArchiveResult:
+        """Run the per-item loop without UoW wrapping — caller's responsibility."""
         outcomes: list[ArchiveOutcome] = []
         for item in plan.items:
             record = self._make_planned_record(item)
@@ -131,6 +160,24 @@ class ArchiveExecutor:
         source = item.source_path
         target = Path(item.target_path.resolve())
 
+        # review M-3 fix: assert target stays under archive_root before any
+        # filesystem mutation. ArchivePath validates segments at construction
+        # but this is the filesystem boundary — fail loud here if a malformed
+        # target would escape the configured root.
+        archive_root_path = Path(item.target_path.archive_root).resolve(strict=False)
+        try:
+            target.relative_to(archive_root_path)
+        except ValueError:
+            error = f"target escapes archive_root: {target} not under {archive_root_path}"
+            logger.warning("Archive FAIL {} {}", item.photo_id, error)
+            record.mark_failed(error)
+            return ArchiveOutcome(
+                photo_id=item.photo_id,
+                status=ArchiveStatus.FAILED,
+                target_path=item.target_path,
+                error=error,
+            )
+
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.exists():
@@ -174,16 +221,17 @@ class ArchiveExecutor:
 
     @staticmethod
     def _copy_file(source: Path, target: Path) -> None:
-        """Copy source to target bytes-for-bytes without metadata surprises.
+        """Copy source to target preserving metadata (mtime, mode bits).
 
-        Uses shutil.copyfile to avoid copying mtime (the file's own mtime is
-        preserved by the destination filesystem, which is acceptable; an
-        explicit metadata copy is out of scope for本轮). Preserves the
-        target parent directory creation responsibility to the caller.
+        review M-4 fix: use shutil.copy2 (not copyfile) so target mtime tracks
+        the source — re-scanning archive_root later can fall back to mtime for
+        captured_at without seeing every archived file stamped "now". EXIF lives
+        in the byte stream so it survives either helper; copy2 also preserves
+        access mode bits which copyfile drops. Caller still owns parent mkdir.
         """
         import shutil
 
-        shutil.copyfile(source, target)
+        shutil.copy2(source, target)
 
     @staticmethod
     def _compute_renamed_target(target: Path) -> Path:

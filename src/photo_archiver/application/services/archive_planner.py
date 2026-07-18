@@ -22,6 +22,16 @@ from photo_archiver.domain import (
     RecognitionRepository,
 )
 
+# review M-2 fix: only "success" states block re-planning. PLANNED / DRY_RUN /
+# FAILED allow retry — DRY_RUN is a preview not a commit, FAILED photos should
+# be re-attemptable, PLANNED is an orphan from a crashed prior run.
+_ALREADY_ARCHIVED_STATES = frozenset({
+    ArchiveStatus.ARCHIVED,
+    ArchiveStatus.SKIPPED,
+    ArchiveStatus.RENAMED,
+    ArchiveStatus.OVERWRITTEN,
+})
+
 
 class ArchivePlanner:
     """Plan archive destinations for approved photos, without touching the filesystem.
@@ -162,7 +172,7 @@ class ArchivePlanner:
             return None
 
         existing_record = self._archive_record_repository.find_by_photo(photo_id)
-        if existing_record is not None and existing_record.status is not ArchiveStatus.PLANNED:
+        if existing_record is not None and existing_record.status in _ALREADY_ARCHIVED_STATES:
             logger.debug(
                 "Archive plan: photo {} already archived as {}, skipping",
                 photo_id,

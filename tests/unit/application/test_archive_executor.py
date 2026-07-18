@@ -119,7 +119,7 @@ def test_executor_rename_strategy_picks_sibling(tmp_path: Path) -> None:
     assert renamed_target.exists()
     assert renamed_target.read_bytes() == b"new"
     assert target.read_bytes() == b"old"  # original untouched
-    assert outcome.target_path.original_name == "x.archived-1.jpg"
+    assert outcome.target_path.original_name == "x.dup-1.jpg"
 
 
 def test_executor_dry_run_does_not_touch_filesystem(tmp_path: Path) -> None:

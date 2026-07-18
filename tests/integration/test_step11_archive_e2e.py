@@ -133,11 +133,10 @@ def test_step11_e2e_archives_approved_photo_under_naming_rule(
         recognition_repository=recognition_repo,
         archive_record_repository=archive_repo,
     )
-    executor = ArchiveExecutor(archive_repo)
+    executor = ArchiveExecutor(archive_repo, unit_of_work=SQLiteUnitOfWork(sqlite_provider))
     service = ArchivePhotosService(
         planner=planner,
         executor=executor,
-        unit_of_work=SQLiteUnitOfWork(sqlite_provider),
     )
 
     result = service.execute(ArchivePhotosCommand(
@@ -181,9 +180,9 @@ def test_step11_e2e_dry_run_does_not_write_filesystem(
         recognition_repository=recognition_repo,
         archive_record_repository=archive_repo,
     )
-    executor = ArchiveExecutor(archive_repo)
+    executor = ArchiveExecutor(archive_repo, unit_of_work=SQLiteUnitOfWork(sqlite_provider))
     service = ArchivePhotosService(
-        planner=planner, executor=executor, unit_of_work=SQLiteUnitOfWork(sqlite_provider),
+        planner=planner, executor=executor,
     )
 
     result = service.execute(ArchivePhotosCommand(
@@ -213,9 +212,9 @@ def test_step11_e2e_skip_strategy_skips_second_run(
         recognition_repository=recognition_repo,
         archive_record_repository=archive_repo,
     )
-    executor = ArchiveExecutor(archive_repo)
+    executor = ArchiveExecutor(archive_repo, unit_of_work=SQLiteUnitOfWork(sqlite_provider))
     service = ArchivePhotosService(
-        planner=planner, executor=executor, unit_of_work=SQLiteUnitOfWork(sqlite_provider),
+        planner=planner, executor=executor,
     )
 
     first = service.execute(ArchivePhotosCommand(archive_root=archive_root, person_ids=(person_id,)))
@@ -246,9 +245,9 @@ def test_step11_e2e_unknown_date_segment_when_captured_at_missing(
         recognition_repository=recognition_repo,
         archive_record_repository=archive_repo,
     )
-    executor = ArchiveExecutor(archive_repo)
+    executor = ArchiveExecutor(archive_repo, unit_of_work=SQLiteUnitOfWork(sqlite_provider))
     service = ArchivePhotosService(
-        planner=planner, executor=executor, unit_of_work=SQLiteUnitOfWork(sqlite_provider),
+        planner=planner, executor=executor,
     )
 
     result = service.execute(ArchivePhotosCommand(archive_root=archive_root, person_ids=(person_id,)))
