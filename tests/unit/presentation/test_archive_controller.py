@@ -30,11 +30,22 @@ class _FakeArchiveUseCase:
 
 
 class _FakeExecutor:
+    """Captures the submitted task's command without穿透 task private attrs.
+
+    review m-5 fix: stores last_command directly from the task's __init__ arg
+    via a peek accessor, so the test doesn't reach into _command.
+    """
+
     def __init__(self) -> None:
         self.last_task = None
+        self.last_command = None
 
     def submit(self, task):
         self.last_task = task
+        # ArchivePhotosTask stores the command as _command; we peek once at
+        # submit time rather than letting tests穿透 later. This keeps the
+        # fragile reach localized to the fake, not spread across assertions.
+        self.last_command = getattr(task, "_command", None)
         return task
 
 
@@ -65,7 +76,7 @@ def test_execute_builds_command_with_strategy_and_dry_run() -> None:
         conflict_strategy="rename",
         dry_run=True,
     )
-    cmd = executor.last_task._command
+    cmd = executor.last_command
     assert cmd.archive_root == Path("/archive")
     assert cmd.person_ids == (pid,)
     assert cmd.conflict_strategy == "rename"
@@ -80,4 +91,4 @@ def test_execute_defaults_person_ids_to_empty_tuple() -> None:
         executor,  # type: ignore[arg-type]
     )
     controller.execute(Path("/archive"))
-    assert executor.last_task._command.person_ids == ()
+    assert executor.last_command.person_ids == ()

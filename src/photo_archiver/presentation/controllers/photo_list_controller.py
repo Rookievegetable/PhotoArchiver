@@ -9,7 +9,7 @@ Step 7 ThumbnailCache 已就绪（resolve + is_stale），本 controller 持它�
 from pathlib import Path
 from uuid import UUID
 
-from PySide6.QtCore import QObject, Qt, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QRunnable, QThreadPool, Signal, Slot
 
 from photo_archiver.application.ports import ThumbnailGenerator
 from photo_archiver.domain import Photo, PhotoRepository
@@ -17,6 +17,32 @@ from photo_archiver.infrastructure.image import ThumbnailCache
 
 # Default thumbnail bounding box size matches ThumbnailGenerator.generate default.
 _DEFAULT_THUMBNAIL_SIZE = 256
+
+
+class _ThumbnailJob(QRunnable):
+    """QRunnable that generates one thumbnail off the UI thread.
+
+    review m-1 fix: lifted to module level so Python doesn't rebuild the class
+    object on every cache-miss load_thumbnail call. The job captures the
+    controller via a closure-free constructor argument to stay pickle-safe.
+    """
+
+    def __init__(self, controller: "PhotoListController", pid: UUID, path: Path) -> None:
+        super().__init__()
+        self._controller = controller
+        self._pid = pid
+        self._path = path
+
+    def run(self) -> None:
+        try:
+            thumb_path = self._controller._thumbnail_generator.generate(
+                self._path, _DEFAULT_THUMBNAIL_SIZE,
+            )
+            self._controller.thumbnail_loaded.emit(self._pid, thumb_path)
+        except Exception:  # noqa: BLE001 - UI must not crash on one bad photo
+            self._controller.thumbnail_loaded.emit(self._pid, None)
+        finally:
+            self._controller._in_flight.discard(self._pid)
 
 
 class PhotoListController(QObject):
@@ -74,30 +100,7 @@ class PhotoListController(QObject):
             return  # already dispatched; the in-flight Job will emit when done
 
         self._in_flight.add(photo_id)
-        from PySide6.QtCore import QRunnable, QThreadPool
-
-        controller = self
-
-        class _ThumbnailJob(QRunnable):
-            """QRunnable that generates one thumbnail off the UI thread."""
-
-            def __init__(self, pid: UUID, path: Path) -> None:
-                super().__init__()
-                self._pid = pid
-                self._path = path
-
-            def run(self) -> None:
-                try:
-                    thumb_path = controller._thumbnail_generator.generate(
-                        self._path, _DEFAULT_THUMBNAIL_SIZE,
-                    )
-                    controller.thumbnail_loaded.emit(self._pid, thumb_path)
-                except Exception:  # noqa: BLE001 - UI must not crash on one bad photo
-                    controller.thumbnail_loaded.emit(self._pid, None)
-                finally:
-                    controller._in_flight.discard(self._pid)
-
-        QThreadPool.globalInstance().start(_ThumbnailJob(photo_id, source_path))
+        QThreadPool.globalInstance().start(_ThumbnailJob(self, photo_id, source_path))
 
     @Slot(object, object)
     def _on_thumbnail_ready(self, photo_id: object, thumbnail: object) -> None:

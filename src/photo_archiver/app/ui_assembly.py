@@ -1,9 +1,8 @@
 """UI controller assembly for PhotoArchiver presentation layer.
 
-Wires ReviewController and PhotoListController from already-assembled services
-and repositories + Step 7 ThumbnailCache / PillowThumbnailGenerator. Kept in
-its own module so app/services.py stays free of PySide6 imports (controllers
-depend on Qt).
+Centralizes ReviewController + PhotoListController wiring (thumbnail cache,
+generator, repositories) in one module so app/bootstrap.py stays focused on
+the startup sequence rather than Qt controller construction details.
 """
 
 from dataclasses import dataclass

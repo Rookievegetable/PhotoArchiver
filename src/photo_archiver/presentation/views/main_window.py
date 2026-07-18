@@ -114,7 +114,7 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self._cancel_action)
 
     def _build_central(self) -> None:
-        """Create the central photo list with a placeholder label above."""
+        """Create the central photo list view."""
         central = QWidget(self)
         layout = QVBoxLayout(central)
 
