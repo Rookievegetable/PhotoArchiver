@@ -5,19 +5,18 @@
 """
 
 from pathlib import Path
-from uuid import UUID
 
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
     QLabel,
-    QComboBox,
+    QWidget,
 )
 
 from photo_archiver.application.dtos import ArchivePlan
-from photo_archiver.domain import ArchiveStatus
 
 # Conflict strategy choices mirror AppSettings / CLI; the combo box exposes
 # them in user-friendly order with descriptions trailing for clarity.
@@ -31,7 +30,7 @@ class ArchivePreviewDialog(QDialog):
         self,
         plan: ArchivePlan,
         archive_root: Path,
-        parent=None,
+        parent: QWidget | None = None,
     ) -> None:
         """Initialize the dialog with the plan and the configured archive root.
 
@@ -68,7 +67,7 @@ class ArchivePreviewDialog(QDialog):
         self._dry_run_check = QCheckBox("Dry-run (preview only, no files written)", self)
         layout.addRow(self._dry_run_check)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok, self)
+        buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok, self)  # type: ignore[attr-defined]
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
@@ -83,27 +82,7 @@ class ArchivePreviewDialog(QDialog):
         """Return whether dry-run was checked."""
         return self._dry_run_check.isChecked()
 
-    @property
-    def person_ids(self) -> tuple[UUID, ...]:
-        """Return the person_ids covered by the previewed plan, for execute() reuse.
-
-        Extracted from the plan items so the caller doesn't have to track which
-        persons were previewed — the dialog hands back the exact set the plan
-        covered, keeping the UI's execute call symmetric with the preview.
-        """
-        seen: set[UUID] = set()
-        result: list[UUID] = []
-        for item in self._plan.items:
-            if item.person_id not in seen:
-                seen.add(item.person_id)
-                result.append(item.person_id)
-        return tuple(result)
-
-    @property
-    def planned_count(self) -> int:
-        """Return the plan's planned_count for the caller's sanity assertion."""
-        return self._plan.planned_count
-
-    # Sentinel exported for tests that want to assert status enums flow through
-    # without importing the domain directly.
-    ARCHIVED_STATUS = ArchiveStatus.ARCHIVED
+    # review m-4 fix: removed planned_count and person_ids properties —
+    # the caller already holds the plan (for planned_count) and must pass
+    # the SAME person_ids to execute() that it passed to preview() (for
+    # symmetry); the dialog must not silently substitute a subset.

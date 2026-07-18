@@ -77,16 +77,15 @@ class MainWindow(QMainWindow):
             self._context.worker_executor,
             parent=self,
         )
-        # ArchiveController needs the planner directly for preview() — we reach
-        # into the service's planner rather than widening ApplicationContext for
-        # one component. This is a narrow intentional coupling.
+        # review M-3 fix: ArchiveController holds the UseCase only; preview()
+        # delegates through the UseCase Protocol so no _planner reflection.
         self._archive_controller = ArchiveController(
-            self._context.services.archive_photos._planner,  # type: ignore[attr-defined]
             self._context.services.archive_photos,
             self._context.worker_executor,
             parent=self,
         )
         self._review_controller = self._context.review_controller  # set by bootstrap
+        self._photo_list_controller = self._context.photo_list_controller  # set by bootstrap
 
     def _build_toolbar(self) -> None:
         """Create the primary action toolbar covering the full闭环."""
@@ -125,6 +124,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._photo_list)
 
         self.setCentralWidget(central)
+        # Wire thumbnail loads → model now that _photo_list_model exists.
+        self._photo_list_controller.thumbnail_loaded.connect(
+            self._photo_list_model.set_thumbnail,
+        )
 
     def _build_status(self) -> None:
         """Create the status bar with a progress bar and persistent label."""
@@ -252,7 +255,7 @@ class MainWindow(QMainWindow):
         self._status_label.setText("Archiving ...")
         runnable = self._archive_controller.execute(
             archive_root,
-            person_ids=dialog.person_ids,
+            person_ids=(),  # review M-5 fix: symmetric with preview(()) — "all persons with approvals"
             conflict_strategy=dialog.conflict_strategy,
             dry_run=dialog.dry_run,
         )
@@ -265,9 +268,7 @@ class MainWindow(QMainWindow):
         surface without a manual refresh. Thumbnails load lazily via the
         PhotoListController when the list view asks for them.
         """
-        if not hasattr(self, "_photo_list_controller"):
-            return  # controller not wired (tests may construct MainWindow minimally)
         photos = self._photo_list_controller.list_photos()
         self._photo_list_model.load_photos(photos)
         for photo in photos:
-            self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)
+            self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__

@@ -16,29 +16,31 @@ from PySide6.QtCore import QObject, Slot
 
 from photo_archiver.application import ArchivePhotosCommand, ArchivePhotosUseCase
 from photo_archiver.application.dtos import ArchivePlan
-from photo_archiver.application.services.archive_planner import ArchivePlanner
 from photo_archiver.workers import ArchivePhotosTask, QtWorkerExecutor
 
 
 class ArchiveController(QObject):
-    """Bridge archive use case requests to worker execution with plan-preview support."""
+    """Bridge archive use case requests to worker execution with plan-preview support.
+
+    review M-3 fix: holds the ArchivePhotosUseCase Protocol only (not the
+    concrete ArchivePlanner), so presentation → application dependencies stay
+    at the Protocol boundary per DEP-010. preview() delegates to the use
+    case's preview method which the service implements via its planner.
+    """
 
     def __init__(
         self,
-        planner: ArchivePlanner,
         use_case: ArchivePhotosUseCase,
         executor: QtWorkerExecutor,
         parent: QObject | None = None,
     ) -> None:
-        """Initialize the controller with its planner, use case, and worker executor.
+        """Initialize the controller with its use case and worker executor.
 
         Args:
-            planner: ArchivePlanner instance for synchronous preview() calls.
-            use_case: ArchivePhotosUseCase instance for execute() via Worker.
+            use_case: ArchivePhotosUseCase — preview() + execute() both delegate here.
             executor: QtWorkerExecutor to run the archive task off the UI thread.
         """
         super().__init__(parent)
-        self._planner = planner
         self._use_case = use_case
         self._executor = executor
 
@@ -49,12 +51,11 @@ class ArchiveController(QObject):
     ) -> ArchivePlan:
         """Synchronously plan the archive and return the plan for UI preview.
 
-        No worker submission — planner is side-effect free and reads only
-        repositories, so this completes in <50ms for typical person counts.
-        The UI can inspect the returned ArchivePlan (items / skipped_count)
+        Delegates to the UseCase's preview method — no worker submission, no
+        filesystem mutation. The UI can inspect the returned ArchivePlan
         before deciding whether to call execute().
         """
-        return self._planner.plan(
+        return self._use_case.preview(
             archive_root=str(archive_root),
             person_ids=person_ids,
         )

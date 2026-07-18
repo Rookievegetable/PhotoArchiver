@@ -11,11 +11,12 @@ Executor 单独可复用只执行不规划，本服务则是"完整闭环"入口
 """
 
 from pathlib import Path
+from uuid import UUID
 
 from loguru import logger
 
 from photo_archiver.application.commands import ArchivePhotosCommand
-from photo_archiver.application.dtos import ArchiveResult
+from photo_archiver.application.dtos import ArchivePlan, ArchiveResult
 from photo_archiver.application.services.archive_executor import ArchiveExecutor
 from photo_archiver.application.services.archive_planner import ArchivePlanner
 from photo_archiver.application.use_cases import ArchivePhotosUseCase
@@ -56,6 +57,19 @@ class ArchivePhotosService(ArchivePhotosUseCase):
         self._planner = planner
         self._executor = executor
         self._default_conflict_strategy = default_conflict_strategy
+
+    def preview(
+        self,
+        archive_root: str,
+        person_ids: tuple[UUID, ...] = (),
+    ) -> ArchivePlan:
+        """Synchronously plan the archive and return the plan for UI preview.
+
+        Delegates to the planner so the controller/UI can call preview on the
+        UseCase boundary without knowing the ArchivePlanner concrete class
+        (review M-3 fix).
+        """
+        return self._planner.plan(archive_root=archive_root, person_ids=person_ids)
 
     def execute(self, command: ArchivePhotosCommand) -> ArchiveResult:
         """Plan and execute archiving for the command's persons.
