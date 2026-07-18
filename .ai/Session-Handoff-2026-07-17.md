@@ -33,7 +33,7 @@
 | B（应修） | `4415d23` | P1-a except 收窄、P1-d 嵌套事务文档、P2-a max_workers 绑定、P2-b 删 model_path 惰建、P2-c cache 防御、P2-d 相对路径统一 |
 | C（延后处置） | `a118bf5` | P3-a base.txt 保留注释、P3-b FolderRepository docstring；P3-c 合并 P1-c；P3-d 延后 |
 
-**最终 HEAD**：`a118bf5`，工作树干净，pytest **143 passed / 8 skipped**（8 skip = 缺模型集成测试），ruff/mypy clean。
+**最终 HEAD**：`03f4395`（Step 12 三轮 Review 修复完成），工作树干净，pytest **200 passed / 8 skipped**（8 skip = 缺模型包 + PySide6/pytestqt 飘带），ruff/mypy 本轮引入范围 clean。既有 19 mypy + 2 ruff 飘带持平（交接 §6.3 决策不顺带修）。
 
 ---
 
@@ -48,7 +48,7 @@
 | 9 AI InsightFace 实现 + 识别闭环 | ✅ 已完成 | `75a865d` |
 | 10 用户复核数据模型 | ✅ 已完成 | `947b428` |
 | 11 归档组织 + 去重 | ✅ **已完成** — Planner→Plan→Executor 拆分 + captured_at 领域字段 + archive_root 独立配置 + --dry-run | 本会话 |
-| 12 完整 UI 工作台 | ✅ **已完成** — MainWindow 重构（4 toolbar action + 照片列表 + 缩略图）；4 controller（ImportPeople/Archive/Review/PhotoList）；ArchivePhotosTask；ArchivePreviewDialog | 本会话 |
+| 12 完整 UI 工作台 | ✅ **已完成** — MainWindow 重构（4 toolbar action + 照片列表 + 缩略图）；4 controller（ImportPeople/Archive/Review/PhotoList）；ArchivePhotosTask；ArchivePreviewDialog；三轮 Review 修复（M-1~M-5 + m-1~m-8）落 `e58d353` + `824ccbe` + `03f4395` | 本会话 |
 | 13 设置持久化 | ⛔ 未开始 | — |
 
 ### 2.2 数据库 Schema 版本
@@ -90,13 +90,13 @@
 
 | 项 | 延后到 | 理由 |
 |---|---|---|
-| recognizer.extract 双检测 | Step 12 Worker | 批量 detect+extract 单次 get 可 halve 成本；本轮 Application-only 范围可接受 |
-| 结构化埋点（logger.bind task_id/folder_id） | Step 12 | 需 Worker 接入后统一规划，当前无 task_id 概念 |
-| FaceEmbeddingRepository.list_all 分页 | Step 12 | Person 数千时内存压力，当前量小可接受 |
+| recognizer.extract 双检测 | Step 13+ | 批量 detect+extract 单次 get 可 halve 成本；Step 12 Worker 已接入但 detect/extract 仍分两次，可后续优化 |
+| 结构化埋点（logger.bind task_id/folder_id） | Step 13+ | Step 12 Worker 已接入但未补 task_id 绑定，当前无 task_id 概念 |
+| FaceEmbeddingRepository.list_all 分页 | Step 13+ | Person 数千时内存压力，当前量小可接受 |
 | SQLAlchemy/Alembic 引入 | roadmap Step 3 | 审计 C-7 决策保留，PRAGMA user_version 足够当前 |
-| 既有文件 3 个 ruff 未用导入 + 16 个 mypy 类型错 | 单独清理轮 | 在 unit_of_work/sqlite_unit_of_work/application_tasks/register_photo_service/qt_executor/main_window/scan_controller，非本轮引入 |
+| 既有文件 3 个 ruff 未用导入 + 16 个 mypy 类型错 | 单独清理轮 | 在 unit_of_work/sqlite_unit_of_work/application_tasks/register_photo_service/qt_executor/main_window/scan_controller，非本轮引入。Step 12 后基线 mypy 仍 19 错（本轮 Step 12 引入范围已 clean）|
 | RecognitionResult.id 类型 `UUID | None` 靠 type: ignore | 未来重构 | __post_init__ 保证非空但类型签名未表达，应改 UUID 非 None |
-| ReviewRecognitionService 无事务边界 | Step 11 | 若 update_status 异常，内存已 approve 而 DB 未 approve；Step 11 archive 应包 UnitOfWork |
+| ReviewRecognitionService 无事务边界 | Step 13 | Step 12 Archive 已补 UnitOfWork（M-1 修复），Review 仍裸奔——若 update_status 异常，内存已 approve 而 DB 未 approve。建议 Step 13 接入 UI 审核流时一并补 |
 
 ---
 
@@ -131,7 +131,7 @@
 
 ### 6.3 既有飘带（非本会话引入）
 
-上一轮 P0-P3 核验时发现既有文件有 3 个 ruff 未用导入 + 16 个 mypy 类型错，全在 Step 8-10 之前的文件。建议新会话单独开一轮清理，不混入 Step 11。
+上一轮 P0-P3 核验时发现既有文件有 3 个 ruff 未用导入 + 16 个 mypy 类型错，全在 Step 8-10 之前的文件。建议新会话单独开一轮清理，不混入 Step 13。
 
 ---
 
