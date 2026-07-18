@@ -164,11 +164,15 @@ def test_executor_records_planned_before_finalize(tmp_path: Path) -> None:
 
 
 def test_executor_failed_on_oserror(tmp_path: Path) -> None:
-    """OSError during copy → FAILED outcome + error captured in record."""
-    # Make source a directory so shutil.copyfile raises IsADirectoryError (OSError subclass).
-    source = tmp_path / "src" / "x.jpg"
-    source.parent.mkdir(parents=True, exist_ok=True)
-    source.mkdir()  # not a file
+    """OSError during copy → FAILED outcome + error captured in record.
+
+    review m-7 fix: trigger via a missing source file (FileNotFoundError is an
+    OSError subclass) so the test stays cross-platform — a directory-typed
+    source raised IsADirectoryError on POSIX but PermissionError on Windows.
+    The source's non-existence makes shutil.copy2 raise FileNotFoundError
+    before any filesystem write, exercising the same except-OSError branch.
+    """
+    source = tmp_path / "nonexistent.jpg"  # never materialized
     archive_root = tmp_path / "archive"
     item = _make_plan_item(source, str(archive_root))
     repo = _RecordingArchiveRecordRepository()

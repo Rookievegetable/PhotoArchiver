@@ -19,10 +19,12 @@ from photo_archiver.application.dtos import ArchiveResult
 from photo_archiver.application.services.archive_executor import ArchiveExecutor
 from photo_archiver.application.services.archive_planner import ArchivePlanner
 from photo_archiver.application.use_cases import ArchivePhotosUseCase
-from photo_archiver.infrastructure.config import (
-    DEFAULT_ARCHIVE_CONFLICT_STRATEGY,
-    VALID_ARCHIVE_CONFLICT_STRATEGIES,
-)
+
+# review m-1 fix: archive conflict strategy constants live at the Application
+# layer (the layer that consumes them) rather than Infrastructure.config,
+# avoiding an Application -> Infrastructure dependency that violates DEP-012.
+DEFAULT_ARCHIVE_CONFLICT_STRATEGY = "skip"
+VALID_ARCHIVE_CONFLICT_STRATEGIES = ("skip", "overwrite", "rename")
 
 
 class ArchivePhotosService(ArchivePhotosUseCase):

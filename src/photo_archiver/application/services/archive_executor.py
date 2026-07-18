@@ -16,7 +16,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from photo_archiver.application.dtos import ArchiveOutcome, ArchivePlan, ArchiveResult
+from photo_archiver.application.dtos import ArchiveOutcome, ArchivePlan, ArchivePlanItem, ArchiveResult
 from photo_archiver.application.ports import UnitOfWork
 from photo_archiver.domain import ArchiveRecord, ArchiveRecordRepository
 from photo_archiver.domain.entities.archive import ArchiveStatus
@@ -101,22 +101,23 @@ class ArchiveExecutor:
             self._archive_record_repository.add(record)
             outcomes.append(outcome)
 
+        result = ArchiveResult(planned_count=plan.planned_count, outcomes=tuple(outcomes))
         logger.info(
             "ArchiveExecutor: planned={} archived={} skipped={} renamed={} "
             "overwritten={} dry_run={} failed={}",
-            plan.planned_count,
-            sum(1 for o in outcomes if o.status is ArchiveStatus.ARCHIVED),
-            sum(1 for o in outcomes if o.status is ArchiveStatus.SKIPPED),
+            result.planned_count,
+            result.archived_count,
+            result.skipped_count,
             sum(1 for o in outcomes if o.status is ArchiveStatus.RENAMED),
             sum(1 for o in outcomes if o.status is ArchiveStatus.OVERWRITTEN),
-            sum(1 for o in outcomes if o.status is ArchiveStatus.DRY_RUN),
-            sum(1 for o in outcomes if o.status is ArchiveStatus.FAILED),
+            result.dry_run_count,
+            result.failed_count,
         )
-        return ArchiveResult(planned_count=plan.planned_count, outcomes=tuple(outcomes))
+        return result
 
     def _execute_dry_run(
         self,
-        item,
+        item: ArchivePlanItem,
         record: ArchiveRecord,
     ) -> ArchiveOutcome:
         """Log the intended operation and mark the record DRY_RUN.
@@ -152,7 +153,7 @@ class ArchiveExecutor:
 
     def _execute_real(
         self,
-        item,
+        item: ArchivePlanItem,
         conflict_strategy: str,
         record: ArchiveRecord,
     ) -> ArchiveOutcome:
@@ -266,7 +267,7 @@ class ArchiveExecutor:
             original_name=resolved.name,
         )
 
-    def _make_planned_record(self, item) -> ArchiveRecord:
+    def _make_planned_record(self, item: ArchivePlanItem) -> ArchiveRecord:
         """Create a PLANNED ArchiveRecord capturing the plan's intent for this photo.
 
         PLANNED records persist even if the executor later fails on this item —

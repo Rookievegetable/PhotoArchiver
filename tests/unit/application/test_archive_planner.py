@@ -257,6 +257,28 @@ def test_plan_empty_person_ids_expands_to_all_with_approvals() -> None:
     assert plan.items[0].person_name == "Alice"
 
 
+def test_plan_empty_person_ids_with_no_approvals_anywhere_yields_empty_plan() -> None:
+    """review m-6 fix: N=0 boundary — no approved photos anywhere → empty plan, no crash.
+
+    Exercises the _resolve_target_persons expansion when every person has zero
+    approved recognitions; the comprehension filters them all out so the plan
+    stays empty without throwing on the empty iteration.
+    """
+    alice = Person(name="Alice")
+    bob = Person(name="Bob")
+    planner = ArchivePlanner(
+        path_builder=_FakeArchivePathBuilder(),
+        person_repository=_FakePersonRepository([alice, bob]),
+        photo_repository=_FakePhotoRepository([]),
+        recognition_repository=_FakeRecognitionRepository({}),  # no approvals anywhere
+        archive_record_repository=_FakeArchiveRecordRepository(),
+    )
+    plan = planner.plan("/archive", ())
+    assert plan.planned_count == 0
+    assert plan.skipped_count == 0
+    assert plan.items == ()
+
+
 def test_plan_skips_missing_person() -> None:
     """A person_id that no longer exists contributes to skipped_count."""
     person = Person(name="Alice")

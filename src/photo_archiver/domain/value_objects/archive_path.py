@@ -26,9 +26,9 @@ class ArchivePath:
 
     Hold the four naming-rule segments separately so builders, planners, and
     UI previews can inspect each segment (e.g. "this photo will land under
-    Alice/2024-05-01/") without re-parsing a joined string. ``resolve`` only
-    performs PurePath concatenation — it does NOT touch the filesystem — so
-    the value object stays side-effect free inside the Domain layer.
+    Alice/2024-05-01/photo.jpg") without re-parsing a joined string. ``resolve``
+    only performs PurePath concatenation — it does NOT touch the filesystem —
+    so the value object stays side-effect free inside the Domain layer.
     """
 
     archive_root: str

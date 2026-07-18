@@ -47,6 +47,8 @@ class ArchiveRecord:
     target_original_name: str
     status: ArchiveStatus
     id: UUID | None = None
+    # archived_at is None while PLANNED; finalized states (ARCHIVED/SKIPPED/RENAMED/
+    # OVERWRITTEN/DRY_RUN/FAILED) set it via the mark_* transition methods.
     archived_at: datetime | None = None
     error: str | None = None
 
@@ -64,9 +66,6 @@ class ArchiveRecord:
                 raise ValidationError(f"ArchiveRecord {name} must not be empty")
         if self.id is None:
             self.id = uuid4()
-        if self.archived_at is None and self.status is ArchiveStatus.PLANNED:
-            # PLANNED 状态是规划阶段，尚无落盘时刻；其余状态由 Executor 显式设。
-            pass
         if self.error is not None:
             normalized = self.error.strip()
             self.error = normalized or None

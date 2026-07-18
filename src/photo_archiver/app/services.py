@@ -13,13 +13,15 @@ from photo_archiver.application import (
     ScanAndRegisterPhotosService,
     ScanPhotoFolderService,
 )
+from photo_archiver.application.services.archive_photos_service import (
+    DEFAULT_ARCHIVE_CONFLICT_STRATEGY,
+)
 from photo_archiver.infrastructure import (
     LocalPhotoFileScanner,
     PillowPhotoMetadataReader,
     SQLiteUnitOfWork,
     TxtPersonImportReader,
 )
-from photo_archiver.infrastructure.config import DEFAULT_ARCHIVE_CONFLICT_STRATEGY
 
 
 @dataclass(frozen=True, slots=True)
