@@ -4,7 +4,7 @@ Version: 1.0.0
 
 Status: Stable
 
-Last Updated: 2026-07-01
+Last Updated: 2026-07-19
 
 ---
 
@@ -436,45 +436,7 @@ Names should clearly describe responsibilities.
 
 # 27. Project-specific UI Flow
 
-The recommended workflow is:
-
-```text
-Import Excel/TXT
-
-↓
-
-Select Photo Directory
-
-↓
-
-Build Folder Structure
-
-↓
-
-Scan Photos
-
-↓
-
-Face Recognition
-
-↓
-
-Match Results
-
-↓
-
-Review Results
-
-↓
-
-Archive
-
-↓
-
-Export Report
-```
-
-The UI should guide users through this workflow in a logical order.
+> **业务工作流权威定义**：`.ai/business/roadmap.md` §2（15 步路线图）。本节不复制 UI 工作流正文，详见该处。The UI should guide users through that workflow in a logical order.
 
 ---
 

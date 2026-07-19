@@ -4,7 +4,7 @@ Version: 1.1.0
 
 Status: Stable
 
-Last Updated: 2026-07-13
+Last Updated: 2026-07-19
 
 ---
 
@@ -679,39 +679,7 @@ Avoid skipping layers.
 
 # 21. Project Workflow
 
-Approved workflow:
-
-```
-
-Import Excel/TXT
-
-↓
-
-Folder Builder
-
-↓
-
-Photo Scanner
-
-↓
-
-Face Recognition
-
-↓
-
-Person Matching
-
-↓
-
-Archive Service
-
-↓
-
-Export
-
-```
-
-Application Services coordinate this workflow.
+> **业务工作流权威定义**：`.ai/business/roadmap.md` §2（15 步路线图）。本节不复制工作流正文，详见该处。Application Services coordinate the workflow defined there.
 
 ---
 

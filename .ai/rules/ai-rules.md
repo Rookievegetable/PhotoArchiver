@@ -4,7 +4,7 @@ Version: 1.1.0
 
 Status: Stable
 
-Last Updated: 2026-07-13
+Last Updated: 2026-07-19
 
 ---
 
@@ -81,7 +81,11 @@ Pillow (Infrastructure image layer only)
 
 SQLAlchemy (Infrastructure database layer only)
 
+> 延后（ADR-005）：当前用 sqlite3 + `PRAGMA user_version` 管理 Schema 版本，SQLAlchemy/Alembic 迁移体系推迟到 roadmap Step 3 收尾或后续阶段。批准保留在 requirements 但零 import。
+
 alembic (Infrastructure database migrations only)
+
+> 同上延后（ADR-005），与 SQLAlchemy 配套推迟。
 
 watchdog (Infrastructure filesystem watcher only)
 
@@ -99,33 +103,9 @@ AI MUST NOT replace any approved technology unless explicitly instructed.
 
 Before generating code, AI MUST understand the project workflow.
 
-Excel / TXT
+> **业务工作流权威定义**：`.ai/business/roadmap.md` §2（15 步路线图）。本节不复制工作流正文，详见该处。其余承载处（`architecture-rules.md` §21、`ui-rules.md` §27）均为指针，不重复落正文。
 
-↓
-
-Folder Structure Builder
-
-↓
-
-Photo Scanner
-
-↓
-
-Face Recognition
-
-↓
-
-Person Matching
-
-↓
-
-Archive Service
-
-↓
-
-Report Generation
-
-All generated code must support this workflow.
+All generated code must support the workflow defined there.
 
 ---
 

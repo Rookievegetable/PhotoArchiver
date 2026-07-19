@@ -4,7 +4,7 @@ Version: 1.1.0
 
 Status: Stable
 
-Last Updated: 2026-07-13
+Last Updated: 2026-07-19
 
 ---
 
@@ -356,8 +356,8 @@ Approved libraries:
 * pydantic
 * pydantic-settings
 * Pillow (Infrastructure image layer only)
-* SQLAlchemy (Infrastructure database layer only)
-* alembic (Infrastructure database migrations only)
+* SQLAlchemy (Infrastructure database layer only) — 延后（ADR-005）：当前用 sqlite3 + `PRAGMA user_version` 管理 Schema 版本，SQLAlchemy/Alembic 迁移体系推迟到 roadmap Step 3 收尾或后续阶段。批准保留在 requirements 但零 import。
+* alembic (Infrastructure database migrations only) — 同上延后（ADR-005），与 SQLAlchemy 配套推迟。
 * watchdog (Infrastructure filesystem watcher only)
 * pytest-qt (dev-only, UI smoke tests)
 
