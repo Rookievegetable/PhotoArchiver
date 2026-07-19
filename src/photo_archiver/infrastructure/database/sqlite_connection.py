@@ -195,4 +195,12 @@ class SQLiteConnectionProvider:
                     ON archive_records(status);
                 """
             )
-            connection.execute("PRAGMA user_version = 4")
+            # review Major fix: only stamp user_version when the database is new
+            # (current user_version == 0). Unconditionally writing "PRAGMA
+            # user_version = 4" on every open marked pre-existing v1/v2/v3
+            # databases as v4 without running any migration, hiding schema drift.
+            # New databases get the latest stamp; existing ones keep their real
+            # version so a future migration path can inspect + upgrade honestly.
+            current_version = connection.execute("PRAGMA user_version").fetchone()[0]
+            if current_version == 0:
+                connection.execute("PRAGMA user_version = 4")

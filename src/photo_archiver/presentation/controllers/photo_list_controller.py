@@ -11,9 +11,8 @@ from uuid import UUID
 
 from PySide6.QtCore import QObject, Qt, QRunnable, QThreadPool, Signal, Slot
 
-from photo_archiver.application.ports import ThumbnailGenerator
+from photo_archiver.application.ports import ThumbnailCache, ThumbnailGenerator
 from photo_archiver.domain import Photo, PhotoRepository
-from photo_archiver.infrastructure.image import ThumbnailCache
 
 # Default thumbnail bounding box size matches ThumbnailGenerator.generate default.
 _DEFAULT_THUMBNAIL_SIZE = 256

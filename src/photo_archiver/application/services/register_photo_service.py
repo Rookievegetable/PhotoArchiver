@@ -40,6 +40,7 @@ class RegisterPhotoService(RegisterPhotoUseCase):
             folder_id=command.folder_id,
             metadata=metadata,
             original_name=command.original_name,
+            captured_at=metadata.captured_at if metadata is not None else None,
         )
         self._repository.add(photo)
         return RegisterPhotoResult(

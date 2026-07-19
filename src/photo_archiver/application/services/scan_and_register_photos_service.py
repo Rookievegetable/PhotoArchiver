@@ -105,6 +105,7 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
                 folder_id=folder.id,
                 metadata=metadata,
                 original_name=item.original_name or photo_path.name,
+                captured_at=metadata.captured_at if metadata is not None else None,
             )
             self._photo_repository.add(photo)
             existing_paths.add(path_value)

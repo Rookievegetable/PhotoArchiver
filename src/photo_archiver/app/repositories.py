@@ -5,6 +5,7 @@ from pathlib import Path
 
 from photo_archiver.domain import (
     ArchiveRecordRepository,
+    FaceEmbeddingRepository,
     FolderRepository,
     PersonRepository,
     PhotoRepository,
@@ -13,6 +14,7 @@ from photo_archiver.domain import (
 from photo_archiver.infrastructure import (
     SQLiteArchiveRecordRepository,
     SQLiteConnectionProvider,
+    SQLiteFaceEmbeddingRepository,
     SQLiteFolderRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
@@ -30,6 +32,7 @@ class ApplicationRepositories:
     photos: PhotoRepository
     archive_records: ArchiveRecordRepository
     recognition: RecognitionRepository
+    face_embeddings: FaceEmbeddingRepository
 
 
 def build_sqlite_repositories(database_path: Path) -> ApplicationRepositories:
@@ -48,4 +51,5 @@ def build_sqlite_repositories(database_path: Path) -> ApplicationRepositories:
         photos=SQLitePhotoRepository(connection_provider),
         archive_records=SQLiteArchiveRecordRepository(connection_provider),
         recognition=SQLiteRecognitionRepository(connection_provider),
+        face_embeddings=SQLiteFaceEmbeddingRepository(connection_provider),
     )

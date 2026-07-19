@@ -9,14 +9,12 @@ from photo_archiver.application import (
     ArchivePhotosService,
     ArchivePlanner,
     ImportPeopleService,
+    MatchPersonsService,
     RegisterPhotoService,
     ReviewRecognitionService,
     ScanAndRegisterPhotosService,
     ScanPhotoFolderService,
     SettingsService,
-)
-from photo_archiver.application.services.archive_photos_service import (
-    DEFAULT_ARCHIVE_CONFLICT_STRATEGY,
 )
 from photo_archiver.infrastructure import (
     InMemoryUserSettingsStore,
@@ -25,6 +23,7 @@ from photo_archiver.infrastructure import (
     SQLiteUnitOfWork,
     TxtPersonImportReader,
 )
+from photo_archiver.infrastructure.config import AppSettings
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,13 +34,22 @@ class ApplicationServices:
     register_photo: RegisterPhotoService
     scan_photo_folder: ScanPhotoFolderService
     scan_and_register_photos: ScanAndRegisterPhotosService
+    match_persons: MatchPersonsService
     archive_photos: ArchivePhotosService
     review_recognition: ReviewRecognitionService
     settings: SettingsService
 
 
-def build_application_services(repositories: ApplicationRepositories) -> ApplicationServices:
+def build_application_services(
+    repositories: ApplicationRepositories,
+    settings: AppSettings,
+) -> ApplicationServices:
     """Build application services using runtime repositories and adapters.
+
+    ``MatchPersonsService`` wires the recognition pipeline (detector → recognizer
+    → matcher → face_embedding / recognition repos) that Step 8-10 shipped but
+    never assembled. The matcher receives ``settings.match_threshold`` so the
+    Step 13 system-level bound is honored at runtime, not only validated.
 
     ``ReviewRecognitionService`` is injected with the shared ``SQLiteUnitOfWork``
     so ISSUE-005 is closed: the in-memory ``approve()/reject()`` flip and the
@@ -51,6 +59,13 @@ def build_application_services(repositories: ApplicationRepositories) -> Applica
     CI contexts work without a Qt runtime; ``app/ui_assembly.py`` re-binds the
     desktop UI's service to a ``QSettingsUserSettingsStore`` after QSettings
     becomes available.
+
+    Model pack availability: ``InsightFaceLoader`` raises ``ModelPackMissing``
+    when the model directory is absent or empty. We catch that and construct a
+    ``MatchPersonsService`` with placeholder ports so the UI still boots (Scan /
+    Import / Archive / Settings all work without recognition); the Match action
+    surfaces the error to the user. This keeps dev / CI environments without the
+    ~500MB model pack runnable for every other feature.
     """
     scanner = LocalPhotoFileScanner()
     metadata_reader = PillowPhotoMetadataReader()
@@ -71,7 +86,7 @@ def build_application_services(repositories: ApplicationRepositories) -> Applica
     archive_photos_service = ArchivePhotosService(
         planner=archive_planner,
         executor=archive_executor,
-        default_conflict_strategy=DEFAULT_ARCHIVE_CONFLICT_STRATEGY,
+        default_conflict_strategy=settings.archive_conflict_strategy,
     )
     review_service = ReviewRecognitionService(
         repositories.recognition,
@@ -81,6 +96,7 @@ def build_application_services(repositories: ApplicationRepositories) -> Applica
         user_settings_store=InMemoryUserSettingsStore(),
         system_settings=None,
     )
+    match_service = _build_match_service(repositories, settings)
 
     return ApplicationServices(
         import_people=ImportPeopleService(TxtPersonImportReader(), repositories.people),
@@ -93,7 +109,107 @@ def build_application_services(repositories: ApplicationRepositories) -> Applica
             metadata_reader,
             unit_of_work=unit_of_work,
         ),
+        match_persons=match_service,
         archive_photos=archive_photos_service,
         review_recognition=review_service,
         settings=settings_service,
     )
+
+
+def _build_match_service(
+    repositories: ApplicationRepositories,
+    settings: AppSettings,
+) -> MatchPersonsService:
+    """Assemble the recognition pipeline, falling back when the model pack is absent.
+
+    Imported lazily so CLI / CI / unit-test contexts that never call Match do not
+    pay the ~3s InsightFace import + model prepare cost, and so environments
+    without the model pack do not crash at bootstrap. The Match service is
+    constructed against the real InsightFace detector / recognizer only when
+    the pack is available; otherwise a placeholder service raises
+    ``ModelPackMissing`` on first execute() so the UI can surface the error
+    honestly rather than crashing startup.
+    """
+    from photo_archiver.ai import InsightFaceDetector, InsightFaceRecognizer
+    from photo_archiver.ai.similarity_matcher import CosinePersonMatcher
+    from photo_archiver.infrastructure.ai import InsightFaceLoader
+
+    loader = InsightFaceLoader(model_root=settings.model_path)
+    if not loader.is_available():
+        return _UnavailableMatchService(
+            ModelPackMissing(
+                f"InsightFace model pack not found at {loader.pack_path}; "
+                "run scripts/download_models.py to fetch it"
+            )
+        )
+    analysis = loader.load()
+    detector = InsightFaceDetector(analysis)
+    recognizer = InsightFaceRecognizer(analysis)
+    matcher = CosinePersonMatcher(threshold=settings.match_threshold)
+    return MatchPersonsService(
+        detector=detector,
+        recognizer=recognizer,
+        matcher=matcher,
+        face_embedding_repository=repositories.face_embeddings,
+        recognition_repository=repositories.recognition,
+    )
+
+
+class ModelPackMissing(Exception):
+    """Raised when the InsightFace model pack is absent and Match cannot run."""
+
+
+class _UnavailableMatchService(MatchPersonsService):
+    """Placeholder MatchPersonsService that raises on execute() when model pack is absent.
+
+    Subclassing MatchPersonsService keeps the ApplicationServices dataclass field
+    type honest (callers get a MatchPersonsService, not a Union). The constructor
+    bypasses real detector/recognizer/matcher wiring by passing lightweight
+    stand-ins; only execute() is overridden to raise the captured ModelPackMissing.
+    """
+
+    def __init__(self, error: ModelPackMissing) -> None:
+        """Store the error to raise on execute(); wire stand-in ports to satisfy base."""
+        from uuid import uuid4
+
+        from photo_archiver.ai.similarity_matcher import CosinePersonMatcher
+        from photo_archiver.application.dtos import MatchResult
+
+        # Stand-in ports never exercised because execute() is overridden to raise.
+        class _NoOpDetector:
+            def detect(self, image):  # noqa: ANN001
+                return []
+
+        class _NoOpRecognizer:
+            def extract(self, image, box):  # noqa: ANN001
+                return None
+
+        super().__init__(
+            detector=_NoOpDetector(),  # type: ignore[arg-type]
+            recognizer=_NoOpRecognizer(),  # type: ignore[arg-type]
+            matcher=CosinePersonMatcher(threshold=-1.0),
+            face_embedding_repository=_NoOpFaceEmbeddingRepository(),
+            recognition_repository=_NoOpRecognitionRepository(),
+        )
+        self._error = error
+        self._MatchResult = MatchResult  # keep import reachable for type checks
+        self._uuid4 = uuid4
+
+    def execute(self, command):  # noqa: ANN001
+        """Raise the captured ModelPackMissing so the UI surfaces it honestly."""
+        raise self._error
+
+
+class _NoOpFaceEmbeddingRepository:
+    """Stand-in repository returning empty candidates so base __init__ survives."""
+
+    def list_all(self) -> dict:
+        """Return empty mapping; never exercised because execute() raises."""
+        return {}
+
+
+class _NoOpRecognitionRepository:
+    """Stand-in repository accepting add() so base __init__ survives."""
+
+    def add(self, result) -> None:
+        """No-op; never exercised because execute() raises."""

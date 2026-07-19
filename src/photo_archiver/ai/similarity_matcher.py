@@ -35,8 +35,8 @@ class CosinePersonMatcher:
             threshold: Minimum cosine similarity for a candidate to be
                 returned, in ``[0.0, 1.0]``.
         """
-        if not 0.0 <= threshold <= 1.0:
-            raise ValueError("CosinePersonMatcher threshold must be in [0.0, 1.0]")
+        if not -1.0 <= threshold <= 1.0:
+            raise ValueError("CosinePersonMatcher threshold must be in [-1.0, 1.0]")
         self._threshold = threshold
         logger.debug("CosinePersonMatcher ready (threshold={})", threshold)
 
@@ -68,13 +68,18 @@ class CosinePersonMatcher:
             if candidate_norm == 0.0:
                 continue
             similarity = _dot(embedding.vector, candidate.vector) / (query_norm * candidate_norm)
-            confidence = max(0.0, min(1.0, (similarity + 1.0) / 2.0))
-            if confidence >= self._threshold and confidence > best_confidence:
+            # review Major fix: threshold lives in cosine [-1,1] domain, NOT in
+            # the [0,1] confidence reporting domain. Previous (sim+1)/2 mapping
+            # made threshold=0.40 accept cosine >= -0.2 (almost everyone matches).
+            if similarity >= self._threshold and similarity >= best_confidence:
                 best_id = person_id
-                best_confidence = confidence
+                best_confidence = similarity
         if best_id is None:
             return None
-        return best_id, best_confidence
+        # Report confidence in [0,1] for UI/logs; threshold comparison happened
+        # in cosine [-1,1] domain above (review Major fix).
+        reported_confidence = max(0.0, min(1.0, (best_confidence + 1.0) / 2.0))
+        return best_id, reported_confidence
 
 
 def _dot(a: tuple[float, ...], b: tuple[float, ...]) -> float:

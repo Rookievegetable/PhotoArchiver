@@ -32,6 +32,7 @@ from photo_archiver.presentation.controllers import (
 )
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
 from photo_archiver.presentation.views.photo_list_model import PhotoListModel
+from photo_archiver.presentation.views.review_dialog import ReviewDialog
 from photo_archiver.presentation.views.settings_dialog import SettingsDialog
 from photo_archiver.workers.events import TaskCompleted, TaskFailed, TaskProgress, TaskStarted
 
@@ -219,22 +220,15 @@ class MainWindow(QMainWindow):
         self._connect_task_signals(runnable)
 
     def _on_review_clicked(self) -> None:
-        """Show pending recognition results in a blocking info dialog.
+        """Open the modal ReviewDialog for inline approve/reject.
 
-        Step 12 裁决 A: approve/reject are synchronous DB operations (<10ms);
-        a full review panel is out of scope this round — surfacing the pending
-        count here lets the user know whether archive is meaningful yet.
+        Step 13 fix: review is no longer a dead-end. The dialog lists pending
+        recognition results, forwards approve/reject to the controller
+        synchronously (<10ms SQLite per Step 12 裁决 A), and refreshes the
+        queue after each action. The "Use the CLI" info popup is retired.
         """
-        pending = self._review_controller.list_pending()
-        if not pending:
-            QMessageBox.information(self, "Review", "No pending recognition results.")
-            return
-        QMessageBox.information(
-            self,
-            "Review",
-            f"{len(pending)} pending result(s). Use the CLI or a future review panel "
-            "to approve/reject them; archive only covers APPROVED photos.",
-        )
+        dialog = ReviewDialog(self._review_controller, self)
+        dialog.exec()
 
     def _on_archive_clicked(self) -> None:
         """Open the archive preview dialog; on accept, start the archive task."""

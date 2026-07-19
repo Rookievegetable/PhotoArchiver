@@ -50,7 +50,7 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
     )
     try:
         repositories = build_sqlite_repositories(resolved_settings.database_path)
-        services = build_application_services(repositories)
+        services = build_application_services(repositories, resolved_settings)
     except Exception:
         logger.exception(
             "Failed to initialize application dependencies at {}",

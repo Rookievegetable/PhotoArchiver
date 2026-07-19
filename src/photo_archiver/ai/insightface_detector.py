@@ -6,6 +6,14 @@ behaviour in this module. The loading has moved to
 now only performs the detection itself against a prepared analysis instance.
 This respects DEP-050: ``ai`` depends on ``infrastructure`` for model wiring
 and focuses on AI capability here.
+
+ISSUE-001 disclosure (review Major fix): an earlier docstring here claimed a
+"detection cache" fix that did not exist in the code — the detector performs
+no caching, every ``detect()`` call reads the image from disk and runs the
+model. The claim has been removed to stop misrepresenting the module. If
+detection caching becomes valuable later (e.g. re-detecting the same photo
+across MatchPersons retries), it will be added with a real implementation and
+test, not a docstring assertion.
 """
 
 from collections.abc import Sequence
