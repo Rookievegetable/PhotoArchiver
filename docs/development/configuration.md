@@ -1,7 +1,7 @@
 # PhotoArchiver 配置说明
 
-> Version: 1.0  
-> Last Updated: 2026-07-03
+> Version: 1.1  
+> Last Updated: 2026-07-19
 
 本文档说明 PhotoArchiver 当前支持的环境变量、默认值、运行目录和配置约束。
 
@@ -46,6 +46,7 @@ copy .env.example .env
 | `MAX_WORKERS`   | `4`                                | 后台任务最大 Worker 数量。                 |
 | `ARCHIVE_ROOT`  | 空                                 | 归档根目录（独立配置，ADR-022，Step 11 新增）。 |
 | `ARCHIVE_CONFLICT_STRATEGY` | `skip`                | 归档冲突策略：skip / overwrite / rename（ADR-022）。 |
+| `MATCH_THRESHOLD` | `0.40`                             | 人脸匹配置信度阈值，范围 `[0.0, 1.0]`（Step 10 新增）。低于此值的候选不视为匹配。 |
 
 ## 3. 日志配置
 
@@ -88,7 +89,7 @@ DATABASE_URL=postgresql://localhost/photo_archiver
 DATABASE_URL=sqlite:///
 ```
 
-启动时会创建数据库文件所在目录，但数据库表结构、迁移和仓储实现会在后续 Infrastructure 模块中完成。
+启动时会创建数据库文件所在目录。Schema 由 `infrastructure/database/sqlite_connection.py` 集中初始化，走 `PRAGMA user_version` 版本管理（ADR-024，当前 v4）。SQLAlchemy/Alembic 迁移体系推迟到 roadmap Step 3 收尾（ADR-005）。
 
 ## 5. 模型目录
 
@@ -97,12 +98,12 @@ DATABASE_URL=sqlite:///
 默认值：
 
 ```env
-MODEL_PATH=models
+MODEL_PATH=resources/models
 ```
 
-启动时会自动创建该目录。当前 AI 推理流程尚未接入，因此该目录可以暂时为空。
+**不自动创建该目录**：`AppSettings.ensure_runtime_directories()` 故意跳过 `model_path`，由 `infrastructure/ai/InsightFaceLoader` 与 `scripts/download_models.py` 自管，避免静默落盘掩盖 AI 依赖（ADR-012）。模型走 `scripts/download_models.py` 手动下载，禁止自动下载。
 
-后续接入 InsightFace / ONNX Runtime 时，模型加载逻辑应位于 `ai/` 或 `infrastructure/` 的适配器中，不能泄漏到 `domain/` 或 UI 层。
+AI 推理已接入（InsightFace / ONNX Runtime，Step 8-10）。模型加载逻辑位于 `infrastructure/ai/InsightFaceLoader` 与 `ai/` 层，不泄漏到 `domain/` 或 UI 层（ADR-014）。
 
 ## 6. 照片根目录
 
@@ -146,7 +147,7 @@ OUTPUT_ROOT=D:/Photos/Archived
 MAX_WORKERS=4
 ```
 
-目录扫描、Excel 导入、缩略图生成、AI 推理、批量导出等耗时任务后续都应通过 Worker 执行，避免阻塞 UI 主线程。
+目录扫描、Excel 导入、缩略图生成、AI 推理、批量导出等耗时任务均通过 `workers/` 执行，避免阻塞 UI 主线程（Step 7+ 已就绪）。
 
 ## 9. 示例 `.env`
 
@@ -160,9 +161,12 @@ LOG_LEVEL=DEBUG
 LOG_DIRECTORY=logs
 
 DATABASE_URL=sqlite:///data/photo_archiver.db
-MODEL_PATH=models
+MODEL_PATH=resources/models
 PHOTO_ROOT=
 OUTPUT_ROOT=
+ARCHIVE_ROOT=
+ARCHIVE_CONFLICT_STRATEGY=skip
+MATCH_THRESHOLD=0.40
 
 MAX_WORKERS=4
 ```
