@@ -280,21 +280,19 @@ presentation
 
 当前尚未实现：
 
-- SQLite 迁移体系与 Schema 版本演进规范（当前以 `PRAGMA user_version` 管理，SQLAlchemy/Alembic 推迟）。
-- 缩略图生成与缓存。
-- AI 推理流程（人脸检测/识别/匹配/用户复核）。
-- 归档组织、导出结果和统计报告。
-- 完整 UI 工作流（照片列表预览、用户复核界面）。
+- SQLite 迁移体系与 Schema 版本演进规范（当前以 `PRAGMA user_version` 管理，SQLAlchemy/Alembic 推迟，见 `.ai/ARCHITECTURE_DECISIONS.md` ADR-005）。
+- 设置持久化与用户偏好（roadmap Step 13）。
+- 导出结果和统计报告（roadmap Step 14）。
+- 插件扩展机制（roadmap Step 15）。
 
 ## 7. 后续优先级
 
 建议后续按以下顺序扩展：
 
-1. 缩略图生成与缓存策略。
-2. 完整 PySide6 工作台（照片列表预览、用户复核界面）。
-3. AI 能力接入（人脸检测、识别、匹配）。
-4. 归档组织与导出。
-5. SQLite 迁移体系（SQLAlchemy/Alembic）替代 `PRAGMA user_version`。
+1. 设置与偏好（Step 13）。
+2. 导出报告与统计（Step 14）。
+3. 插件扩展机制（Step 15）。
+4. SQLite 迁移体系（SQLAlchemy/Alembic）替代 `PRAGMA user_version`（roadmap Step 3 收尾）。
 
 ## 8. 与 `.ai/` 的关系
 

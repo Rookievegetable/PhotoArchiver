@@ -265,10 +265,9 @@ Infrastructure
 待实现：
 
 - SQLite 迁移体系和 Schema 版本演进规范（当前以 `PRAGMA user_version` 管理，SQLAlchemy/Alembic 推迟）。
-- 缩略图生成与缓存数据。
-- 人脸识别和匹配流程。
-- 归档组织、导出结果和统计报告。
-- UI、缩略图和 AI 流程相关集成测试与端到端工作流测试。
+- 设置与偏好持久化（Step 13）。
+- 导出结果和统计报告（Step 14）。
+- 插件扩展机制（Step 15）。
 
 ## 下一阶段计划
 
@@ -283,6 +282,6 @@ Infrastructure
 
 ## AI 协作说明
 
-本项目包含 `.ai/` 知识库，用于约束 AI 编码助手的行为、架构边界、代码风格和审查标准。AI 助手在修改代码前必须阅读 `.ai/START_HERE.md`、`.ai/PROJECT_CONTEXT.md`、`.ai/TASK_WORKFLOW.md` 和 `.ai/rules/`。
+本项目包含 `.ai/` 知识库，用于约束 AI 编码助手的行为、架构边界、代码风格和审查标准。AI 助手在修改代码前必须从 `.ai/AI_ONBOARDING.md` 入口开始，按 `.ai/PROJECT_STATUS.md` → `.ai/ARCHITECTURE_DECISIONS.md` → `.ai/KNOWN_ISSUES.md` → `.ai/DOCUMENT_INDEX.md` 顺序加载 AI Runtime Context，再按需阅读 `.ai/rules/` 与 `docs/`。
 
 根目录 `README.md` 面向所有项目读者；`.ai/` 面向 AI 协作流程。两者职责不同，应保持同步但避免重复维护规则正文。

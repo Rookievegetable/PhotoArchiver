@@ -44,6 +44,8 @@ copy .env.example .env
 | `PHOTO_ROOT`    | 空                                 | 默认照片根目录，可留空。                   |
 | `OUTPUT_ROOT`   | 空                                 | 默认输出目录，可留空。                     |
 | `MAX_WORKERS`   | `4`                                | 后台任务最大 Worker 数量。                 |
+| `ARCHIVE_ROOT`  | 空                                 | 归档根目录（独立配置，ADR-022，Step 11 新增）。 |
+| `ARCHIVE_CONFLICT_STRATEGY` | `skip`                | 归档冲突策略：skip / overwrite / rename（ADR-022）。 |
 
 ## 3. 日志配置
 

@@ -220,6 +220,8 @@ tests/integration/database/
 - [ ] 事务边界清晰（写操作可 commit/rollback）
 - [ ] 迁移脚本可重复执行
 
+> **注**：当前以 sqlite3 + `PRAGMA user_version` 临时实现（ADR-005），SQLAlchemy/Alembic 推迟到 roadmap Step 3 收尾或后续阶段。Schema 版本当前 v4。
+
 ---
 
 # 9. Step 4 — Domain Model
