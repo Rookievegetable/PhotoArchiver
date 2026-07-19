@@ -1,7 +1,7 @@
 # PhotoArchiver 开发入门指南
 
-> Version: 1.0  
-> Last Updated: 2026-07-03
+> Version: 1.1  
+> Last Updated: 2026-07-19
 
 本文档面向参与 PhotoArchiver 开发的人类开发者，说明如何准备环境、安装依赖、运行应用、执行测试和遵守基本开发约束。
 
@@ -163,7 +163,7 @@ mypy src
 同步文档
 ```
 
-AI 编码助手必须遵守 `.ai/TASK_WORKFLOW.md`。
+AI 编码助手必须遵守 `.ai/AI_ONBOARDING.md`（新 AI Runtime Context 入口，取代旧 `.ai/TASK_WORKFLOW.md`）。
 
 ## 10. 关键开发约束
 
@@ -188,11 +188,11 @@ AI 编码助手必须遵守 `.ai/TASK_WORKFLOW.md`。
 
 ### 数据库文件不存在
 
-启动时 `AppSettings.ensure_runtime_directories()` 会创建数据库所在目录，但业务表和迁移会在后续数据库模块中实现。
+启动时 `AppSettings.ensure_runtime_directories()` 会创建数据库所在目录。Schema 由 `infrastructure/database/sqlite_connection.py` 集中初始化，走 `PRAGMA user_version` 版本管理（ADR-024，当前 v4）。SQLAlchemy/Alembic 迁移体系推迟到 roadmap Step 3 收尾（ADR-005）。
 
 ### AI 模型目录为空
 
-当前 AI 功能尚未接入。`MODEL_PATH` 目录会被创建，但模型加载流程会在后续 AI 模块中实现。
+AI 推理已接入（InsightFace / ONNX Runtime，Step 8-10）。`MODEL_PATH` 默认 `resources/models`，**不自动创建该目录**（ADR-012）——由 `scripts/download_models.py` 手动下载模型，禁止自动下载。首次运行前需先跑该脚本。
 
 ## 12. 下一步阅读
 
@@ -200,5 +200,6 @@ AI 编码助手必须遵守 `.ai/TASK_WORKFLOW.md`。
 - `docs/development/configuration.md`
 - `docs/architecture/overview.md`
 - `docs/deployment/project-structure.md`
-- `.ai/START_HERE.md`
-- `.ai/rules/`
+- `.ai/AI_ONBOARDING.md`（AI Runtime Context 入口）
+- `.ai/PROJECT_STATUS.md`（当前开发状态唯一权威）
+- `.ai/rules/`（9 专项工程规则 + README + audit-methodology）

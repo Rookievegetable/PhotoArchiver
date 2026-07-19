@@ -1,7 +1,7 @@
 # PhotoArchiver 架构总览
 
-> Version: 1.0  
-> Last Updated: 2026-07-03
+> Version: 1.1  
+> Last Updated: 2026-07-19
 
 本文档面向开发者和维护者，说明 PhotoArchiver 的架构目标、分层职责、依赖方向和后续功能开发边界。
 
@@ -261,38 +261,38 @@ presentation
 
 ## 6. 当前实现状态
 
-当前已实现：
+> **唯一权威**：`.ai/PROJECT_STATUS.md`。本节为人类入口快照，随开发推进可能漂移——若冲突以彼为准。
 
-- `main.py` 应用入口（CLI 扫描模式 + PySide6 桌面模式）。
-- `app/bootstrap.py` 启动和依赖装配。
-- `app/context.py` 应用上下文（含 `QtWorkerExecutor`）。
-- `infrastructure/config/settings.py` 配置加载和校验。
+当前 Step 0.5-13 已完成（Phase 2 Step 13 Settings 收尾）：
+
+- `main.py` 应用入口（CLI 扫描 + 归档 + PySide6 桌面模式）。
+- `app/bootstrap.py` 启动和依赖装配（CLI/UI 分层）+ `ApplicationContext`（含 `QtWorkerExecutor`）。
+- `infrastructure/config/settings.py` 完整 `AppSettings`（含 `archive_root` / `archive_conflict_strategy` / `match_threshold`，ADR-022/024）。
 - `infrastructure/logging/` Loguru 初始化。
-- `domain/` 核心实体（Person/Photo/Folder）、值对象（PhotoPath/PhotoMetadata/PersonIdentity）、仓储 Protocol、异常。
-- `application/` Command/DTO/UseCase Protocol/Service 四组：ImportPeople/RegisterPhoto/ScanPhotoFolder/ScanAndRegisterPhotos；端口 ProgressReporter/UnitOfWork。
-- `infrastructure/database/` SQLite 连接（含事务边界 `transaction()`）、Schema 初始化、Repository 容器、基础仓储实现、`SQLiteUnitOfWork`。
-- `infrastructure/filesystem/` 本地照片文件扫描器、Pillow 元数据读取适配器。
+- `domain/` 完整实体（Person/Photo/Folder/ArchiveRecord/RecognitionResult/FaceEmbedding）+ 值对象（含 `captured_at`，ADR-021）+ 仓储 Protocol + 异常。
+- `application/` Command/DTO/UseCase Protocol/Service 全集：ImportPeople / RegisterPhoto / ScanPhotoFolder / ScanAndRegisterPhotos / Thumbnail / MatchPersons / ReviewRecognition / ArchivePlanner / ArchiveExecutor / ArchivePhotos / ArchivePathBuilder / Settings。
+- `infrastructure/database/` SQLite 连接（`PRAGMA user_version = 4`，ADR-024）、事务边界、Schema 初始化、Repository 容器、全部仓储实现、`SQLiteUnitOfWork`。
+- `infrastructure/filesystem/` 本地照片文件扫描器、Pillow 元数据读取适配器（含 `captured_at` EXIF→mtime 链式降级）。
 - `infrastructure/importers/` TXT 与 Excel 人员导入适配器。
-- `workers/` 任务基类、事件模型、Qt 执行器、人员导入与扫描注册任务包装器。
-- `presentation/views/main_window.py` 最小工作台（扫描按钮 + 进度条 + 状态栏 + ScanController）。
-- `presentation/controllers/scan_controller.py` UI↔Worker 桥接。
-- 扫描注册闭环的事务原子性与进度回流契约。
-
-当前尚未实现：
-
-- SQLite 迁移体系与 Schema 版本演进规范（当前以 `PRAGMA user_version` 管理，SQLAlchemy/Alembic 推迟，见 `.ai/ARCHITECTURE_DECISIONS.md` ADR-005）。
-- 设置持久化与用户偏好（roadmap Step 13）。
-- 导出结果和统计报告（roadmap Step 14）。
-- 插件扩展机制（roadmap Step 15）。
+- `infrastructure/ai/` InsightFaceLoader（ADR-012 模型自管路径）。
+- `ai/` InsightFaceDetector / InsightFaceRecognizer / SimilarityMatcher（ADR-014，AI 不做业务决策）。
+- `infrastructure/persistence/` QSettings + InMemory 双 `UserSettingsStore` 适配器。
+- `workers/` 通用执行器框架（`QtWorkerExecutor` + `task` / `application_tasks` + `events` 信号载体）。
+- `presentation/views/` MainWindow + ArchivePreviewDialog + SettingsDialog + ArchivePhotosTask。
+- `presentation/controllers/` ImportPeople / Archive / Review / PhotoList / Settings + ScanController。
+- 缩略图缓存（`data/cache/thumbnails/`，ADR-013）、Excel 导入、AI 人脸检测/识别/匹配、用户复核、归档组织、Settings 闭环均已就绪。
+- 单元测试与集成测试体系（pytest 226 passed / 8 skipped）。
 
 ## 7. 后续优先级
 
+> 详见 `.ai/business/roadmap.md`（15 步权威路线图）与 `.ai/PROJECT_STATUS.md`。
+
 建议后续按以下顺序扩展：
 
-1. 设置与偏好（Step 13）。
-2. 导出报告与统计（Step 14）。
-3. 插件扩展机制（Step 15）。
-4. SQLite 迁移体系（SQLAlchemy/Alembic）替代 `PRAGMA user_version`（roadmap Step 3 收尾）。
+1. 导出报告与统计（Step 14 Export）。
+2. 插件扩展机制（Step 15 Plugin System）。
+3. SQLite 迁移体系（SQLAlchemy/Alembic）替代 `PRAGMA user_version`（roadmap Step 3 收尾，ADR-005）。
+4. 既有 19 mypy + 2 ruff 飘带单独一轮清理（ISSUE-007）。
 
 ## 8. 与 `.ai/` 的关系
 

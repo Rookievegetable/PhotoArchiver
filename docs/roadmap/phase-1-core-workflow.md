@@ -1,6 +1,12 @@
 # Phase 1 Core Workflow Roadmap
 
-> Last Updated: 2026-07-08
+> Last Updated: 2026-07-19
+
+> ⚠️ **Phase 1 已完成**（2026-07-19 收尾，Step 0.5-13 全就绪）。
+>
+> 本文档为 Phase 1 历史路线图，保留作历史参考。**当前权威路线图**：`.ai/business/roadmap.md`（15 步）+ `.ai/PROJECT_STATUS.md`。
+>
+> 阅读本文件时请知：以下"尚未完成"清单已在 Phase 1 收尾时全部落地，Phase 2 Step 14 Export / Step 15 Plugin System 进行中。
 
 ## 目标
 

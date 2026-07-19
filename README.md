@@ -2,7 +2,9 @@
 
 PhotoArchiver 是一个面向长期维护的企业级桌面照片归档管理系统，目标是帮助学校、政府机构、企业、档案馆、博物馆、摄影工作室和个人用户管理大量历史照片。
 
-项目当前处于核心业务闭环建设阶段：工程结构、配置加载、日志初始化、最小 PySide6 启动链路、领域模型、应用服务、SQLite 仓储、文件系统扫描、Pillow 元数据读取和 CLI 扫描注册路径已经建立；完整桌面 UI、后台 Worker、缩略图缓存、Excel 导入、归档流程、AI 识别和用户复核仍在后续阶段实现。
+项目当前处于 Phase 2 产品化阶段：Step 0.5-13 已完成（Walking Skeleton / Logging / Configuration / Database / Domain / Excel Import / Folder Scanner / Thumbnail / Face Detection / Face Recognition / Matching Engine / Archive Generator / Main UI / Settings），完整桌面 UI、后台 Worker、缩略图缓存、Excel 导入、归档流程、AI 识别和用户复核均已落地；下一步推进 Step 14 Export 导出与统计报告。
+
+> **当前进度唯一权威**：`.ai/PROJECT_STATUS.md`。本节为人类入口快照，随开发推进可能漂移——若与 `PROJECT_STATUS.md` 冲突，以彼为准。
 
 ## 核心目标
 
@@ -47,7 +49,7 @@ Export Results
 
 - Python 3.11
 - PySide6
-- SQLite、SQLAlchemy、Alembic
+- SQLite、SQLAlchemy、Alembic（延后：当前 sqlite3 + PRAGMA user_version，ADR-005）
 - pandas、openpyxl
 - OpenCV、Pillow
 - InsightFace、ONNX Runtime
@@ -236,49 +238,39 @@ Infrastructure
 
 ## 当前开发进度
 
-已完成：
+> **唯一权威**：`.ai/PROJECT_STATUS.md`。本节为人类入口快照，随开发推进可能漂移——若与 `PROJECT_STATUS.md` 冲突，以彼为准。
 
-- 顶层目录结构。
-- Python 工程配置。
-- 运行依赖与开发依赖规划。
-- `.env.example` 示例配置。
-- 应用启动入口。
-- 配置加载与运行目录创建。
-- Loguru 日志初始化。
-- 最小 PySide6 主窗口。
-- `domain/` 基础实体、值对象、异常和仓储接口。
-- `application/` Command、DTO、Use Case 协议和应用服务。
-- 人员 TXT 导入、Excel 导入、照片目录扫描、照片注册的基础应用服务。
-- 本地照片文件扫描器和 Pillow 图片元数据读取适配器。
-- 扫描目录、读取元数据、注册照片、更新文件夹统计的应用服务闭环。
-- `python main.py scan <folder>` CLI 扫描注册入口。
-- SQLite 连接、Schema 初始化、Repository 容器和基础仓储实现。
+已完成（Step 0.5-13）：
+
+- Walking Skeleton、Python 工程配置、运行依赖与开发依赖规划、`.env.example` 示例配置。
+- 应用启动入口、配置加载与运行目录创建、Loguru 日志初始化。
+- 完整 PySide6 主窗口（MainWindow + 4 controller + ArchivePhotosTask + ArchivePreviewDialog + SettingsDialog）。
+- `domain/` 完整实体、值对象、异常和仓储接口。
+- `application/` Command、DTO、Use Case 协议和应用服务（ImportPeople / RegisterPhoto / ScanPhotoFolder / ScanAndRegisterPhotos / Thumbnail / MatchPersons / ReviewRecognition / ArchivePlanner / ArchiveExecutor / ArchivePhotos / ArchivePathBuilder / Settings）。
+- 人员 TXT + Excel 导入、照片目录扫描、照片注册、缩略图生成、AI 人脸检测/识别/匹配、用户复核、归档组织全闭环。
+- SQLite 连接、Schema 初始化（`PRAGMA user_version = 4`）、Repository 容器和全部仓储实现（含 ArchiveRecord、FaceEmbedding、Recognition）。
 - App bootstrap 对配置、日志、运行目录和 SQLite 仓储的装配。
-- Domain、Application、Infrastructure Repository、App bootstrap、扫描注册闭环和 CLI 入口测试。
-- Worker 任务基类、事件模型、Qt 执行器和人员导入/扫描注册任务包装器。
-- `ProgressReporter` 端口与扫描注册服务的进度回调契约。
-- `UnitOfWork` 端口与 SQLite 事务边界，扫描注册闭环在事务内原子提交。
-- PySide6 最小工作台：扫描目录按钮 + 进度条 + 状态栏 + ScanController 接入 QtWorkerExecutor。
-- AI 开发知识库和工程规则。
-- AI_ONBOARDING.md 统一入职指南与规则一致性审计报告。
+- AI 能力：InsightFace detect/recognize/match + ONNX Runtime（Step 8-10）。
+- Workers 通用执行器框架（QtWorkerExecutor + task/application_tasks/events）+ 已注册任务。
+- Settings 闭环：`UserPreferences` DTO + 校验 + `SettingsService` + `UserSettingsStore` 抽象端口 + QSettings/InMemory 双适配器 + `SettingsDialog` + `SettingsController` + ISSUE-005 ReviewRecognitionService UoW 闭环。
+- 单元测试与集成测试体系（pytest 226 passed / 8 skipped）。
+- AI 开发知识库 AI Runtime Context 四文档体系 + 工程规则 + 文档体系导航。
 
 待实现：
 
-- SQLite 迁移体系和 Schema 版本演进规范（当前以 `PRAGMA user_version` 管理，SQLAlchemy/Alembic 推迟）。
-- 设置与偏好持久化（Step 13）。
-- 导出结果和统计报告（Step 14）。
-- 插件扩展机制（Step 15）。
+- Step 14 Export：`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `ExportDialog`，导出范围全量/当前批次/筛选结果。
+- Step 15 Plugin System：插件接口 + 发现/加载机制 + 生命周期管理 + 示例插件。
+- SQLAlchemy/Alembic 迁移体系替代当前 `PRAGMA user_version`（roadmap Step 3 收尾）。
+- 既有 19 mypy + 2 ruff 飘带单独一轮清理。
 
 ## 下一阶段计划
 
-建议优先顺序：
+> 详见 `.ai/business/roadmap.md`（15 步权威路线图）与 `.ai/PROJECT_STATUS.md`。
 
-1. 校准文档与当前代码状态，并维护 `docs/roadmap/` 阶段路线图。
-2. 安装并验证完整运行依赖，让 Pillow 相关集成测试从 skipped 转为 passed。
-3. 缩略图生成与缓存策略。
-4. 在核心业务闭环稳定后接入 AI 人脸检测、识别、匹配和用户复核流程。
-5. 归档组织、导出结果和统计报告。
-6. SQLite 迁移体系（SQLAlchemy/Alembic）替代当前 `PRAGMA user_version` 管理。
+1. Step 14 Export 导出与统计报告。
+2. Step 15 Plugin System 插件扩展机制。
+3. SQLAlchemy/Alembic 迁移体系（roadmap Step 3 收尾）。
+4. 既有飘带单独一轮清理。
 
 ## AI 协作说明
 
