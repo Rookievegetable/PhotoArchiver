@@ -1,5 +1,17 @@
 # PhotoArchiver AI Knowledge Base
 
+> ⚠️ **DEPRECATED — DO NOT READ**
+>
+> 本文档已废弃，仅保留作历史参考。**新 AI Session 请勿阅读本文。**
+>
+> **替代文档**：`.ai/AI_ONBOARDING.md`（入口）+ `.ai/DOCUMENT_INDEX.md`（文档体系导航）+ `.ai/rules/README.md`（规则元规则）
+>
+> 废弃日期：2026-07-18 ｜ 废弃裁决：AI Runtime Context 体系建立（`.ai/rules/CONTEXT_HANDOFF_RULES.md`）
+>
+> 历史正文保留于下方，仅供追溯。
+
+---
+
 Version: 1.0.0
 
 Status: Stable

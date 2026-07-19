@@ -1,5 +1,17 @@
 # PhotoArchiver 会话间交接文档
 
+> ⚠️ **DEPRECATED — DO NOT READ**
+>
+> 本文档已废弃，仅保留作历史参考。**新 AI Session 请勿阅读本文。**
+>
+> **替代文档**：`.ai/PROJECT_STATUS.md` §5（Last Session，实时状态交接）
+>
+> 废弃日期：2026-07-18 ｜ 废弃裁决：AI Runtime Context 体系建立（`.ai/rules/CONTEXT_HANDOFF_RULES.md`）+ `.ai/rules/CONTEXT_HANDOFF_RULES.md` P5（prompt 不得成永久文档）
+>
+> 历史正文保留于下方，仅供追溯。
+
+---
+
 > 生成时间：2026-07-17 18:12（本地） ｜ 生成者：AtomCode (GLM-5.2) ｜ 会话范围：Phase 2 Step 8-10 + 三轮 Review + P0-P3 修复
 > 新会话入职顺序：① 本文档 ② `AI_ONBOARDING.md` ③ `.ai/Consistency-Audit-2026-07-13.md` ④ 本文 §6 未决事项
 

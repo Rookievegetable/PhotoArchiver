@@ -1,5 +1,17 @@
 # AI_ONBOARDING.md — PhotoArchiver AI 入职指南
 
+> ⚠️ **DEPRECATED — DO NOT READ**
+>
+> 本文档已废弃，仅保留作历史参考。**新 AI Session 请勿从本文开始入职。**
+>
+> **替代文档**：`.ai/AI_ONBOARDING.md`（新 AI Runtime Context 唯一入口，同名异位）
+>
+> 废弃日期：2026-07-18 ｜ 废弃裁决：AI Runtime Context 体系建立（`.ai/rules/CONTEXT_HANDOFF_RULES.md`），入职指南统一迁至 `.ai/` 下
+>
+> 历史正文保留于下方，仅供追溯。
+
+---
+
 > **本文档是任何 AI 编码助手接手 PhotoArchiver 项目时的唯一统一入口（Single Entry Point）。**
 >
 > Version: 1.0.0 ｜ Last Updated: 2026-07-13 ｜ Status: Stable

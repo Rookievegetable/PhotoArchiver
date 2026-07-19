@@ -1,5 +1,17 @@
 # 🚀 START HERE - PhotoArchiver AI Development Guide
 
+> ⚠️ **DEPRECATED — DO NOT READ**
+>
+> 本文档已废弃，仅保留作历史参考。**新 AI Session 请勿从本文开始入职。**
+>
+> **替代文档**：`.ai/AI_ONBOARDING.md`（新 AI Runtime Context 唯一入口）
+>
+> 废弃日期：2026-07-18 ｜ 废弃裁决：AI Runtime Context 体系建立（`.ai/rules/CONTEXT_HANDOFF_RULES.md`）
+>
+> 历史正文保留于下方，仅供追溯。新会话请改读 `.ai/AI_ONBOARDING.md` → `.ai/PROJECT_STATUS.md` → `.ai/ARCHITECTURE_DECISIONS.md` → `.ai/KNOWN_ISSUES.md` → `.ai/DOCUMENT_INDEX.md`。
+
+---
+
 > **This is the first document every AI coding assistant must read before modifying the project.**
 
 ---

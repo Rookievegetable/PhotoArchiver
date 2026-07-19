@@ -1,5 +1,17 @@
 # PhotoArchiver 规则一致性审计报告
 
+> ⚠️ **DEPRECATED — DO NOT READ**
+>
+> 本文档已废弃，仅保留作历史参考。**新 AI Session 请勿阅读本文。**
+>
+> **替代文档**：已裁决冲突迁入 `.ai/ARCHITECTURE_DECISIONS.md` R 段；未决冲突迁入 `.ai/KNOWN_ISSUES.md`（ISSUE-011~015）
+>
+> 废弃日期：2026-07-18 ｜ 废弃裁决：AI Runtime Context 体系建立（`.ai/rules/CONTEXT_HANDOFF_RULES.md`），审计内容已分流至新四文档
+>
+> 历史正文保留于下方，仅供追溯。
+
+---
+
 > Audit Date: 2026-07-13
 > Auditor: AtomCode (GLM-5.2) — Senior Software Architect / Python Engineer / Technical Lead
 > Scope: `.ai/rules/` vs `.ai/architecture/` vs `.ai/business/` vs `.ai/context/` vs `docs/` vs 当前代码
