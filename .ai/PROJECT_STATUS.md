@@ -113,7 +113,8 @@
 | Next Step | Step 14 Export |
 | HEAD | 本会话未提交（工作树含 Step 13 全部新增 + 既有占位骨架扩展） |
 | 测试 | pytest **226 passed / 8 skipped**（8 skip = 缺模型包 + PySide6/pytestqt 阈带） |
-| 质量门 | 本轮引入范围 ruff/mypy clean；既有 19 mypy + 2 ruff 阈带持平（裁决 3 不混入） |
+| 质量门 | 本轮引入范围 ruff/mypy clean；既有 19 mypy + 2 ruff 飘带持平（裁决 3 不混入） |
+| 文档影响 | 本轮新增 Settings 模块——`AI_ONBOARDING.md` §3/§4（新 Settings 文件路径可补入索引，本轮未触，视为下轮文档触碰清单补录项）；`PROJECT_STATUS.md` §4 模块表已含 Settings；`docs/development/configuration.md`（QSettings 不属本文档范畴，无需更） |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 

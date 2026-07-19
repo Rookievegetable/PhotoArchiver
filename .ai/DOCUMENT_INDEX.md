@@ -6,7 +6,7 @@
 >
 > 任何 AI 在 30 秒内读完本文即可理解整个文档体系结构。
 >
-> Version: 1.0.0 ｜ Status: Stable ｜ Last Updated: 2026-07-18
+> Version: 1.1.0 ｜ Status: Stable ｜ Last Updated: 2026-07-19
 
 ---
 
@@ -66,6 +66,7 @@ flowchart TD
 | `.ai/rules/ui-rules.md` | PySide6 UI 标准 | UI 标准 |
 | `.ai/rules/git-rules.md` | Git 工作流、提交规范 | Git 标准 |
 | `.ai/rules/review-rules.md` | 审查清单、质量门 | Review Checklist 总表 |
+| `.ai/rules/audit-methodology.md` | 文档一致性审计方法论（轻量复审节奏） | 审计方法论 |
 
 ### 2.3 业务与路线图
 
@@ -117,6 +118,7 @@ flowchart TD
 | 编码标准 | `.ai/rules/coding-rules.md` |
 | Worker / UI / Git / Review 标准 | `.ai/rules/{worker,ui,git,review}-rules.md` |
 | Review Checklist 总表 | `.ai/rules/review-rules.md` §22 |
+| 文档一致性审计方法论 | `.ai/rules/audit-methodology.md` |
 | 15 步路线图 | `.ai/business/roadmap.md` |
 | 配置项详解 | `docs/development/configuration.md` |
 | 目录结构详解 | `docs/deployment/project-structure.md` |

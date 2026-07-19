@@ -270,8 +270,15 @@ flowchart TD
 - [ ] 无 TODO/FIXME/`print()`/Magic Number/bare except
 - [ ] 类型提示与 docstring 完整（公共 API）
 - [ ] 文档同步（`PROJECT_STATUS.md` 必更；ADR/Issues 按需）
+- [ ] **文档触碰清单**——本次改动是否使任何文档陈述失效？若是：同轮更新该文档，或在 `KNOWN_ISSUES.md` 登记 ISSUE 并标爆炸半径；§13.1 所列权威文档均属触碰范围
 - [ ] Commit Message 符合 Conventional Commits
 - [ ] 改动范围最小，无无关重构
+
+> 文档触碰清单是防漂移根本机制：漂移的总根因是"代码动了、文档没动"。在每轮收尾显式自问"我这次改动会让哪份文档变错？"可在漂移产生的当轮消除它，而非依赖三个月一次的大审计。判断方法：本次改动是否触及某文档"陈述为现状"的句子（已实现/未实现/当前版本/位置/路径/技术栈）？若是即触碰。
+
+### 12.1 复审节奏（防漂移机制）
+
+每完成 2-3 个 Step 做一次轻量一致性检查，沿用 `.ai/rules/audit-methodology.md` 方法论（证据采集 + 五维比对）。检查范围：本次所涉 Step 触碰过的全部权威文档（§13.1）。产出：新发现的矛盾追加到 `KNOWN_ISSUES.md`，已解决的整条删除，无需另起审计报告文档。
 
 ---
 
@@ -332,6 +339,74 @@ flowchart TD
 ```
 
 > ⚠ Placeholder 占位文档（11 个，见 `.ai/DOCUMENT_INDEX.md` §6）不读取、不修改、不删除。
+
+---
+
+## 14. 附录：入职自测（Onboarding Knowledge Verification）
+
+> 迁移自废弃根目录 `AI_ONBOARDING.md` §15（2026-07-18 废弃，独有教学设备迁此为附录）。答案已按新 AI Runtime Context 体系修正。
+
+入职完成后，AI **必须**回答以下问题。**答错则继续阅读，不要开发。**
+
+### Q1. 项目目标是什么？
+
+<details>
+<summary>参考答案</summary>
+
+基于 DDD + Clean Architecture 的企业级桌面照片归档系统，面向学校/政府/企业/档案馆/摄影工作室等管理大量历史照片，自动化导入/扫描/识别/匹配/归档/导出流程。当前 Phase 2 进行中（Step 13 Settings 闭环就绪，Step 14 Export 未开始）。
+</details>
+
+### Q2. 目前完成到哪里？
+
+<details>
+<summary>参考答案</summary>
+
+Step 0.5-13 已完成（Walking Skeleton / Logging / Configuration / Database / Domain / Excel Import / Folder Scanner / Thumbnail / Face Detection / Face Recognition / Matching Engine / Archive Generator / Main UI / Settings）。Schema 当前 `PRAGMA user_version = 4`。未完成：Step 14 Export、Step 15 Plugin System、SQLAlchemy/Alembic 迁移体系（roadmap Step 3 收尾）。
+</details>
+
+### Q3. 下一阶段是什么？
+
+<details>
+<summary>参考答案</summary>
+
+Step 14 Export（`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `ExportDialog`，导出范围全量/当前批次/筛选结果）→ Step 15 Plugin System → SQLAlchemy/Alembic 迁移体系。
+</details>
+
+### Q4. 当前最大风险是什么？
+
+<details>
+<summary>参考答案</summary>
+
+1. **既有 19 mypy + 2 ruff 阘带**（ISSUE-007）——基线质量飘带，单独开一轮清理，不混入 Step 任务。
+2. **11 个 `.ai/` 文档为 Placeholder 占位**（ISSUE-015）——SSOT 不完整，随模块推进逐步填充。
+3. **文档体系漂移**（ISSUE-012/013/014）——Tier3 人类文档冻结在 Step 11/12 状态，文档体系改进计划第一期止血已在推进。
+</details>
+
+### Q5. 有哪些架构约束？
+
+<details>
+<summary>参考答案</summary>
+
+- 分层：Presentation → Application → Domain ← Infrastructure；Workers → Application；AI → Infrastructure+Domain；Common 仅标准库（权威矩阵见 `.ai/rules/dependency-rules.md` §4）
+- Domain 零框架依赖（禁 PySide6/OpenCV/InsightFace/SQLite/pandas/openpyxl/SQLAlchemy/numpy）
+- Presentation 禁导入 Infrastructure/SQLite/OpenCV/InsightFace
+- Application 禁导入 PySide6、禁执行 SQL、必须用 Repository Protocol
+- Workers 仅可导入 `PySide6.QtCore`（线程原语），禁导入 QtWidgets/QtGui（ADR-007、DEP-040）
+- SQLite 仅在 `infrastructure/database/`（ADR-004、ARC-014）
+- 所有业务经由 Application 编排
+</details>
+
+### Q6. 哪些修改必须确认？
+
+<details>
+<summary>参考答案</summary>
+
+新增依赖、改项目结构、改公开 API、改数据库 Schema、改配置格式、引入破坏性变更、修改 `.ai/rules/` 规则条文、修改 License/CI/`pyproject.toml`/`.env.example`、重命名公开模块、改变架构边界、绕过 `application/` 直接 Presentation→Infrastructure、在 Widget 写业务逻辑、在 Worker 操作 Widget。详见本文 §6 与 §11。
+</details>
+
+---
+
+> 📝 本文件由 AtomCode (GLM-5.2) 于 2026-07-18 基于真实项目分析生成。所有信息引用 `.ai/`、`docs/`、源码权威内容，不复制正文。维护规则：架构演进、规则版本 bump、模块新增/迁移时同步本文件。
 
 ---
 
