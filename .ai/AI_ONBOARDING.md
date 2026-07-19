@@ -156,7 +156,7 @@ Plugins  →  Application        Common  →  Standard Library only
 
 ## 6. 开发工作流（每次任务必走）
 
-> 权威：`.ai/TASK_WORKFLOW.md`（10 阶段）。
+> 本节是工作流权威定义，10 阶段流即下方 mermaid 图。历史废弃文档 `.ai/TASK_WORKFLOW.md` 已由本节取代（见 §13.2）。
 
 ```mermaid
 flowchart TD

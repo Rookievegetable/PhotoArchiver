@@ -81,21 +81,15 @@ Business decisions belong to the Application layer.
 
 ---
 
-# 5. Approved Worker Types
+# 5. Approved Worker Framework
 
-The following Worker types are approved:
+The Worker layer is a **generic executor framework**, not a fixed set of named Worker classes. The earlier list of 9 concrete classes (`FolderScanWorker` etc.) was aspirational and never landed in code — the actual implementation is:
 
-* FolderScanWorker
-* ImageScanWorker
-* FaceRecognitionWorker
-* ImportWorker
-* ExportWorker
-* ArchiveWorker
-* ThumbnailWorker
-* CacheWorker
-* DatabaseSyncWorker
+* `QtWorkerExecutor` (`src/photo_archiver/workers/`) — the single executor owning a `QThreadPool`.
+* `task` / `application_tasks` (`src/photo_archiver/workers/`) — task registration helpers wiring Application services onto the executor.
+* `events` (`src/photo_archiver/workers/events.py`) — `TaskStarted` / `TaskProgress` / `TaskFailed` / `TaskCompleted` signal carriers.
 
-New Worker types require architectural review.
+New long-running operations are registered as tasks through this framework rather than subclassing a named Worker type. Architecture review is required before introducing a new named Worker class — the default path is registering a task against the executor.
 
 ---
 
