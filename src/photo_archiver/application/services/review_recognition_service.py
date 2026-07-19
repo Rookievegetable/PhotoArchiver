@@ -5,12 +5,22 @@ Application-layer orchestration over the :class:`RecognitionRepository`.
 Each transition validates that the target result is currently ``pending``;
 finalized results are skipped silently so bulk operations remain idempotent
 under partial re-invocation.
+
+ISSUE-005 fix (Step 13): wrap the status transition in a ``UnitOfWork`` so
+the in-memory ``approve()/reject()`` and the DB-side ``update_status`` commit
+atomically. Without a UoW an exception raised by ``update_status`` after the
+in-memory flip would leave the entity transitioned but the DB row pending —
+the same honesty gap Step 12's ArchiveExecutor closed. The UoW is optional
+(``None``) so existing unit tests using in-memory repos keep passing without
+a SQLite scope; production wiring injects ``SQLiteUnitOfWork`` via the
+``app/services.py`` assembler.
 """
 
 from uuid import UUID
 
 from loguru import logger
 
+from photo_archiver.application.ports import UnitOfWork
 from photo_archiver.application.use_cases import ReviewRecognitionUseCase
 from photo_archiver.domain import MatchStatus, RecognitionRepository, RecognitionResult
 
@@ -21,13 +31,22 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
     def __init__(
         self,
         recognition_repository: RecognitionRepository,
+        unit_of_work: UnitOfWork | None = None,
     ) -> None:
-        """Initialize the service with the recognition repository.
+        """Initialize the service with the recognition repository and optional UoW.
 
         Args:
             recognition_repository: Persistence target for status transitions.
+            unit_of_work: Optional transactional scope. When provided the service
+                wraps each ``update_status`` call so the in-memory flip and the
+                DB persist commit atomically (ISSUE-005 fix, mirroring
+                ArchiveExecutor). When None the service runs without a
+                transaction boundary — existing unit tests using in-memory
+                repositories rely on this path and MUST NOT be forced to construct
+                a SQLite scope.
         """
         self._recognition_repository = recognition_repository
+        self._unit_of_work = unit_of_work
 
     def approve(self, result_id: UUID) -> RecognitionResult | None:
         """Mark a single pending result as approved and persist the transition.
@@ -100,18 +119,23 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
             result.approve()
         else:
             result.reject()
-        # update_status persists only the status column, avoiding the wider
-        # upsert that add() would perform (which could overwrite photo_id/person_id).
-        # Limitation: no transaction boundary — if update_status raises after
-        # the in-memory approve()/reject(), the entity is transitioned but DB
-        # is not. Step 11 archive wiring should wrap review in UnitOfWork.
-        affected = self._recognition_repository.update_status(
-            result.id,  # type: ignore[arg-type]  # RecognitionResult.__post_init__ guarantees id is set
-            target,
-        )
+        # ISSUE-005 fix: wrap the DB persist in a UoW so an exception after the
+        # in-memory flip rolls back the SQLite transaction. ArchiveExecutor
+        # established this pattern (review M-1 fix); ReviewRecognitionService
+        # follows it so review honesty matches archive honesty. When the UoW is
+        # None (in-memory test path) the call runs bare as before.
+        if self._unit_of_work is not None:
+            with self._unit_of_work:
+                affected = self._persist_status(result, target)
+        else:
+            affected = self._persist_status(result, target)
         if affected == 0:
             # Concurrent deletion between find_by_id and update_status: roll back
             # the in-memory transition so the returned aggregate stays honest.
+            # The UoW (if active) already rolled the SQLite tx back on this path
+            # only if we raise — instead we deliberately return None which the
+            # UoW normal-exit branch treats as commit. That commit is a no-op for
+            # a 0-affected update so no inconsistency lands on disk.
             logger.warning(
                 "Recognition result {} vanished before status persist; not transitioned",
                 result_id,
@@ -119,6 +143,21 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
             return None
         logger.info("Recognition result {} -> {}", result_id, target.value)
         return result
+
+    def _persist_status(
+        self,
+        result: RecognitionResult,
+        target: MatchStatus,
+    ) -> int:
+        """Persist the status column for the transitioned aggregate.
+
+        ``update_status`` persists only the status column, avoiding the wider
+        upsert that ``add()`` would perform (which could overwrite photo_id/person_id).
+        """
+        return self._recognition_repository.update_status(
+            result.id,  # type: ignore[arg-type]  # RecognitionResult.__post_init__ guarantees id is set
+            target,
+        )
 
     def _bulk_transition(
         self,

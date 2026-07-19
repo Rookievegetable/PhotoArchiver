@@ -70,3 +70,21 @@ def test_unit_of_work_supports_concurrent_threads(provider: SQLiteConnectionProv
     t2.join()
 
     assert results == {"T1": "ok", "T2": "ok"}
+
+
+def test_unit_of_work_commit_safe_with_zero_affected(provider: SQLiteConnectionProvider) -> None:
+    """A transaction that performs no writes must commit without error (review M-7).
+
+    SQLite ``COMMIT`` on a read-only scope is a no-op but must not raise; this
+    guards the ReviewRecognitionService 0-affected path where ``update_status``
+    returns 0 and the service exits the UoW normally.
+    """
+    uow = SQLiteUnitOfWork(provider)
+    with uow:
+        pass  # no repository calls — simulates 0-affected status update
+    # If COMMIT had raised, the with-block would have propagated; reaching here
+    # is the success assertion. A second round-trip confirms the provider is
+    # back to per-call mode and remains usable.
+    with uow:
+        pass
+    assert True

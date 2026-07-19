@@ -16,7 +16,7 @@
 |---|---|
 | 架构决策 / ADR / 依赖规则 / 编码规则 | `ARCHITECTURE_DECISIONS.md` |
 | 当前 Bug / 技术债 / 风险 / workaround | `KNOWN_ISSUES.md` |
-| �AI 阅读顺序 / AI 工作流程 | `AI_ONBOARDING.md` |
+| 按AI 阅读顺序 / AI 工作流程 | `AI_ONBOARDING.md` |
 | Bug 原因分析 / 长篇历史记录 / 聊天记录 | 不保留 |
 
 ---
@@ -40,7 +40,7 @@
 | 10 | Matching Engine | ✅ Completed（`947b428`） |
 | 11 | Archive Generator | ✅ Completed（本会话） |
 | 12 | Main UI | ✅ Completed（本会话，三轮 Review 修复落 `03f4395`） |
-| 13 | Settings | ⛔ Pending |
+| 13 | Settings | ✅ Completed（本会话） |
 | 14 | Export | ⛔ Pending |
 | 15 | Plugin System | ⛔ Pending |
 
@@ -50,12 +50,12 @@
 
 ## 2. Current Step（当前开发阶段）
 
-**Step 13 — Settings（设置与偏好）** — ⛔ 未开始
+**Step 14 — Export（导出）** — ⛔ 未开始
 
 前置就绪状态：
-- Step 12 完整 UI 工作台已就绪（MainWindow 重构 + 4 controller + ArchivePhotosTask + ArchivePreviewDialog）。
-- `AppSettings`（pydantic-settings）系统配置就绪，但**用户偏好持久化未建**。
+- Step 13 Settings 闭环已就绪（`SettingsDialog` + `SettingsController` + `SettingsService` + `UserSettingsStore` 抽象端口 + QSettings/InMemory 双适配器 + `ReviewRecognitionService` 接入 `UnitOfWork` 闭环 ISSUE-005）。
 - 数据库 Schema 当前 `PRAGMA user_version = 4`。
+- 用户偏好持久化走 QSettings（平台原生位置），与系统级 `AppSettings`（env/.env）分层隔离。
 
 ---
 
@@ -85,7 +85,7 @@
 | Recognition | ✅ Step 8-10 就绪（InsightFace detect/recognize/match + Review） | `ai/`、`infrastructure/ai/insightface_loader.py`、`application/services/{match_persons,review_recognition}_service.py` |
 | Archive | ✅ Step 11 就绪（Planner→Plan→Executor + dry-run + captured_at） | `application/services/{archive_planner,archive_executor,archive_photos_service,archive_path_builder_service}.py` |
 | UI | ✅ Step 12 就绪（MainWindow + 4 controller + ArchivePhotosTask + ArchivePreviewDialog） | `presentation/views/main_window.py`、`presentation/controllers/` |
-| Settings | ⛔ Step 13 未开始 | — |
+| Settings | ✅ Step 13 就绪（QSettings + 抽象端口双适配器 + SettingsDialog + SettingsController + SettingsService + ReviewRecognitionService UoW 闭环） | `application/services/settings_service.py`、`presentation/views/settings_dialog.py`、`infrastructure/persistence/` |
 | Export | ⛔ Step 14 未开始 | — |
 | Plugins | ⛔ Step 15 未开始 | — |
 
@@ -105,96 +105,95 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-07-17 18:12（本地） |
+| 时间 | 2026-07-19 17:24（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | Phase 2 Step 8-10 + 三轮 Review + P0-P3 修复 + Step 11-12 实现 |
-| Completed | Step 8-10（AI 检测/识别/匹配 + Review）；Step 11（归档闭环）；Step 12（完整 UI 工作台）；三轮 Review 修复；P0-P3 问题清单核验与修复 |
-| Remaining | Step 13-15；既有 19 mypy + 2 ruff 飘带清理；SQLAlchemy/Alembic 迁移体系（roadmap Step 3） |
-| Next Step | Step 13 Settings |
-| HEAD | `03f4395`（Step 12 三轮 Review 修复完成），工作树干净 |
-| 测试 | pytest **200 passed / 8 skipped**（8 skip = 缺模型包 + PySide6/pytestqt 阘带） |
-| 质量门 | 本轮引入范围 ruff/mypy clean；既有 19 mypy + 2 ruff 阘带持平（交接 §6.3 决策不顺带修） |
+| 会话范围 | Phase 2 Step 13 Settings 闭环 + ISSUE-005 修复 |
+| Completed | Step 13：`UserPreferences` DTO + 校验函数 + `SettingsUseCase` Protocol + `SettingsService`（含系统默认兜底）+ `UserSettingsStore` 抽象端口 + QSettings/InMemory 双适配器 + `SettingsDialog` + `SettingsController` + MainWindow toolbar [Settings] 入口 + bootstrap 装配（CLI/CI 走 InMemory，UI 走 QSettings rebinding）+ ISSUE-005 闭环（`ReviewRecognitionService` 注入 `UnitOfWork`，复刻 ArchiveExecutor 模板） |
+| Remaining | Step 14-15；既有 19 mypy + 2 ruff 飘带清理（单独一轮，未混入）；SQLAlchemy/Alembic 迁移体系（roadmap Step 3） |
+| Next Step | Step 14 Export |
+| HEAD | 本会话未提交（工作树含 Step 13 全部新增 + 既有占位骨架扩展） |
+| 测试 | pytest **226 passed / 8 skipped**（8 skip = 缺模型包 + PySide6/pytestqt 阈带） |
+| 质量门 | 本轮引入范围 ruff/mypy clean；既有 19 mypy + 2 ruff 阈带持平（裁决 3 不混入） |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 
-1. `ai/` 层职责拆分：检测/识别/匹配；`infrastructure/ai/InsightFaceLoader` 持模型加载。
-2. `FaceEmbedding` 持 tuple 不持 numpy（Domain 零框架依赖）。
-3. Embedding 序列化用 JSON 非 pickle（SEC-030）。
-4. 匹配策略固定 1:N Top-1（`max(boxes, key=confidence)`）。
-5. `MatchResult.box` 字段 `FaceBox | None`（无人脸时 box=None）。
-6. `update_status` 返回 int（受影响行数）。
-7. `ensure_runtime_directories` 不建 `model_path`。
-8. `ArchivePlanner` → `ArchivePlan` → `ArchiveExecutor` 三段拆分；CLI/UI/测试共用同一套归档计划。
-9. 新增 `Photo.captured_at` + `PhotoMetadata.captured_at` 领域字段，由 `PillowPhotoMetadataReader` 在导入阶段统一填充（EXIF DateTimeOriginal → mtime 链式降级），Archive 只消费领域数据。
-10. 新增独立 `AppSettings.archive_root` + `archive_conflict_strategy`（默认 skip）。
+本轮未新增 ADR——三大启动裁决已落地执行未产生需记录的不可改决策：
+1. 用户偏好持久化走 QSettings + 抽象端口双适配器（CLI/UI 分层，infrastructure 层合规）。
+2. `ReviewRecognitionService` 注入可选 `UnitOfWork`（None 兼容既有测试），复刻 `ArchiveExecutor` 模板。
+3. 既有飘带单独开清理轮，不混入 Step 任务（遵循 ADR-023 单一逻辑变更）。
 
-### 5.1 本会话工作记录（2026-07-18，Tech Lead 文档治理轮）
+### 5.1 本会话工作记录（2026-07-19，Step 13 Settings 轮）
 
 | 项 | 值 |
 |---|---|
-| 角色 | Tech Lead（AtomCode GLM-5.2） |
-| �围 | 文档体系治理，不改源码 |
-| HEAD | `ab523d2`（本会话开始时；上一会话末为 `03f4395`，已 commit 为 `ab523d2` docs(handoff)） |
+| 角色 | Implementer（AtomCode GLM-5.2） |
+| 范围 | Step 13 Settings 全闭环 + ISSUE-005 修复，含测试与文档 |
+| HEAD | 本会话未提交（工作树含 Step 13 全部新增 + 既有占位骨架扩展） |
 | Branch | `main` |
-| pytest 快照 | 208 tests collected（本轮未跑全量，未引入源码改动） |
-| Completed | 建立 AI Runtime Context 四文档体系（上一轮）；新建 `.ai/DOCUMENT_INDEX.md` 文档导航 SSOT；改造 `requirements/ai.txt` 为纯扩展挂载点（清与 base 冲突的版本行）；7 个旧体系文档加 Deprecated banner（根 `AI_ONBOARDING.md` + `.ai/{START_HERE,PROJECT_CONTEXT,TASK_WORKFLOW,README,Session-Handoff-2026-07-17,Consistency-Audit-2026-07-13}.md`）；`AI_ONBOARDING.md` 新增 §13 Documentation Status；过期信息修正（`docs/architecture/overview.md` §6/§7、`docs/development/configuration.md` §2、`.ai/business/roadmap.md` Step 3、`README.md` 待实现列表 + AI 协作说明段） |
-| Remaining | Step 13-15；既有 19 mypy + 2 ruff 阘带清理；SQLAlchemy/Alembic 迁移体系；5 处规则 SSOT 收敛（D-1~D-5，延后）；11 个 Placeholder 占位文档处置（延后） |
-| Next Step | Step 13 Settings（待裁决 3 项见 §7） |
-| 阻塞 | 无（文档治理轮完成，可进入 Step 13 裁决） |
+| pytest 快照 | 226 tests collected, 226 passed / 8 skipped |
+| Completed | 见 §5 Completed 字段 |
+| Remaining | Step 14-15；飘带清理轮；SQLAlchemy/Alembic |
+| Next Step | Step 14 Export（启动前需裁决 openpyxl/pandas 是否入 base.txt） |
+| 阻塞 | 无 |
 
-**本会话关键裁决**：确立 `.ai/DOCUMENT_INDEX.md` 为文档体系结构 SSOT（已回答文档治理四问，见该文件 §0）。
+
 
 ---
 
 ## 6. Next Step（下一步开发计划）
 
-**Step 13 — Settings**
+**Step 14 — Export**
 
-依据 `.ai/business/roadmap.md` §18，交付物：
+依据 `.ai/business/roadmap.md` §19，交付物：
 
-- [ ] `SettingsDialog` + `SettingsController`（`presentation/`）
-- [ ] 用户偏好持久化（QSettings 或 DB / 配置文件）
-- [ ] 可配置项：主题、语言（预留 i18n）、默认导入/导出路径、识别阈值、`MAX_WORKERS`
-- [ ] `SettingsService`（`application/`）
-- [ ] 修改后热生效或提示重启策略（文档化）
-- [ ] 单元测试：读写 settings；UI 测试：保存/取消
-- [ ] 与 Step 2 系统配置区分：系统 env vs 用户偏好
-- [ ] `ReviewRecognitionService` 接入 `UnitOfWork` 事务边界（Step 12 遗留技术债）
+- [ ] `ExportService`（`application/`）
+- [ ] 导出 DTO：人员、照片、匹配、归档汇总
+- [ ] Excel / CSV 导出器（`infrastructure/exporters/`，openpyxl/pandas 仅 Infrastructure）
+- [ ] `ExportWorker`（`workers/`，长报告不阻塞 UI）
+- [ ] `ExportDialog` + Controller（`presentation/`）
+- [ ] 导出范围：全量 / 当前批次 / 筛选结果
+- [ ] 集成测试：导出文件可打开、字段完整
+- [ ] 输出路径默认走 `AppSettings.output_root`，可被 `UserPreferences.default_export_path` 覆盖
 
-### Step 13 启动前置就绪检查
+### Step 14 启动前置就绪检查
 
-- ✅ Step 12 UI 工作台就绪，可挂 SettingsDialog 入口
-- ✅ `AppSettings`（pydantic-settings）系统配置已就绪
-- ⛔ 用户偏好存储未建（需裁决：QSettings vs DB vs 配置文件）
-- ⛔ `ReviewRecognitionService` 事务边界未补（建议本步一并接入）
+- ✅ Step 13 Settings 闭环就绪，`UserPreferences.default_export_path` 可作导出默认路径
+- ✅ Step 11 Archive 已落 `ArchiveRecord`，导出汇总有数据源
+- ✅ Step 12 UI 工作台就绪，可挂 ExportDialog 入口
+- ⛔ openpyxl/pandas 已批准（DEP-032），但未引入工程依赖；Step 14 启动前需确认 `requirements/base.txt` 是否新增
 
 ---
 
-## 7. 待裁决事项（Step 13 启动前）
+## 7. 待裁决事项（Step 14 启动前）
 
 | # | 待裁决 | 建议方案 |
 |---|---|---|
-| 1 | 用户偏好持久化机制：QSettings vs DB 表 vs JSON 配置文件 | QSettings（PySide6 原生，跨平台，无需额外 Schema），键名走命名常量 |
-| 2 | `ReviewRecognitionService` 事务边界是否本轮补 | 建议 Step 13 接入 UI 审核流时一并补 `UnitOfWork`（与 Archive 看齐） |
-| 3 | 既有 19 mypy + 2 ruff 飘带是否本轮顺带清理 | 建议单独开一轮清理，不混入 Step 13 |
+| 1 | openpyxl/pandas 是否本轮首次入 `requirements/base.txt` | 建议入 base（运行时依赖，非 dev-only），Step 14 启动前确认 |
+| 2 | 导出范围交互式选择 UI（单选 radio vs 多选 checkbox） | 建议单选 radio：全量/当前批次/筛选结果三选一，避免歧义 |
+| 3 | 大报告是否走 Worker + 进度条 | 建议走 Worker（UI-011 长耗时规则），复刻 ArchivePhotosTask 信号模板 |
 
 ---
 
-## 8. 关键文件索引（Step 12 收尾状态）
+## 8. 关键文件索引（Step 13 收尾状态）
 
 | 职责 | 文件 |
 |---|---|
 | AI 模型加载 | `src/photo_archiver/infrastructure/ai/insightface_loader.py` |
 | AI 检测/识别/匹配 | `src/photo_archiver/ai/{insightface_detector,insightface_recognizer,similarity_matcher}.py` |
 | 匹配服务 | `src/photo_archiver/application/services/match_persons_service.py` |
-| 审核服务 | `src/photo_archiver/application/services/review_recognition_service.py` |
+| 审核服务（含 UoW 闭环 ISSUE-005） | `src/photo_archiver/application/services/review_recognition_service.py` |
 | Embedding 持久化 | `src/photo_archiver/infrastructure/database/sqlite_face_embedding_repository.py` |
 | Recognition 持久化 | `src/photo_archiver/infrastructure/database/sqlite_recognition_repository.py` |
 | 归档 Planner/Executor | `src/photo_archiver/application/services/{archive_planner,archive_executor,archive_photos_service,archive_path_builder_service}.py` |
 | Schema 定义 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`（PRAGMA v4） |
 | 模型下载 | `scripts/download_models.py` |
-| 主窗口 | `src/photo_archiver/presentation/views/main_window.py` |
-| Controllers | `src/photo_archiver/presentation/controllers/`（ImportPeople/Archive/Review/PhotoList） |
+| 主窗口（含 [Settings] 入口） | `src/photo_archiver/presentation/views/main_window.py` |
+| Controllers | `src/photo_archiver/presentation/controllers/`（ImportPeople/Archive/Review/PhotoList/Settings） |
+| Settings DTO + 校验 | `src/photo_archiver/application/dtos/settings.py` |
+| Settings 服务 | `src/photo_archiver/application/services/settings_service.py` |
+| Settings 端口 | `src/photo_archiver/application/ports/{system_settings,user_settings_store}.py` |
+| Settings 适配器 | `src/photo_archiver/infrastructure/persistence/{in_memory,qsettings}_user_settings_store.py` |
+| Settings UI | `src/photo_archiver/presentation/views/settings_dialog.py`、`presentation/controllers/settings_controller.py` |
 | 集成测试 | `tests/integration/`（face_detection / step10 / step11_archive_e2e 等） |
 
 ---

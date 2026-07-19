@@ -40,6 +40,30 @@ class _RecordingRecognitionRepository(RecognitionRepository):
         return 1
 
 
+class _RecordingUoW:
+    """Captures __enter__/__exit__ pairs so tests can assert UoW wrapping."""
+
+    def __init__(self, raise_on_exit: bool = False) -> None:
+        self.enter_calls: int = 0
+        self.exit_calls: list[tuple] = []
+        self.commit_calls: int = 0
+        self.rollback_calls: int = 0
+        self._raise_on_exit = raise_on_exit
+
+    def __enter__(self) -> "_RecordingUoW":
+        self.enter_calls += 1
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.exit_calls.append((exc_type, exc_val, exc_tb))
+        if exc_type is None:
+            self.commit_calls += 1
+        else:
+            self.rollback_calls += 1
+        if self._raise_on_exit:
+            raise RuntimeError("simulated commit failure")
+
+
 def _make_result(photo_id=None, status: MatchStatus = MatchStatus.PENDING) -> RecognitionResult:
     """Build a RecognitionResult in a known status."""
     import uuid
@@ -147,3 +171,86 @@ def test_bulk_approve_empty_batch_returns_zero() -> None:
     service = ReviewRecognitionService(repo)
     assert service.bulk_approve(()) == 0
     assert service.bulk_reject(()) == 0
+
+
+# ---- ISSUE-005 fix: UnitOfWork transaction boundary tests ----
+
+
+def test_approve_without_uow_runs_bare() -> None:
+    """approve without a UoW must still persist (back-compat with in-memory repos)."""
+    result = _make_result()
+    repo = _RecordingRecognitionRepository({result.id: result})
+    service = ReviewRecognitionService(repo, unit_of_work=None)
+    refreshed = service.approve(result.id)
+    assert refreshed is not None
+    assert refreshed.status is MatchStatus.APPROVED
+
+
+def test_approve_with_uow_enters_then_commits_on_success() -> None:
+    """approve with a UoW must __enter__ then __exit__ with no exception (commit path)."""
+    result = _make_result()
+    repo = _RecordingRecognitionRepository({result.id: result})
+    uow = _RecordingUoW()
+    service = ReviewRecognitionService(repo, unit_of_work=uow)
+    refreshed = service.approve(result.id)
+    assert refreshed is not None
+    assert refreshed.status is MatchStatus.APPROVED
+    assert uow.enter_calls == 1
+    assert uow.commit_calls == 1
+    assert uow.rollback_calls == 0
+
+
+def test_approve_with_uow_rolls_back_when_update_raises() -> None:
+    """approve must let the UoW roll back when update_status raises.
+
+    This is the ISSUE-005 honesty gap closing: before the UoW wrap the in-memory
+    flip was committed but the DB row was left pending. With the UoW the SQLite
+    transaction rolls back so no partial state lands on disk.
+    """
+
+    class _RaisingRepo(_RecordingRecognitionRepository):
+        def update_status(self, result_id, status) -> int:
+            raise RuntimeError("simulated DB outage")
+
+    result = _make_result()
+    repo = _RaisingRepo({result.id: result})
+    uow = _RecordingUoW()
+    service = ReviewRecognitionService(repo, unit_of_work=uow)
+    raised = False
+    caught_exc: BaseException | None = None
+    try:
+        service.approve(result.id)
+    except RuntimeError as exc:
+        raised = True
+        caught_exc = exc
+    assert raised
+    # m-7: assert UoW __exit__ received the propagated exception so future
+    # silent-swallow changes cannot quietly flip the rollback path to commit.
+    assert uow.exit_calls
+    assert uow.exit_calls[0][0] is RuntimeError
+    assert isinstance(caught_exc, RuntimeError)
+    assert uow.enter_calls == 1
+    assert uow.rollback_calls == 1
+    assert uow.commit_calls == 0
+
+
+def test_bulk_approve_with_uow_enters_once_per_item() -> None:
+    """bulk_approve must enter/exit the UoW once per transitioned item.
+
+    Each item gets its own with-block so a mid-batch failure rolls back only
+    that item's transition, not the whole batch. This mirrors the per-item
+    semantics ArchiveExecutor uses for ArchiveRecord persistence.
+    """
+    pending1 = _make_result()
+    pending2 = _make_result()
+    repo = _RecordingRecognitionRepository({
+        pending1.id: pending1,
+        pending2.id: pending2,
+    })
+    uow = _RecordingUoW()
+    service = ReviewRecognitionService(repo, unit_of_work=uow)
+    transitioned = service.bulk_approve((pending1.id, pending2.id))
+    assert transitioned == 2
+    assert uow.enter_calls == 2
+    assert uow.commit_calls == 2
+    assert uow.rollback_calls == 0

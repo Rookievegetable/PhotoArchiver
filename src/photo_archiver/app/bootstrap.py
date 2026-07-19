@@ -66,4 +66,5 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
         worker_executor=worker_executor,
         review_controller=ui_controllers.review,
         photo_list_controller=ui_controllers.photo_list,
+        settings_controller=ui_controllers.settings,
     )

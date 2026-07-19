@@ -13,11 +13,14 @@ from photo_archiver.application.dtos import (
     ArchivePlanItem,
     ArchiveResult,
     ImportPeopleResult,
+    InvalidPreferencesError,
     PersonImportRow,
     PhotoScanItem,
     RegisterPhotoResult,
     ScanAndRegisterPhotosResult,
     ScanPhotoFolderResult,
+    UserPreferences,
+    validate_preferences,
 )
 from photo_archiver.application.ports import (
     ArchivePathBuilder,
@@ -25,7 +28,9 @@ from photo_archiver.application.ports import (
     PhotoFileScanner,
     PhotoMetadataReader,
     ProgressReporter,
+    SystemSettings,
     UnitOfWork,
+    UserSettingsStore,
 )
 from photo_archiver.application.services import (
     ArchiveExecutor,
@@ -37,6 +42,7 @@ from photo_archiver.application.services import (
     ReviewRecognitionService,
     ScanAndRegisterPhotosService,
     ScanPhotoFolderService,
+    SettingsService,
 )
 from photo_archiver.application.use_cases import (
     ArchivePhotosUseCase,
@@ -45,6 +51,7 @@ from photo_archiver.application.use_cases import (
     ReviewRecognitionUseCase,
     ScanAndRegisterPhotosUseCase,
     ScanPhotoFolderUseCase,
+    SettingsUseCase,
 )
 
 __all__ = [
@@ -63,6 +70,7 @@ __all__ = [
     "ImportPeopleResult",
     "ImportPeopleService",
     "ImportPeopleUseCase",
+    "InvalidPreferencesError",
     "PersonImportReader",
     "PersonImportRow",
     "PhotoFileScanner",
@@ -83,5 +91,11 @@ __all__ = [
     "ScanPhotoFolderResult",
     "ScanPhotoFolderService",
     "ScanPhotoFolderUseCase",
+    "SettingsService",
+    "SettingsUseCase",
+    "SystemSettings",
     "UnitOfWork",
+    "UserPreferences",
+    "UserSettingsStore",
+    "validate_preferences",
 ]

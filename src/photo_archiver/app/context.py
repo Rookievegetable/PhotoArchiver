@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from photo_archiver.app.repositories import ApplicationRepositories
 from photo_archiver.app.services import ApplicationServices
 from photo_archiver.infrastructure.config import AppSettings
-from photo_archiver.presentation.controllers import ReviewController, PhotoListController
+from photo_archiver.presentation.controllers import (
+    PhotoListController,
+    ReviewController,
+    SettingsController,
+)
 from photo_archiver.workers import QtWorkerExecutor
 
 
@@ -19,3 +23,4 @@ class ApplicationContext:
     worker_executor: QtWorkerExecutor
     review_controller: ReviewController
     photo_list_controller: PhotoListController
+    settings_controller: SettingsController

@@ -10,7 +10,7 @@ Status:  progress bar + status label
 
 from pathlib import Path
 
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
@@ -32,6 +32,7 @@ from photo_archiver.presentation.controllers import (
 )
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
 from photo_archiver.presentation.views.photo_list_model import PhotoListModel
+from photo_archiver.presentation.views.settings_dialog import SettingsDialog
 from photo_archiver.workers.events import TaskCompleted, TaskFailed, TaskProgress, TaskStarted
 
 DEFAULT_WINDOW_WIDTH = 1200
@@ -86,6 +87,7 @@ class MainWindow(QMainWindow):
         )
         self._review_controller = self._context.review_controller  # set by bootstrap
         self._photo_list_controller = self._context.photo_list_controller  # set by bootstrap
+        self._settings_controller = self._context.settings_controller  # set by bootstrap (Step 13)
 
     def _build_toolbar(self) -> None:
         """Create the primary action toolbar covering the full闭环."""
@@ -107,6 +109,11 @@ class MainWindow(QMainWindow):
         archive_action = QAction("Archive", self)
         archive_action.triggered.connect(self._on_archive_clicked)
         toolbar.addAction(archive_action)
+
+        settings_action = QAction("Settings", self)
+        settings_action.setShortcut(QKeySequence("Ctrl+,"))
+        settings_action.triggered.connect(self._on_settings_clicked)
+        toolbar.addAction(settings_action)
 
         self._cancel_action = QAction("Cancel Task", self)
         self._cancel_action.setEnabled(False)
@@ -272,3 +279,16 @@ class MainWindow(QMainWindow):
         self._photo_list_model.load_photos(photos)
         for photo in photos:
             self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__
+
+    def _on_settings_clicked(self) -> None:
+        """Open the modal SettingsDialog; the dialog owns its own save/cancel flow.
+
+        Step 13: settings are persisted synchronously through QSettings (sub-ms),
+        so no worker is needed here. The dialog rejects on cancel or validation
+        failure that the user chose to abandon; accept only happens after a
+        successful save. Restart prompts for theme / language changes are
+        documented in docs/development/configuration.md §3 (this round ships
+        the persistence; hot-reload of theme is a follow-up).
+        """
+        dialog = SettingsDialog(self._settings_controller, self)
+        dialog.exec()

@@ -283,3 +283,18 @@ benchmark/
 # Windows
 Thumbs.db
 Desktop.ini
+
+# Stray 0-byte files from shell heredoc failures (Review C-1 fix)
+# These names recur as empty files in the working root when a bash command
+# contains unquoted CJK/special characters that the shell parses as redirect
+# targets. Ignoring them keeps git status clean despite shell recurrence.
+Last
+PySide6
+SQLite
+Version*
+/application
+/domain
+/infrastructure
+/presentation
+⚠️
+**本文档是*

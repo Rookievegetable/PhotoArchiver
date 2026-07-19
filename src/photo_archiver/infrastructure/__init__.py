@@ -24,6 +24,9 @@ from photo_archiver.infrastructure.image import (
     ThumbnailCache,
 )
 from photo_archiver.infrastructure.importers import ExcelPersonImportReader, TxtPersonImportReader
+from photo_archiver.infrastructure.persistence import (
+    InMemoryUserSettingsStore,
+)
 from photo_archiver.infrastructure.repositories import (
     InMemoryFolderRepository,
     InMemoryPersonRepository,
@@ -36,6 +39,7 @@ __all__ = [
     "InMemoryFolderRepository",
     "InMemoryPersonRepository",
     "InMemoryPhotoRepository",
+    "InMemoryUserSettingsStore",
     "InsightFaceLoader",
     "LocalPhotoFileScanner",
     "ModelPackMissing",

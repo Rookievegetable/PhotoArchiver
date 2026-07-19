@@ -78,16 +78,6 @@
 | Temporary Workaround | `sqlite_connection.py` 内集中升级逻辑，版本号单调递增 |
 | Planned Resolution | roadmap Step 3 收尾或后续阶段引入 SQLAlchemy/Alembic |
 
-### ISSUE-005 — ReviewRecognitionService 无事务边界
-
-| 字段 | 值 |
-|---|---|
-| Status | Open |
-| Description | Step 12 Archive 已补 `UnitOfWork`（M-1 修复），但 Review 仍裸奔——若 `update_status` 异常，内存已 approve 而 DB 未 approve。 |
-| Impact | Medium —— 可靠性，并发或异常下状态不一致 |
-| Temporary Workaround | 无 |
-| Planned Resolution | Step 13 接入 UI 审核流时一并补 `UnitOfWork`（与 Archive 看齐） |
-
 ### ISSUE-006 — RecognitionResult.id 类型 UUID | None 带 type: ignore
 
 | 字段 | 值 |

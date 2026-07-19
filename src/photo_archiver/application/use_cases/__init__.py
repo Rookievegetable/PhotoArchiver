@@ -7,6 +7,7 @@ from photo_archiver.application.use_cases.register_photo import RegisterPhotoUse
 from photo_archiver.application.use_cases.review_recognition import ReviewRecognitionUseCase
 from photo_archiver.application.use_cases.scan_and_register_photos import ScanAndRegisterPhotosUseCase
 from photo_archiver.application.use_cases.scan_photo_folder import ScanPhotoFolderUseCase
+from photo_archiver.application.use_cases.settings import SettingsUseCase
 
 __all__ = [
     "ArchivePhotosUseCase",
@@ -16,4 +17,5 @@ __all__ = [
     "ReviewRecognitionUseCase",
     "ScanAndRegisterPhotosUseCase",
     "ScanPhotoFolderUseCase",
+    "SettingsUseCase",
 ]
