@@ -134,7 +134,7 @@
 | pytest 快照 | 226 tests collected, 226 passed / 8 skipped |
 | Completed | 见 §5 Completed 字段 |
 | Remaining | Step 14-15；飘带清理轮；SQLAlchemy/Alembic |
-| Next Step | Step 14 Export（启动前需裁决 openpyxl/pandas 是否入 base.txt） |
+| Next Step | Step 14 Export |
 | 阻塞 | 无 |
 
 
@@ -161,7 +161,7 @@
 - ✅ Step 13 Settings 闭环就绪，`UserPreferences.default_export_path` 可作导出默认路径
 - ✅ Step 11 Archive 已落 `ArchiveRecord`，导出汇总有数据源
 - ✅ Step 12 UI 工作台就绪，可挂 ExportDialog 入口
-- ⛔ openpyxl/pandas 已批准（DEP-032），但未引入工程依赖；Step 14 启动前需确认 `requirements/base.txt` 是否新增
+- ⛔ openpyxl/pandas 已批准（DEP-032）且早已入 `requirements/base.txt`，Step 14 启动直接用
 
 ---
 
@@ -169,9 +169,8 @@
 
 | # | 待裁决 | 建议方案 |
 |---|---|---|
-| 1 | openpyxl/pandas 是否本轮首次入 `requirements/base.txt` | 建议入 base（运行时依赖，非 dev-only），Step 14 启动前确认 |
-| 2 | 导出范围交互式选择 UI（单选 radio vs 多选 checkbox） | 建议单选 radio：全量/当前批次/筛选结果三选一，避免歧义 |
-| 3 | 大报告是否走 Worker + 进度条 | 建议走 Worker（UI-011 长耗时规则），复刻 ArchivePhotosTask 信号模板 |
+| 1 | 导出范围交互式选择 UI（单选 radio vs 多选 checkbox） | 建议单选 radio：全量/当前批次/筛选结果三选一，避免歧义 |
+| 2 | 大报告是否走 Worker + 进度条 | 建议走 Worker（UI-011 长耗时规则），复刻 ArchivePhotosTask 信号模板 |
 
 ---
 

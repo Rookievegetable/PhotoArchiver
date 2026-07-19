@@ -6,7 +6,7 @@
 >
 > 动态维护，实时更新。问题解决后**立即删除**，不保留历史记录。
 >
-> Version: 1.0.0 ｜ Last Updated: 2026-07-18 ｜ Status: Live
+> Version: 1.1.0 ｜ Last Updated: 2026-07-19 ｜ Status: Live
 
 ---
 
@@ -156,21 +156,23 @@
 
 | 字段 | 值 |
 |---|---|
-| Status | Open |
-| Description | `docs/architecture/overview.md` §6 标"尚未实现"的列表均已实现，文档漂移。 |
+| Status | Mitigated |
+| Description | `docs/architecture/overview.md` §6 标"尚未实现"的列表均已实现，文档漂移。本轮（2026-07-19）已刷新 §6/§7 为 Step 13 收尾状态 + PROJECT_STATUS 唯一权威指针。 |
 | Impact | Low —— 文档一致性 |
+| 爆炸半径 | `docs/architecture/overview.md` §6/§7（已修）；同属漂移的 `README.md` 开头段/已完成/待实现/下阶段、`docs/roadmap/phase-1-core-workflow.md`、`docs/development/getting-started.md` §11 FAQ 均已同轮刷新 |
 | Temporary Workaround | 无 |
-| Planned Resolution | Phase 1 收尾统一更新（P1） |
+| Planned Resolution | 本轮已修，保留 Mitigated 状态待下轮复审确认；若 §6 再次漂移按 `audit-methodology.md` 复审 |
 
 ### ISSUE-013 — README.md 待实现列表未列已完成项
 
 | 字段 | 值 |
 |---|---|
-| Status | Open |
-| Description | `README.md` 待实现列表未反映已完成项（如缩略图、AI、归档、UI），文档漂移。 |
+| Status | Mitigated |
+| Description | `README.md` 待实现列表未反映已完成项（如缩略图、AI、归档、UI），文档漂移。本轮（2026-07-19）已刷新开头段 + 已完成/待实现/下阶段段为 Step 13 收尾状态 + PROJECT_STATUS 唯一权威指针。 |
 | Impact | Low —— 文档一致性 |
+| 爆炸半径 | `README.md` 开头段/已完成/待实现/下阶段（已修）；同属漂移的 `docs/architecture/overview.md` §6/§7、`docs/roadmap/phase-1-core-workflow.md`、`docs/development/getting-started.md` §11 FAQ 均已同轮刷新 |
 | Temporary Workaround | 无 |
-| Planned Resolution | Phase 1 收尾统一更新（P1） |
+| Planned Resolution | 本轮已修，保留 Mitigated 状态待下轮复审确认 |
 
 ### ISSUE-014 — 5 处规则重复承载（SSOT 缺口）
 
