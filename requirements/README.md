@@ -15,7 +15,16 @@ pip install -r requirements/base.txt
 
 ## ai.txt
 
-Optional AI dependencies for face detection and recognition features.
+AI extension dependencies. As of roadmap Step 9, the core AI runtime
+(`insightface`, `onnxruntime`) has been consolidated into `base.txt` (see
+ADR-012 in `.ai/ARCHITECTURE_DECISIONS.md`). This file is retained as a
+pure extension mount point for future AI-only auxiliary libraries that
+should NOT be installed by default (e.g. extra model packs, benchmark
+tooling). It includes `-r base.txt` so `pip install -r requirements/ai.txt`
+still provisions the full AI-capable environment.
+
+Do NOT duplicate any dependency already pinned in `base.txt` — version
+conflicts here would override `base.txt` per pip `-r` semantics.
 
 Install only when working on AI-related functionality:
 
@@ -23,8 +32,9 @@ Install only when working on AI-related functionality:
 pip install -r requirements/ai.txt
 ```
 
-On Windows, `insightface` may need Microsoft C++ Build Tools if pip cannot find
-a compatible prebuilt wheel for your Python version.
+On Windows, `insightface` (now installed via `base.txt`) may need Microsoft
+C++ Build Tools if pip cannot find a compatible prebuilt wheel for your
+Python version.
 
 ---
 
