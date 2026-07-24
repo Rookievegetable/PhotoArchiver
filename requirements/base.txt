@@ -6,6 +6,7 @@
 PySide6==6.11.1
 
 # ---------- Data ----------
+# pandas: approved but unused — Step 14 Export will enable it (currently zero import).
 pandas==2.3.1
 openpyxl==3.1.5
 
@@ -32,4 +33,6 @@ pydantic-settings==2.10.1
 loguru==0.7.3
 
 # ---------- File Watching ----------
+# watchdog: approved but unused — filesystem watcher用途预留,currently zero import.
+# Do not remove without confirming the approval is superseded.
 watchdog==6.0.0

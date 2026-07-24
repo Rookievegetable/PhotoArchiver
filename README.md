@@ -49,7 +49,7 @@ Export Results
 
 > **技术栈权威清单**：`.ai/rules/dependency-rules.md` §13（含层归属、延后批注）。本节为人类入口概览，若与彼冲突以彼为准。
 
-核心运行栈：Python 3.11、PySide6、SQLite（`PRAGMA user_version` 管理 Schema）、InsightFace + ONNX Runtime、OpenCV、Pillow、pandas、openpyxl、Pydantic + pydantic-settings、Loguru、watchdog。开发栈：pytest、pytest-qt、Ruff、Black、isort、MyPy、pre-commit。SQLAlchemy/Alembic 已批准但延后（ADR-005），当前零 import。完整清单与层归属见上方权威链接。
+核心运行栈：Python 3.11、PySide6、SQLite（`PRAGMA user_version` 管理 Schema）、InsightFace + ONNX Runtime、OpenCV、Pillow、openpyxl、Pydantic + pydantic-settings、Loguru。开发栈：pytest、pytest-qt、Ruff、Black、isort、MyPy、pre-commit。已批准但当前未使用：pandas（Step 14 Export 落地启用）、watchdog（filesystem watcher 用途预留，当前零 import）。SQLAlchemy/Alembic 已批准但延后（ADR-005），当前零 import。完整清单与层归属见上方权威链接。
 
 ## 快速开始
 
@@ -145,6 +145,18 @@ python main.py scan /path/to/photos --name "Archive Folder"
 ```bash
 python main.py scan /path/to/photos --no-recursive
 ```
+
+将已审核通过的照片归档到 `ARCHIVE_ROOT/{person}/{date}/{file}`：
+
+```bash
+python main.py archive --archive-root /path/to/archive --conflict-strategy skip
+```
+
+可选参数：
+
+- `--archive-root <path>`：覆盖 `AppSettings.archive_root` 仅本次运行。
+- `--conflict-strategy {skip,overwrite,rename}`：目标已存在时处置策略（默认 `skip`，配置键 `ARCHIVE_CONFLICT_STRATEGY`）。
+- `--dry-run`：只记录计划操作不触文件系统，便于预审整批归档计划。
 
 ## 开发命令
 

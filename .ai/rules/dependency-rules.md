@@ -1,6 +1,6 @@
 # PhotoArchiver Dependency Rules
 
-Version: 1.1.1
+Version: 1.1.2
 
 Status: Stable
 
@@ -352,7 +352,7 @@ Approved libraries:
 * PySide6
 * InsightFace
 * OpenCV
-* pandas
+* pandas (Infrastructure data layer only) — 已批准未使用：Step 14 Export 落地启用，当前零 import。
 * openpyxl
 * loguru
 * pydantic
@@ -360,7 +360,7 @@ Approved libraries:
 * Pillow (Infrastructure image layer only)
 * SQLAlchemy (Infrastructure database layer only) — 延后（ADR-005）：当前用 sqlite3 + `PRAGMA user_version` 管理 Schema 版本，SQLAlchemy/Alembic 迁移体系推迟到 roadmap Step 3 收尾或后续阶段。批准保留在 requirements 但零 import。
 * alembic (Infrastructure database migrations only) — 同上延后（ADR-005），与 SQLAlchemy 配套推迟。
-* watchdog (Infrastructure filesystem watcher only)
+* watchdog — 已批准未使用：filesystem watcher 用途预留，当前零 import。若未来启用须落 Infrastructure filesystem 层并补本节层归属注。
 * pytest-qt (dev-only, UI smoke tests)
 
 ONNX Runtime is approved as the AI model runtime when InsightFace models require it; it MUST remain inside the `ai/` layer or `infrastructure/` adapters and MUST NOT leak into Domain or Presentation.
