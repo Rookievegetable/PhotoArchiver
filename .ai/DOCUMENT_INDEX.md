@@ -30,7 +30,7 @@ flowchart TD
     C --> D[4. .ai/KNOWN_ISSUES.md<br/>当前风险与限制]
     D --> E[5. .ai/DOCUMENT_INDEX.md<br/>本文档 — 文档体系导航]
     E --> F[6. 按需: .ai/business/roadmap.md<br/>15 步路线图]
-    F --> G[7. 按需: .ai/rules/*.md<br/>9 专项工程规则]
+    F --> G[7. 按需: .ai/rules/*.md<br/>10 专项工程规则]
     G --> H[8. 按需: docs/architecture/overview.md<br/>架构总览]
     H --> I[9. 按需: src/photo_archiver/<br/>源码各层]
     I --> J[✅ 可进入开发]
@@ -53,7 +53,7 @@ flowchart TD
 | `.ai/DOCUMENT_INDEX.md`（本文） | 文档体系导航索引 | SSOT — 文档结构 |
 | `.ai/rules/CONTEXT_HANDOFF_RULES.md` | AI 接力交接元规则（New Conversation Prompt 规范） | SSOT — 交接元规则 |
 
-### 2.2 工程规则（`.ai/rules/`，9 文件，权威）
+### 2.2 工程规则（`.ai/rules/`，10 文件，权威）
 
 | 文档 | 职责 | SSOT 主题 |
 |---|---|---|
@@ -111,10 +111,10 @@ flowchart TD
 | 当前未决问题 / 技术债 | `.ai/KNOWN_ISSUES.md` |
 | 文档体系结构 | `.ai/DOCUMENT_INDEX.md`（本文） |
 | AI 接力交接元规则 | `.ai/rules/CONTEXT_HANDOFF_RULES.md` |
-| 业务工作流 | `.ai/rules/ai-rules.md` §4 |
+| 业务工作流 | `.ai/business/roadmap.md` §2 |
 | 技术栈与第三方库清单 | `.ai/rules/dependency-rules.md` §13 |
-| 分层架构图 | `.ai/rules/architecture-rules.md` §2 |
-| 模块职责 | `.ai/rules/architecture-rules.md` §3 |
+| 分层依赖图+矩阵 | `.ai/rules/dependency-rules.md` §2/§4 |
+| 模块职责 | `.ai/rules/architecture-rules.md` §4（ARC-001~009） |
 | 编码标准 | `.ai/rules/coding-rules.md` |
 | Worker / UI / Git / Review 标准 | `.ai/rules/{worker,ui,git,review}-rules.md` |
 | Review Checklist 总表 | `.ai/rules/review-rules.md` §22 |
