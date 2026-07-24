@@ -6,7 +6,7 @@
 >
 > 动态维护，实时更新。问题解决后**立即删除**，不保留历史记录。
 >
-> Version: 1.2.0 ｜ Last Updated: 2026-07-24 ｜ Status: Live
+> Version: 1.2.1 ｜ Last Updated: 2026-07-24 ｜ Status: Live
 
 ---
 
@@ -43,7 +43,7 @@
 | 字段 | 值 |
 |---|---|
 | Status | Open |
-| Description | `recognizer.extract` 当前对同一图片做两次检测（detect + extract 内部再 detect），可合并 halve 成本。Step 12 Worker 已接入但 detect/extract 仍分两次调用。 |
+| Description | `recognizer.extract` 当前对同一图片做两次检测（detect + extract 内部再 detect），可合并 halve 成本。Step 12 Worker 已接入但 detect/extract 仍分两次调用。**注**：2026-07-24 已修 recognizer 模块 docstring 假缓存声明（"extract reuses a cached detection result"），改回诚实描述——本 ISSUE 主体（双检测）仍未解决，docstring 与 ISSUE 一致不再矛盾。 |
 | Impact | Medium —— 性能，每张照片 AI 处理时间翻倍 |
 | Temporary Workaround | 无 |
 | Planned Resolution | Step 13+ 优化：批量 detect+extract 单次 get，或缓存 detection 结果 |
@@ -78,29 +78,29 @@
 | Temporary Workaround | `sqlite_connection.py` 内集中升级逻辑，版本号单调递增 |
 | Planned Resolution | roadmap Step 3 收尾或后续阶段引入 SQLAlchemy/Alembic |
 
-### ISSUE-006 — RecognitionResult.id 类型 UUID | None 带 type: ignore
+### ISSUE-006 — RecognitionResult.id 类型 UUID | None 类型未表达
 
 | 字段 | 值 |
 |---|---|
 | Status | Open |
-| Description | `RecognitionResult.id` 类型签名 `UUID | None` 带 `type: ignore`，__post_init__ 保证非空但类型未表达。 |
+| Description | `RecognitionResult.id` 类型签名 `UUID | None`，`__post_init__` 保证非空但类型未表达。**注**：2026-07-24 核验 `domain/entities/recognition.py` 已不再含 `type: ignore` 注释（旧描述"带 `type: ignore`"已失效）——核心问题（类型未表达）仍在，仅 workaround 已移除。 |
 | Impact | Low —— 类型安全，静态检查不完整 |
-| Temporary Workaround | `type: ignore` 注释 |
+| Temporary Workaround | 无（原 `type: ignore` 注释已删） |
 | Planned Resolution | 未来重构改 `UUID` 非 None |
 
 ---
 
 ## 已知飘带（既有代码 lint 阘带）
 
-### ISSUE-007 — 既有文件 3 个 ruff 未用导入 + 16 个 mypy 类型错
+### ISSUE-007 — 既有文件 4 个 ruff 未用导入 + 23 个 mypy 类型错
 
 | 字段 | 值 |
 |---|---|
 | Status | Open |
-| Description | Step 8-10 之前文件存在 3 个 ruff 未用导入 + 16 个 mypy 类型错（本会话核验时为 19 mypy + 2 ruff，含 Step 12 引入范围已 clean）。分布在 `unit_of_work` / `sqlite_unit_of_work` / `application_tasks` / `register_photo_service` / `qt_executor` / `main_window` / `scan_controller`。非本轮引入。 |
+| Description | Step 8-10 之前文件存在 4 个 ruff 未用导入 + 23 个 mypy 类型错（2026-07-24 实测：`mypy src` 报 23 error；`ruff check src tests` 报 4 错误含 `src/ai/insightface_detector.py` 未用导入）。分布在 `unit_of_work` / `sqlite_unit_of_work` / `application_tasks` / `register_photo_service` / `qt_executor` / `main_window` / `scan_controller` / `app/services.py:188-189`（`ec1c31c` 引入）/ `app/ui_assembly.py:110` 等。非本轮引入。 |
 | Impact | Low —— 质量，基线飘带 |
 | Temporary Workaround | 不顺带混入 Step 任务，避免污染本轮范围 |
-| Planned Resolution | 单独开一轮清理 |
+| Planned Resolution | 单独开一轮清理（第 2 期机制 5「lint 阘带清理轮」） |
 
 ---
 
