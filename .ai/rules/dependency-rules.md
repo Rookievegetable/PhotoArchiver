@@ -51,6 +51,8 @@ The Domain layer is the center of the architecture.
 
 # 3. Approved Modules
 
+> **模块职责 SSOT**：`.ai/rules/architecture-rules.md` §4（ARC-001~009，含子包与特殊目录补录）。本节仅列模块清单与依赖授权，不重复职责正文。
+
 The following modules are recognized by the project:
 
 ```text

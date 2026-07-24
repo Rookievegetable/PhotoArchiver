@@ -146,11 +146,11 @@
 
 | 字段 | 值 |
 |---|---|
-| Status | Open |
-| Description | `config/` 顶层目录在 ARC-017 允诺，但依赖矩阵未列。 |
+| Status | Mitigated |
+| Description | `config/` 顶层目录在 ARC-017 允诺，但依赖矩阵未列。本轮（2026-07-24）SSOT 收敛已在 ARC §4 ARC-009 补录表收口：标注 `config/` 为"仅静态配置文件目录，非 Python 模块，不进 DEP §4 矩阵"。 |
 | Impact | Low —— 文档一致性 |
 | Temporary Workaround | 无 |
-| Planned Resolution | 补注释说明"仅静态配置文件目录，非 Python 模块"或删 §17 选项（P1） |
+| Planned Resolution | 本轮已修，保留 Mitigated 状态待下轮复审确认 |
 
 ### ISSUE-012 — docs/architecture/overview.md §6 "尚未实现" 列表均已实现
 

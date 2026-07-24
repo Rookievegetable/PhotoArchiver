@@ -111,6 +111,8 @@ flowchart TD
 
 ### 一句话模块职责
 
+> **模块职责权威**：`.ai/rules/architecture-rules.md` §4（ARC-001~008 + §ARC-009 子包与特殊目录补录）。本表仅列入职秒懂的最小集，不复制正文，与 ARC §4 冲突时以 ARC §4 为准。
+
 | 模块 | 职责 |
 |---|---|
 | `app/` | QApplication 生命周期、bootstrap 装配、上下文容器 |
@@ -123,7 +125,7 @@ flowchart TD
 | `common/` | 仅标准库的通用工具 |
 | `plugins/` | 扩展预留 |
 
-详细模块规则与依赖矩阵：`.ai/rules/architecture-rules.md`、`.ai/rules/dependency-rules.md`。
+> 子包与特殊目录（`application/{commands,dtos,ports,use_cases,services}`、`infrastructure/{persistence,database,repositories,exporters}`、顶层 `config/`）详见 ARC §4 ARC-009 补录表。
 
 ---
 

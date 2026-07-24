@@ -207,6 +207,27 @@ Common MUST remain lightweight.
 
 ---
 
+## ARC-009 子包与特殊目录职责补录（ISSUE-011 收口）
+
+> 本节补录代码现状中已存在但 §3 模块清单未显式列出的子包与目录职责。模块顶层归属仍以 §3 + DEP §4 矩阵为准。
+
+| 路径 | 职责一句话 | 归属 |
+|---|---|---|
+| `application/commands/` | 命令对象（Command DTO），表达用例入参 | Application 子包 |
+| `application/dtos/` | 数据传输对象，含用例返回模型与 Settings DTO | Application 子包 |
+| `application/ports/` | 端口（Port）抽象，系统侧与用户侧仓储/存储接口 | Application 子包 |
+| `application/use_cases/` | Use Case 协议（Protocol），声明用例契约 | Application 子包 |
+| `application/services/` | Application Service 编排实现 | Application 子包 |
+| `infrastructure/persistence/` | 用户偏好持久化适配器（QSettings/InMemory），不涉 SQLite | Infrastructure 子包 |
+| `infrastructure/database/` | SQLite 连接、Schema、`SQLiteUnitOfWork`、SQLite 仓储实现（ARC §8 例外条款） | Infrastructure 子包 |
+| `infrastructure/repositories/` | 非 SQLite 仓储实现（如 InMemory 测试替身） | Infrastructure 子包 |
+| `infrastructure/exporters/` | 导出器适配器（Excel/CSV），roadmap Step 14 落地 | Infrastructure 子包 |
+| `config/`（顶层） | 仅静态配置文件目录（如 `.env`、主题样式），**非 Python 模块**，不进 DEP §4 矩阵（ISSUE-011 收口：补注释说明，不删 §17 选项） | 非 Python 模块 |
+
+> `infrastructure/persistence/` 与 `infrastructure/database/` 分立：前者管用户偏好（QSettings 平台原生位置），后者管业务数据（SQLite）。二者均不越界。
+
+---
+
 # 5. Allowed Dependencies
 
 > **依赖矩阵权威**：`.ai/rules/dependency-rules.md` §4（完整模块×可依赖矩阵）。本节不复制矩阵正文，详见该处。本文件 §6 列禁令以矩阵为准。

@@ -91,6 +91,8 @@ ai-rules.md
 
 Defines the behavior of AI assistants.
 
+> **模块职责 SSOT**：`.ai/rules/architecture-rules.md` §4（ARC-001~009）。本文件各 Category 仅声明规则文件主题归属，不重复模块职责正文。
+
 ---
 
 ## Coding Rules
