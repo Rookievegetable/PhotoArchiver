@@ -1,10 +1,10 @@
 # PhotoArchiver AI Rules
 
-Version: 1.1.0
+Version: 1.2.0
 
 Status: Stable
 
-Last Updated: 2026-07-19
+Last Updated: 2026-07-24
 
 ---
 
@@ -117,12 +117,7 @@ Generated code MUST:
 - Follow Ruff recommendations.
 - Pass MyPy checks.
 
-Generated code MUST NOT contain:
-
-- print()
-- TODO placeholders
-- pass statements in production code
-- commented-out legacy code
+Generated code MUST NOT contain `print()` / TODO placeholders / `pass` in production / commented-out legacy code——详见 `coding-rules.md` COD-051/072/073 与 `architecture-rules.md` 禁占位条款。
 
 ---
 
@@ -148,87 +143,39 @@ AI MUST NOT:
 - Swallow exceptions silently.
 - Ignore return values.
 
+> 详见 `coding-rules.md` §8 Exceptions（COD-060~062）。
+
 ---
 
 # 11. Threading Rules
 
-Long-running tasks MUST execute in Worker threads.
+> **Worker/线程权威**：`.ai/rules/worker-rules.md` WRK-001~003（UI 线程外执行、Qt 线程原语、QWidget 子类禁长任务）。本节不复制正文。
 
-Examples:
-
-Photo scanning
-
-Face recognition
-
-Large Excel import
-
-Folder creation
-
-Batch archive
-
-UI MUST remain responsive.
+Long-running tasks MUST execute in Worker threads per WRK-001；UI MUST remain responsive per WRK-003.
 
 ---
 
 # 12. UI Rules
 
-Presentation layer is responsible only for:
+> **UI 规则权威**：`.ai/rules/ui-rules.md` UI-001/002（MainWindow 职责与禁令）+ `architecture-rules.md` §4 ARC-001（Presentation 职责）。本节不复制正文。
 
-Displaying information
-
-Receiving user input
-
-Sending commands
-
-UI MUST NOT:
-
-Contain business logic
-
-Operate SQLite
-
-Execute OpenCV
-
-Call InsightFace directly
+Presentation 只负责显示/输入/命令；禁含业务逻辑、禁操作 SQLite/OpenCV/InsightFace。
 
 ---
 
 # 13. Domain Rules
 
-Domain models MUST remain independent.
+> **Domain 规则权威**：`.ai/rules/dependency-rules.md` §7 DEP-020~023（Domain 零框架依赖）+ `architecture-rules.md` §4 ARC-003（Domain 职责）。本节不复制正文。
 
-Domain layer MUST NOT import:
-
-PySide6
-
-OpenCV
-
-SQLite
-
-Pandas
-
-InsightFace
-
-Domain contains business rules only.
+Domain MUST remain framework independent；禁导入 PySide6/OpenCV/SQLite/pandas/InsightFace。Domain contains business rules only.
 
 ---
 
 # 14. Infrastructure Rules
 
-Infrastructure provides implementations for:
+> **Infrastructure 规则权威**：`architecture-rules.md` §4 ARC-004 + `dependency-rules.md` §8 DEP-030~033。本节不复制正文。
 
-Repositories
-
-File system access
-
-SQLite
-
-Image loading
-
-Configuration
-
-Logging
-
-Infrastructure MUST NOT contain business decisions.
+Infrastructure provides Repository/Filesystem/SQLite/Image/Config/Logging implementations；MUST NOT contain business decisions.
 
 ---
 
