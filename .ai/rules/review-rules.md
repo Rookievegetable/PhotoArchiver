@@ -247,6 +247,8 @@ Avoid:
 
 # 14. Logging Review
 
+> **print 禁令/日志权威**：`.ai/rules/coding-rules.md` COD-050（用 Loguru）+ COD-051（禁 `print()`）。本节是 §22 Review 在日志层的细化，不重复 COD-050/051 正文。
+
 Verify:
 
 * Loguru is used

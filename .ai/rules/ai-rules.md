@@ -128,21 +128,9 @@ Generated code MUST NOT contain:
 
 # 9. Logging Rules
 
-All runtime information MUST use Loguru.
+> **print 禁令/日志权威**：`.ai/rules/coding-rules.md` COD-050（用 Loguru）+ COD-051（禁 `print()`）+ §7 Logging 小节。本节不复制正文，详见该处。ADR-008 已裁决统一 Loguru。
 
-Example:
-
-Correct:
-
-logger.info(...)
-
-logger.warning(...)
-
-logger.error(...)
-
-Forbidden:
-
-print(...)
+All runtime information MUST use Loguru (`logger.info/warning/error`). `print()` is prohibited in production code per COD-051.
 
 ---
 

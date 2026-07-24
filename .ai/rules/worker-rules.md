@@ -236,19 +236,9 @@ Workers MUST NOT silently ignore exceptions.
 
 # 12. Logging
 
-Workers MUST use Loguru.
+> **print 禁令/日志权威**：`.ai/rules/coding-rules.md` COD-050（用 Loguru）+ COD-051（禁 `print()`）。本节不复制正文，详见该处。Workers 层无额外日志规则，遵循 COD-050/051 即可。
 
-Example:
-
-```python
-logger.info("Scanning {}", directory)
-```
-
-Forbidden:
-
-```python
-print(...)
-```
+Workers MUST use Loguru. `print()` is prohibited per COD-051.
 
 ---
 
