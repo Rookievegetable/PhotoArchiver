@@ -6,7 +6,7 @@
 >
 > 动态维护，实时更新。问题解决后**立即删除**，不保留历史记录。
 >
-> Version: 1.1.0 ｜ Last Updated: 2026-07-19 ｜ Status: Live
+> Version: 1.2.0 ｜ Last Updated: 2026-07-24 ｜ Status: Live
 
 ---
 
@@ -178,11 +178,11 @@
 
 | 字段 | 值 |
 |---|---|
-| Status | Open |
-| Description | 5 处规则重复承载：业务工作流 / 技术栈 / 分层图 / 模块职责 / Review Checklist。审计 D-1~D-5。 |
+| Status | Mitigated |
+| Description | 5 处规则重复承载：业务工作流 / 技术栈 / 分层图 / 模块职责 / Review Checklist。审计 D-1~D-5。本轮（2026-07-24）SSOT 收敛已落地 7 主题归属裁决（技术栈→DEP §13、分层图+矩阵→DEP §2/§4、模块职责→ARC §4、业务工作流→roadmap §2、Review Checklist→review §22、print禁令→COD-050/051、命名/导入→coding-rules），其余承载处改指针；ai-rules.md 从 479 行降至 311 行。 |
 | Impact | Low —— 维护成本，多处同步易漂移 |
-| Temporary Workaround | 以 `.ai/rules/` 为权威，其余引用不复制 |
-| Planned Resolution | SSOT 收敛，每条规则只在一处落正文（P2） |
+| Temporary Workaround | 无（收敛已落地） |
+| Planned Resolution | 本轮已修，保留 Mitigated 状态待下轮复审确认；待裁决1-4（占位/废弃物理删除/roadmap合并/编号补齐）需授权后才能进一步收敛 |
 
 ### ISSUE-015 — 11 个 .ai/ 文档为 Placeholder 占位
 

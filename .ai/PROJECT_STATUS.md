@@ -6,7 +6,7 @@
 >
 > 这是唯一允许频繁修改的 AI 文档。每次开发结束必须更新。历史状态不保留——永远只有当前状态。
 >
-> Version: 1.0.0 ｜ Last Updated: 2026-07-18 ｜ Status: Live
+> Version: 1.1.0 ｜ Last Updated: 2026-07-24 ｜ Status: Live
 
 ---
 
@@ -105,37 +105,34 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-07-19 17:24（本地） |
+| 时间 | 2026-07-24 17:44（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | Phase 2 Step 13 Settings 闭环 + ISSUE-005 修复 |
-| Completed | Step 13：`UserPreferences` DTO + 校验函数 + `SettingsUseCase` Protocol + `SettingsService`（含系统默认兜底）+ `UserSettingsStore` 抽象端口 + QSettings/InMemory 双适配器 + `SettingsDialog` + `SettingsController` + MainWindow toolbar [Settings] 入口 + bootstrap 装配（CLI/CI 走 InMemory，UI 走 QSettings rebinding）+ ISSUE-005 闭环（`ReviewRecognitionService` 注入 `UnitOfWork`，复刻 ArchiveExecutor 模板） |
-| Remaining | Step 14-15；既有 19 mypy + 2 ruff 飘带清理（单独一轮，未混入）；SQLAlchemy/Alembic 迁移体系（roadmap Step 3） |
+| 会话范围 | 文档体系改进计划第二期 SSOT 收敛（7 主题归属裁决 + 3 同步动作） |
+| Completed | 主题1 技术栈清单（DEP §13 权威，ai-rules §3/README §11/AI_ONBOARDING §1 改指针）；主题2 分层依赖图+矩阵（DEP §2/§4 权威，ai-rules §5/ARC §2/§5/AI_ONBOARDING §4 改指针，A2 冲突以 DEP §4 为准）；主题4 模块职责（ARC §4 权威，补 ARC-009 子包/特殊目录补录表含 persistence/application子包/config 收口 ISSUE-011→Mitigated，DEP §3/AI_ONBOARDING §4/rules/README §4 改指针）；主题5 Review Checklist（review-rules §22 权威，ai-rules §21 改指针，6 层 checklist 加指针头）；主题6 print禁令/日志（COD-050/051 权威，ai-rules §9/worker §12 改指针，review §14 加指针头）；主题7 命名/导入（coding-rules 权威，ai-rules §15/DEP §14 改指针）；2.1 规则编号治理（rules/README §6 降级承认现状+禁章节号冒充，ARC-014/017/018 引用改章节引用跨 5 文件）；2.2 空目录登记（DOCUMENT_INDEX §6.1 补 conventions/decisions/examples）；2.3 ai-rules.md 瘦身（§8/§10~§14 改指针，479→311 行） |
+| Remaining | Step 14-15；既有 19 mypy + 2 ruff 飘带清理；SQLAlchemy/Alembic 迁移体系（roadmap Step 3）；待裁决1-4（占位/废弃/roadmap合并/编号补齐）需项目负责人授权 |
 | Next Step | Step 14 Export |
-| HEAD | 本会话未提交（工作树含 Step 13 全部新增 + 既有占位骨架扩展） |
-| 测试 | pytest **226 passed / 8 skipped**（8 skip = 缺模型包 + PySide6/pytestqt 阈带） |
-| 质量门 | 本轮引入范围 ruff/mypy clean；既有 19 mypy + 2 ruff 飘带持平（裁决 3 不混入） |
-| 文档影响 | 本轮新增 Settings 模块——`AI_ONBOARDING.md` §3/§4（新 Settings 文件路径可补入索引，本轮未触，视为下轮文档触碰清单补录项）；`PROJECT_STATUS.md` §4 模块表已含 Settings；`docs/development/configuration.md`（QSettings 不属本文档范畴，无需更） |
+| HEAD | b68f553（本会话 9 commits：主题1-7 + 2.1/2.2/2.3） |
+| 测试 | 文档改动无需 pytest；无代码变更 |
+| 贎量门 | 无代码变更，无 ruff/mypy 触发 |
+| 文档影响 | 本轮 SSOT 收敛触及 .ai/rules/ 全 9 文件 + AI_ONBOARDING/PROJECT_STATUS/KNOWN_ISSUES/ARCHITECTURE_DECISIONS/DOCUMENT_INDEX/README 共 15 文档；ISSUE-014 统筹收敛本轮落地，状态改 Mitigated；ISSUE-011 config/ 补录收口改 Mitigated |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 
-本轮未新增 ADR——三大启动裁决已落地执行未产生需记录的不可改决策：
-1. 用户偏好持久化走 QSettings + 抽象端口双适配器（CLI/UI 分层，infrastructure 层合规）。
-2. `ReviewRecognitionService` 注入可选 `UnitOfWork`（None 兼容既有测试），复刻 `ArchiveExecutor` 模板。
-3. 既有飘带单独开清理轮，不混入 Step 任务（遵循 ADR-023 单一逻辑变更）。
+本轮未新增 ADR——SSOT 收敛属文档治理范畴，未产生需记录的不可改架构决策。规则编号降级裁决（rules/README §6 承认仅 COD/DEP/WRK/ARC 用 ID）已落 rules/README §6 正文，不另起 ADR。
 
-### 5.1 本会话工作记录（2026-07-19，Step 13 Settings 轮）
+### 5.1 本会话工作记录（2026-07-24，SSOT 收敛轮）
 
 | 项 | 值 |
 |---|---|
 | 角色 | Implementer（AtomCode GLM-5.2） |
-| 范围 | Step 13 Settings 全闭环 + ISSUE-005 修复，含测试与文档 |
-| HEAD | 本会话未提交（工作树含 Step 13 全部新增 + 既有占位骨架扩展） |
+| 范围 | 文档体系改进计划第二期 SSOT 收敛全 10 项（7 主题 + 3 同步动作） |
+| HEAD | b68f553 |
 | Branch | `main` |
-| pytest 快照 | 226 tests collected, 226 passed / 8 skipped |
+| pytest 快照 | 无代码变更，未跑（文档改动） |
 | Completed | 见 §5 Completed 字段 |
-| Remaining | Step 14-15；飘带清理轮；SQLAlchemy/Alembic |
+| Remaining | Step 14-15；飘带清理轮；SQLAlchemy/Alembic；待裁决1-4 |
 | Next Step | Step 14 Export |
-| 阻塞 | 无 |
+| 阻塞 | 无（待裁决1-4 非本轮范畴） |
 
 
 
@@ -171,6 +168,17 @@
 |---|---|---|
 | 1 | 导出范围交互式选择 UI（单选 radio vs 多选 checkbox） | 建议单选 radio：全量/当前批次/筛选结果三选一，避免歧义 |
 | 2 | 大报告是否走 Worker + 进度条 | 建议走 Worker（UI-011 长耗时规则），复刻 ArchivePhotosTask 信号模板 |
+
+### 7.1 文档治理待裁决（2026-07-24 SSOT 收敛轮登记）
+
+> 文档体系改进计划第三期机制建设已落地，第二期 SSOT 收敛已落地；以下 4 项属"物理删除/目录合并/编号补齐"裁决，需项目负责人明确授权后方可执行。本轮不自行执行。
+
+| # | 待裁决 | 建议方案 | 状态 |
+|---|---|---|---|
+| 裁决1 | 11 份占位文档：删除还是保留 quarantine？ | 建议删除（新四文档体系已接管职责） | ⛔ 待授权 |
+| 裁决2 | 7 份废弃文档：独有信息已迁（上轮机制4），物理删除还是保留？ | 建议物理删除（banner 已合规满一周期） | ⛔ 待授权 |
+| 裁决3 | `docs/roadmap/` 目录并入 `.ai/business/roadmap.md`？ | 建议并入（phase-1 已加横幅，路线图只需一份） | ⛔ 待授权 |
+| 裁决4 | 规则编号：补齐还是降级？ | 建议降级（已落 rules/README §6 承认现状） | ⛔ 待授权（本轮已按降级执行） |
 
 ---
 
