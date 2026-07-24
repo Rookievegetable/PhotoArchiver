@@ -40,7 +40,7 @@ copy .env.example .env
 | `LOG_LEVEL`     | `INFO`                             | 日志等级。                                 |
 | `LOG_DIRECTORY` | `logs`                             | 日志输出目录。                             |
 | `DATABASE_URL`  | `sqlite:///data/photo_archiver.db` | SQLite 数据库 URL。                        |
-| `MODEL_PATH`    | `models`                           | AI 模型目录。                              |
+| `MODEL_PATH`    | `resources/models`                | AI 模型目录（ADR-012）。                  |
 | `PHOTO_ROOT`    | 空                                 | 默认照片根目录，可留空。                   |
 | `OUTPUT_ROOT`   | 空                                 | 默认输出目录，可留空。                     |
 | `MAX_WORKERS`   | `4`                                | 后台任务最大 Worker 数量。                 |
