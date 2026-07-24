@@ -1,10 +1,10 @@
 # PhotoArchiver 开发路线图与分步交付清单
 
-Version: 1.0.0
+Version: 1.1.0
 
 Status: Stable
 
-Last Updated: 2026-07-02
+Last Updated: 2026-07-24
 
 ---
 
@@ -19,6 +19,8 @@ Last Updated: 2026-07-02
 并纳入 Application 层、Repository 模式、User Review、测试与装配等补充项。
 
 每步完成后再进入下一步，避免跨步返工。
+
+> 📌 **Phase 1 历史路线图已并入**（2026-07-24 裁决3授权执行）：原 `docs/roadmap/phase-1-core-workflow.md` 已物理删除，其权威信息（Phase 1 目标 / 完成状态 / 开发顺序 / 阶段完成标准 / 约束）由本文件 §2-§17 正文承载，人类入口历史快照见 `README.md` 已完成段。删除理由：双路线图无存在必要，phase-1 横幅已并入本文件，避免分散承载漂移。
 
 ---
 

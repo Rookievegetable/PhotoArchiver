@@ -83,7 +83,6 @@ flowchart TD
 | `docs/deployment/project-structure.md` | 顶层与源码目录结构说明 | 目录结构详解 |
 | `docs/development/getting-started.md` | 环境准备、运行、测试、质量检查 | 开发入门 |
 | `docs/development/configuration.md` | `.env` 配置项、默认值、约束 | 配置详解 |
-| `docs/roadmap/phase-1-core-workflow.md` | Phase 1 路线图（已结束，参考） | 历史 roadmap |
 | `LICENSE_PLACEHOLDER.md` | License 占位 | 待定 |
 
 ### 2.5 工程配置

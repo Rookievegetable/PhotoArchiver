@@ -72,8 +72,8 @@ AI 开发知识库与强制规则（AI Runtime Context 体系）。
 
 - `AI_ONBOARDING.md`（AI 入口）、`PROJECT_STATUS.md`（实状态）、`ARCHITECTURE_DECISIONS.md`（ADR Register）、`KNOWN_ISSUES.md`（问题清单）、`DOCUMENT_INDEX.md`（文档体系导航）
 - `rules/`（10 份工程规则：ai/coding/architecture/dependency/ui/worker/git/review/audit-methodology + README）
-- `business/roadmap.md`（15 步路线图）
-- 11 个 Placeholder 占位文档与 7 个 Deprecated 废弃文档（清单见 `.ai/DOCUMENT_INDEX.md` §4/§6）
+- `business/roadmap.md`（15 步路线图，含 Phase 1 历史并入横幅）
+- 原 11 份 Placeholder 占位 + 7 份 Deprecated 废弃文档已于 2026-07-24 裁决1/2物理删除（见 `.ai/DOCUMENT_INDEX.md` §4/§6）
 
 该目录仅供 AI 辅助开发使用，不参与程序运行。完整体系导航见 `.ai/DOCUMENT_INDEX.md`。
 
@@ -168,7 +168,6 @@ data 目录属于运行数据，不属于源代码。
 - `architecture/overview.md`（架构详解）
 - `deployment/project-structure.md`（本文，目录结构详解）
 - `development/{getting-started,configuration}.md`（开发入门 + 配置详解）
-- `roadmap/phase-1-core-workflow.md`（Phase 1 历史 roadmap，已结束参考）
 
 任何设计决策都应该形成文档。
 
@@ -531,8 +530,7 @@ resources/
 docs/
 ├── architecture/    # overview.md（架构详解）
 ├── deployment/      # project-structure.md（本文）
-├── development/     # getting-started.md + configuration.md
-└── roadmap/         # phase-1-core-workflow.md（Phase 1 历史，已结束）
+└── development/     # getting-started.md + configuration.md
 ```
 
 权威文档体系导航见 `.ai/DOCUMENT_INDEX.md`。保持文档与代码同步更新。
