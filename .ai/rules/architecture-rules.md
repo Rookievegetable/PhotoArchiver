@@ -26,19 +26,7 @@ PhotoArchiver adopts:
 - Clean Architecture
 - Layered Architecture
 
-Application layers:
-
-```
-
-Presentation
-↓
-Application
-↓
-Domain
-↑
-Infrastructure
-
-```
+> **分层依赖图+矩阵权威**：`.ai/rules/dependency-rules.md` §2（依赖原则与方向图）+ §4（模块依赖矩阵，含 `ai` / `workers` / `plugins` / `common` 全方向）。本节不复制图与矩阵正文，详见该处。当本文件 §5 与 DEP §4 矩阵表述不同时，以 DEP §4 为准（ADR R 段已裁决）。
 
 Dependencies MUST always point toward the Domain layer.
 
@@ -221,43 +209,9 @@ Common MUST remain lightweight.
 
 # 5. Allowed Dependencies
 
-The following dependencies are permitted.
+> **依赖矩阵权威**：`.ai/rules/dependency-rules.md` §4（完整模块×可依赖矩阵）。本节不复制矩阵正文，详见该处。本文件 §6 列禁令以矩阵为准。
 
-Presentation
-
-↓
-
-Application
-
-↓
-
-Domain
-
-Infrastructure
-
-↓
-
-Domain
-
-Workers
-
-↓
-
-Application
-
-AI
-
-↓
-
-Infrastructure
-
-Plugins
-
-↓
-
-Application
-
-Common may be used by all layers.
+The matrix in DEP §4 is the SSOT for all module-to-module dependency allowances, including `ai`, `workers`, `plugins`, and `common` directions. §6 below enumerates the prohibitions that complement the matrix.
 
 ---
 

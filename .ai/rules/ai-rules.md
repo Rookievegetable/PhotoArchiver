@@ -69,31 +69,9 @@ All generated code must support the workflow defined there.
 
 AI MUST preserve the existing architecture.
 
-Allowed layers:
+> **分层依赖图+矩阵权威**：`.ai/rules/dependency-rules.md` §2（依赖原则与方向图）+ §4（模块依赖矩阵）。本节不复制图与矩阵正文，详见该处。当 ARC §5 与 DEP §4 矩阵表述不同时，以 DEP §4 矩阵为准（ADR R 段已裁决）。
 
-Presentation
-
-↓
-
-Application
-
-↓
-
-Domain
-
-↓
-
-Infrastructure
-
-Cross-layer shortcuts are prohibited.
-
-Example:
-
-Presentation MUST NOT directly access SQLite.
-
-Presentation MUST NOT call OpenCV APIs.
-
-Presentation MUST NOT execute face recognition.
+Cross-layer shortcuts are prohibited. Presentation MUST NOT directly access SQLite, OpenCV, or face recognition APIs.
 
 ---
 

@@ -105,11 +105,9 @@ flowchart TD
 
 ### 依赖方向（不可逆）
 
-```text
-Presentation  →  Application  →  Domain  ←  Infrastructure
-Workers  →  Application        AI  →  Infrastructure, Domain
-Plugins  →  Application        Common  →  Standard Library only
-```
+> **分层依赖图+矩阵权威**：`.ai/rules/dependency-rules.md` §2（依赖原则与方向图）+ §4（模块×可依赖矩阵）。本节不复制图与矩阵正文，详见该处。下方一句话仅为入职秒懂，与 DEP §4 冲突时以 DEP §4 为准。
+
+一句话：`Presentation → Application → Domain ← Infrastructure`，`Workers → Application`，`AI → Infrastructure + Domain`，`Plugins → Application`，`Common` 仅标准库被所有层引用。
 
 ### 一句话模块职责
 
