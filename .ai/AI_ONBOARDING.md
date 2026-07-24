@@ -82,7 +82,7 @@ flowchart TD
 | 源码 | `src/photo_archiver/`（分层骨架见 §4） | 实现具体任务 |
 | 测试 | `tests/unit/` + `tests/integration/` | 写或跑测试 |
 
-> `.ai/architecture/`、`.ai/business/{workflow,requirements}.md`、`.ai/prompts/`、`.ai/templates/`、`.ai/context/` 当前为 Placeholder 占位——SSOT 缺口，随模块推进逐步填充。
+> `.ai/architecture/`、`.ai/business/{workflow,requirements}.md`、`.ai/prompts/`、`.ai/templates/`、`.ai/context/` 原 11 份 Placeholder 占位文档已于 2026-07-24 裁决1授权物理删除，空父目录一并清理（见 `.ai/DOCUMENT_INDEX.md` §6）。
 
 ---
 
@@ -338,7 +338,7 @@ flowchart TD
 按任务范围定向阅读 rules / roadmap / docs / 源码
 ```
 
-> ⚠ Placeholder 占位文档（11 个，见 `.ai/DOCUMENT_INDEX.md` §6）不读取、不修改、不删除。
+> ⚠ 原 11 份 Placeholder 占位文档已于 2026-07-24 裁决1授权物理删除（见 `.ai/DOCUMENT_INDEX.md` §6）。
 
 ---
 
@@ -378,8 +378,7 @@ Step 14 Export（`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `Expor
 <summary>参考答案</summary>
 
 1. **既有 23 mypy + 4 ruff 飘带**（ISSUE-007）——基线质量飘带，单独开一轮清理，不混入 Step 任务。
-2. **11 个 `.ai/` 文档为 Placeholder 占位**（ISSUE-015）——SSOT 不完整，随模块推进逐步填充。
-3. **文档体系漂移**（ISSUE-012/013/014）——Tier3 人类文档冻结在 Step 11/12 状态，文档体系改进计划第一期止血已在推进。
+2. **文档体系漂移**（ISSUE-012/013/014）——Tier3 人类文档冻结在 Step 11/12 状态，文档体系改进计划第一期止血已在推进。原 11 份 Placeholder 占位文档已 2026-07-24 裁决1删除（ISSUE-015 已结）。
 </details>
 
 ### Q5. 有哪些架构约束？

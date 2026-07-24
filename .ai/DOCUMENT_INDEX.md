@@ -6,7 +6,7 @@
 >
 > 任何 AI 在 30 秒内读完本文即可理解整个文档体系结构。
 >
-> Version: 1.2.0 ｜ Status: Stable ｜ Last Updated: 2026-07-24
+> Version: 1.3.0 ｜ Status: Stable ｜ Last Updated: 2026-07-24
 
 ---
 
@@ -151,26 +151,26 @@ flowchart TD
 
 ---
 
-## 6. Placeholder 文档清单（占位，不动）
+## 6. Placeholder 文档清单（占位，已删除）
 
-> 以下 11 文件为占位空文档，**不读取、不修改、不删除**（任务6 明令）。留待后续模块推进时统一处理。
+> 2026-07-24 裁决1授权执行：以下 11 份占位空文档已物理删除（`git rm`）。新四文档体系已接管职责，删除后不再保留占位段。空父目录（`.ai/architecture/`、`.ai/context/`、`.ai/prompts/`、`.ai/templates/`）及 3 个空占位目录（`.ai/{conventions,decisions,examples}/`）一并删除。
 
 ```
 .ai/architecture/{architecture,lifecycle,modules}.md
 .ai/business/{requirements,workflow}.md
-.ai/context/project-status.md          ⚠ 同名混淆风险，未来清理时优先处置
+.ai/context/project-status.md
 .ai/prompts/{bugfix,codex,feature,review}.md
 .ai/templates/module-template.md
 ```
 
 ### 6.1 空目录补录（2026-07-24 SSOT 收敛登记）
 
-以下 3 个 `.ai/` 下空目录未含任何占位文档，亦不在 Deprecated/Archive 清单——本节登记为"空目录占位，不动"，未来清理裁决时一并处置：
+以下 3 个空占位目录随裁决1一并删除：
 
 ```
-.ai/conventions/    # 约定占位目录，无文件
-.ai/decisions/      # 决策占位目录，无文件
-.ai/examples/       # 示例占位目录，无文件
+.ai/conventions/    # 约定占位目录，无文件，已删
+.ai/decisions/      # 决策占位目录，无文件，已删
+.ai/examples/       # 示例占位目录，无文件，已删
 ```
 
 ---
@@ -180,7 +180,6 @@ flowchart TD
 - 文档体系结构变化（新增/废弃/归档）时必须同步本文。
 - 新增文档前必须回答"文档治理四问"（本文 §0），并经明确裁决。
 - Deprecated 文档正文保留，仅顶部加 banner；进一步移至 Archive 需新一轮裁决。
-- Placeholder 文档不进入 Deprecated，单独处置。
 
 ---
 

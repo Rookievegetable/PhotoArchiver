@@ -184,15 +184,15 @@
 | Temporary Workaround | 无（收敛已落地） |
 | Planned Resolution | 本轮已修，保留 Mitigated 状态待下轮复审确认；待裁决1-4（占位/废弃物理删除/roadmap合并/编号补齐）需授权后才能进一步收敛 |
 
-### ISSUE-015 — 11 个 .ai/ 文档为 Placeholder 占位
+### ISSUE-015 — 11 个 .ai/ 文档为 Placeholder 占位（已删）
 
 | 字段 | 值 |
 |---|---|
-| Status | Open |
-| Description | `.ai/architecture/`、`.ai/business/{workflow,requirements}.md`、`.ai/context/project-status.md`、`.ai/prompts/`、`.ai/templates/` 等 11 个文档为 Placeholder 占位空文档。SSOT 不完整。 |
-| Impact | Low —— AI 协作时这些文档无法提供实质指引 |
-| Temporary Workaround | 本 AI Runtime Context 四文档已替代部分占位职责 |
-| Planned Resolution | 随模块推进逐步填充，或统一收敛到新 AI Runtime Context（P3） |
+| Status | Mitigated |
+| Description | `.ai/architecture/`、`.ai/business/{workflow,requirements}.md`、`.ai/context/project-status.md`、`.ai/prompts/`、`.ai/templates/` 等 11 个文档为 Placeholder 占位空文档。**2026-07-24 裁决1授权已物理删除**（`git rm`），空父目录与 3 个空占位目录一并清理，见 `.ai/DOCUMENT_INDEX.md` §6。 |
+| Impact | Low —— SSOT 缺口随删除收口 |
+| Temporary Workaround | 无（删除已落地） |
+| Planned Resolution | 本轮已结，保留 Mitigated 状态待下轮复审确认 |
 
 ---
 
