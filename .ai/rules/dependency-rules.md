@@ -456,6 +456,8 @@ Never solve circular imports with delayed imports unless there is no reasonable 
 
 # 19. Review Checklist
 
+> **总表权威**：`.ai/rules/review-rules.md` §22。本节是 §22 在依赖层的细化，不重复总表。
+
 Before merging code, verify:
 
 * [ ] Dependency direction is correct.

@@ -440,6 +440,8 @@ When a Worker finishes successfully it SHOULD:
 
 # 27. Review Checklist
 
+> **总表权威**：`.ai/rules/review-rules.md` §22。本节是 §22 在 Worker 层的细化，不重复总表。
+
 Before merging Worker code verify:
 
 * [ ] Runs outside UI thread

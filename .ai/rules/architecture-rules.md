@@ -676,6 +676,8 @@ Architecture review required.
 
 # 23. Review Checklist
 
+> **总表权威**：`.ai/rules/review-rules.md` §22。本节是 §22 在架构层的细化，不重复总表。
+
 Before merging code verify:
 
 - [ ] Layer responsibility respected

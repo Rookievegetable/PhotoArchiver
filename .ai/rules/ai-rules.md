@@ -350,27 +350,9 @@ Never overwrite user files without confirmation.
 
 # 21. Review Checklist
 
-Before completing a task, AI MUST verify:
+> **Review Checklist 总表权威**：`.ai/rules/review-rules.md` §22（11 项全覆盖清单）。本节不复制清单正文，详见该处。各专项规则文件末尾的 layer-specific checklist（coding/architecture/dependency/ui/worker/git）是 §22 在该层的细化，不重复 §22 总表。
 
-✓ Correct layer
-
-✓ Correct dependencies
-
-✓ Logger used
-
-✓ No print()
-
-✓ Type hints complete
-
-✓ Public docstrings added
-
-✓ Exceptions handled
-
-✓ Cross-platform compatibility
-
-✓ Tests updated
-
-✓ Documentation updated (if needed)
+Before completing a task, AI MUST run the §22 master checklist plus any layer-specific checklist applicable to the change.
 
 ---
 

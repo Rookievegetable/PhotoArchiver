@@ -355,6 +355,8 @@ Update documentation
 
 # 19. Pull Request Checklist
 
+> **总表权威**：`.ai/rules/review-rules.md` §22。本节是 §22 在 Git/PR 层的细化，不重复总表。
+
 Before opening a Pull Request verify:
 
 * [ ] Ruff passes

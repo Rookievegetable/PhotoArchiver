@@ -442,6 +442,8 @@ Names should clearly describe responsibilities.
 
 # 28. Review Checklist
 
+> **总表权威**：`.ai/rules/review-rules.md` §22。本节是 §22 在 UI 层的细化，不重复总表。
+
 Before merging UI code verify:
 
 * [ ] UI contains no business logic

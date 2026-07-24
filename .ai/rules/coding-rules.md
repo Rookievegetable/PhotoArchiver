@@ -472,6 +472,8 @@ They MUST NOT contain UI code.
 
 # 15. Review Checklist
 
+> **总表权威**：`.ai/rules/review-rules.md` §22。本节是 §22 在编码层的细化，不重复总表。
+
 Before submitting code, verify:
 
 - [ ] Imports ordered correctly
