@@ -33,7 +33,7 @@
 | 仓库 | `github.com/Rookievegetable/PhotoArchiver` |
 | 入口 | `main.py`（CLI 扫描 + PySide6 桌面） |
 
-完整技术栈与权威清单：`.ai/rules/dependency-rules.md` §13、`.ai/rules/ai-rules.md` §3。
+> 完整技术栈与权威清单：`.ai/rules/dependency-rules.md` §13（第三方库清单 + 层归属 SSOT）。本表仅列入职秒懂的最小集，不复制清单正文。
 
 ---
 

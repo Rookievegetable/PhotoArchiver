@@ -49,53 +49,9 @@ AI is NOT responsible for:
 
 # 3. Technology Baseline
 
-The following technology stack is fixed.
+> **技术栈清单权威**：`.ai/rules/dependency-rules.md` §13（第三方库清单 + 层归属 + 延后批注）。本节不复制清单正文，详见该处。`requirements/base.txt` 与 `requirements/dev.txt` 是依赖版本 SSOT。
 
-Python 3.11
-
-PySide6
-
-InsightFace
-
-OpenCV
-
-Pandas
-
-OpenPyXL
-
-SQLite
-
-Loguru
-
-pytest
-
-Ruff
-
-MyPy
-
-pydantic
-
-pydantic-settings
-
-Pillow (Infrastructure image layer only)
-
-SQLAlchemy (Infrastructure database layer only)
-
-> 延后（ADR-005）：当前用 sqlite3 + `PRAGMA user_version` 管理 Schema 版本，SQLAlchemy/Alembic 迁移体系推迟到 roadmap Step 3 收尾或后续阶段。批准保留在 requirements 但零 import。
-
-alembic (Infrastructure database migrations only)
-
-> 同上延后（ADR-005），与 SQLAlchemy 配套推迟。
-
-watchdog (Infrastructure filesystem watcher only)
-
-ONNX Runtime (AI model runtime, `ai/` layer or Infrastructure adapters only)
-
-pytest-qt (dev-only, UI smoke tests)
-
-The authoritative third-party library list is maintained in `dependency-rules.md` §13.
-
-AI MUST NOT replace any approved technology unless explicitly instructed.
+AI MUST NOT replace any approved technology unless explicitly instructed. AI MUST NOT introduce technologies outside the §13 list without project approval.
 
 ---
 

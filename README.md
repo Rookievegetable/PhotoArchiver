@@ -47,17 +47,9 @@ Export Results
 
 ## 技术栈
 
-- Python 3.11
-- PySide6
-- SQLite、SQLAlchemy、Alembic（延后：当前 sqlite3 + PRAGMA user_version，ADR-005）
-- pandas、openpyxl
-- OpenCV、Pillow
-- InsightFace、ONNX Runtime
-- Pydantic、pydantic-settings
-- Loguru
-- watchdog
-- pytest、pytest-qt
-- Ruff、Black、isort、MyPy、pre-commit
+> **技术栈权威清单**：`.ai/rules/dependency-rules.md` §13（含层归属、延后批注）。本节为人类入口概览，若与彼冲突以彼为准。
+
+核心运行栈：Python 3.11、PySide6、SQLite（`PRAGMA user_version` 管理 Schema）、InsightFace + ONNX Runtime、OpenCV、Pillow、pandas、openpyxl、Pydantic + pydantic-settings、Loguru、watchdog。开发栈：pytest、pytest-qt、Ruff、Black、isort、MyPy、pre-commit。SQLAlchemy/Alembic 已批准但延后（ADR-005），当前零 import。完整清单与层归属见上方权威链接。
 
 ## 快速开始
 
