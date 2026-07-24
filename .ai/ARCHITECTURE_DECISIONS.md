@@ -274,6 +274,7 @@
 | R-5 (C-2) | `pydantic` 标 "if introduced" 但已投入使用 | 升为正式批准，补入 ai-rules §3 | ✅ 已执行 |
 | R-6 (C-4) | 6 项库（Pillow/SQLAlchemy/alembic/watchdog/pytest-qt/ONNX）未进 §13/§3 | 补入并标注层归属 | ✅ 已执行 |
 | R-7 (C-5) | `architecture-rules.md` §18 Logging Rules 允诺 `common/logging/` vs DEP-071 禁 common 导第三方 | 删除 `common/logging/` 选项 | ✅ 已执行 |
+| R-8 (2026-07-24) | `architecture-rules.md` §5 Allowed Dependencies 与 `dependency-rules.md` §4 依赖矩阵表述冲突（§5 缺 `ai`/`workers`/`plugins`/`common` 全方向，且未含 SQLite 仓储例外等） | 以 DEP §4 矩阵为唯一权威；ARC §5 改指针，正文不重复矩阵 | ✅ 已执行（SSOT 收敛主题2） |
 
 ---
 

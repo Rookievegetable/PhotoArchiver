@@ -69,7 +69,7 @@ All generated code must support the workflow defined there.
 
 AI MUST preserve the existing architecture.
 
-> **分层依赖图+矩阵权威**：`.ai/rules/dependency-rules.md` §2（依赖原则与方向图）+ §4（模块依赖矩阵）。本节不复制图与矩阵正文，详见该处。当 ARC §5 与 DEP §4 矩阵表述不同时，以 DEP §4 矩阵为准（ADR R 段已裁决）。
+> **分层依赖图+矩阵权威**：`.ai/rules/dependency-rules.md` §2（依赖原则与方向图）+ §4（模块依赖矩阵）。本节不复制图与矩阵正文，详见该处。当 ARC §5 与 DEP §4 矩阵表述不同时，以 DEP §4 矩阵为准（ADR R-8 已裁决，见 `ARCHITECTURE_DECISIONS.md`）。
 
 Cross-layer shortcuts are prohibited. Presentation MUST NOT directly access SQLite, OpenCV, or face recognition APIs.
 
@@ -117,7 +117,7 @@ Generated code MUST:
 - Follow Ruff recommendations.
 - Pass MyPy checks.
 
-Generated code MUST NOT contain `print()` / TODO placeholders / `pass` in production / commented-out legacy code——详见 `coding-rules.md` COD-051/072/073 与 `architecture-rules.md` 禁占位条款。
+Generated code MUST NOT contain `print()` / TODO placeholders / `pass` in production / commented-out legacy code——`print()` 禁令权威 `coding-rules.md` COD-051；TODO/占位/pass 禁令权威 `review-rules.md` §22 清单项"No TODO placeholders / No commented-out obsolete code"。
 
 ---
 

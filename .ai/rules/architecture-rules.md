@@ -26,7 +26,7 @@ PhotoArchiver adopts:
 - Clean Architecture
 - Layered Architecture
 
-> **分层依赖图+矩阵权威**：`.ai/rules/dependency-rules.md` §2（依赖原则与方向图）+ §4（模块依赖矩阵，含 `ai` / `workers` / `plugins` / `common` 全方向）。本节不复制图与矩阵正文，详见该处。当本文件 §5 与 DEP §4 矩阵表述不同时，以 DEP §4 为准（ADR R 段已裁决）。
+> **分层依赖图+矩阵权威**：`.ai/rules/dependency-rules.md` §2（依赖原则与方向图）+ §4（模块依赖矩阵，含 `ai` / `workers` / `plugins` / `common` 全方向）。本节不复制图与矩阵正文，详见该处。当本文件 §5 与 DEP §4 矩阵表述不同时，以 DEP §4 为准（ADR R-8 已裁决，见 `ARCHITECTURE_DECISIONS.md`）。
 
 Dependencies MUST always point toward the Domain layer.
 
