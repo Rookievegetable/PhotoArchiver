@@ -373,6 +373,8 @@ Additional third-party dependencies require project approval.
 
 # 14. Import Guidelines
 
+> **命名/导入规范权威**：`.ai/rules/coding-rules.md` §3 Imports（COD-010~013，含导入顺序、wildcard/unused/circular 禁令）。本节仅补充依赖矩阵视角的导入约束，不重复 COD-010~013 正文。
+
 Imports MUST follow this order:
 
 1. Standard Library

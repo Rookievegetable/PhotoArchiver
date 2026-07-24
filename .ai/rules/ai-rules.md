@@ -234,27 +234,9 @@ Infrastructure MUST NOT contain business decisions.
 
 # 15. Naming Rules
 
-Classes
+> **命名/导入规范权威**：`.ai/rules/coding-rules.md` §4 Naming（COD-020~025）+ §3 Imports（COD-010~013）。本节不复制正文，详见该处。
 
-PascalCase
-
-Functions
-
-snake_case
-
-Variables
-
-snake_case
-
-Constants
-
-UPPER_CASE
-
-Private members
-
-_prefix
-
-Abbreviations should be avoided whenever possible.
+AI MUST follow COD-020~025 for naming and COD-010~013 for import ordering. Abbreviations should be avoided whenever possible.
 
 ---
 
