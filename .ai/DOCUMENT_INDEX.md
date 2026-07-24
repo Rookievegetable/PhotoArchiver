@@ -6,7 +6,7 @@
 >
 > 任何 AI 在 30 秒内读完本文即可理解整个文档体系结构。
 >
-> Version: 1.1.0 ｜ Status: Stable ｜ Last Updated: 2026-07-19
+> Version: 1.2.0 ｜ Status: Stable ｜ Last Updated: 2026-07-24
 
 ---
 
@@ -161,6 +161,16 @@ flowchart TD
 .ai/context/project-status.md          ⚠ 同名混淆风险，未来清理时优先处置
 .ai/prompts/{bugfix,codex,feature,review}.md
 .ai/templates/module-template.md
+```
+
+### 6.1 空目录补录（2026-07-24 SSOT 收敛登记）
+
+以下 3 个 `.ai/` 下空目录未含任何占位文档，亦不在 Deprecated/Archive 清单——本节登记为"空目录占位，不动"，未来清理裁决时一并处置：
+
+```
+.ai/conventions/    # 约定占位目录，无文件
+.ai/decisions/      # 决策占位目录，无文件
+.ai/examples/       # 示例占位目录，无文件
 ```
 
 ---
