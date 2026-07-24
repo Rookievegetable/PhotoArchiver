@@ -1,6 +1,6 @@
 # PhotoArchiver AI Rules
 
-Version: 1.2.0
+Version: 1.2.1
 
 Status: Stable
 
@@ -118,6 +118,8 @@ Generated code MUST:
 - Pass MyPy checks.
 
 Generated code MUST NOT contain `print()` / TODO placeholders / `pass` in production / commented-out legacy code——`print()` 禁令权威 `coding-rules.md` COD-051；TODO/占位/pass 禁令权威 `review-rules.md` §22 清单项"No TODO placeholders / No commented-out obsolete code"。
+
+**指针必须可解析**（元规则，`rules/README.md` §6.1）：任何"权威：文件 §N"或"文件 §N"形式指针引用，目标文件 + 章节/规则 ID 必须真实存在。新增或修改指针时**当场验证**目标可解析——读目标文件确认锚点存在，不得凭记忆写指针。违反信号：grep 检索某指针锚点在目标文件 0 命中。发现假指针立即当轮修。
 
 ---
 

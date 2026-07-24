@@ -1,6 +1,6 @@
 # PhotoArchiver AI Rules
 
-Version: 1.0.0
+Version: 1.1.0
 
 Status: Stable
 
@@ -228,6 +228,20 @@ Rule identifiers are permanent.
 Existing identifiers MUST NOT be reused.
 
 > ⚠ 禁止"章节号冒充规则 ID"：`architecture-rules.md` 的章节号（§14 Database / §17 Configuration / §18 Logging 等）**不是 ARC-ID**。引用这些章节时统一写"文件 §章节"（如 `architecture-rules.md §14`），不得写"ARC-014/ARC-017/ARC-018"——后者会误导读者以为是稳定规则 ID。
+
+---
+
+# 6.1 Pointer Integrity（指针必须可解析）
+
+> 元规则（2026-07-24 v2 第 0 期补入）：收敛轮出现"假指针"——引用不存在的锚点（如 `COD-072/073` 全 git 历史从未存在、"ADR R 段已裁决"R 表无此条目）。假指针比重复全文更危险，它制造"已收敛"的幻觉。
+
+**MUST**：任何"权威：文件 §N"或"文件 §N"形式的指针引用，目标文件 + 章节/规则 ID 必须真实存在；新增或修改指针时**当场验证**目标可解析（读目标文件确认锚点存在）。
+
+**MUST NOT**：不得凭记忆写指针——记错章节号或规则 ID 会引入假指针。
+
+**SHOULD**：复审时抽查指针可解析性（按 `audit-methodology.md` 五维比对之一）。
+
+违反信号：grep 检索某指针锚点在目标文件 0 命中。发现假指针立即当轮修——要么改指向真实存在的锚点，要么补录目标条目使指针成立。
 
 ---
 
