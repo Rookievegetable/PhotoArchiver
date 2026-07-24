@@ -6,7 +6,7 @@
 >
 > 这是唯一允许频繁修改的 AI 文档。每次开发结束必须更新。历史状态不保留——永远只有当前状态。
 >
-> Version: 1.1.0 ｜ Last Updated: 2026-07-24 ｜ Status: Live
+> Version: 1.2.0 ｜ Last Updated: 2026-07-24 ｜ Status: Live
 
 ---
 
@@ -105,34 +105,35 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-07-24 17:44（本地） |
+| 时间 | 2026-07-24 21:27（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | 文档体系改进计划 v2 第 0 期修补轮（进行中，已落地 6/12 项） |
-| Completed | 0.1 修 ai-rules §8 假锚点（COD-072/073→COD-051+review §22）；0.2 补录 ADR R-8（ARC §5 vs DEP §4）+三处悬空引用改 R-8；0.3 DOCUMENT_INDEX §3/§2.2/§1 同步本轮裁决（业务工作流→roadmap §2/分层图→DEP §2§4/模块职责→ARC §4，文件计数 9→10）；0.4 worker-rules §17-§22 删 6 个幻影 Worker 类改任务注册示例（D4）；0.5 DEP §14 删重复正文+§16 补 SQLite 例外条款收口 A1（D5/D6）；0.6 8 文件刷新 Last Updated+Version bump（D7，机制 3 补课）；0.9 recognizer docstring 假缓存声明改诚实描述与 ISSUE-001 一致（R4） |
-| Remaining | Step 14-15；既有 19 mypy + 2 ruff 飘带清理；SQLAlchemy/Alembic 迁移体系（roadmap Step 3）；待裁决1-4（占位/废弃/roadmap合并/编号补齐）需项目负责人授权 |
+| 会话范围 | 文档体系改进计划 v2 第 0 期修补轮余 6 项 + 裁决1-4 + 收尾（全执行） |
+| Completed | 0.7 修 PROJECT_STATUS §4 自相矛盾+补 ReviewDialog 入 §4/§8+刷新 lint 数字（AI_ONBOARDING Q4 19+2→23+4 实测，pytest 229 passed+8 skipped）；0.8 KNOWN_ISSUES ISSUE-001 补记 docstring 已修+ISSUE-006 删失效 type: ignore 描述+ISSUE-007 数字改实测 23 mypy+4 ruff；0.10 README 补 archive 子命令+pandas/watchdog 三处批注'已批准未使用'（README §52+DEP §13+base.txt，watchdog 删虚构 filesystem watcher 用途）；0.11 configuration §2 MODEL_PATH 改 resources/models+.env.example 补 MATCH_THRESHOLD/修 MODEL_PATH（R6 收口）；0.12 project-structure.md 全面刷新（删幽灵 LICENSE、补 ai.txt、common/ 删违 R-7、补全部新子包、ApplicationContext 刷新）；元规则'指针必须可解析'补入 rules/README §6.1+ai-rules §8；裁决1 11 份占位物理删除+ISSUE-015 改 Mitigated；裁决2 7 份废弃物理删除+修悬空指针（ARCHITECTURE_DECISIONS R段/KNOWN_ISSUES 改指 audit-methodology.md）；裁决3 docs/roadmap/ 并入 roadmap.md 横幅+删目录；裁决4 复核编号降级已执行干净 |
+| Remaining | Step 14-15；既有 23 mypy + 4 ruff 飘带清理（第 2 期机制 5）；SQLAlchemy/Alembic 迁移体系（roadmap Step 3） |
 | Next Step | Step 14 Export |
-| HEAD | b68f553（本会话 9 commits：主题1-7 + 2.1/2.2/2.3） |
-| 测试 | 文档改动无需 pytest；无代码变更 |
-| 贎量门 | 无代码变更，无 ruff/mypy 触发 |
-| 文档影响 | 本轮 SSOT 收敛触及 .ai/rules/ 全 9 文件 + AI_ONBOARDING/PROJECT_STATUS/KNOWN_ISSUES/ARCHITECTURE_DECISIONS/DOCUMENT_INDEX/README 共 15 文档；ISSUE-014 统筹收敛本轮落地，状态改 Mitigated；ISSUE-011 config/ 补录收口改 Mitigated |
+| HEAD | dd7ba5d（本会话 9 commits：0.7/0.8/0.10/0.11/0.12/元规则/裁决1/2/3） |
+| 测试 | 文档改动无需 pytest；本轮无代码变更，未跑 |
+| 贎量门 | 无代码变更，无 ruff/mypy 触发；元规则§6.1 当场验证悬空指针已修（ARCHITECTURE_DECISIONS R段/KNOWN_ISSUES §待裁决段两处） |
+| 文档影响 | 本轮触及 PROJECT_STATUS/KNOWN_ISSUES/AI_ONBOARDING/README/DEP/base.txt/configuration/.env.example/project-structure/rules{README,ai}/roadmap/DOCUMENT_INDEX/ARCHITECTURE_DECISIONS 共 14 文档；裁决1-2 删 18 份文档+7 空目录；ISSUE-015 改 Mitigated；新增元规则§6.1 Pointer Integrity；本轮自检见 §5.1 |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 
 本轮未新增 ADR——SSOT 收敛属文档治理范畴，未产生需记录的不可改架构决策。规则编号降级裁决（rules/README §6 承认仅 COD/DEP/WRK/ARC 用 ID）已落 rules/README §6 正文，不另起 ADR。
 
-### 5.1 本会话工作记录（2026-07-24，SSOT 收敛轮）
+### 5.1 本会话工作记录（2026-07-24，v2 第 0 期修补轮余项 + 裁决1-4）
 
 | 项 | 值 |
 |---|---|
 | 角色 | Implementer（AtomCode GLM-5.2） |
-| 范围 | 文档体系改进计划第二期 SSOT 收敛全 10 项（7 主题 + 3 同步动作） |
-| HEAD | b68f553 |
+| 范围 | 文档体系改进计划 v2 第 0 期修补轮余 6 项（0.7/0.8/0.10/0.11/0.12/元规则）+ 裁决1-4（占位删除/废弃删除/roadmap合并/编号维持降级复核）+ 收尾 |
+| HEAD | dd7ba5d |
 | Branch | `main` |
-| pytest 快照 | 无代码变更，未跑（文档改动） |
+| pytest 快照 | 229 passed + 8 skipped（本轮实测核验，无代码变更但核验文档数字） |
 | Completed | 见 §5 Completed 字段 |
-| Remaining | Step 14-15；飘带清理轮；SQLAlchemy/Alembic；待裁决1-4 |
+| Remaining | Step 14-15；23 mypy + 4 ruff 飘带清理（第 2 期机制 5）；SQLAlchemy/Alembic |
 | Next Step | Step 14 Export |
-| 阻塞 | 无（待裁决1-4 非本轮范畴） |
+| 阻塞 | 无（裁决1-4 已全执行） |
+| §12 文档触碰自检 | 裁决1-2 删 18 份文档引入悬空指针：当场按元规则§6.1 验证修 ARCHITECTURE_DECISIONS R段 + KNOWN_ISSUES §待裁决段两处（改指 audit-methodology.md）；AI_ONBOARDING §13.2 废弃映射表非活指针保留作替换说明；audit-methodology.md §0/末迁移说明保留作历源注；裁决3 删 docs/roadmap/ 后 grep 全仓 0 残留引用；本轮文档陈述无失效 |
 
 
 
@@ -171,14 +172,14 @@
 
 ### 7.1 文档治理待裁决（2026-07-24 SSOT 收敛轮登记）
 
-> 文档体系改进计划第三期机制建设已落地，第二期 SSOT 收敛已落地；以下 4 项属"物理删除/目录合并/编号补齐"裁决，需项目负责人明确授权后方可执行。本轮不自行执行。
+> 文档体系改进计划第三期机制建设已落地，第二期 SSOT 收敛已落地；以下 4 项属"物理删除/目录合并/编号补齐"裁决，2026-07-24 已获项目负责人授权一并执行。
 
 | # | 待裁决 | 建议方案 | 状态 |
 |---|---|---|---|
-| 裁决1 | 11 份占位文档：删除还是保留 quarantine？ | 建议删除（新四文档体系已接管职责） | ⛔ 待授权 |
-| 裁决2 | 7 份废弃文档：独有信息已迁（上轮机制4），物理删除还是保留？ | 建议物理删除（banner 已合规满一周期） | ⛔ 待授权 |
-| 裁决3 | `docs/roadmap/` 目录并入 `.ai/business/roadmap.md`？ | 建议并入（phase-1 已加横幅，路线图只需一份） | ⛔ 待授权 |
-| 裁决4 | 规则编号：补齐还是降级？ | 建议降级（已落 rules/README §6 承认现状） | ⛔ 待授权（本轮已按降级执行） |
+| 裁决1 | 11 份占位文档：删除还是保留 quarantine？ | 建议删除（新四文档体系已接管职责） | ✅ 已执行（git rm 11 文档+7 空目录，2026-07-24） |
+| �裁决2 | 7 份废弃文档：独有信息已迁（上轮机制4），物理删除还是保留？ | 建议物理删除（banner 已合规满一周期） | ✅ 已执行（git rm 7 文档+修悬空指针，2026-07-24） |
+| 裁决3 | `docs/roadmap/` 目录并入 `.ai/business/roadmap.md`？ | 建议并入（phase-1 已加横幅，路线图只需一份） | ✅ 已执行（并入横幅+删目录，2026-07-24） |
+| 裁决4 | 规则编号：补齐还是降级？ | 建议降级（已落 rules/README §6 承认现状） | ✅ 已执行+复核干净（本轮补 §6.1 Pointer Integrity） |
 
 ---
 
