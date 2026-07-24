@@ -1,10 +1,10 @@
 # PhotoArchiver Worker Rules
 
-Version: 1.0.1
+Version: 1.0.2
 
 Status: Stable
 
-Last Updated: 2026-07-13
+Last Updated: 2026-07-24
 
 ---
 
@@ -311,73 +311,13 @@ Use pathlib.Path for all file operations.
 
 ---
 
-# 17. Face Recognition Workers
+# 17-22. 任务注册示例（Task Registration Examples）
 
-FaceRecognitionWorker is responsible for:
+> ⚠ §5 已说明 Workers 层是通用执行器框架（`QtWorkerExecutor` + `task`/`application_tasks` + `events`），**不存在名为 `FaceRecognitionWorker`/`ImportWorker`/`ExportWorker`/`FolderScanWorker`/`ThumbnailWorker`/`CacheWorker` 的具体 Worker 类**。本节原描述的 6 个幻影类已在 2026-07-24 SSOT 收敛轮删除，避免与 §5 自相矛盾。
 
-* image loading
-* face detection
-* feature extraction
-* similarity calculation
+新长耗时操作通过 `application_tasks.py` 注册为任务函数（复刻 ArchivePhotosTask 信号模板），而非新建具名 Worker 子类。实际已注册的任务见 `src/photo_archiver/workers/application_tasks.py` 与 `src/photo_archiver/presentation/controllers/` 各 controller 的接入点。架构审查要求新建具名 Worker 类前先裁决——默认路径是任务注册。
 
-Business decisions (e.g. archive assignment) remain in Application Services.
-
----
-
-# 18. Import Workers
-
-ImportWorker is responsible for:
-
-* reading Excel/TXT
-* validating data
-* creating import commands
-
-It MUST NOT update UI directly.
-
----
-
-# 19. Export Workers
-
-ExportWorker is responsible for:
-
-* generating reports
-* exporting Excel
-* exporting CSV
-* exporting archive metadata
-
----
-
-# 20. FolderScanWorker
-
-FolderScanWorker SHOULD:
-
-* recursively scan directories
-* validate image formats
-* ignore unsupported files
-* report progress periodically
-
----
-
-# 21. ThumbnailWorker
-
-ThumbnailWorker SHOULD:
-
-* generate thumbnails
-* cache results
-* avoid regenerating existing thumbnails
-* release image resources promptly
-
----
-
-# 22. CacheWorker
-
-CacheWorker MAY:
-
-* clean expired cache
-* preload metadata
-* optimize cache structure
-
-Cache operations MUST NOT interfere with active user tasks.
+业务决策（如归档分配）始终在 Application Services，Workers 仅执行。
 
 ---
 

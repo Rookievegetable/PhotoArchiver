@@ -6,7 +6,7 @@
 >
 > 迁移自废弃文档 `.ai/Consistency-Audit-2026-07-13.md` §8（2026-07-13 完整审计落地的方法论）。
 >
-> Version: 1.0.0 ｜ Status: Stable ｜ Last Updated: 2026-07-19
+> Version: 1.0.1 ｜ Status: Stable ｜ Last Updated: 2026-07-24
 
 ---
 

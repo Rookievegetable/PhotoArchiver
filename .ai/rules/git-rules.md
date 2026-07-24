@@ -1,10 +1,10 @@
 # PhotoArchiver Git Rules
 
-Version: 1.0.0
+Version: 1.0.1
 
 Status: Stable
 
-Last Updated: 2026-07-01
+Last Updated: 2026-07-24
 
 ---
 

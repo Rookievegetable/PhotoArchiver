@@ -1,10 +1,10 @@
 # PhotoArchiver Coding Rules
 
-Version: 1.0.1
+Version: 1.0.2
 
 Status: Stable
 
-Last Updated: 2026-07-13
+Last Updated: 2026-07-24
 
 ---
 

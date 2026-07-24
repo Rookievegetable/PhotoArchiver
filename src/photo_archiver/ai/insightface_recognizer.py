@@ -6,10 +6,11 @@ analysis instance so the model is loaded only once per process, and copies
 numpy embeddings into plain :class:`FaceEmbedding` tuples so the Domain layer
 keeps its zero-numpy invariant.
 
-M-4 fix: ``extract`` reuses a cached detection result when the caller passes
-the same ``FaceAnalysis`` instance that produced ``box``, avoiding the double
-full-image detection that Step 9 introduced. When no cache is available it
-falls back to a fresh detection pass.
+``extract`` performs a fresh detection pass via ``_analysis.get(image, max_num=0)``
+on every call to locate the face matching ``box``. The double-detection cost
+(shared with the detector's own pass) is tracked in ``KNOWN_ISSUES.md`` ISSUE-001
+and planned for optimization in Step 13+ (batch detect+extract single pass or
+detection-result caching). No result caching is implemented today.
 """
 
 from collections.abc import Sequence

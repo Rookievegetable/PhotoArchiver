@@ -1,10 +1,10 @@
 # PhotoArchiver Architecture Rules
 
-Version: 1.1.0
+Version: 1.1.1
 
 Status: Stable
 
-Last Updated: 2026-07-19
+Last Updated: 2026-07-24
 
 ---
 

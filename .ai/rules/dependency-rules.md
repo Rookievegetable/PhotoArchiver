@@ -1,10 +1,10 @@
 # PhotoArchiver Dependency Rules
 
-Version: 1.1.0
+Version: 1.1.1
 
 Status: Stable
 
-Last Updated: 2026-07-19
+Last Updated: 2026-07-24
 
 ---
 
@@ -373,19 +373,7 @@ Additional third-party dependencies require project approval.
 
 # 14. Import Guidelines
 
-> **命名/导入规范权威**：`.ai/rules/coding-rules.md` §3 Imports（COD-010~013，含导入顺序、wildcard/unused/circular 禁令）。本节仅补充依赖矩阵视角的导入约束，不重复 COD-010~013 正文。
-
-Imports MUST follow this order:
-
-1. Standard Library
-2. Third-party Libraries
-3. Project Modules
-
-Unused imports are prohibited.
-
-Wildcard imports are prohibited.
-
-Circular imports are prohibited.
+> **命名/导入规范权威**：`.ai/rules/coding-rules.md` §3 Imports（COD-010~013，含导入顺序、wildcard/unused/circular 禁令）。本节不重复 COD-010~013 正文——依赖矩阵视角的导入约束已与 COD-010~013 完全一致，详见彼处。
 
 ---
 
@@ -413,16 +401,19 @@ repo = SQLitePhotoRepository()
 
 # 16. Repository Pattern
 
+> ⚠ **SQLite 仓储位置例外（A1 收口，2026-07-24）**：`architecture-rules.md` §8 已加例外条款——SQLite-backed 仓储实现归 `infrastructure/database/`，`infrastructure/repositories/` 保留非 SQLite 实现（如 InMemory 测试替身）。本节下表是对齐后的表述。
+
 Repository interfaces belong to:
 
 ```text
 domain/repositories/
 ```
 
-Repository implementations belong to:
+Repository implementations belong in:
 
 ```text
-infrastructure/repositories/
+infrastructure/repositories/      ← 非 SQLite 实现（InMemory 等）
+infrastructure/database/           ← SQLite-backed 实现（见 ARC §8 例外，ADR R-2/R-4 已执行）
 ```
 
 Application depends only on interfaces.
