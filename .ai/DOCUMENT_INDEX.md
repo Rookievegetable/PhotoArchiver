@@ -127,11 +127,11 @@ flowchart TD
 
 ---
 
-## 4. Deprecated 文档清单（废弃，勿读）
+## 4. Deprecated 文档清单（废弃，已删除）
 
 > 废弃日期：2026-07-18 ｜ 废弃裁决：AI Runtime Context 体系建立（`.ai/rules/CONTEXT_HANDOFF_RULES.md`）
 >
-> 以下文档保留作历史参考，**新 AI Session 请勿阅读**。每份顶部已加 Deprecated banner。
+> 2026-07-24 裁决2授权执行：以下 7 份废弃文档已物理删除（`git rm`）。独有信息已迁入新四文档体系（audit-methodology.md 等），其残留的 ARC-014 旧编号引用会持续污染 grep 检索结果故删除收口。各文档顶部 Deprecated banner 历史保留于 git。
 
 | 文档 | 废弃原因 | 替代文档 |
 |---|---|---|

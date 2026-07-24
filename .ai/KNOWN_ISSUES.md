@@ -140,7 +140,7 @@
 
 ## 待裁决的规则/文档冲突（非 ADR，未落地）
 
-> 权威审计：`.ai/Consistency-Audit-2026-07-13.md`。本节列待裁决项，裁决后或并入 `ARCHITECTURE_DECISIONS.md` R 段，或从本文删除。
+> 权威审计方法论：`.ai/rules/audit-methodology.md`（迁移自废弃文档 `.ai/Consistency-Audit-2026-07-13.md` §8，2026-07-24 裁决2已物理删除该废弃文档）。本节列待裁决项，裁决后或并入 `ARCHITECTURE_DECISIONS.md` R 段，或从本文删除。
 
 ### ISSUE-011 — config/ 顶层目录在 architecture-rules §17 允诺但依赖矩阵未授权
 

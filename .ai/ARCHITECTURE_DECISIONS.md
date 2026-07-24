@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.0.0 ｜ Status: Stable ｜ Last Updated: 2026-07-18
+> Version: 1.0.1 ｜ Status: Stable ｜ Last Updated: 2026-07-24
 
 ---
 
@@ -263,7 +263,7 @@
 
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）
 
-> 权威审计报告：`.ai/Consistency-Audit-2026-07-13.md`。本节仅列已裁决并执行的冲突处置。
+> 权威审计方法论：`.ai/rules/audit-methodology.md`（迁移自废弃文档 `.ai/Consistency-Audit-2026-07-13.md` §8，2026-07-24 裁决2已物理删除该废弃文档）。本节仅列已裁决并执行的冲突处置。
 
 | ID | 冲突 | 裁决 | 状态 |
 |---|---|---|---|
