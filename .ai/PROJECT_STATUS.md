@@ -76,7 +76,7 @@
 | 模块 | 状态 | 关键文件 |
 |---|---|---|
 | Logging | ✅ Step 1 就绪 | `infrastructure/logging/configuration.py` |
-| Configuration | ✅ Step 2 就绪（系统配置）；用户偏好 ⛔ 未建 | `infrastructure/config/settings.py`（`AppSettings`） |
+| Configuration | ✅ Step 2 就绪（系统配置 `AppSettings`）+ Step 13 用户偏好闭环（`UserPreferences` + `UserSettingsStore` 抽象端口 + QSettings/InMemory 双适配器） | `infrastructure/config/settings.py`（`AppSettings`）、`application/dtos/settings.py`、`infrastructure/persistence/{in_memory,qsettings}_user_settings_store.py` |
 | Database | ✅ Step 3 就绪（sqlite3 + PRAGMA v4）；SQLAlchemy/Alembic 延后 | `infrastructure/database/sqlite_connection.py` |
 | Domain | ✅ Step 4 + 后续迭代就绪 | `domain/{entities,value_objects,repositories}/` |
 | Import | ✅ Step 5 就绪（TXT + Excel） | `infrastructure/importers/`、`application/services/import_person_service.py` |
@@ -84,7 +84,7 @@
 | Thumbnail | ✅ Step 7 就绪 | `application/services/thumbnail_service.py`、`infrastructure/image/` |
 | Recognition | ✅ Step 8-10 就绪（InsightFace detect/recognize/match + Review） | `ai/`、`infrastructure/ai/insightface_loader.py`、`application/services/{match_persons,review_recognition}_service.py` |
 | Archive | ✅ Step 11 就绪（Planner→Plan→Executor + dry-run + captured_at） | `application/services/{archive_planner,archive_executor,archive_photos_service,archive_path_builder_service}.py` |
-| UI | ✅ Step 12 就绪（MainWindow + 4 controller + ArchivePhotosTask + ArchivePreviewDialog） | `presentation/views/main_window.py`、`presentation/controllers/` |
+| UI | ✅ Step 12 就绪（MainWindow + 4 controller + ArchivePhotosTask + ArchivePreviewDialog + ReviewDialog） | `presentation/views/{main_window,review_dialog}.py`、`presentation/controllers/` |
 | Settings | ✅ Step 13 就绪（QSettings + 抽象端口双适配器 + SettingsDialog + SettingsController + SettingsService + ReviewRecognitionService UoW 闭环） | `application/services/settings_service.py`、`presentation/views/settings_dialog.py`、`infrastructure/persistence/` |
 | Export | ⛔ Step 14 未开始 | — |
 | Plugins | ⛔ Step 15 未开始 | — |
@@ -196,6 +196,7 @@
 | Schema 定义 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`（PRAGMA v4） |
 | 模型下载 | `scripts/download_models.py` |
 | 主窗口（含 [Settings] 入口） | `src/photo_archiver/presentation/views/main_window.py` |
+| Review UI（审核对话框） | `src/photo_archiver/presentation/views/review_dialog.py`、`presentation/controllers/review_controller.py` |
 | Controllers | `src/photo_archiver/presentation/controllers/`（ImportPeople/Archive/Review/PhotoList/Settings） |
 | Settings DTO + 校验 | `src/photo_archiver/application/dtos/settings.py` |
 | Settings 服务 | `src/photo_archiver/application/services/settings_service.py` |

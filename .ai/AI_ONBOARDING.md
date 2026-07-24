@@ -377,7 +377,7 @@ Step 14 Export（`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `Expor
 <details>
 <summary>参考答案</summary>
 
-1. **既有 19 mypy + 2 ruff 阘带**（ISSUE-007）——基线质量飘带，单独开一轮清理，不混入 Step 任务。
+1. **既有 23 mypy + 4 ruff 飘带**（ISSUE-007）——基线质量飘带，单独开一轮清理，不混入 Step 任务。
 2. **11 个 `.ai/` 文档为 Placeholder 占位**（ISSUE-015）——SSOT 不完整，随模块推进逐步填充。
 3. **文档体系漂移**（ISSUE-012/013/014）——Tier3 人类文档冻结在 Step 11/12 状态，文档体系改进计划第一期止血已在推进。
 </details>
