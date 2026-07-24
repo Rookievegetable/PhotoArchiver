@@ -4,7 +4,7 @@ Version: 1.0.0
 
 Status: Stable
 
-Last Updated: 2026-07-01
+Last Updated: 2026-07-24
 
 ---
 
@@ -209,11 +209,11 @@ Use only when appropriate.
 
 # 6. Rule Numbering
 
-Every rule has a unique identifier.
+> **现状承认（2026-07-24 SSOT 收敛）**：本目录 8 个规则文件中，**仅 `coding-rules.md`（COD）/`dependency-rules.md`（DEP）/`worker-rules.md`（WRK）/`architecture-rules.md` §4（ARC-001~009）实际使用编号 ID**。`ai-rules.md` /`ui-rules.md`/`git-rules.md`/`review-rules.md` 章节式但不带稳定 ID，编号体系降级为"按需引用"——引用统一用"文件+章节"格式（如 `ai-rules.md §9`），不强行补 AI-/UI-/GIT-/REV- ID（成本高收益低）。
+
+Every stable rule that already has an identifier keeps it permanently.
 
 Examples
-
-AI-001
 
 COD-001
 
@@ -221,17 +221,13 @@ ARC-001
 
 DEP-001
 
-UI-001
-
 WRK-001
-
-GIT-001
-
-REV-001
 
 Rule identifiers are permanent.
 
 Existing identifiers MUST NOT be reused.
+
+> ⚠ 禁止"章节号冒充规则 ID"：`architecture-rules.md` 的章节号（§14 Database / §17 Configuration / §18 Logging 等）**不是 ARC-ID**。引用这些章节时统一写"文件 §章节"（如 `architecture-rules.md §14`），不得写"ARC-014/ARC-017/ARC-018"——后者会误导读者以为是稳定规则 ID。
 
 ---
 

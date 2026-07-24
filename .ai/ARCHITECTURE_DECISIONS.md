@@ -73,7 +73,7 @@
 | 状态 | Accepted |
 | 决策 | 所有 sqlite3/SQLAlchemy 代码只能出现在 `infrastructure/database/`，仓储实现走 `infrastructure/database/sqlite_*_repository.py`。 |
 | 理由 | 集中技术适配，避免 SQL 泄漏到 Application/Domain。 |
-| 影响范围 | `infrastructure/database/`（ARC-014） |
+| 影响范围 | `infrastructure/database/`（`architecture-rules.md` §14 Database Rules） |
 
 ### ADR-005 — SQLAlchemy/Alembic 延后，当前用 sqlite3 + PRAGMA user_version
 
@@ -268,12 +268,12 @@
 | ID | 冲突 | 裁决 | 状态 |
 |---|---|---|---|
 | R-1 | Workers 层导入 `PySide6.QtCore` vs DEP-040 依赖矩阵未授权 | 更新 DEP-040 + WRK-002，允许 `PySide6.QtCore`（线程原语 only） | ✅ 已执行 |
-| R-2 | SQLite 代码在 `infrastructure/repositories/` vs ARC-014 要求 `infrastructure/database/` | 迁移至 `infrastructure/database/` | ✅ 已执行 |
+| R-2 | SQLite 代码在 `infrastructure/repositories/` vs `architecture-rules.md` §14 要求 `infrastructure/database/` | 迁移至 `infrastructure/database/` | ✅ 已执行 |
 | R-3 | COD-005 行宽 88 vs `pyproject.toml` 行宽 100 | 统一为 100 | ✅ 已执行 |
 | R-4 (C-1) | ARC-008 §8 vs §14 SQLite 位置表述不一 | §8 加 SQLite 例外条款 | ✅ 已执行 |
 | R-5 (C-2) | `pydantic` 标 "if introduced" 但已投入使用 | 升为正式批准，补入 ai-rules §3 | ✅ 已执行 |
 | R-6 (C-4) | 6 项库（Pillow/SQLAlchemy/alembic/watchdog/pytest-qt/ONNX）未进 §13/§3 | 补入并标注层归属 | ✅ 已执行 |
-| R-7 (C-5) | ARC-018 §18 允诺 `common/logging/` vs DEP-071 禁 common 导第三方 | 删除 `common/logging/` 选项 | ✅ 已执行 |
+| R-7 (C-5) | `architecture-rules.md` §18 Logging Rules 允诺 `common/logging/` vs DEP-071 禁 common 导第三方 | 删除 `common/logging/` 选项 | ✅ 已执行 |
 
 ---
 

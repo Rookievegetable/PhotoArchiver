@@ -392,7 +392,7 @@ Step 14 Export（`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `Expor
 - Presentation 禁导入 Infrastructure/SQLite/OpenCV/InsightFace
 - Application 禁导入 PySide6、禁执行 SQL、必须用 Repository Protocol
 - Workers 仅可导入 `PySide6.QtCore`（线程原语），禁导入 QtWidgets/QtGui（ADR-007、DEP-040）
-- SQLite 仅在 `infrastructure/database/`（ADR-004、ARC-014）
+- SQLite 仅在 `infrastructure/database/`（ADR-004、`architecture-rules.md` §14）
 - 所有业务经由 Application 编排
 </details>
 

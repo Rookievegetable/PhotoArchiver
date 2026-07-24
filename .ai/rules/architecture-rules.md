@@ -364,7 +364,7 @@ infrastructure/repositories/
 
 ```
 
-SQLite-backed repository implementations are exempted from the location above and MUST reside with the SQLite database layer in `infrastructure/database/` per ARC-014 §14. `infrastructure/repositories/` retains in-memory and other non-SQLite repository implementations.
+SQLite-backed repository implementations are exempted from the location above and MUST reside with the SQLite database layer in `infrastructure/database/` per §14 Database Rules. `infrastructure/repositories/` retains in-memory and other non-SQLite repository implementations.
 
 Application MUST use interfaces.
 
