@@ -107,8 +107,8 @@
 |---|---|
 | 时间 | 2026-07-24 17:44（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | 文档体系改进计划第二期 SSOT 收敛（7 主题归属裁决 + 3 同步动作） |
-| Completed | 主题1 技术栈清单（DEP §13 权威，ai-rules §3/README §11/AI_ONBOARDING §1 改指针）；主题2 分层依赖图+矩阵（DEP §2/§4 权威，ai-rules §5/ARC §2/§5/AI_ONBOARDING §4 改指针，A2 冲突以 DEP §4 为准）；主题4 模块职责（ARC §4 权威，补 ARC-009 子包/特殊目录补录表含 persistence/application子包/config 收口 ISSUE-011→Mitigated，DEP §3/AI_ONBOARDING §4/rules/README §4 改指针）；主题5 Review Checklist（review-rules §22 权威，ai-rules §21 改指针，6 层 checklist 加指针头）；主题6 print禁令/日志（COD-050/051 权威，ai-rules §9/worker §12 改指针，review §14 加指针头）；主题7 命名/导入（coding-rules 权威，ai-rules §15/DEP §14 改指针）；2.1 规则编号治理（rules/README §6 降级承认现状+禁章节号冒充，ARC-014/017/018 引用改章节引用跨 5 文件）；2.2 空目录登记（DOCUMENT_INDEX §6.1 补 conventions/decisions/examples）；2.3 ai-rules.md 瘦身（§8/§10~§14 改指针，479→311 行） |
+| 会话范围 | 文档体系改进计划 v2 第 0 期修补轮（进行中，已落地 6/12 项） |
+| Completed | 0.1 修 ai-rules §8 假锚点（COD-072/073→COD-051+review §22）；0.2 补录 ADR R-8（ARC §5 vs DEP §4）+三处悬空引用改 R-8；0.3 DOCUMENT_INDEX §3/§2.2/§1 同步本轮裁决（业务工作流→roadmap §2/分层图→DEP §2§4/模块职责→ARC §4，文件计数 9→10）；0.4 worker-rules §17-§22 删 6 个幻影 Worker 类改任务注册示例（D4）；0.5 DEP §14 删重复正文+§16 补 SQLite 例外条款收口 A1（D5/D6）；0.6 8 文件刷新 Last Updated+Version bump（D7，机制 3 补课）；0.9 recognizer docstring 假缓存声明改诚实描述与 ISSUE-001 一致（R4） |
 | Remaining | Step 14-15；既有 19 mypy + 2 ruff 飘带清理；SQLAlchemy/Alembic 迁移体系（roadmap Step 3）；待裁决1-4（占位/废弃/roadmap合并/编号补齐）需项目负责人授权 |
 | Next Step | Step 14 Export |
 | HEAD | b68f553（本会话 9 commits：主题1-7 + 2.1/2.2/2.3） |
