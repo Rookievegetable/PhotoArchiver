@@ -109,12 +109,12 @@
 | 时间 | 2026-07-25 12:43（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
 | 会话范围 | Step 15 Plugin System 实现（接口+加载器+示例+MainWindow 接线+开发指南+测试） |
-| Completed | 插件接口 `application/ports/plugin.py`；PluginRegistry 加载器 `plugins/loader.py`（目录扫描+错误隔离）；示例插件 `examples/plugins/hello_plugin.py`；MainWindow 集成 toolbar 注册；插件开发指南；单元测试 6 条 |
-| Remaining | 飘带清理轮（23 mypy + 4 ruff）；SQLAlchemy/Alembic 迁移体系 |
+| Completed | 飘带清理轮：Ruff 4 errors + Mypy 25 errors 全清零（18 文件含 type:ignore 或代码修复）；Step 15 Plugin System 实现（接口+加载器+示例+MainWindow 接线+开发指南+测试） |
+| Remaining | SQLAlchemy/Alembic 迁移体系（roadmap Step 3 收尾） |
 | Next Step | Step 15 Plugin System |
 | HEAD | Step 14 代码已提交（前序文档清理 + Export 全层） |
-| 测试 | pytest 239 passed + 8 skipped（含 6 新 plugin 测试）；ruff new files clean |
-| 贎量门 | ruff clean；mypy 基线 23 errors 未增减 |
+| 测试 | pytest 239 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
+| 贎量门 | ruff 0 errors；mypy 0 errors；所有 lint 飘带已清理 |
 | 文档影响 | 新增 5 文件、修改 2 文件；ARC-009 plugins 子包已预登记与落地一致 |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
