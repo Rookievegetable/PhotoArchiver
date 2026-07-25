@@ -41,7 +41,7 @@
 | 11 | Archive Generator | ✅ Completed（本会话） |
 | 12 | Main UI | ✅ Completed（本会话，三轮 Review 修复落 `03f4395`） |
 | 13 | Settings | ✅ Completed（本会话） |
-| 14 | Export | ⛔ Pending |
+| 14 | Export | ✅ Completed（本会话） |
 | 15 | Plugin System | ⛔ Pending |
 
 里程碑：M1-M5 已就绪；M6 产品化（Step 12-14）进行中；M7 可扩展未启动。
@@ -50,12 +50,11 @@
 
 ## 2. Current Step（当前开发阶段）
 
-**Step 14 — Export（导出）** — ⛔ 未开始
+**Step 15 — Plugin System（插件）** — ⛔ 未开始
 
 前置就绪状态：
-- Step 13 Settings 闭环已就绪（`SettingsDialog` + `SettingsController` + `SettingsService` + `UserSettingsStore` 抽象端口 + QSettings/InMemory 双适配器 + `ReviewRecognitionService` 接入 `UnitOfWork` 闭环 ISSUE-005）。
+- Step 14 Export 已完成（`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `ExportDialog` + 集成测试）。
 - 数据库 Schema 当前 `PRAGMA user_version = 4`。
-- 用户偏好持久化走 QSettings（平台原生位置），与系统级 `AppSettings`（env/.env）分层隔离。
 
 ---
 
@@ -63,9 +62,9 @@
 
 完成 Step 13-15，达成 M6 产品化与 M7 可扩展里程碑：
 
-- Step 13：`SettingsDialog` + `SettingsController` + `SettingsService` + 用户偏好持久化（QSettings 或 DB/配置文件），可配项含主题、语言（预留）、默认导入/导出路径、识别阈值、MAX_WORKERS。
-- Step 14：`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `ExportDialog`，导出范围全量/当前批次/筛选结果。
-- Step 15：插件接口定义 + 发现/加载机制 + 生命周期管理 + 示例插件。
+- Step 13：`SettingsDialog` + `SettingsController` + `SettingsService` + 用户偏好持久化（QSettings 或 DB/配置文件），可配项含主题、语言（预留）、默认导入/导出路径、识别阈值、MAX_WORKERS。✅ 已完成
+- Step 14：`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `ExportDialog`，导出范围全量/当前批次/筛选结果。✅ 已完成
+- Step 15：插件接口定义 + 发现/加载机制 + 生命周期管理 + 示例插件。⛔ 待完成
 
 详见 `.ai/business/roadmap.md` §18-§20。
 
@@ -86,7 +85,7 @@
 | Archive | ✅ Step 11 就绪（Planner→Plan→Executor + dry-run + captured_at） | `application/services/{archive_planner,archive_executor,archive_photos_service,archive_path_builder_service}.py` |
 | UI | ✅ Step 12 就绪（MainWindow + 4 controller + ArchivePhotosTask + ArchivePreviewDialog + ReviewDialog） | `presentation/views/{main_window,review_dialog}.py`、`presentation/controllers/` |
 | Settings | ✅ Step 13 就绪（QSettings + 抽象端口双适配器 + SettingsDialog + SettingsController + SettingsService + ReviewRecognitionService UoW 闭环） | `application/services/settings_service.py`、`presentation/views/settings_dialog.py`、`infrastructure/persistence/` |
-| Export | ⛔ Step 14 未开始 | — |
+| Export | ✅ Step 14 就绪（ExportService + Excel/CSV exporter + ExportWorker + ExportDialog + Controller） | `application/services/export_service.py`、`infrastructure/exporters/{excel_exporter,csv_exporter}.py`、`workers/export_task.py`、`presentation/{controllers/export_controller,views/export_dialog}.py` |
 | Plugins | ⛔ Step 15 未开始 | — |
 
 ### 数据库 Schema 版本
@@ -105,35 +104,35 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-07-24 21:27（本地） |
+| 时间 | 2026-07-25 12:43（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | 文档体系改进计划 v2 第 0 期修补轮余 6 项 + 裁决1-4 + 收尾（全执行） |
-| Completed | 0.7 修 PROJECT_STATUS §4 自相矛盾+补 ReviewDialog 入 §4/§8+刷新 lint 数字（AI_ONBOARDING Q4 19+2→23+4 实测，pytest 229 passed+8 skipped）；0.8 KNOWN_ISSUES ISSUE-001 补记 docstring 已修+ISSUE-006 删失效 type: ignore 描述+ISSUE-007 数字改实测 23 mypy+4 ruff；0.10 README 补 archive 子命令+pandas/watchdog 三处批注'已批准未使用'（README §52+DEP §13+base.txt，watchdog 删虚构 filesystem watcher 用途）；0.11 configuration §2 MODEL_PATH 改 resources/models+.env.example 补 MATCH_THRESHOLD/修 MODEL_PATH（R6 收口）；0.12 project-structure.md 全面刷新（删幽灵 LICENSE、补 ai.txt、common/ 删违 R-7、补全部新子包、ApplicationContext 刷新）；元规则'指针必须可解析'补入 rules/README §6.1+ai-rules §8；裁决1 11 份占位物理删除+ISSUE-015 改 Mitigated；裁决2 7 份废弃物理删除+修悬空指针（ARCHITECTURE_DECISIONS R段/KNOWN_ISSUES 改指 audit-methodology.md）；裁决3 docs/roadmap/ 并入 roadmap.md 横幅+删目录；裁决4 复核编号降级已执行干净 |
-| Remaining | Step 14-15；既有 23 mypy + 4 ruff 飘带清理（第 2 期机制 5）；SQLAlchemy/Alembic 迁移体系（roadmap Step 3） |
-| Next Step | Step 14 Export |
-| HEAD | dd7ba5d（本会话 9 commits：0.7/0.8/0.10/0.11/0.12/元规则/裁决1/2/3） |
-| 测试 | 文档改动无需 pytest；本轮无代码变更，未跑 |
-| 贎量门 | 无代码变更，无 ruff/mypy 触发；元规则§6.1 当场验证悬空指针已修（ARCHITECTURE_DECISIONS R段/KNOWN_ISSUES §待裁决段两处） |
-| 文档影响 | 本轮触及 PROJECT_STATUS/KNOWN_ISSUES/AI_ONBOARDING/README/DEP/base.txt/configuration/.env.example/project-structure/rules{README,ai}/roadmap/DOCUMENT_INDEX/ARCHITECTURE_DECISIONS 共 14 文档；裁决1-2 删 18 份文档+7 空目录；ISSUE-015 改 Mitigated；新增元规则§6.1 Pointer Integrity；本轮自检见 §5.1 |
+| 会话范围 | Step 14 Export 实现（全层交付） |
+| Completed | Export 全层实现：Infrastructure（ExcelExporter+CsvExporter）+ Application（ExportData+ExportScope DTO+ExportService）+ Worker（ExportTask）+ Presentation（ExportDialog+ExportController）+ Assembly（services/ui_assembly/context/bootstrap）+ 集成测试 4 条 |
+| Remaining | Step 15 Plugin System；既有 23 mypy + 4 ruff 飘带清理（第 2 期机制 5）；SQLAlchemy/Alembic 迁移体系（roadmap Step 3） |
+| Next Step | Step 15 Plugin System |
+| HEAD | Step 14 代码已提交（前序文档清理 + Export 全层） |
+| 测试 | pytest 233 passed + 8 skipped（含 4 新 export 集成测试）；ruff 新文件 clean |
+| 贎量门 | ruff clean；mypy 基线 23 errors 未增减 |
+| 文档影响 | 新增 8 文件、修改 10 文件；ARC-009 exporters 预登记与落地一致（infrastructure/exporters/ 已存在） |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 
 本轮未新增 ADR——SSOT 收敛属文档治理范畴，未产生需记录的不可改架构决策。规则编号降级裁决（rules/README §6 承认仅 COD/DEP/WRK/ARC 用 ID）已落 rules/README §6 正文，不另起 ADR。
 
-### 5.1 本会话工作记录（2026-07-24，v2 第 0 期修补轮余项 + 裁决1-4）
+### 5.1 本会话工作记录（2026-07-25，Step 14 Export 实现轮）
 
 | 项 | 值 |
 |---|---|
 | 角色 | Implementer（AtomCode GLM-5.2） |
-| 范围 | 文档体系改进计划 v2 第 0 期修补轮余 6 项（0.7/0.8/0.10/0.11/0.12/元规则）+ 裁决1-4（占位删除/废弃删除/roadmap合并/编号维持降级复核）+ 收尾 |
-| HEAD | dd7ba5d |
+| 范围 | Step 14 Export 全层实现：Infrastructure exporters + Application DTO/Service + Worker + Presentation + Assembly + 集成测试 |
+| HEAD | Step 14 代码已提交（前序文档清理 + Export 全层） |
 | Branch | `main` |
-| pytest 快照 | 229 passed + 8 skipped（本轮实测核验，无代码变更但核验文档数字） |
+| pytest 快照 | 233 passed + 8 skipped（含 4 新 export 集成测试） |
 | Completed | 见 §5 Completed 字段 |
-| Remaining | Step 14-15；23 mypy + 4 ruff 飘带清理（第 2 期机制 5）；SQLAlchemy/Alembic |
-| Next Step | Step 14 Export |
-| 阻塞 | 无（裁决1-4 已全执行） |
-| §12 文档触碰自检 | 裁决1-2 删 18 份文档引入悬空指针：当场按元规则§6.1 验证修 ARCHITECTURE_DECISIONS R段 + KNOWN_ISSUES §待裁决段两处（改指 audit-methodology.md）；AI_ONBOARDING §13.2 废弃映射表非活指针保留作替换说明；audit-methodology.md §0/末迁移说明保留作历源注；裁决3 删 docs/roadmap/ 后 grep 全仓 0 残留引用；本轮文档陈述无失效 |
+| Remaining | Step 15 Plugin System；23 mypy + 4 ruff 飘带清理；SQLAlchemy/Alembic |
+| Next Step | Step 15 Plugin System |
+| 阻塞 | 无 |
+| §12 文档触碰自检 | 新增 8 文件 + 修改 10 文件，ARC-009 exporters 预登记与落地一致；Exporter protocol 在 application/ports/ 遵循现有模式；export_dialog.py/controller.py 遵循 ArchivePreviewDialog/ArchiveController 风格；所有新引用指针可解析（元规则§6.1 当场验证） |
 
 
 
@@ -141,34 +140,32 @@
 
 ## 6. Next Step（下一步开发计划）
 
-**Step 14 — Export**
+**Step 15 — Plugin System**
 
-依据 `.ai/business/roadmap.md` §19，交付物：
+依据 `.ai/business/roadmap.md` §20，交付物：
 
-- [ ] `ExportService`（`application/`）
-- [ ] 导出 DTO：人员、照片、匹配、归档汇总
-- [ ] Excel / CSV 导出器（`infrastructure/exporters/`，openpyxl/pandas 仅 Infrastructure）
-- [ ] `ExportWorker`（`workers/`，长报告不阻塞 UI）
-- [ ] `ExportDialog` + Controller（`presentation/`）
-- [ ] 导出范围：全量 / 当前批次 / 筛选结果
-- [ ] 集成测试：导出文件可打开、字段完整
-- [ ] 输出路径默认走 `AppSettings.output_root`，可被 `UserPreferences.default_export_path` 覆盖
+- [ ] 插件接口定义（Application 层 public API）
+- [ ] 插件发现/加载机制（entry point 或目录扫描）
+- [ ] 插件生命周期：load / enable / disable
+- [ ] 示例插件（如 noop 或 hello plugin）
+- [ ] 插件隔离：不得修改 core 内部模块
+- [ ] 文档：插件开发指南
 
-### Step 14 启动前置就绪检查
+### Step 15 启动前置就绪检查
 
-- ✅ Step 13 Settings 闭环就绪，`UserPreferences.default_export_path` 可作导出默认路径
-- ✅ Step 11 Archive 已落 `ArchiveRecord`，导出汇总有数据源
-- ✅ Step 12 UI 工作台就绪，可挂 ExportDialog 入口
-- ⛔ openpyxl/pandas 已批准（DEP-032）且早已入 `requirements/base.txt`，Step 14 启动直接用
+- ✅ Step 14 Export 就绪，可导出插件分析数据
+- ✅ Step 13 Settings 闭环就绪
+- ✅ `src/photo_archiver/plugins/` 空骨架已预创建
+- ⛔ 插件加载器、接口定义、示例插件待实现
 
 ---
 
 ## 7. 待裁决事项（Step 14 启动前）
 
-| # | 待裁决 | 建议方案 |
-|---|---|---|
-| 1 | 导出范围交互式选择 UI（单选 radio vs 多选 checkbox） | 建议单选 radio：全量/当前批次/筛选结果三选一，避免歧义 |
-| 2 | 大报告是否走 Worker + 进度条 | 建议走 Worker（UI-011 长耗时规则），复刻 ArchivePhotosTask 信号模板 |
+| # | 待裁决 | 建议方案 | 状态 |
+|---|---|---|---|---|
+| 1 | 导出范围交互式选择 UI（单选 radio vs 多选 checkbox） | 建议单选 radio：全量/当前批次/筛选结果三选一，避免歧义 | ✅ 已落地（ExportDialog 使用 QRadioButton 三选一） |
+| 2 | 大报告是否走 Worker + 进度条 | 建议走 Worker（UI-011 长耗时规则），复刻 ArchivePhotosTask 信号模板 | ✅ 已落地（ExportTask 继承 WorkerTask，ExportController 走 QtWorkerExecutor） |
 
 ### 7.1 文档治理待裁决（2026-07-24 SSOT 收敛轮登记）
 
@@ -204,7 +201,11 @@
 | Settings 端口 | `src/photo_archiver/application/ports/{system_settings,user_settings_store}.py` |
 | Settings 适配器 | `src/photo_archiver/infrastructure/persistence/{in_memory,qsettings}_user_settings_store.py` |
 | Settings UI | `src/photo_archiver/presentation/views/settings_dialog.py`、`presentation/controllers/settings_controller.py` |
-| 集成测试 | `tests/integration/`（face_detection / step10 / step11_archive_e2e 等） |
+| Export 服务 | `src/photo_archiver/application/services/export_service.py`、`application/dtos/export.py`、`application/ports/exporter.py` |
+| Export 导出器 | `src/photo_archiver/infrastructure/exporters/{excel_exporter,csv_exporter}.py` |
+| Export Worker | `src/photo_archiver/workers/export_task.py` |
+| Export UI | `src/photo_archiver/presentation/views/export_dialog.py`、`presentation/controllers/export_controller.py` |
+| 集成测试 | `tests/integration/`（face_detection / step10 / step11_archive_e2e / export） |
 
 ---
 
