@@ -9,6 +9,7 @@ from photo_archiver.app.repositories import build_sqlite_repositories
 from photo_archiver.app.services import build_application_services
 from photo_archiver.app.ui_assembly import build_ui_controllers
 from photo_archiver.infrastructure.config import AppSettings
+from photo_archiver.infrastructure.database.alembic_runner import run_alembic_migrations
 from photo_archiver.infrastructure.logging import configure_logging, log_application_startup
 from photo_archiver.workers import QtWorkerExecutor
 
@@ -50,6 +51,7 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
     )
     try:
         repositories = build_sqlite_repositories(resolved_settings.database_path)
+        run_alembic_migrations(resolved_settings.database_path)
         services = build_application_services(repositories, resolved_settings)
     except Exception:
         logger.exception(

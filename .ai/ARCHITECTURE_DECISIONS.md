@@ -250,14 +250,14 @@
 | 理由 | 可追溯、可回滚，便于审计与 bisect。 |
 | 影响范围 | 全项目（GIT-006） |
 
-### ADR-024 — 数据库 Schema 版本管理走 PRAGMA user_version
+### ADR-024 — 数据库 Schema 版本管理走 Alembic 迁移体系
 
 | 字段 | 值 |
 |---|---|
 | 状态 | Accepted |
-| 决策 | Schema 版本由 `PRAGMA user_version` 单调递增管理。当前 v4。每次 Schema 变更 bump 版本号并在 `sqlite_connection.py` 初始化逻辑中处理升级。 |
-| 理由 | 在 SQLAlchemy/Alembic 延后（ADR-005）期间需要轻量版本管理。 |
-| 影响范围 | `infrastructure/database/sqlite_connection.py` |
+| 决策 | Schema 迁移由 Alembic 管理（`alembic/` 目录 + `alembic.ini`）。当前版本 `001_initial_v4`。`sqlite_connection.py` 的 `initialize_schema()` 继续 `CREATE TABLE IF NOT EXISTS` 创建表结构，`alembic_runner.run_alembic_migrations()` 在每次启动时自动 `upgrade head` 确保迁移脚本未执行。Schema 版本不再依赖 `PRAGMA user_version` 手工维护——但 `initialize_schema()` 在新数据库上仍写 `PRAGMA user_version = 4` 保持与旧代码兼容。 |
+| 理由 | ADR-005 的"延后"条件已满足：Schema 已稳定（v4），需要可追溯、可回滚的迁移脚本。Alembic 已在 `requirements/base.txt` 批准保留。 |
+| 影响范围 | `alembic/`、`alembic.ini`、`infrastructure/database/alembic_runner.py`、`bootstrap.py`（集成 `run_alembic_migrations()`）；废弃 ADR-024 旧版本（用 `PRAGMA user_version` 单调递增管理的决策） |
 
 ---
 

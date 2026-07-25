@@ -109,13 +109,13 @@
 | 时间 | 2026-07-25 12:43（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
 | 会话范围 | Step 15 Plugin System 实现（接口+加载器+示例+MainWindow 接线+开发指南+测试） |
-| Completed | 飘带清理轮：Ruff 4 errors + Mypy 25 errors 全清零（18 文件含 type:ignore 或代码修复）；Step 15 Plugin System 实现（接口+加载器+示例+MainWindow 接线+开发指南+测试） |
-| Remaining | SQLAlchemy/Alembic 迁移体系（roadmap Step 3 收尾） |
-| Next Step | Step 15 Plugin System |
-| HEAD | Step 14 代码已提交（前序文档清理 + Export 全层） |
+| Completed | SQLAlchemy/Alembic 迁移体系落地：`alembic/` 目录 + `alembic.ini` 配置 + `alembic_runner.py` + `001_initial_v4` 初始迁移；`bootstrap.py` 接线 `run_alembic_migrations()`；前置：飘带清理轮 Ruff 4+Mypy 25 全清零；Step 15 Plugin System 实现
+| Remaining | 无（所有 Roadmap Step 0.5-15 + 飘带清理 + Alembic 迁移体系已完成） |
+| Next Step | 无（全部 15 步 + Alembic 迁移体系已完成） |
+| HEAD | 本轮 Alembic 集成已提交 |
 | 测试 | pytest 239 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
-| 贎量门 | ruff 0 errors；mypy 0 errors；所有 lint 飘带已清理 |
-| 文档影响 | 新增 5 文件、修改 2 文件；ARC-009 plugins 子包已预登记与落地一致 |
+| 贎量门 | ruff 0 errors；mypy 0 errors；Alembic migration 验证通过（新建 DB 自动 upgrade head） |
+| 文档影响 | 新增 alembic/ 目录（3 文件）+ alembic.ini + alembic_runner.py；修改 ADR-024/DEP §13/PROJECT_STATUS；SQLAlchemy/Alembic 从"延后"改"已投入使用" |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 

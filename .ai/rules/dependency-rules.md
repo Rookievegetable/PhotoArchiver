@@ -358,8 +358,8 @@ Approved libraries:
 * pydantic
 * pydantic-settings
 * Pillow (Infrastructure image layer only)
-* SQLAlchemy (Infrastructure database layer only) — 延后（ADR-005）：当前用 sqlite3 + `PRAGMA user_version` 管理 Schema 版本，SQLAlchemy/Alembic 迁移体系推迟到 roadmap Step 3 收尾或后续阶段。批准保留在 requirements 但零 import。
-* alembic (Infrastructure database migrations only) — 同上延后（ADR-005），与 SQLAlchemy 配套推迟。
+* SQLAlchemy (Infrastructure database layer only) — 已投入使用：Alembic 迁移体系（`alembic_runner.py`）依赖 SQLAlchemy Engine 连接到 SQLite。仓储层仍使用 raw sqlite3（ORM 未引入），SQLAlchemy 仅被 Alembic 使用。MUST NOT leak into Application or Domain.
+* alembic (Infrastructure database migrations only) — 已投入使用：Schema 迁移管理（`alembic/` 目录 + `alembic.ini`）。每次启动由 `alembic_runner.run_alembic_migrations()` 自动 upgrade head。
 * watchdog — 已批准未使用：filesystem watcher 用途预留，当前零 import。若未来启用须落 Infrastructure filesystem 层并补本节层归属注。
 * pytest-qt (dev-only, UI smoke tests)
 
