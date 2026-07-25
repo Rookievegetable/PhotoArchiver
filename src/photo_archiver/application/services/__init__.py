@@ -4,6 +4,7 @@ from photo_archiver.application.services.archive_executor import ArchiveExecutor
 from photo_archiver.application.services.archive_path_builder_service import ArchivePathBuilderService
 from photo_archiver.application.services.archive_photos_service import ArchivePhotosService
 from photo_archiver.application.services.archive_planner import ArchivePlanner
+from photo_archiver.application.services.export_service import ExportService
 from photo_archiver.application.services.import_people_service import ImportPeopleService
 from photo_archiver.application.services.match_persons_service import MatchPersonsService
 from photo_archiver.application.services.register_photo_service import RegisterPhotoService
@@ -17,6 +18,7 @@ __all__ = [
     "ArchivePathBuilderService",
     "ArchivePhotosService",
     "ArchivePlanner",
+    "ExportService",
     "ImportPeopleService",
     "MatchPersonsService",
     "RegisterPhotoService",

@@ -8,6 +8,7 @@ from photo_archiver.application import (
     ArchivePathBuilderService,
     ArchivePhotosService,
     ArchivePlanner,
+    ExportService,
     ImportPeopleService,
     MatchPersonsService,
     RegisterPhotoService,
@@ -38,6 +39,7 @@ class ApplicationServices:
     archive_photos: ArchivePhotosService
     review_recognition: ReviewRecognitionService
     settings: SettingsService
+    export: ExportService
 
 
 def build_application_services(
@@ -97,6 +99,12 @@ def build_application_services(
         system_settings=None,
     )
     match_service = _build_match_service(repositories, settings)
+    export_service = ExportService(
+        person_repository=repositories.people,
+        photo_repository=repositories.photos,
+        recognition_repository=repositories.recognition,
+        archive_record_repository=repositories.archive_records,
+    )
 
     return ApplicationServices(
         import_people=ImportPeopleService(TxtPersonImportReader(), repositories.people),
@@ -113,6 +121,7 @@ def build_application_services(
         archive_photos=archive_photos_service,
         review_recognition=review_service,
         settings=settings_service,
+        export=export_service,
     )
 
 

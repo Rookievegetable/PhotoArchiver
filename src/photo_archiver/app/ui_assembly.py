@@ -24,15 +24,18 @@ from photo_archiver.application import SettingsService
 from photo_archiver.application.ports.system_settings import SystemSettings
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.infrastructure.config.settings import DEFAULT_APP_NAME
+from photo_archiver.infrastructure.exporters import ExcelExporter
 from photo_archiver.infrastructure.image import PillowThumbnailGenerator, ThumbnailCache
 from photo_archiver.infrastructure.persistence.qsettings_user_settings_store import (
     QSettingsUserSettingsStore,
 )
 from photo_archiver.presentation.controllers import (
+    ExportController,
     PhotoListController,
     ReviewController,
     SettingsController,
 )
+from photo_archiver.workers import QtWorkerExecutor
 
 # QSettings organization / application names mirror AppSettings.app_name SSOT
 # (review m-5: avoid hard-coded duplicates of DEFAULT_APP_NAME).
@@ -45,6 +48,7 @@ class UIControllers:
     review: ReviewController
     photo_list: PhotoListController
     settings: SettingsController
+    export: ExportController
 
 
 class _AppSettingsSystemSettings(SystemSettings):
@@ -82,6 +86,7 @@ def build_ui_controllers(
     services: ApplicationServices,
     repositories: ApplicationRepositories,
     settings: AppSettings,
+    worker_executor: QtWorkerExecutor | None = None,
 ) -> UIControllers:
     """Build ReviewController, PhotoListController, and SettingsController from runtime parts.
 
@@ -116,6 +121,11 @@ def build_ui_controllers(
             thumbnail_generator,
         ),
         settings=SettingsController(services.settings),
+        export=ExportController(
+            service=services.export,
+            exporter=ExcelExporter(),
+            executor=worker_executor,
+        ),
     )
 
 

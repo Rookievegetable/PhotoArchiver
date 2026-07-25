@@ -6,6 +6,7 @@ from photo_archiver.app.repositories import ApplicationRepositories
 from photo_archiver.app.services import ApplicationServices
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.presentation.controllers import (
+    ExportController,
     PhotoListController,
     ReviewController,
     SettingsController,
@@ -24,3 +25,4 @@ class ApplicationContext:
     review_controller: ReviewController
     photo_list_controller: PhotoListController
     settings_controller: SettingsController
+    export_controller: ExportController

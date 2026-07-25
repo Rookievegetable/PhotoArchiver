@@ -58,7 +58,7 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
         )
         raise
     worker_executor = QtWorkerExecutor()
-    ui_controllers = build_ui_controllers(services, repositories, resolved_settings)
+    ui_controllers = build_ui_controllers(services, repositories, resolved_settings, worker_executor)
     return ApplicationContext(
         settings=resolved_settings,
         repositories=repositories,
@@ -67,4 +67,5 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
         review_controller=ui_controllers.review,
         photo_list_controller=ui_controllers.photo_list,
         settings_controller=ui_controllers.settings,
+        export_controller=ui_controllers.export,
     )

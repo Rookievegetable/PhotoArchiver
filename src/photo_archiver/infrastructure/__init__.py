@@ -14,6 +14,7 @@ from photo_archiver.infrastructure.database import (
     SQLiteRecognitionRepository,
     SQLiteUnitOfWork,
 )
+from photo_archiver.infrastructure.exporters import CsvExporter, ExcelExporter
 from photo_archiver.infrastructure.filesystem import (
     LocalPhotoFileScanner,
     PillowPhotoMetadataReader,
@@ -35,6 +36,8 @@ from photo_archiver.infrastructure.repositories import (
 
 __all__ = [
     "ContentHashCalculator",
+    "CsvExporter",
+    "ExcelExporter",
     "ExcelPersonImportReader",
     "InMemoryFolderRepository",
     "InMemoryPersonRepository",
