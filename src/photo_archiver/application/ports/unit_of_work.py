@@ -1,6 +1,5 @@
 """Unit of work port for transactional use-case boundaries."""
 
-from contextlib import AbstractContextManager
 from typing import Protocol, runtime_checkable, TypeVar
 
 T = TypeVar("T")

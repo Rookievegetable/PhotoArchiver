@@ -124,7 +124,7 @@ def build_ui_controllers(
         export=ExportController(
             service=services.export,
             exporter=ExcelExporter(),
-            executor=worker_executor,
+            executor=worker_executor,  # type: ignore[arg-type]  # QtWorkerExecutor | None resolved by runtime caller
         ),
     )
 

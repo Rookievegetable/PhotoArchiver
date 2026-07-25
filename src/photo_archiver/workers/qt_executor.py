@@ -17,11 +17,11 @@ from photo_archiver.workers.task import WorkerTask, WorkerTaskCancelled
 class QtWorkerSignals(QObject):
     """Qt signals emitted from worker task events."""
 
-    event = Signal(object)
-    started = Signal(object)
-    progress = Signal(object)
-    completed = Signal(object)
-    failed = Signal(object)
+    event = Signal(object)  # type: ignore[assignment]
+    started = Signal(object)  # type: ignore[assignment]  # SignalInstance vs Callable variance
+    progress = Signal(object)  # type: ignore[assignment]
+    completed = Signal(object)  # type: ignore[assignment]
+    failed = Signal(object)  # type: ignore[assignment]
     cancelled = Signal(object)
 
 

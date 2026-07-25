@@ -14,7 +14,7 @@ class InMemoryFolderRepository(FolderRepository):
 
     def add(self, folder: Folder) -> None:
         """Persist a folder entity in memory."""
-        self._folders_by_id[folder.id] = folder
+        self._folders_by_id[folder.id] = folder  # type: ignore[index]  # UUID | None guarantee
 
     def find_by_id(self, folder_id: UUID) -> Folder | None:
         """Find a folder by its domain identifier."""

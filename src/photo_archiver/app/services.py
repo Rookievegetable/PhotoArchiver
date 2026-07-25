@@ -197,8 +197,8 @@ class _UnavailableMatchService(MatchPersonsService):
             detector=_NoOpDetector(),  # type: ignore[arg-type]
             recognizer=_NoOpRecognizer(),  # type: ignore[arg-type]
             matcher=CosinePersonMatcher(threshold=-1.0),
-            face_embedding_repository=_NoOpFaceEmbeddingRepository(),
-            recognition_repository=_NoOpRecognitionRepository(),
+            face_embedding_repository=_NoOpFaceEmbeddingRepository(),  # type: ignore[arg-type]  # mock repo
+            recognition_repository=_NoOpRecognitionRepository(),  # type: ignore[arg-type]  # mock repo
         )
         self._error = error
         self._MatchResult = MatchResult  # keep import reachable for type checks

@@ -34,6 +34,8 @@ class PillowThumbnailGenerator(ThumbnailGenerator):
             OSError: If the image cannot be decoded or written.
         """
         cached = self._cache.resolve(source, size)
+        if cached is None:
+            raise FileNotFoundError(f"ThumbnailCache.resolve returned None for {source}")
         if cached.exists() and not self._cache.is_stale(source, cached):
             return cached
 

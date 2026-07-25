@@ -13,7 +13,6 @@ from uuid import uuid4
 
 import pytest
 
-from photo_archiver.ai import InsightFaceDetector
 from photo_archiver.application.dtos import (
     FaceDetectionItem,
     FaceDetectionResult,

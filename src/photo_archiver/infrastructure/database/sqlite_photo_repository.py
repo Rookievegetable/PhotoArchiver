@@ -59,7 +59,7 @@ class SQLitePhotoRepository(PhotoRepository):
                     path_base,
                     str(photo.folder_id) if photo.folder_id is not None else None,
                     photo.original_name,
-                    datetime_to_text(photo.created_at),
+                    datetime_to_text(photo.created_at),  # type: ignore[arg-type]  # guaranteed non-None by __post_init__
                     datetime_to_text(photo.captured_at) if photo.captured_at is not None else None,
                     metadata.width if metadata is not None else None,
                     metadata.height if metadata is not None else None,

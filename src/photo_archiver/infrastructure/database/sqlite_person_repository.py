@@ -34,7 +34,7 @@ class SQLitePersonRepository(PersonRepository):
                     str(person.identity) if person.identity is not None else None,
                     person.department,
                     person.note,
-                    datetime_to_text(person.created_at),
+                    datetime_to_text(person.created_at),  # type: ignore[arg-type]  # guaranteed non-None
                 ),
             )
 

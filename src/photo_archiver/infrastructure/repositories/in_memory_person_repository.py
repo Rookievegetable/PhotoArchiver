@@ -14,7 +14,7 @@ class InMemoryPersonRepository(PersonRepository):
 
     def add(self, person: Person) -> None:
         """Persist a person entity in memory."""
-        self._people_by_id[person.id] = person
+        self._people_by_id[person.id] = person  # type: ignore[index]  # UUID | None guarantee
 
     def find_by_id(self, person_id: UUID) -> Person | None:
         """Find a person by its domain identifier."""

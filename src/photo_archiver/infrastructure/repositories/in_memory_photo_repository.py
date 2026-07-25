@@ -14,7 +14,7 @@ class InMemoryPhotoRepository(PhotoRepository):
 
     def add(self, photo: Photo) -> None:
         """Persist a photo entity in memory."""
-        self._photos_by_id[photo.id] = photo
+        self._photos_by_id[photo.id] = photo  # type: ignore[index]  # UUID | None guarantee
 
     def find_by_id(self, photo_id: UUID) -> Photo | None:
         """Find a photo by its domain identifier."""

@@ -1,7 +1,6 @@
 """SQLite implementation of the UnitOfWork port."""
 
 import threading
-from typing import Optional
 
 from photo_archiver.application.ports import UnitOfWork
 from photo_archiver.infrastructure.database.sqlite_connection import SQLiteConnectionProvider

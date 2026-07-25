@@ -76,7 +76,7 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
         # find_by_path queries inside the scan loop (P1-b fix). Path comparison
         # happens in memory against the fetched set.
         existing_paths = {
-            photo.path for photo in self._photo_repository.list_by_folder_id(folder.id)
+            photo.path for photo in self._photo_repository.list_by_folder_id(folder.id)  # type: ignore[arg-type]  # UUID | None guarantee
         }
 
         registered_count = 0

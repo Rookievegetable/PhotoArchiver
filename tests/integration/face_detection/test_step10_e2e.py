@@ -31,7 +31,6 @@ from photo_archiver.infrastructure import (
     SQLiteConnectionProvider,
     SQLiteFaceEmbeddingRepository,
     SQLiteFolderRepository,
-    SQLitePersonRepository,
     SQLitePhotoRepository,
     SQLiteRecognitionRepository,
 )

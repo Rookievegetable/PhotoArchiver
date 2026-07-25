@@ -43,7 +43,7 @@ class SQLiteFolderRepository(FolderRepository):
                     folder.display_name,
                     folder.total_photos,
                     folder.scanned_photos,
-                    datetime_to_text(folder.created_at),
+                    datetime_to_text(folder.created_at),  # type: ignore[arg-type]  # guaranteed non-None
                 ),
             )
 

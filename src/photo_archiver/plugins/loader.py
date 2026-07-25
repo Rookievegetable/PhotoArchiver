@@ -11,6 +11,7 @@ plugin never crashes the host application (acceptance criterion 3).
 from __future__ import annotations
 
 import importlib
+import importlib.util
 from pathlib import Path
 from typing import TYPE_CHECKING
 

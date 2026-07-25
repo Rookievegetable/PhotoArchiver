@@ -40,7 +40,7 @@ class ScanController(QObject):
             folder_display_name=display_name,
         )
         task = ScanAndRegisterPhotosTask(self._use_case, command)
-        return self._executor.submit(task)
+        return self._executor.submit(task)  # type: ignore[arg-type]  # generics variance
 
     @staticmethod
     def connect_signals(runnable, started: Slot, progress: Slot, completed: Slot, failed: Slot) -> None:

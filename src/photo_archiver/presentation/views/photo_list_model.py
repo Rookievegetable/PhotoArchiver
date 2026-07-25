@@ -15,9 +15,9 @@ from photo_archiver.domain import Photo
 
 # Role constants exposed to the QListView delegate and tests. Numbers start
 # above Qt.UserRole so we don't clobber Qt's own role slots.
-THUMBNAIL_ROLE = Qt.UserRole + 1
-ORIGINAL_NAME_ROLE = Qt.UserRole + 2
-PHOTO_ID_ROLE = Qt.UserRole + 3
+THUMBNAIL_ROLE = Qt.UserRole + 1  # type: ignore[attr-defined]
+ORIGINAL_NAME_ROLE = Qt.UserRole + 2  # type: ignore[attr-defined]
+PHOTO_ID_ROLE = Qt.UserRole + 3  # type: ignore[attr-defined]
 
 
 class PhotoListModel(QAbstractListModel):
@@ -55,7 +55,7 @@ class PhotoListModel(QAbstractListModel):
         """Return the number of photos; invalid parent per QAIM convention."""
         return 0 if parent.isValid() else len(self._photos)
 
-    def data(self, index: QModelIndex, role: int = Qt.DisplayRole):  # type: ignore[override]
+    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):  # type: ignore[attr-defined,override]
         """Return the data for the given index and role.
 
         Qt.DisplayRole returns the original name as the row's visible label.
@@ -65,12 +65,12 @@ class PhotoListModel(QAbstractListModel):
         if not index.isValid() or not (0 <= index.row() < len(self._photos)):
             return None
         photo = self._photos[index.row()]
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:  # type: ignore[attr-defined]
             return photo.original_name or photo.path.raw_path.name
         if role == ORIGINAL_NAME_ROLE:
             return photo.original_name or photo.path.raw_path.name
         if role == THUMBNAIL_ROLE:
-            return self._thumbnails.get(photo.id)
+            return self._thumbnails.get(photo.id)  # type: ignore[arg-type]  # UUID | None guarantee
         if role == PHOTO_ID_ROLE:
             return photo.id
         return None
