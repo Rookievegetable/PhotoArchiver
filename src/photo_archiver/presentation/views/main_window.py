@@ -34,6 +34,7 @@ from photo_archiver.presentation.views.archive_preview_dialog import ArchivePrev
 from photo_archiver.presentation.views.photo_list_model import PhotoListModel
 from photo_archiver.presentation.views.review_dialog import ReviewDialog
 from photo_archiver.presentation.views.settings_dialog import SettingsDialog
+from photo_archiver.plugins import PluginRegistry
 from photo_archiver.workers.events import TaskCompleted, TaskFailed, TaskProgress, TaskStarted
 
 DEFAULT_WINDOW_WIDTH = 1200
@@ -63,6 +64,7 @@ class MainWindow(QMainWindow):
         self._context = context
         self._build_controllers()
         self._build_toolbar()
+        self._load_plugins()
         self._build_central()
         self._build_status()
         self._active_runnable = None  # tracks the currently running worker
@@ -120,6 +122,55 @@ class MainWindow(QMainWindow):
         self._cancel_action.setEnabled(False)
         self._cancel_action.triggered.connect(self._on_cancel_clicked)
         toolbar.addAction(self._cancel_action)
+
+        toolbar.addSeparator()
+        self._plugin_actions: list[QAction] = []
+
+    def _load_plugins(self) -> None:
+        """Discover, load, and register plugin menu actions.
+
+        Plugins are loaded from ``examples/plugins/``. Each plugin's
+        ``actions()`` are turned into QAction entries appended to the toolbar.
+        Malformed plugins never crash the window — the loader logs and skips.
+        """
+        self._plugin_registry = PluginRegistry()
+        examples_plugins = Path(__file__).resolve().parent.parent.parent.parent / "examples" / "plugins"
+        if examples_plugins.is_dir():
+            self._plugin_registry.load_from_path(examples_plugins)
+            self._plugin_registry.enable_all()
+            self._add_plugin_actions()
+
+    def _add_plugin_actions(self) -> None:
+        """Add one QAction per plugin action item to the main toolbar."""
+        toolbar = self.findChild(QToolBar, "Main")  # type: ignore[union-attr]
+        if toolbar is None:
+            return
+        for plugin in self._plugin_registry.enabled_plugins.values():
+            for action_def in plugin.actions():
+                qaction = QAction(action_def.label, self)
+                if action_def.tooltip:
+                    qaction.setToolTip(action_def.tooltip)
+                pid = action_def.id
+                qaction.triggered.connect(lambda checked=False, pid=pid: self._on_plugin_action(pid))
+                toolbar.addAction(qaction)
+                self._plugin_actions.append(qaction)
+
+    def _on_plugin_action(self, action_id: str) -> None:
+        """Dispatch a plugin action click to the owning plugin."""
+        for plugin in self._plugin_registry.enabled_plugins.values():
+            ids_in_plugin = {a.id for a in plugin.actions()}
+            if action_id in ids_in_plugin:
+                try:
+                    plugin.execute_action(action_id)
+                except Exception:
+                    from loguru import logger
+                    logger.exception("Plugin action {} failed", action_id)
+                    QMessageBox.warning(
+                        self,
+                        "Plugin Error",
+                        f"Plugin action '{action_id}' failed. See logs for details.",
+                    )
+                break
 
     def _build_central(self) -> None:
         """Create the central photo list view."""

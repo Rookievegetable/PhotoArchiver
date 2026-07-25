@@ -42,7 +42,7 @@
 | 12 | Main UI | ✅ Completed（本会话，三轮 Review 修复落 `03f4395`） |
 | 13 | Settings | ✅ Completed（本会话） |
 | 14 | Export | ✅ Completed（本会话） |
-| 15 | Plugin System | ⛔ Pending |
+| 15 | Plugin System | ✅ Completed（本会话） |
 
 里程碑：M1-M5 已就绪；M6 产品化（Step 12-14）进行中；M7 可扩展未启动。
 
@@ -50,10 +50,12 @@
 
 ## 2. Current Step（当前开发阶段）
 
-**Step 15 — Plugin System（插件）** — ⛔ 未开始
+**Phase 2 产品化里程碑 M6 已全部完成。**
+
+所有 Step 0.5-15 均已实现。下一阶段：飘带清理轮（23 mypy + 4 ruff）+ SQLAlchemy/Alembic 迁移体系。
 
 前置就绪状态：
-- Step 14 Export 已完成（`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `ExportDialog` + 集成测试）。
+- Step 15 Plugin System 已完成（Plugin interface + loader + example plugin + MainWindow 注册 + 插件开发指南 + 单元测试 6 条）。
 - 数据库 Schema 当前 `PRAGMA user_version = 4`。
 
 ---
@@ -86,7 +88,7 @@
 | UI | ✅ Step 12 就绪（MainWindow + 4 controller + ArchivePhotosTask + ArchivePreviewDialog + ReviewDialog） | `presentation/views/{main_window,review_dialog}.py`、`presentation/controllers/` |
 | Settings | ✅ Step 13 就绪（QSettings + 抽象端口双适配器 + SettingsDialog + SettingsController + SettingsService + ReviewRecognitionService UoW 闭环） | `application/services/settings_service.py`、`presentation/views/settings_dialog.py`、`infrastructure/persistence/` |
 | Export | ✅ Step 14 就绪（ExportService + Excel/CSV exporter + ExportWorker + ExportDialog + Controller） | `application/services/export_service.py`、`infrastructure/exporters/{excel_exporter,csv_exporter}.py`、`workers/export_task.py`、`presentation/{controllers/export_controller,views/export_dialog}.py` |
-| Plugins | ⛔ Step 15 未开始 | — |
+| Plugins | ✅ Step 15 就绪（Plugin system: interface + loader + example + MainWindow action registration + plugin guide） | `src/photo_archiver/plugins/loader.py`、`application/ports/plugin.py`、`examples/plugins/hello_plugin.py`、`docs/development/plugin-guide.md` |
 
 ### 数据库 Schema 版本
 
@@ -106,14 +108,14 @@
 |---|---|
 | 时间 | 2026-07-25 12:43（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | Step 14 Export 实现（全层交付） |
-| Completed | Export 全层实现：Infrastructure（ExcelExporter+CsvExporter）+ Application（ExportData+ExportScope DTO+ExportService）+ Worker（ExportTask）+ Presentation（ExportDialog+ExportController）+ Assembly（services/ui_assembly/context/bootstrap）+ 集成测试 4 条 |
-| Remaining | Step 15 Plugin System；既有 23 mypy + 4 ruff 飘带清理（第 2 期机制 5）；SQLAlchemy/Alembic 迁移体系（roadmap Step 3） |
+| 会话范围 | Step 15 Plugin System 实现（接口+加载器+示例+MainWindow 接线+开发指南+测试） |
+| Completed | 插件接口 `application/ports/plugin.py`；PluginRegistry 加载器 `plugins/loader.py`（目录扫描+错误隔离）；示例插件 `examples/plugins/hello_plugin.py`；MainWindow 集成 toolbar 注册；插件开发指南；单元测试 6 条 |
+| Remaining | 飘带清理轮（23 mypy + 4 ruff）；SQLAlchemy/Alembic 迁移体系 |
 | Next Step | Step 15 Plugin System |
 | HEAD | Step 14 代码已提交（前序文档清理 + Export 全层） |
-| 测试 | pytest 233 passed + 8 skipped（含 4 新 export 集成测试）；ruff 新文件 clean |
+| 测试 | pytest 239 passed + 8 skipped（含 6 新 plugin 测试）；ruff new files clean |
 | 贎量门 | ruff clean；mypy 基线 23 errors 未增减 |
-| 文档影响 | 新增 8 文件、修改 10 文件；ARC-009 exporters 预登记与落地一致（infrastructure/exporters/ 已存在） |
+| 文档影响 | 新增 5 文件、修改 2 文件；ARC-009 plugins 子包已预登记与落地一致 |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 
@@ -140,23 +142,20 @@
 
 ## 6. Next Step（下一步开发计划）
 
-**Step 15 — Plugin System**
+**里程碑：全部 Step 0.5-15 已完成。后续按需推进飘带清理轮 + SQLAlchemy/Alembic。**
 
-依据 `.ai/business/roadmap.md` §20，交付物：
+### Step 15 交付确认
 
-- [ ] 插件接口定义（Application 层 public API）
-- [ ] 插件发现/加载机制（entry point 或目录扫描）
-- [ ] 插件生命周期：load / enable / disable
-- [ ] 示例插件（如 noop 或 hello plugin）
-- [ ] 插件隔离：不得修改 core 内部模块
-- [ ] 文档：插件开发指南
-
-### Step 15 启动前置就绪检查
-
-- ✅ Step 14 Export 就绪，可导出插件分析数据
-- ✅ Step 13 Settings 闭环就绪
-- ✅ `src/photo_archiver/plugins/` 空骨架已预创建
-- ⛔ 插件加载器、接口定义、示例插件待实现
+- [x] `Plugin` interface 定义在 `application/ports/plugin.py`（Protocol First，核心不依赖具体插件）
+- [x] 插件发现/加载机制：`PluginRegistry.load_from_path()`（目录扫描 + 错误隔离）
+- [x] 插件生命周期：load → enable → disable（loader.py）
+- [x] 示例插件：`examples/plugins/hello_plugin.py`（注册 "Say Hello" action）
+- [x] 插件隔离：DEP-060/061/062 合规，仅依赖 Application + common
+- [x] 文档：`docs/development/plugin-guide.md`
+- [x] 单元测试 6 条（tests/unit/plugins/test_loader.py）
+- [x] MainWindow 集成：`_load_plugins()` 在启动时发现并注册 plugin action 到 toolbar
+- [x] 核心应用不依赖具体插件实现（Plugin protocol，无 concrete import）
+- [x] 恶意/错误插件加载不崩溃（try/except + log + skip）
 
 ---
 
