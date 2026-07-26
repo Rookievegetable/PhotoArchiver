@@ -2,9 +2,9 @@
 
 PhotoArchiver 是一个面向长期维护的企业级桌面照片归档管理系统，目标是帮助学校、政府机构、企业、档案馆、博物馆、摄影工作室和个人用户管理大量历史照片。
 
-项目当前处于 Phase 2 产品化阶段：Step 0.5-13 已完成（Walking Skeleton / Logging / Configuration / Database / Domain / Excel Import / Folder Scanner / Thumbnail / Face Detection / Face Recognition / Matching Engine / Archive Generator / Main UI / Settings），完整桌面 UI、后台 Worker、缩略图缓存、Excel 导入、归档流程、AI 识别和用户复核均已落地；下一步推进 Step 14 Export 导出与统计报告。
-
-> **当前进度唯一权威**：`.ai/PROJECT_STATUS.md`。本节为人类入口快照，随开发推进可能漂移——若与 `PROJECT_STATUS.md` 冲突，以彼为准。
+> **当前进度唯一权威**：`.ai/PROJECT_STATUS.md`。本节仅作人类入口概览，不承载任何会过期的状态陈述——所有 Step 状态、测试计数、lint 数字均以 `PROJECT_STATUS.md` 为准。
+>
+> **项目开发已全面收官**（全部 15 Step 完成，ruff 0 + mypy 0，Alembic 迁移体系已激活）。详见 `.ai/PROJECT_STATUS.md`。
 
 ## 核心目标
 

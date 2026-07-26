@@ -31,14 +31,8 @@ DIRECTORIES = [
     ".trae/prompts",
     ".trae/checklists",
 
-    ".ai/architecture",
     ".ai/business",
-    ".ai/conventions",
-    ".ai/decisions",
-    ".ai/examples",
-    ".ai/prompts",
     ".ai/rules",
-    ".ai/templates",
 
     "config/settings",
     "config/logging",

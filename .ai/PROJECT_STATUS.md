@@ -6,7 +6,7 @@
 >
 > 这是唯一允许频繁修改的 AI 文档。每次开发结束必须更新。历史状态不保留——永远只有当前状态。
 >
-> Version: 1.2.0 ｜ Last Updated: 2026-07-24 ｜ Status: Live
+> Version: 1.3.0 ｜ Last Updated: 2026-07-26 ｜ Status: Live
 
 ---
 
@@ -30,7 +30,7 @@
 | 0.5 | Walking Skeleton | ✅ Completed |
 | 1 | Logging | ✅ Completed |
 | 2 | Configuration | ✅ Completed |
-| 3 | Database | ✅ Completed（SQLAlchemy/Alembic 延后，当前 sqlite3 + PRAGMA user_version） |
+| 3 | Database | ✅ Completed（sqlite3 + PRAGMA v4 → Alembic 迁移体系已激活，ADR-024） |
 | 4 | Domain Model | ✅ Completed |
 | 5 | Excel Import | ✅ Completed |
 | 6 | Folder Scanner | ✅ Completed |
@@ -44,31 +44,33 @@
 | 14 | Export | ✅ Completed（本会话） |
 | 15 | Plugin System | ✅ Completed（本会话） |
 
-里程碑：M1-M5 已就绪；M6 产品化（Step 12-14）进行中；M7 可扩展未启动。
+里程碑：M1-M6 全部就绪（Step 0.5-15 全完成）；M7 可扩展未启动。
 
 ---
 
 ## 2. Current Step（当前开发阶段）
 
-**Phase 2 产品化里程碑 M6 已全部完成。**
-
-所有 Step 0.5-15 均已实现。下一阶段：飘带清理轮（23 mypy + 4 ruff）+ SQLAlchemy/Alembic 迁移体系。
+**项目开发已全面收官。所有 Step 0.5-15 全部完成。飘带清零（ruff 0 + mypy 0）。Alembic 迁移体系已激活。**
 
 前置就绪状态：
-- Step 15 Plugin System 已完成（Plugin interface + loader + example plugin + MainWindow 注册 + 插件开发指南 + 单元测试 6 条）。
-- 数据库 Schema 当前 `PRAGMA user_version = 4`。
+- All 15 steps completed and verified.
+- 数据库 Schema v4（Alembic `001_initial_v4` 管理）。
+- 飘带清理轮执行完毕：ruff 4→0, mypy 25→0。
 
 ---
 
-## 3. Current Goal（当前阶段最终目标）
+## 3. Project Status（项目当前状态）
 
-完成 Step 13-15，达成 M6 产品化与 M7 可扩展里程碑：
+**全部 15 个 Roadmap Step 均已实现并验证通过**（pytest 239 passed + 8 skipped，ruff 0，mypy 0）。
 
-- Step 13：`SettingsDialog` + `SettingsController` + `SettingsService` + 用户偏好持久化（QSettings 或 DB/配置文件），可配项含主题、语言（预留）、默认导入/导出路径、识别阈值、MAX_WORKERS。✅ 已完成
-- Step 14：`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `ExportDialog`，导出范围全量/当前批次/筛选结果。✅ 已完成
-- Step 15：插件接口定义 + 发现/加载机制 + 生命周期管理 + 示例插件。⛔ 待完成
+| 阶段 | 状态 |
+|---|---|
+| Phase 1（Step 0.5-11） | ✅ 完成 |
+| Phase 2 产品化（Step 12-15） | ✅ 完成 |
+| 飘带清理轮 | ✅ ruff 0 + mypy 0 |
+| Alembic 迁移体系 | ✅ 已激活（ADR-024） |
 
-详见 `.ai/business/roadmap.md` §18-§20。
+详见 `.ai/business/roadmap.md` §18-§20（已完成步骤标注为 ✅）。
 
 ---
 
@@ -78,7 +80,7 @@
 |---|---|---|
 | Logging | ✅ Step 1 就绪 | `infrastructure/logging/configuration.py` |
 | Configuration | ✅ Step 2 就绪（系统配置 `AppSettings`）+ Step 13 用户偏好闭环（`UserPreferences` + `UserSettingsStore` 抽象端口 + QSettings/InMemory 双适配器） | `infrastructure/config/settings.py`（`AppSettings`）、`application/dtos/settings.py`、`infrastructure/persistence/{in_memory,qsettings}_user_settings_store.py` |
-| Database | ✅ Step 3 就绪（sqlite3 + PRAGMA v4）；SQLAlchemy/Alembic 延后 | `infrastructure/database/sqlite_connection.py` |
+| Database | ✅ Step 3 就绪 + Alembic 迁移体系已激活（ADR-024，`001_initial_v4`） | `infrastructure/database/sqlite_connection.py`、`infrastructure/database/alembic_runner.py`、`alembic/` |
 | Domain | ✅ Step 4 + 后续迭代就绪 | `domain/{entities,value_objects,repositories}/` |
 | Import | ✅ Step 5 就绪（TXT + Excel） | `infrastructure/importers/`、`application/services/import_person_service.py` |
 | Scan | ✅ Step 6 就绪 | `application/services/scan_folder_service.py`、`infrastructure/filesystem/` |
@@ -92,7 +94,7 @@
 
 ### 数据库 Schema 版本
 
-`PRAGMA user_version = 4`，含表：`people`、`folders`、`photos`（含 `captured_at` 列）、`recognition_results`、`person_embeddings`、`archive_records`。
+`PRAGMA user_version = 4`，含表：`people`、`folders`、`photos`（含 `captured_at` 列）、`recognition_results`、`person_embeddings`、`archive_records`。Schema 迁移由 Alembic 管理（`alembic/` 目录 + `alembic_runner.py`）。
 
 ### 依赖状态
 
@@ -106,16 +108,16 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-07-25 12:43（本地） |
-| 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | Step 15 Plugin System 实现（接口+加载器+示例+MainWindow 接线+开发指南+测试） |
-| Completed | SQLAlchemy/Alembic 迁移体系落地：`alembic/` 目录 + `alembic.ini` 配置 + `alembic_runner.py` + `001_initial_v4` 初始迁移；`bootstrap.py` 接线 `run_alembic_migrations()`；前置：飘带清理轮 Ruff 4+Mypy 25 全清零；Step 15 Plugin System 实现
-| Remaining | 无（所有 Roadmap Step 0.5-15 + 飘带清理 + Alembic 迁移体系已完成） |
-| Next Step | 无（全部 15 步 + Alembic 迁移体系已完成） |
-| HEAD | 本轮 Alembic 集成已提交 |
+| 时间 | 2026-07-26 12:24（本地） |
+| 生成者 | AtomCode (deepseek-v4-flash) |
+| 会话范围 | 第三轮审计残余清单执行（PROJECT_STATUS 刷新 + KNOWN_ISSUES 删 7 条 + ADR-005 Superseded + 人类文档最终同步 + scripts/bootstrap.py 修 + 指针化） |
+| Completed | 第三轮审计 6 项修复：PROJECT_STATUS 全部矛盾消除；ADR-005 标 Superseded（被 ADR-024 取代）；KNOWN_ISSUES 删 7 条治愈条目（004/007/011-015）；README/overview/getting-started/configuration 状态句最终指针化；scripts/bootstrap.py DIRECTORIES 删 6 个已裁决目录；base.txt/alembic 注释刷新 |
+| Remaining | 无（系统版本已收官） |
+| Next Step | 无（全部 15 步 + 飘带清理 + Alembic 已完成） |
+| HEAD | 8237b5a（Alembic 集成）+ 本轮审计修复 |
 | 测试 | pytest 239 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
-| 贎量门 | ruff 0 errors；mypy 0 errors；Alembic migration 验证通过（新建 DB 自动 upgrade head） |
-| 文档影响 | 新增 alembic/ 目录（3 文件）+ alembic.ini + alembic_runner.py；修改 ADR-024/DEP §13/PROJECT_STATUS；SQLAlchemy/Alembic 从"延后"改"已投入使用" |
+| 质量门 | ruff 0 errors；mypy 0 errors；Alembic migration 验证通过；第三轮审计所有🔴问题已修 |
+| 文档影响 | 本轮审计 6 项修复触及 PROJECT_STATUS/ARCHITECTURE_DECISIONS/KNOWN_ISSUES/README/overview/getting-started/configuration/scripts/bootstrap.py/base.txt/DOCUMENT_INDEX/ai-rules/rules-README/AI_ONBOARDING |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 

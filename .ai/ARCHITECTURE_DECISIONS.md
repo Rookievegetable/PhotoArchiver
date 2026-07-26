@@ -75,11 +75,11 @@
 | 理由 | 集中技术适配，避免 SQL 泄漏到 Application/Domain。 |
 | 影响范围 | `infrastructure/database/`（`architecture-rules.md` §14 Database Rules） |
 
-### ADR-005 — SQLAlchemy/Alembic 延后，当前用 sqlite3 + PRAGMA user_version
+### ADR-005 — SQLAlchemy/Alembic 延后，当前用 sqlite3 + PRAGMA user_version（已废弃）
 
 | 字段 | 值 |
 |---|---|
-| 状态 | Accepted |
+| 状态 | **Superseded**（被 ADR-024 新版取代：Alembic 迁移体系，2026-07-25 落地） |
 | 决策 | Step 3 不引入 SQLAlchemy/Alembic，改用 sqlite3 + `PRAGMA user_version` 管理 Schema 版本。SQLAlchemy/Alembic 迁移体系推迟到 roadmap Step 3 收尾或后续阶段。 |
 | 理由 | 当前 Schema 简单，PRAGMA 版本号足够；避免过早引入迁移体系增加维护成本。 |
 | 影响范围 | `infrastructure/database/sqlite_connection.py`；审计记录 C-7 |

@@ -270,7 +270,8 @@ flowchart TD
 - [ ] 无 TODO/FIXME/`print()`/Magic Number/bare except
 - [ ] 类型提示与 docstring 完整（公共 API）
 - [ ] 文档同步（`PROJECT_STATUS.md` 必更；ADR/Issues 按需）
-- [ ] **文档触碰清单**——本次改动是否使任何文档陈述失效？若是：同轮更新该文档，或在 `KNOWN_ISSUES.md` 登记 ISSUE 并标爆炸半径；§13.1 所列权威文档均属触碰范围
+- [ ] **文档触碰清单**——**本轮改动使哪些既有文档陈述失效？** 逐条列出并同轮修复。若不能同轮修复则在 `KNOWN_ISSUES.md` 登记 ISSUE 并标爆炸半径；§13.1 所列权威文档均属触碰范围。**特别注意**：人类文档（README/docs/）中的状态陈述必须指针化或同轮刷新。
+- [ ] **关闭 Issue 的提交必须同提交删除 KNOWN_ISSUES 条目**——问题解决后立即整条删除，不保留历史。
 - [ ] Commit Message 符合 Conventional Commits
 - [ ] 改动范围最小，无无关重构
 
@@ -308,9 +309,9 @@ flowchart TD
 | `docs/development/{getting-started,configuration}.md` | 开发入门 + 配置详解 |
 | `requirements/{README.md,base.txt,dev.txt,ai.txt}` | 依赖清单 |
 
-### 13.2 Deprecated Documentation（废弃，勿读）
+### 13.2 Deprecated Documentation（废弃，已物理删除）
 
-> 废弃日期：2026-07-18 ｜ 废弃裁决：AI Runtime Context 体系建立。每份顶部已加 Deprecated banner，正文保留作历史参考。
+> 废弃日期：2026-07-18 ｜ 废弃裁决：AI Runtime Context 体系建立。2026-07-24 裁决2授权物理删除（git rm 7 文件），独有信息已迁入 audit-methodology.md 等。以下表格保留作历史替换说明。
 
 | 文档 | 替代文档 |
 |---|---|
