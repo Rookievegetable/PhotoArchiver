@@ -281,18 +281,16 @@ presentation
 - `presentation/views/` MainWindow + ArchivePreviewDialog + SettingsDialog + ArchivePhotosTask。
 - `presentation/controllers/` ImportPeople / Archive / Review / PhotoList / Settings + ScanController。
 - 缩略图缓存（`data/cache/thumbnails/`，ADR-013）、Excel 导入、AI 人脸检测/识别/匹配、用户复核、归档组织、Settings 闭环均已就绪。
-- 单元测试与集成测试体系（pytest 226 passed / 8 skipped）。
+- 单元测试与集成测试体系（最新快照见 `.ai/PROJECT_STATUS.md` §5）。
 
 ## 7. 后续优先级
 
-> 详见 `.ai/business/roadmap.md`（15 步权威路线图）与 `.ai/PROJECT_STATUS.md`。
+> **项目开发已全面收官**（全部 15 Step 完成）。以下列表为历史规划，实际完成状态以 `.ai/PROJECT_STATUS.md` §1 为准。
 
-建议后续按以下顺序扩展：
-
-1. 导出报告与统计（Step 14 Export）。
-2. 插件扩展机制（Step 15 Plugin System）。
-3. SQLite 迁移体系（SQLAlchemy/Alembic）替代 `PRAGMA user_version`（roadmap Step 3 收尾，ADR-005）。
-4. 既有 19 mypy + 2 ruff 飘带单独一轮清理（ISSUE-007）。
+1. ✅ 导出报告与统计（Step 14 Export，已完成）。
+2. ✅ 插件扩展机制（Step 15 Plugin System，已完成）。
+3. ✅ Alembic 迁移体系替代 `PRAGMA user_version`（ADR-024，已激活）。
+4. ✅ 飘带清理轮（ruff 0 + mypy 0，已完成）。
 
 ## 8. 与 `.ai/` 的关系
 

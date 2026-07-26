@@ -6,7 +6,7 @@
 >
 > 任何 AI 在 30 秒内读完本文即可理解整个文档体系结构。
 >
-> Version: 1.3.0 ｜ Status: Stable ｜ Last Updated: 2026-07-24
+> Version: 1.3.1 ｜ Status: Stable ｜ Last Updated: 2026-07-26
 
 ---
 

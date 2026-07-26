@@ -17,7 +17,7 @@
 | 已解决的问题 | 不保留（解决后立即删除） |
 | 已裁决的架构决策 / ADR | `ARCHITECTURE_DECISIONS.md` |
 | 当前任务 / Step / Roadmap | `PROJECT_STATUS.md` |
-| AI �阅读顺序 / 工作流程 | `AI_ONBOARDING.md` |
+| AI 阅读顺序 / 工作流程 | `AI_ONBOARDING.md` |
 
 ---
 
@@ -116,10 +116,9 @@
 
 ## 维护规则
 
-- **问题解决后立即整条删除**，不保留历史（历史在 Git 与审计报告中）。
+- **问题解决后必须同提交整条删除**，不保留历史（历史在 Git 与审计报告中）。
 - 新发现问题实时追加，ID 单调递增，不复用已删除 ID。
 - 状态从 `Open` → `Mitigated`（有 workaround）→ `Resolving`（已在某 Step 推进）→ 删除。
-- 仅记录当前未决，禁止记录已解决、ADR、当前任务、聊天记录。
 
 ---
 

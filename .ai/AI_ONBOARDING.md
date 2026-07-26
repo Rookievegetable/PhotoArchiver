@@ -6,7 +6,7 @@
 >
 > 本文件回答的唯一问题：**"为了开始开发，我应该先了解什么？"**
 >
-> Version: 1.0.0 ｜ Status: Stable ｜ 适用范围: 任何 AI 编码助手（Codex / Claude / Gemini / Cursor / Windsurf / Roo Code / Cline / AtomCode 及未来 AI）
+> Version: 1.1.0 ｜ Status: Stable ｜ Last Updated: 2026-07-26 ｜ 适用范围: 任何 AI 编码助手（Codex / Claude / Gemini / Cursor / Windsurf / Roo Code / Cline / AtomCode 及未来 AI）
 
 ---
 
@@ -75,7 +75,7 @@ flowchart TD
 | Git 规则 | `.ai/rules/git-rules.md` | 提交、分支 |
 | Review 规则 | `.ai/rules/review-rules.md` | 自审与交付 |
 | 项目概览 | `README.md` | 需理解业务工作流 |
-| 架构总览 | `docs/architecture/overview.md` | �需理解模块职责 |
+| 架构总览 | `docs/architecture/overview.md` | 需理解模块职责 |
 | 目录结构 | `docs/deployment/project-structure.md` | 新建文件、定位归属 |
 | 配置项 | `docs/development/configuration.md` + `.env.example` | 改配置、加 Settings 字段 |
 | 开发路线图 | `.ai/business/roadmap.md`（15 步） | 推进 Step、判断下一步 |
@@ -145,10 +145,11 @@ flowchart TD
 | 8 | **禁止 bare `except`** 与静默吞异常 |
 | 9 | **长耗时任务必须走 Worker**，UI 通过 Qt Signal 通信 |
 | 10 | **规则优先于个人判断**——不确定时：读文档，不编码 |
+| 11 | **指针必须可解析**（`rules/README.md` §6.1）——引用"文件 §N"时目标必须真实存在，新增或修改指针时当场验证 |
 
 ### 规则冲突优先级（`.ai/rules/README.md` §3）
 
-1. 当前用户指令 → 2. `.ai/rules/` → 3. `.ai/architecture/` → 4. `.ai/business/` → 5. `.ai/prompts/` → 6. `.ai/templates/`
+1. 当前用户指令 → 2. `.ai/rules/` → 3. `.ai/business/`（注：`.ai/architecture/`、`.ai/prompts/`、`.ai/templates/` 已于 2026-07-24 裁决1物理删除，优先级链对应精简）
 
 同级冲突取更严格的规则；仍模糊则请求澄清，**AI 不得自行决定**。
 
@@ -301,7 +302,7 @@ flowchart TD
 | `.ai/KNOWN_ISSUES.md` | 当前未决 Bug/技术债/平台限制 |
 | `.ai/DOCUMENT_INDEX.md` | 文档体系导航索引（30 秒理解全体系） |
 | `.ai/rules/CONTEXT_HANDOFF_RULES.md` | AI 接力交接元规则 |
-| `.ai/rules/*.md`（9 文件） | 工程规则权威（ai/coding/architecture/dependency/ui/worker/git/review + README） |
+| `.ai/rules/*.md`（11 文件） | 工程规则权威（ai/coding/architecture/dependency/ui/worker/git/review/audit-methodology + README + CONTEXT_HANDOFF_RULES） |
 | `.ai/business/roadmap.md` | 15 步路线图 |
 | `README.md` | 项目概览（人类入口） |
 | `docs/architecture/overview.md` | 架构详解 |
@@ -354,7 +355,7 @@ flowchart TD
 <details>
 <summary>参考答案</summary>
 
-基于 DDD + Clean Architecture 的企业级桌面照片归档系统，面向学校/政府/企业/档案馆/摄影工作室等管理大量历史照片，自动化导入/扫描/识别/匹配/归档/导出流程。当前 Phase 2 进行中（Step 13 Settings 闭环就绪，Step 14 Export 未开始）。
+基于 DDD + Clean Architecture 的企业级桌面照片归档系统，面向学校/政府/企业/档案馆/摄影工作室等管理大量历史照片，自动化导入/扫描/识别/匹配/归档/导出流程。**项目开发已全面收官**（全部 15 Step 完成，飘带清零，Alembic 迁移体系已激活）。
 </details>
 
 ### Q2. 目前完成到哪里？
@@ -362,7 +363,7 @@ flowchart TD
 <details>
 <summary>参考答案</summary>
 
-Step 0.5-13 已完成（Walking Skeleton / Logging / Configuration / Database / Domain / Excel Import / Folder Scanner / Thumbnail / Face Detection / Face Recognition / Matching Engine / Archive Generator / Main UI / Settings）。Schema 当前 `PRAGMA user_version = 4`。未完成：Step 14 Export、Step 15 Plugin System、SQLAlchemy/Alembic 迁移体系（roadmap Step 3 收尾）。
+Step 0.5-15 全部完成（Walking Skeleton / Logging / Configuration / Database / Domain / Excel Import / Folder Scanner / Thumbnail / Face Detection / Face Recognition / Matching Engine / Archive Generator / Main UI / Settings / Export / Plugin System）。Schema 由 Alembic 管理（`001_initial_v4`）。飘带已清零（ruff 0 + mypy 0）。
 </details>
 
 ### Q3. 下一阶段是什么？
@@ -370,7 +371,7 @@ Step 0.5-13 已完成（Walking Skeleton / Logging / Configuration / Database / 
 <details>
 <summary>参考答案</summary>
 
-Step 14 Export（`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `ExportDialog`，导出范围全量/当前批次/筛选结果）→ Step 15 Plugin System → SQLAlchemy/Alembic 迁移体系。
+项目开发已全面收官。后续按需增强 CI 流水线、更多导出格式、插件生态。详见 `.ai/PROJECT_STATUS.md`。
 </details>
 
 ### Q4. 当前最大风险是什么？

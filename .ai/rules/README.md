@@ -55,13 +55,13 @@ Priority 2
 
 Priority 3
 
-.architecture/
+.business/
 
 ↓
 
 Priority 4
 
-.business/
+.architecture/
 
 ↓
 
@@ -74,6 +74,8 @@ Priority 5
 Priority 6
 
 .templates/
+
+注：`.ai/architecture/`、`.ai/prompts/`、`.ai/templates/` 目录已于 2026-07-24 裁决1物理删除，列表保留作预留占位层级框架。同级无实际文档时默认按约束最严格执行。
 
 If conflicts occur, the higher priority document always wins.
 

@@ -188,7 +188,7 @@ AI 编码助手必须遵守 `.ai/AI_ONBOARDING.md`（新 AI Runtime Context 入�
 
 ### 数据库文件不存在
 
-启动时 `AppSettings.ensure_runtime_directories()` 会创建数据库所在目录。Schema 由 `infrastructure/database/sqlite_connection.py` 集中初始化，走 `PRAGMA user_version` 版本管理（ADR-024，当前 v4）。SQLAlchemy/Alembic 迁移体系推迟到 roadmap Step 3 收尾（ADR-005）。
+启动时 `AppSettings.ensure_runtime_directories()` 会创建数据库所在目录。Schema 由 `infrastructure/database/sqlite_connection.py` 集中初始化并走 Alembic 迁移管理（`alembic_runner.py`，ADR-024，当前 `001_initial_v4`）。
 
 ### AI 模型目录为空
 

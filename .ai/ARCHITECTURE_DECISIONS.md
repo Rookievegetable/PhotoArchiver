@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.0.1 ｜ Status: Stable ｜ Last Updated: 2026-07-24
+> Version: 1.0.2 ｜ Status: Stable ｜ Last Updated: 2026-07-26
 
 ---
 
@@ -219,7 +219,7 @@
 | 字段 | 值 |
 |---|---|
 | 状态 | Accepted |
-| 决策 | 归档流程拆为三段：`ArchivePlanner`（生成 `ArchivePlan`）→ `ArchiveExecutor`（执行 Plan）。CLI/UI/测试共用同一套归档计划。`--dry-run` 旗标在 Executor 内落 DRY_RUN 状态 + `ArchiveRecord` �库，可预审整批归档计划。 |
+| 决策 | 归档流程拆为三段：`ArchivePlanner`（生成 `ArchivePlan`）→ `ArchiveExecutor`（执行 Plan）。CLI/UI/测试共用同一套归档计划。`--dry-run` 旗标在 Executor 内落 DRY_RUN 状态 + `ArchiveRecord` 入库，可预审整批归档计划。 |
 | 理由 | 计划与执行分离便于 dry-run 预审、测试复用、UI 预览；避免 Service 既规划又执行的双职责。 |
 | 影响范围 | `application/services/{archive_planner,archive_executor,archive_photos_service}.py`、`application/dtos/archive.py`、`main.py` 的 `archive` subparser |
 

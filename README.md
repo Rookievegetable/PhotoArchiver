@@ -49,7 +49,7 @@ Export Results
 
 > **技术栈权威清单**：`.ai/rules/dependency-rules.md` §13（含层归属、延后批注）。本节为人类入口概览，若与彼冲突以彼为准。
 
-核心运行栈：Python 3.11、PySide6、SQLite（`PRAGMA user_version` 管理 Schema）、InsightFace + ONNX Runtime、OpenCV、Pillow、openpyxl、Pydantic + pydantic-settings、Loguru。开发栈：pytest、pytest-qt、Ruff、Black、isort、MyPy、pre-commit。已批准但当前未使用：pandas（Step 14 Export 落地启用）、watchdog（filesystem watcher 用途预留，当前零 import）。SQLAlchemy/Alembic 已批准但延后（ADR-005），当前零 import。完整清单与层归属见上方权威链接。
+核心运行栈：Python 3.11、PySide6、SQLite（Alembic 迁移管理，ADR-024）、InsightFace + ONNX Runtime、OpenCV、Pillow、openpyxl、Pydantic + pydantic-settings、Loguru。开发栈：pytest、pytest-qt、Ruff、Black、isort、MyPy、pre-commit。已批准但当前未使用：pandas（当前零 import，openpyxl 用于 Step 14 Excel 导出）、watchdog（filesystem watcher 用途预留，当前零 import）。SQLAlchemy 仅被 Alembic 使用（ORM 未引入）。完整清单与层归属见 `.ai/rules/dependency-rules.md` §13。
 
 ## 快速开始
 
@@ -176,6 +176,7 @@ mypy src
 ```text
 PhotoArchiver/
 ├── .ai/                  # AI 开发知识库和强制规则
+├── alembic/              # Alembic 迁移脚本（ADR-024）
 ├── assets/               # 设计素材，不参与程序运行
 ├── config/               # 项目配置目录
 ├── data/                 # 运行数据、数据库、缓存、导入数据
@@ -242,21 +243,23 @@ Infrastructure
 
 ## 当前开发进度
 
-> **唯一权威**：`.ai/PROJECT_STATUS.md`。本节为人类入口快照，随开发推进可能漂移——若与 `PROJECT_STATUS.md` 冲突，以彼为准。
+> **唯一权威**：`.ai/PROJECT_STATUS.md`。本节为历史快照，为保持稳定性不再随 Step 更新。
+>
+> **项目开发已全面收官**：全部 15 个 Roadmap Step 完成，飘带清零（ruff 0 + mypy 0），Alembic 迁移体系已激活（ADR-024）。
 
-已完成（Step 0.5-13）：
+已实现核心能力：
 
-- Walking Skeleton、Python 工程配置、运行依赖与开发依赖规划、`.env.example` 示例配置。
+- Walking Skeleton、Python 工程配置、运行依赖与开发依赖规划。
 - 应用启动入口、配置加载与运行目录创建、Loguru 日志初始化。
-- 完整 PySide6 主窗口（MainWindow + 4 controller + ArchivePhotosTask + ArchivePreviewDialog + SettingsDialog）。
-- `domain/` 完整实体、值对象、异常和仓储接口。
-- `application/` Command、DTO、Use Case 协议和应用服务（ImportPeople / RegisterPhoto / ScanPhotoFolder / ScanAndRegisterPhotos / Thumbnail / MatchPersons / ReviewRecognition / ArchivePlanner / ArchiveExecutor / ArchivePhotos / ArchivePathBuilder / Settings）。
-- 人员 TXT + Excel 导入、照片目录扫描、照片注册、缩略图生成、AI 人脸检测/识别/匹配、用户复核、归档组织全闭环。
-- SQLite 连接、Schema 初始化（`PRAGMA user_version = 4`）、Repository 容器和全部仓储实现（含 ArchiveRecord、FaceEmbedding、Recognition）。
-- App bootstrap 对配置、日志、运行目录和 SQLite 仓储的装配。
-- AI 能力：InsightFace detect/recognize/match + ONNX Runtime（Step 8-10）。
-- Workers 通用执行器框架（QtWorkerExecutor + task/application_tasks/events）+ 已注册任务。
-- Settings 闭环：`UserPreferences` DTO + 校验 + `SettingsService` + `UserSettingsStore` 抽象端口 + QSettings/InMemory 双适配器 + `SettingsDialog` + `SettingsController` + ISSUE-005 ReviewRecognitionService UoW 闭环。
+- PySide6 桌面主窗口（MainWindow + 7 controller + ArchivePhotosTask + ArchivePreviewDialog + ExportDialog + ReviewDialog + SettingsDialog）。
+- domain/ 完整实体、值对象、异常和仓储接口。
+- application/ Command、DTO、Use Case 协议和应用服务。
+- 人员 TXT + Excel 导入、照片目录扫描、注册、缩略图生成、AI 人脸检测/识别/匹配、用户复核、归档组织、导出全闭环。
+- SQLite + Alembic 迁移管理（ADR-024）。
+- Plugins 插件系统（Plugin interface + loader + 示例插件 + MainWindow 注册）。
+- Workers 通用执行器框架（QtWorkerExecutor）。
+- Settings 闭环（QSettings/InMemory 双适配器）。
+- 单元测试与集成测试体系。
 - 单元测试与集成测试体系（pytest 226 passed / 8 skipped）。
 - AI 开发知识库 AI Runtime Context 四文档体系 + 工程规则 + 文档体系导航。
 

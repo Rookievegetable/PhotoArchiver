@@ -329,7 +329,7 @@ photo_archiver/
 └── workers/
 ```
 
-> 子包与特殊目录（`application/{commands,dtos,ports,use_cases,services}`、`infrastructure/{persistence,database,repositories,exporters}`、顶层 `config/`）详见 ARC §4 ARC-009 补录表。`infrastructure/exporters/` 为 Step 14 Export 预埋子包，当前未落地。
+> 子包与特殊目录（`application/{commands,dtos,ports,use_cases,services}`、`infrastructure/{persistence,database,repositories,exporters}`、顶层 `config/`）详见 ARC §4 ARC-009 补录表。`infrastructure/exporters/` 已随 Step 14 Export 落地（含 ExcelExporter + CsvExporter）。
 
 ---
 
@@ -430,7 +430,7 @@ AI 能力模块。
 - `persistence/`：用户偏好持久化（`InMemoryUserSettingsStore` / `QSettingsUserSettingsStore`，Step 13）
 - `repositories/`：内存仓储实现（测试用 `InMemory{Folder,Person,Photo}Repository`）
 
-负责和外部世界通信，不写业务决策。`exporters/` 子包为 Step 14 Export 预埋，当前未落地。
+负责和外部世界通信，不写业务决策。`exporters/` 子包已随 Step 14 Export 落地（`ExcelExporter`、`CsvExporter`）。
 
 ---
 
@@ -438,7 +438,7 @@ AI 能力模块。
 
 插件系统（扩展预留，Step 15）。
 
-未来可以扩展：
+当前包含 Step 15 插件加载器（`PluginRegistry`）与接口定义（`application/ports/plugin.py`）。未来可以扩展：
 
 - OCR
 - 云存储
@@ -455,8 +455,8 @@ AI 能力模块。
 
 包括：
 
-- `controllers/`（archive / import_people / photo_list / review / scan / settings 六个 controller）
-- `views/`（`main_window` / `review_dialog` / `settings_dialog` / `archive_preview_dialog` / `photo_list_model`）
+- `controllers/`（archive / export / import_people / photo_list / review / scan / settings 七个 controller）
+- `views/`（`main_window` / `review_dialog` / `settings_dialog` / `archive_preview_dialog` / `export_dialog` / `photo_list_model`）
 
 不处理业务逻辑。**禁导入 Infrastructure/SQLite/OpenCV/InsightFace**。
 

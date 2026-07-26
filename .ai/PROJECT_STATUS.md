@@ -70,7 +70,7 @@
 | 飘带清理轮 | ✅ ruff 0 + mypy 0 |
 | Alembic 迁移体系 | ✅ 已激活（ADR-024） |
 
-详见 `.ai/business/roadmap.md` §18-§20（已完成步骤标注为 ✅）。
+详见 `.ai/business/roadmap.md` §18-§20（规划原文保持计划格式，实际进度以本节 §1 为准）。
 
 ---
 
@@ -123,20 +123,20 @@
 
 本轮未新增 ADR——SSOT 收敛属文档治理范畴，未产生需记录的不可改架构决策。规则编号降级裁决（rules/README §6 承认仅 COD/DEP/WRK/ARC 用 ID）已落 rules/README §6 正文，不另起 ADR。
 
-### 5.1 本会话工作记录（2026-07-25，Step 14 Export 实现轮）
+### 5.1 本会话工作记录（2026-07-26，第三轮审计最终修复轮）
 
 | 项 | 值 |
 |---|---|
-| 角色 | Implementer（AtomCode GLM-5.2） |
-| 范围 | Step 14 Export 全层实现：Infrastructure exporters + Application DTO/Service + Worker + Presentation + Assembly + 集成测试 |
-| HEAD | Step 14 代码已提交（前序文档清理 + Export 全层） |
+| 角色 | Implementer（AtomCode deepseek-v4-flash） |
+| 范围 | 第三轮审计残余 6 🔴 + 6 🟠 项修复：docs/ 4 文件最终指针化 + README 正文 + 3 悬空指针 + AI_ONBOARDING 补修 + roadmap 标记 + 乱码清扫 + 版本刷新 |
+| HEAD | 本轮审计修复已提交 |
 | Branch | `main` |
-| pytest 快照 | 233 passed + 8 skipped（含 4 新 export 集成测试） |
+| pytest 快照 | 239 passed + 8 skipped |
 | Completed | 见 §5 Completed 字段 |
-| Remaining | Step 15 Plugin System；23 mypy + 4 ruff 飘带清理；SQLAlchemy/Alembic |
-| Next Step | Step 15 Plugin System |
+| Remaining | 无 |
+| Next Step | 无 |
 | 阻塞 | 无 |
-| §12 文档触碰自检 | 新增 8 文件 + 修改 10 文件，ARC-009 exporters 预登记与落地一致；Exporter protocol 在 application/ports/ 遵循现有模式；export_dialog.py/controller.py 遵循 ArchivePreviewDialog/ArchiveController 风格；所有新引用指针可解析（元规则§6.1 当场验证） |
+| §12 文档触碰自检 | 本轮修复逐项对照核验清单执行 |
 
 
 
@@ -175,7 +175,7 @@
 | # | 待裁决 | 建议方案 | 状态 |
 |---|---|---|---|
 | 裁决1 | 11 份占位文档：删除还是保留 quarantine？ | 建议删除（新四文档体系已接管职责） | ✅ 已执行（git rm 11 文档+7 空目录，2026-07-24） |
-| �裁决2 | 7 份废弃文档：独有信息已迁（上轮机制4），物理删除还是保留？ | 建议物理删除（banner 已合规满一周期） | ✅ 已执行（git rm 7 文档+修悬空指针，2026-07-24） |
+| 裁决2 | 7 份废弃文档：独有信息已迁（上轮机制4），物理删除还是保留？ | 建议物理删除（banner 已合规满一周期） | ✅ 已执行（git rm 7 文档+修悬空指针，2026-07-24） |
 | 裁决3 | `docs/roadmap/` 目录并入 `.ai/business/roadmap.md`？ | 建议并入（phase-1 已加横幅，路线图只需一份） | ✅ 已执行（并入横幅+删目录，2026-07-24） |
 | 裁决4 | 规则编号：补齐还是降级？ | 建议降级（已落 rules/README §6 承认现状） | ✅ 已执行+复核干净（本轮补 §6.1 Pointer Integrity） |
 
@@ -188,7 +188,7 @@
 | AI 模型加载 | `src/photo_archiver/infrastructure/ai/insightface_loader.py` |
 | AI 检测/识别/匹配 | `src/photo_archiver/ai/{insightface_detector,insightface_recognizer,similarity_matcher}.py` |
 | 匹配服务 | `src/photo_archiver/application/services/match_persons_service.py` |
-| 审核服务（含 UoW 闭环 ISSUE-005） | `src/photo_archiver/application/services/review_recognition_service.py` |
+| 审核服务 | `src/photo_archiver/application/services/review_recognition_service.py` |
 | Embedding 持久化 | `src/photo_archiver/infrastructure/database/sqlite_face_embedding_repository.py` |
 | Recognition 持久化 | `src/photo_archiver/infrastructure/database/sqlite_recognition_repository.py` |
 | 归档 Planner/Executor | `src/photo_archiver/application/services/{archive_planner,archive_executor,archive_photos_service,archive_path_builder_service}.py` |

@@ -1,10 +1,10 @@
 # PhotoArchiver 开发路线图与分步交付清单
 
-Version: 1.1.0
+Version: 1.1.1
 
 Status: Stable
 
-Last Updated: 2026-07-24
+Last Updated: 2026-07-26
 
 ---
 

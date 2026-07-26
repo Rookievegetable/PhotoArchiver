@@ -207,7 +207,7 @@ Common MUST remain lightweight.
 
 ---
 
-## ARC-009 子包与特殊目录职责补录（ISSUE-011 收口）
+## ARC-009 子包与特殊目录职责补录
 
 > 本节补录代码现状中已存在但 §3 模块清单未显式列出的子包与目录职责。模块顶层归属仍以 §3 + DEP §4 矩阵为准。
 
@@ -222,7 +222,7 @@ Common MUST remain lightweight.
 | `infrastructure/database/` | SQLite 连接、Schema、`SQLiteUnitOfWork`、SQLite 仓储实现（ARC §8 例外条款） | Infrastructure 子包 |
 | `infrastructure/repositories/` | 非 SQLite 仓储实现（如 InMemory 测试替身） | Infrastructure 子包 |
 | `infrastructure/exporters/` | 导出器适配器（Excel/CSV），roadmap Step 14 落地 | Infrastructure 子包 |
-| `config/`（顶层） | 仅静态配置文件目录（如 `.env`、主题样式），**非 Python 模块**，不进 DEP §4 矩阵（ISSUE-011 收口：补注释说明，不删 §17 选项） | 非 Python 模块 |
+| `config/`（顶层） | 仅静态配置文件目录（如 `.env`、主题样式），**非 Python 模块**，不进 DEP §4 矩阵 | 非 Python 模块 |
 
 > `infrastructure/persistence/` 与 `infrastructure/database/` 分立：前者管用户偏好（QSettings 平台原生位置），后者管业务数据（SQLite）。二者均不越界。
 
