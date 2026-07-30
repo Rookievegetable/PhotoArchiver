@@ -6,15 +6,17 @@ analysis instance so the model is loaded only once per process, and copies
 numpy embeddings into plain :class:`FaceEmbedding` tuples so the Domain layer
 keeps its zero-numpy invariant.
 
-``extract`` performs a fresh detection pass via ``_analysis.get(image, max_num=0)``
-on every call to locate the face matching ``box``. The double-detection cost
-(shared with the detector's own pass) is tracked in ``KNOWN_ISSUES.md`` ISSUE-001
-and planned for optimization in Step 13+ (batch detect+extract single pass or
-detection-result caching). No result caching is implemented today.
+ISSUE-001 resolution: ``extract_from`` takes a pre-detected face list (e.g.
+from :meth:`InsightFaceDetector.detect_with_embeddings`) and returns the
+matching embedding without re-running detection, so the matching pipeline
+now pays the ``analysis.get`` cost exactly once per photo. The legacy
+``extract(image, box)`` method is retained as a thin wrapper for callers
+outside the optimized pipeline (and for Step 10 integration tests); it
+still performs its own detection pass and is therefore not on the hot path.
 """
 
-from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 import cv2
 from insightface.app import FaceAnalysis  # type: ignore[import-untyped]
@@ -45,12 +47,11 @@ class InsightFaceRecognizer:
     def extract(self, image: Path, box: FaceBox) -> FaceEmbedding:
         """Return the embedding for the face located at ``box`` in ``image``.
 
-        InsightFace's ``FaceAnalysis.get`` returns all detected faces with
-        embeddings in one pass, so this method re-detects then finds the face
-        whose bbox matches ``box`` within a small tolerance and returns its
-        embedding. The double-detection cost is acceptable for Step 10's
-        Application-only scope; Step 12 Worker wiring will batch detect+extract
-        via a single ``get`` call to halve the cost.
+        Thin compatibility wrapper around :meth:`extract_from`: detects all
+        faces in ``image`` via a single ``analysis.get`` pass then delegates to
+        :meth:`extract_from` to pick the matching bbox. Callers on the optimized
+        matching pipeline should use :meth:`InsightFaceDetector.detect_with_embeddings`
+        + :meth:`extract_from` directly to avoid this method's detection pass.
 
         Args:
             image: Absolute path to the source image file.
@@ -67,13 +68,34 @@ class InsightFaceRecognizer:
         if image_bytes is None:
             logger.warning("InsightFaceRecognizer could not read image: {}", image)
             raise ValueError(f"unreadable image: {image}")
-        faces: Sequence = self._analysis.get(image_bytes, max_num=0)
+        faces: Any = self._analysis.get(image_bytes, max_num=0)
+        return self.extract_from(box, faces)
+
+    def extract_from(self, box: FaceBox, faces: Any) -> FaceEmbedding:
+        """Return the embedding for ``box`` from an already-detected face list.
+
+        ISSUE-001 fix: reuses the detector's detection pass (the ``faces``
+        sequence from ``FaceAnalysis.get``) so the recognizer no longer
+        re-detects the image. The bbox match logic is identical to the legacy
+        ``extract`` path.
+
+        Args:
+            box: Bounding box of the face to encode.
+            faces: InsightFace face dicts from a prior ``analysis.get`` call
+                (or a compatible stub), each carrying ``bbox`` and ``embedding``.
+
+        Returns:
+            The :class:`FaceEmbedding` for the face matching ``box``.
+
+        Raises:
+            ValueError: When no face in ``faces`` matches ``box``.
+        """
         for face in faces:
             bbox = face["bbox"]
             if _boxes_match(bbox, box):
                 embedding = face["embedding"]
                 return FaceEmbedding(tuple(float(x) for x in embedding.tolist()))
-        raise ValueError(f"no face in {image} matches box {box}")
+        raise ValueError(f"no face in provided list matches box {box}")
 
     @staticmethod
     def embedding_dimension() -> int:
@@ -82,7 +104,7 @@ class InsightFaceRecognizer:
 
 
 def _boxes_match(
-    insight_bbox: Sequence[float],
+    insight_bbox: Any,
     domain_box: FaceBox,
     tolerance: int = _BBOX_MATCH_TOLERANCE_PX,
 ) -> bool:

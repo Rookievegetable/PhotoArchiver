@@ -25,6 +25,7 @@ from photo_archiver.domain.repositories import (
 from photo_archiver.domain.value_objects import (
     ArchivePath,
     FaceBox,
+    FaceBoxEmbedding,
     FaceEmbedding,
     PersonIdentity,
     PhotoMetadata,
@@ -38,6 +39,7 @@ __all__ = [
     "ArchiveRecordRepository",
     "ArchiveStatus",
     "FaceBox",
+    "FaceBoxEmbedding",
     "FaceEmbedding",
     "FaceEmbeddingRepository",
     "Folder",

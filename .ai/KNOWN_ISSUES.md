@@ -38,16 +38,6 @@
 
 ## 技术债（Technical Debt）
 
-### ISSUE-001 — recognizer.extract 双检测
-
-| 字段 | 值 |
-|---|---|
-| Status | Open |
-| Description | `recognizer.extract` 当前对同一图片做两次检测（detect + extract 内部再 detect），可合并 halve 成本。Step 12 Worker 已接入但 detect/extract 仍分两次调用。**注**：2026-07-24 已修 recognizer 模块 docstring 假缓存声明（"extract reuses a cached detection result"），改回诚实描述——本 ISSUE 主体（双检测）仍未解决，docstring 与 ISSUE 一致不再矛盾。 |
-| Impact | Medium —— 性能，每张照片 AI 处理时间翻倍 |
-| Temporary Workaround | 无 |
-| Planned Resolution | Step 13+ 优化：批量 detect+extract 单次 get，或缓存 detection 结果 |
-
 ### ISSUE-003 — FaceEmbeddingRepository.list_all 未分页
 
 | 字段 | 值 |

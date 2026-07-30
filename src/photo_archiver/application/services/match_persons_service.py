@@ -115,17 +115,23 @@ class MatchPersonsService(MatchPersonsUseCase):
         image: Path,
         candidates: dict[UUID, FaceEmbedding],
     ) -> MatchResult:
-        """Run detect → extract → match for one photo and persist the outcome."""
-        boxes = self._detector.detect(image)
-        if not boxes:
+        """Run detect → extract → match for one photo and persist the outcome.
+
+        ISSUE-001 fix: uses ``detect_with_embeddings`` so detection and embedding
+        extraction happen in a single ``FaceAnalysis.get`` pass — the recognizer
+        no longer re-detects the same image. Per裁决 #5 Top-1 strategy still
+        picks the face with the highest detection confidence.
+        """
+        pairs = self._detector.detect_with_embeddings(image)
+        if not pairs:
             logger.debug("No faces detected in photo {}", photo_id)
             return MatchResult(photo_id=photo_id, box=None)
 
         # Top-1 per裁决 #5: pick the face with the highest detection confidence.
         # InsightFace's detect order is observed to be descending by det_score,
         # but that is an implementation detail — max() locks the semantic.
-        box = max(boxes, key=lambda b: b.confidence or 0.0)
-        embedding = self._recognizer.extract(image, box)
+        best_pair = max(pairs, key=lambda p: p.box.confidence or 0.0)
+        embedding = best_pair.embedding
         match = self._matcher.match(embedding, candidates)
 
         person_id: UUID | None = None
@@ -145,7 +151,7 @@ class MatchPersonsService(MatchPersonsUseCase):
             person_id,
             confidence,
         )
-        return MatchResult(photo_id=photo_id, box=box)
+        return MatchResult(photo_id=photo_id, box=best_pair.box)
 
     def _report(self, current: int, total: int, message: str) -> None:
         """Forward progress to the reporter when one is bound.

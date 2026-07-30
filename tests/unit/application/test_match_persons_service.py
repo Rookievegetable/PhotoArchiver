@@ -12,16 +12,21 @@ from photo_archiver.domain import (
     FaceEmbeddingRepository,
     RecognitionRepository,
 )
+from photo_archiver.domain.value_objects import FaceBox, FaceBoxEmbedding
 
 
 class _StubDetector:
-    """FaceDetector stub returning preconfigured boxes."""
+    """FaceDetector stub returning preconfigured box/embedding pairs."""
 
-    def __init__(self, boxes_per_image: dict[Path, list]) -> None:
-        self._boxes = boxes_per_image
+    def __init__(self, pairs_per_image: dict[Path, list]) -> None:
+        self._pairs = pairs_per_image
 
-    def detect(self, image: Path) -> list:
-        return self._boxes.get(image, [])
+    def detect(self, image: Path) -> list:  # noqa: ARG002
+        """Legacy box-only API retained for Protocol compatibility."""
+        return [pair.box for pair in self._pairs.get(image, [])]
+
+    def detect_with_embeddings(self, image: Path) -> list:
+        return self._pairs.get(image, [])
 
 
 class _StubRecognizer:
@@ -31,6 +36,9 @@ class _StubRecognizer:
         self._embedding = embedding
 
     def extract(self, image: Path, box) -> FaceEmbedding:  # noqa: ARG002
+        return self._embedding
+
+    def extract_from(self, box, faces) -> FaceEmbedding:  # noqa: ARG002
         return self._embedding
 
 
@@ -83,13 +91,13 @@ class _StubRecognitionRepository(RecognitionRepository):
 
 
 def _build_service(
-    detector_boxes: dict[Path, list],
+    detector_pairs: dict[Path, list],
     embedding: FaceEmbedding,
     matcher_result: tuple | None,
     candidates: dict | None = None,
 ) -> tuple[MatchPersonsService, _StubMatcher, _StubRecognitionRepository]:
     """Wire a MatchPersonsService with stubbed ports."""
-    detector = _StubDetector(detector_boxes)
+    detector = _StubDetector(detector_pairs)
     recognizer = _StubRecognizer(embedding)
     matcher = _StubMatcher(matcher_result)
     embedding_repo = _StubFaceEmbeddingRepository(candidates or {})
@@ -135,13 +143,12 @@ def test_match_service_match_success_persists_result(tmp_path: Path) -> None:
     """A successful match must persist a RecognitionResult with person_id."""
     image = tmp_path / "face.jpg"
     image.write_bytes(b"")
-    from photo_archiver.domain.value_objects import FaceBox
-
     box = FaceBox(x1=0, y1=0, x2=10, y2=10, confidence=0.9)
+    embedding = FaceEmbedding((0.5, 0.5))
     person_id = uuid4()
     service, _, recognition_repo = _build_service(
-        {image: [box]},
-        FaceEmbedding((0.5, 0.5)),
+        {image: [FaceBoxEmbedding(box=box, embedding=embedding)]},
+        embedding,
         (person_id, 0.85),
     )
     photo_id = uuid4()
@@ -163,11 +170,10 @@ def test_match_service_unknown_match_persists_without_person(tmp_path: Path) -> 
     """A below-threshold match must persist a result with person_id=None."""
     image = tmp_path / "face.jpg"
     image.write_bytes(b"")
-    from photo_archiver.domain.value_objects import FaceBox
-
     box = FaceBox(x1=0, y1=0, x2=10, y2=10)
+    embedding = FaceEmbedding((0.1,))
     service, _, recognition_repo = _build_service(
-        {image: [box]}, FaceEmbedding((0.1,)), None
+        {image: [FaceBoxEmbedding(box=box, embedding=embedding)]}, embedding, None
     )
     photo_id = uuid4()
     command = MatchPersonsCommand(photo_ids=(photo_id,), images=(image,))
@@ -183,12 +189,18 @@ def test_match_service_uses_top1_first_face_only(tmp_path: Path) -> None:
     """Per裁决 #5, only the first detected face is matched (Top-1)."""
     image = tmp_path / "two_faces.jpg"
     image.write_bytes(b"")
-    from photo_archiver.domain.value_objects import FaceBox
-
     box1 = FaceBox(x1=0, y1=0, x2=10, y2=10)
     box2 = FaceBox(x1=20, y1=20, x2=30, y2=30)
+    embedding = FaceEmbedding((0.5,))
     service, _, recognition_repo = _build_service(
-        {image: [box1, box2]}, FaceEmbedding((0.5,)), (uuid4(), 0.7)
+        {
+            image: [
+                FaceBoxEmbedding(box=box1, embedding=embedding),
+                FaceBoxEmbedding(box=box2, embedding=embedding),
+            ]
+        },
+        embedding,
+        (uuid4(), 0.7),
     )
     command = MatchPersonsCommand(
         photo_ids=(uuid4(),), images=(image,)
@@ -200,16 +212,17 @@ def test_match_service_uses_top1_first_face_only(tmp_path: Path) -> None:
 
 def test_match_service_processes_batch_in_order(tmp_path: Path) -> None:
     """A multi-photo command must yield results in command order."""
-    from photo_archiver.domain.value_objects import FaceBox
-
     box = FaceBox(x1=0, y1=0, x2=10, y2=10)
+    embedding = FaceEmbedding((0.3,))
     image1 = tmp_path / "a.jpg"
     image1.write_bytes(b"")
     image2 = tmp_path / "b.jpg"
     image2.write_bytes(b"")
     id1, id2 = uuid4(), uuid4()
     service, _, _ = _build_service(
-        {image1: [box], image2: []}, FaceEmbedding((0.3,)), None
+        {image1: [FaceBoxEmbedding(box=box, embedding=embedding)], image2: []},
+        embedding,
+        None,
     )
     command = MatchPersonsCommand(
         photo_ids=(id1, id2), images=(image1, image2)

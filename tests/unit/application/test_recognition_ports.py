@@ -35,11 +35,17 @@ class _DetectorImpl:
     def detect(self, image: Path) -> list[FaceBox]:
         return []
 
+    def detect_with_embeddings(self, image: Path) -> list:
+        return []
+
 
 class _RecognizerImpl:
     """Minimal FaceRecognizer implementation for contract verification."""
 
     def extract(self, image: Path, box: FaceBox) -> FaceEmbedding:
+        return FaceEmbedding((0.0, 0.0, 0.0))
+
+    def extract_from(self, box: FaceBox, faces) -> FaceEmbedding:
         return FaceEmbedding((0.0, 0.0, 0.0))
 
 
