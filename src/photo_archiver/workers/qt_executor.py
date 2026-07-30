@@ -47,17 +47,21 @@ class QtWorkerRunnable(QRunnable):
         so this wrapper only catches the re-raised exception to keep Qt thread
         exit clean. A debug log line is left here so thread-layer crashes are
         observable in logs even though the task layer has already reported.
+        The task_id binding is inherited from WorkerTask.run()'s logger.bind
+        scope when run via the executor, but we re-bind here for the rare path
+        where the runnable is started directly without WorkerTask.run().
         """
         try:
             self.task.run()
         except WorkerTaskCancelled:
             return
         except Exception as exc:  # noqa: BLE001 - task layer already emitted TaskFailed
-            logger.debug(
-                "QtWorkerRunnable task '{}' ended with exception (already emitted as TaskFailed): {}",
-                self.task.name,
-                exc,
-            )
+            with logger.contextualize(task_id=self.task.task_id, task_name=self.task.name):
+                logger.debug(
+                    "QtWorkerRunnable task '{}' ended with exception (already emitted as TaskFailed): {}",
+                    self.task.name,
+                    exc,
+                )
             return
 
     def _emit_task_event(self, event: TaskEvent) -> None:

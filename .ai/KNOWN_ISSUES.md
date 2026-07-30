@@ -48,16 +48,6 @@
 | Temporary Workaround | 无 |
 | Planned Resolution | Step 13+ 优化：批量 detect+extract 单次 get，或缓存 detection 结果 |
 
-### ISSUE-002 — 结构化埋点缺失（task_id/folder_id 绑定）
-
-| 字段 | 值 |
-|---|---|
-| Status | Open |
-| Description | 当前日志未绑定 `task_id` / `folder_id` 等结构化上下文，Step 12 Worker 已接入但未补 task_id 绑定，当前无 task_id 概念。难以追溯单批任务全链路。 |
-| Impact | Medium —— 可观测性，长任务排障困难 |
-| Temporary Workaround | 人工按时间窗与消息内容推断 |
-| Planned Resolution | Step 13+ 引入 `logger.bind(task_id=..., folder_id=...)` |
-
 ### ISSUE-003 — FaceEmbeddingRepository.list_all 未分页
 
 | 字段 | 值 |

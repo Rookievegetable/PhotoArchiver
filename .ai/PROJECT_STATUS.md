@@ -108,35 +108,35 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-07-26 12:24（本地） |
-| 生成者 | AtomCode (deepseek-v4-flash) |
-| 会话范围 | 第三轮审计残余清单执行（PROJECT_STATUS 刷新 + KNOWN_ISSUES 删 7 条 + ADR-005 Superseded + 人类文档最终同步 + scripts/bootstrap.py 修 + 指针化） |
-| Completed | 第三轮审计 6 项修复：PROJECT_STATUS 全部矛盾消除；ADR-005 标 Superseded（被 ADR-024 取代）；KNOWN_ISSUES 删 7 条治愈条目（004/007/011-015）；README/overview/getting-started/configuration 状态句最终指针化；scripts/bootstrap.py DIRECTORIES 删 6 个已裁决目录；base.txt/alembic 注释刷新 |
-| Remaining | 无（系统版本已收官） |
-| Next Step | 无（全部 15 步 + 飘带清理 + Alembic 已完成） |
-| HEAD | 8237b5a（Alembic 集成）+ 本轮审计修复 |
-| 测试 | pytest 239 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
-| 质量门 | ruff 0 errors；mypy 0 errors；Alembic migration 验证通过；第三轮审计所有🔴问题已修 |
-| 文档影响 | 本轮审计 6 项修复触及 PROJECT_STATUS/ARCHITECTURE_DECISIONS/KNOWN_ISSUES/README/overview/getting-started/configuration/scripts/bootstrap.py/base.txt/DOCUMENT_INDEX/ai-rules/rules-README/AI_ONBOARDING |
+| 时间 | 2026-07-30 21:34（本地） |
+| 生成者 | AtomCode (GLM-5.2) |
+| 会话范围 | Issue 修复轮 Round 1：ISSUE-002 结构化埋点（task_id 绑定） |
+| Completed | ISSUE-002 落地：`WorkerTask.__init__` 生成 `task_id = f"{name}_{uuid4().hex[:8]}"`；`run()` 用 `logger.contextualize(task_id=..., task_name=...)` 包裹全生命周期；5 个事件类（Started/Progress/Completed/Failed/Cancelled）加 `task_id: str = ""` 字段；`qt_executor.py` 异常路径补 contextualize；新增 5 条 worker 测试（task_id 唯一性 + 事件携带 + Loguru bind 验证）；删 KNOWN_ISSUES ISSUE-002 |
+| Remaining | 无（本 Issue 完整闭环） |
+| Next Step | Round 2：ISSUE-001 recognizer 双检测优化（按开发计划已定方案：先读源码摸清调用方再定优化策略） |
+| HEAD | 待提交（本会话收尾） |
+| 测试 | pytest 244 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
+| 质量门 | ruff 0 errors；mypy 0 errors；新增 5 测试全绿 |
+| 文档影响 | 本轮触及 PROJECT_STATUS §5 刷新 / KNOWN_ISSUES ISSUE-002 删除 |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 
-本轮未新增 ADR——SSOT 收敛属文档治理范畴，未产生需记录的不可改架构决策。规则编号降级裁决（rules/README §6 承认仅 COD/DEP/WRK/ARC 用 ID）已落 rules/README §6 正文，不另起 ADR。
+本轮未新增 ADR——ISSUE-002 属现有 Worker 框架的可观测性增强，未改变架构边界或依赖方向。task_id 生成与 Loguru `contextualize` 用法是实施细节，非需记录的不可改架构决策。
 
-### 5.1 本会话工作记录（2026-07-26，第三轮审计最终修复轮）
+### 5.1 本会话工作记录（2026-07-30，ISSUE-002 修复轮）
 
 | 项 | 值 |
 |---|---|
-| 角色 | Implementer（AtomCode deepseek-v4-flash） |
-| 范围 | 第三轮审计残余 6 🔴 + 6 🟠 项修复：docs/ 4 文件最终指针化 + README 正文 + 3 悬空指针 + AI_ONBOARDING 补修 + roadmap 标记 + 乱码清扫 + 版本刷新 |
-| HEAD | 本轮审计修复已提交 |
+| 角色 | Implementer（AtomCode GLM-5.2） |
+| 范围 | ISSUE-002 单 Issue 单提交：workers 层 task_id 生成 + Loguru contextualize 上下文注入 + 5 事件类加字段 + 5 新测试 |
+| HEAD | 本会话收尾提交 |
 | Branch | `main` |
-| pytest 快照 | 239 passed + 8 skipped |
+| pytest 快照 | 244 passed + 8 skipped |
 | Completed | 见 §5 Completed 字段 |
 | Remaining | 无 |
-| Next Step | 无 |
+| Next Step | Round 2 ISSUE-001（按已定计划） |
 | 阻塞 | 无 |
-| §12 文档触碰自检 | 本轮修复逐项对照核验清单执行 |
+| §12 文档触碰自检 | 本轮仅触及 PROJECT_STATUS/KNOWN_ISSUES，无人类文档陈述失效（task_id 是新增能力非现状描述） |
 
 
 

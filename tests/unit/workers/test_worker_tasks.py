@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from loguru import logger
 
 from photo_archiver.application.commands import ImportPeopleCommand, ScanAndRegisterPhotosCommand
 from photo_archiver.application.dtos import ImportPeopleResult, ScanAndRegisterPhotosResult
@@ -182,6 +183,97 @@ def test_scan_and_register_photos_task_delegates_to_use_case_and_reports_result(
     ]
     assert events[-2].current == 5
     assert events[-2].total == 5
+
+
+def test_worker_task_generates_unique_task_id_and_binds_to_logger() -> None:
+    """WorkerTask.__init__ builds ``{name}_{uuid_hex[:8]}`` and emits it on every event.
+
+    Covers ISSUE-002: structured telemetry requires a per-run identifier so
+    concurrent same-type tasks remain distinguishable in logs and UI handlers.
+    The id propagates to Started / Progress / Completed / Failed / Cancelled
+    events and is bound to the Loguru context for the whole run.
+    """
+    task = SuccessfulTask()
+    assert task.task_id.startswith("successful_")
+    assert len(task.task_id) == len("successful_") + 8
+
+    events = []
+    task.subscribe(events.append)
+
+    captured: list[dict] = []
+    sink_id = logger.add(lambda message: captured.append(message.record))
+    try:
+        result = task.run()
+    finally:
+        logger.remove(sink_id)
+
+    assert result == "done"
+    assert [type(event) for event in events] == [TaskStarted, TaskProgress, TaskCompleted]
+    for event in events:
+        assert event.task_id == task.task_id
+
+
+def test_logger_contextualize_binds_task_id_during_run() -> None:
+    """Loguru ``contextualize`` injects task_id into ``record["extra"]`` so downstream
+    Application service logs inherit the run identifier (ISSUE-002 core mechanism).
+
+    Uses a task that itself emits a log line inside ``execute`` so the sink can
+    observe the bound extra.
+    """
+
+    class LoggingTask(WorkerTask[None]):
+        def __init__(self) -> None:
+            super().__init__("logging")
+
+        def execute(self) -> None:
+            logger.info("inside execute")
+
+    task = LoggingTask()
+    captured: list[dict] = []
+    sink_id = logger.add(lambda message: captured.append(message.record))
+    try:
+        task.run()
+    finally:
+        logger.remove(sink_id)
+
+    assert any(record["extra"].get("task_id") == task.task_id for record in captured)
+
+
+def test_two_same_type_tasks_have_distinct_task_ids() -> None:
+    """Two instances of the same task type get different task_ids (concurrent runs)."""
+    first = SuccessfulTask()
+    second = SuccessfulTask()
+    assert first.task_id != second.task_id
+    assert first.task_id.startswith("successful_")
+    assert second.task_id.startswith("successful_")
+
+
+def test_failing_task_propagates_task_id_on_failed_event() -> None:
+    """TaskFailed carries the task_id so UI/logs can correlate failures."""
+    task = FailingTask()
+    events = []
+    task.subscribe(events.append)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        task.run()
+
+    assert [type(event) for event in events] == [TaskStarted, TaskFailed]
+    assert events[0].task_id == task.task_id
+    assert events[1].task_id == task.task_id
+
+
+def test_cancelled_task_propagates_task_id_on_cancelled_event() -> None:
+    """TaskCancelled carries the task_id."""
+    task = CancellableTask()
+    events = []
+    task.subscribe(events.append)
+    task.cancel("user requested")
+
+    with pytest.raises(WorkerTaskCancelled, match="user requested"):
+        task.run()
+
+    assert [type(event) for event in events] == [TaskStarted, TaskCancelled]
+    assert events[1].task_id == task.task_id
 
 
 def test_qt_worker_executor_submits_task_to_thread_pool() -> None:
