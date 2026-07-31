@@ -41,7 +41,12 @@ class TaskCompleted:
 
 @dataclass(frozen=True, slots=True)
 class TaskFailed:
-    """Event emitted when a worker task fails."""
+    """Event emitted when a worker task fails.
+
+    # field order: non-default (error) must precede defaulted (task_id) —
+    # dataclass raises TypeError if defaulted precedes non-default. Reorder
+    # only by also adjusting which fields carry defaults.
+    """
 
     task_name: str
     error: Exception

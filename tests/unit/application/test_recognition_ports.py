@@ -26,7 +26,7 @@ from photo_archiver.application.ports import (
     FaceRecognizer,
     PersonMatcher,
 )
-from photo_archiver.domain.value_objects import FaceBox, FaceEmbedding
+from photo_archiver.domain.value_objects import FaceBox, FaceBoxEmbedding, FaceEmbedding
 
 
 class _DetectorImpl:
@@ -35,7 +35,7 @@ class _DetectorImpl:
     def detect(self, image: Path) -> list[FaceBox]:
         return []
 
-    def detect_with_embeddings(self, image: Path) -> list:
+    def detect_with_embeddings(self, image: Path) -> list[FaceBoxEmbedding]:
         return []
 
 
@@ -45,7 +45,7 @@ class _RecognizerImpl:
     def extract(self, image: Path, box: FaceBox) -> FaceEmbedding:
         return FaceEmbedding((0.0, 0.0, 0.0))
 
-    def extract_from(self, box: FaceBox, faces) -> FaceEmbedding:
+    def extract_from(self, box: FaceBox, faces: object) -> FaceEmbedding:
         return FaceEmbedding((0.0, 0.0, 0.0))
 
 

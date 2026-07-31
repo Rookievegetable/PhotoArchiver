@@ -1,7 +1,8 @@
 """Face recognition port for extracting face embeddings."""
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from photo_archiver.domain.value_objects import FaceBox, FaceEmbedding
 
@@ -35,13 +36,16 @@ class FaceRecognizer(Protocol):
         """
         ...
 
-    def extract_from(self, box: FaceBox, faces: Any) -> FaceEmbedding:
+    def extract_from(self, box: FaceBox, faces: Sequence) -> FaceEmbedding:
         """Return the embedding for ``box`` from an already-detected face list.
 
         Reuses the detector's detection pass so the recognizer no longer
         re-detects the image (ISSUE-001). ``faces`` is the face sequence
         produced by the detector's underlying ``FaceAnalysis.get`` call or a
-        compatible stub carrying ``bbox`` and ``embedding`` entries.
+        compatible stub carrying ``bbox`` and ``embedding`` entries. Typed as
+        ``Sequence`` (not a concrete InsightFace dict) so this Application port
+        stays AI-framework-free per DEP-013/DEP-020; the AI adapter imports
+        the concrete ``InsightFaceFace`` TypedDict at the adapter boundary.
 
         Args:
             box: Bounding box of the face to encode.

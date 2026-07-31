@@ -259,6 +259,16 @@
 | 理由 | ADR-005 的"延后"条件已满足：Schema 已稳定（v4），需要可追溯、可回滚的迁移脚本。Alembic 已在 `requirements/base.txt` 批准保留。 |
 | 影响范围 | `alembic/`、`alembic.ini`、`infrastructure/database/alembic_runner.py`、`bootstrap.py`（集成 `run_alembic_migrations()`）；废弃 ADR-024 旧版本（用 `PRAGMA user_version` 单调递增管理的决策） |
 
+### ADR-025 — FaceBoxEmbedding 归属 Domain 层（跨用例复用值对象）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted |
+| 决策 | `FaceBoxEmbedding`（`FaceBox` + `FaceEmbedding` 组合体）归属 `domain/value_objects/`，不作 Application DTO 处理。 |
+| 理由 | 三点：(1) 字段 `FaceBox` 与 `FaceEmbedding` 均为既有合规 Domain 值对象，组合体本身不含框架依赖、零 numpy（符合 DEP-020/ADR-015），归 Domain 不破任何依赖规则。(2) 「检测绑定值对象」的语义并非 AI 实现专属——未来若新增「手工标注 + 嵌入」「外部嵌入源 + 检测框」等用例，`FaceBoxEmbedding` 同样表达「一张人脸在某一刻的检测位置与嵌入向量」这一跨用例的 Domain 概念，非 Issue-001 单一性能优化的临时载体。(3) 放 Application DTO 会使「检测与嵌入绑定」这一 Domain 概念被 Application 编排细节吞没，调用方需反向依赖 Application 层取值类型，违反 DIP（DEP-013 Application 用接口、DEP-023 Domain 定义接口不实现）。性能优化的实现细节（`detect_with_embeddings` 单次 `analysis.get`）属 AI 层适配，不应倒推决定 Domain 值对象归属。 |
+| 影响范围 | `domain/value_objects/face_box_embedding.py`、`domain/value_objects/__init__.py`、`domain/__init__.py`；不迁移、不改公开 API。 |
+| 反驳驳回 | Review MAJOR-2 提出「FaceBoxEmbedding 为适配 InsightFace API 形状而生，应迁 `application/dts/`」——驳回：该论断以「值对象的存在动机」判定归属而非以「字段语义 + 依赖合规 + 跨用例复用性」判定，与 DDD 值对象判定标准不符。值对象归属取决于它是否表达 Domain 概念且不持框架依赖，而非首次出现的用例在哪层。 |
+
 ---
 
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）

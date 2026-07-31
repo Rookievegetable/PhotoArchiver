@@ -14,12 +14,12 @@ legacy ``detect`` method is retained for callers that only need boxes.
 """
 
 from pathlib import Path
-from typing import Any
 
 import cv2
 from insightface.app import FaceAnalysis  # type: ignore[import-untyped]
 from loguru import logger
 
+from photo_archiver.ai.insightface_types import InsightFaceFace
 from photo_archiver.domain.value_objects import FaceBox, FaceBoxEmbedding, FaceEmbedding
 
 
@@ -93,7 +93,7 @@ class InsightFaceDetector:
         )
         return pairs
 
-    def _read_and_detect(self, image: Path) -> list[Any]:
+    def _read_and_detect(self, image: Path) -> list[InsightFaceFace]:
         """Read the image bytes and run the model once, returning InsightFace faces.
 
         Shared by :meth:`detect` and :meth:`detect_with_embeddings` so the
@@ -108,7 +108,7 @@ class InsightFaceDetector:
         return self._analysis.get(image_bytes, max_num=0)
 
 
-def _to_face_box(face: Any) -> FaceBox:
+def _to_face_box(face: InsightFaceFace) -> FaceBox:
     """Build a FaceBox from an InsightFace face dict."""
     bbox = face["bbox"]
     confidence = float(face["det_score"])
@@ -121,7 +121,7 @@ def _to_face_box(face: Any) -> FaceBox:
     )
 
 
-def _to_embedding(face: Any) -> FaceEmbedding:
+def _to_embedding(face: InsightFaceFace) -> FaceEmbedding:
     """Build a FaceEmbedding from an InsightFace face dict (numpy → tuple)."""
     embedding = face["embedding"]
     return FaceEmbedding(tuple(float(x) for x in embedding.tolist()))

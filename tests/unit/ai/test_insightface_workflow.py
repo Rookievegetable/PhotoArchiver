@@ -82,6 +82,18 @@ def test_detect_with_embeddings_empty_for_no_faces() -> None:
     assert pairs == []
 
 
+def test_detect_with_embeddings_returns_empty_for_unreadable_image() -> None:
+    """An unreadable image (cv2.imread returns None) must yield empty, not raise."""
+    fake = _FakeFaceAnalysis([_make_face(bbox=(0, 0, 10, 10), det_score=0.9, embedding_values=(0.1,))])
+    detector = InsightFaceDetector(fake)  # type: ignore[arg-type]
+
+    with patch("photo_archiver.ai.insightface_detector.cv2.imread", return_value=None):
+        pairs = detector.detect_with_embeddings(Path("/corrupt.jpg"))
+
+    assert pairs == []
+    assert fake.get_call_count == 0  # model never invoked when imread fails
+
+
 def test_extract_from_reuses_provided_faces_without_redetecting() -> None:
     """extract_from must NOT call analysis.get — it reuses the detector's faces."""
     faces = [_make_face(bbox=(5, 5, 50, 50), det_score=0.8, embedding_values=(0.9, 0.8))]

@@ -52,15 +52,26 @@ class MatchPersonsService(MatchPersonsUseCase):
         """Initialize the service with ports and repositories.
 
         Args:
-            detector: Face detection port (Step 9 InsightFace-backed).
+            detector: Face detection port (Step 9 InsightFace-backed). Issue-001
+                optimized pipeline uses ``detect_with_embeddings`` so detection
+                and embedding extraction happen in a single ``FaceAnalysis.get`` pass.
             recognizer: Face embedding extraction port (Step 9 InsightFace-backed).
+                Retained for protocol completeness / future per-face extract path;
+                Issue-001's ``detect_with_embeddings`` path makes ``_match_one`` no
+                longer call ``recognizer`` directly, but the port is still wired so
+                (a) the Application bootstrap keeps a single recognition-adapter
+                assembly point, and (b) a future per-face or re-extract use case
+                can use it without re-breaking the constructor signature. Callers
+                MUST NOT drop this parameter — ``MatchPersonsService`` is constructed
+                by the infrastructure bootstrap (Step 12 Worker) and by tests, all
+                of which inject a recognizer today.
             matcher: Person matching port (Step 9 cosine-similarity-backed).
             face_embedding_repository: Known person embeddings lookup.
             recognition_repository: Persistence target for match results.
             progress_reporter: Optional progress stream for Worker/UI feedback.
         """
         self._detector = detector
-        self._recognizer = recognizer
+        self._recognizer = recognizer  # noqa: ARG002  retained for protocol completeness / future per-face extract path (Issue-001 made _match_one use detect_with_embeddings)
         self._matcher = matcher
         self._face_embedding_repository = face_embedding_repository
         self._recognition_repository = recognition_repository

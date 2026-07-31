@@ -10,20 +10,20 @@ ISSUE-001 resolution: ``extract_from`` takes a pre-detected face list (e.g.
 from :meth:`InsightFaceDetector.detect_with_embeddings`) and returns the
 matching embedding without re-running detection, so the matching pipeline
 now pays the ``analysis.get`` cost exactly once per photo. The legacy
-``extract(image, box)`` method is retained as a thin wrapper for callers
-outside the optimized pipeline (and for Step 10 integration tests); it
+``extract(image, box)`` method is retained as a compatibility wrapper for
+callers outside the optimized pipeline (and for Step 10 integration tests); it
 still performs its own detection pass and is therefore not on the hot path.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
 
 import cv2
 from insightface.app import FaceAnalysis  # type: ignore[import-untyped]
 from loguru import logger
 
+from photo_archiver.ai.insightface_types import InsightFaceFace
 from photo_archiver.domain.value_objects import FaceBox, FaceEmbedding
-
 _BBOX_MATCH_TOLERANCE_PX = 5
 
 
@@ -47,11 +47,13 @@ class InsightFaceRecognizer:
     def extract(self, image: Path, box: FaceBox) -> FaceEmbedding:
         """Return the embedding for the face located at ``box`` in ``image``.
 
-        Thin compatibility wrapper around :meth:`extract_from`: detects all
-        faces in ``image`` via a single ``analysis.get`` pass then delegates to
-        :meth:`extract_from` to pick the matching bbox. Callers on the optimized
-        matching pipeline should use :meth:`InsightFaceDetector.detect_with_embeddings`
-        + :meth:`extract_from` directly to avoid this method's detection pass.
+        Compatibility wrapper around :meth:`extract_from`: detects all faces
+        in ``image`` via a single ``analysis.get`` pass then delegates to
+        :meth:`extract_from` to pick the matching bbox. NOT a thin wrapper —
+        this method still pays one full detection pass, so callers on the
+        optimized matching pipeline should use
+        :meth:`InsightFaceDetector.detect_with_embeddings` + :meth:`extract_from`
+        directly to avoid this cost.
 
         Args:
             image: Absolute path to the source image file.
@@ -68,10 +70,10 @@ class InsightFaceRecognizer:
         if image_bytes is None:
             logger.warning("InsightFaceRecognizer could not read image: {}", image)
             raise ValueError(f"unreadable image: {image}")
-        faces: Any = self._analysis.get(image_bytes, max_num=0)
+        faces: Sequence[InsightFaceFace] = self._analysis.get(image_bytes, max_num=0)
         return self.extract_from(box, faces)
 
-    def extract_from(self, box: FaceBox, faces: Any) -> FaceEmbedding:
+    def extract_from(self, box: FaceBox, faces: Sequence[InsightFaceFace]) -> FaceEmbedding:
         """Return the embedding for ``box`` from an already-detected face list.
 
         ISSUE-001 fix: reuses the detector's detection pass (the ``faces``
@@ -82,7 +84,8 @@ class InsightFaceRecognizer:
         Args:
             box: Bounding box of the face to encode.
             faces: InsightFace face dicts from a prior ``analysis.get`` call
-                (or a compatible stub), each carrying ``bbox`` and ``embedding``.
+                (or a compatible stub), each carrying ``bbox`` and ``embedding``
+                per :class:`InsightFaceFace`.
 
         Returns:
             The :class:`FaceEmbedding` for the face matching ``box``.
@@ -104,7 +107,7 @@ class InsightFaceRecognizer:
 
 
 def _boxes_match(
-    insight_bbox: Any,
+    insight_bbox: Sequence[float],
     domain_box: FaceBox,
     tolerance: int = _BBOX_MATCH_TOLERANCE_PX,
 ) -> bool:

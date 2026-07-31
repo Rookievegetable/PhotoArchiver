@@ -96,6 +96,13 @@ class SQLiteFaceEmbeddingRepository(FaceEmbeddingRepository):
         Implementation note: ``LIMIT -1`` is SQLite's sentinel meaning "no
         limit" — we bind it when ``limit is None`` so the SQL shape stays
         uniform and the offset-only path still works.
+
+        Pagination stability: the SQL has no ``ORDER BY``, so SQLite returns
+        rows in storage order. For the current single-process upsert-only access
+        pattern this is stable enough, but if a caller needs stable paging across
+        concurrent writes or vacuums, add ``ORDER BY person_id`` here and index
+        ``person_embeddings(person_id)`` — tracked as a future hardening item,
+        not a current defect (person volume is small per ISSUE-003).
         """
         if limit is not None and limit <= 0:
             raise ValueError(f"limit must be positive or None, got {limit}")
