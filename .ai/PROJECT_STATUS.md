@@ -108,16 +108,16 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-07-31 20:19（本地） |
+| 时间 | 2026-08-01 20:30（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | Issue 修复轮 Round 1-3：ISSUE-002 结构化埋点 + ISSUE-001 recognizer 双检测优化 + ISSUE-006 类型收口 + ISSUE-010 Pillow importorskip |
-| Completed | Round 1 ISSUE-002：WorkerTask task_id + Loguru contextualize。Round 2 ISSUE-001：detect_with_embeddings + extract_from 单次 analysis.get，halve AI 处理时间。Round 3 ISSUE-006：RecognitionResult.id 改 `UUID` + `field(default_factory=uuid4)` 类型诚实表达；ISSUE-010：test_step11_archive_e2e.py 补 `pytest.importorskip("PIL")`。删 KNOWN_ISSUES ISSUE-001/002/006/010 |
-| Remaining | 无（本三 Issue 完整闭环） |
-| Next Step | Round 4：ISSUE-003 Repository 分页接口（按已定计划最后一项） |
+| 会话范围 | Issue 修复轮 Round 1-4：ISSUE-002 结构化埋点 + ISSUE-001 recognizer 双检测优化 + ISSUE-006 类型收口 + ISSUE-010 Pillow importorskip + ISSUE-003 Repository 分页接口 |
+| Completed | Round 1 ISSUE-002：WorkerTask task_id + Loguru contextualize。Round 2 ISSUE-001：detect_with_embeddings + extract_from 单次 analysis.get，halve AI 处理时间。Round 3 ISSUE-006：RecognitionResult.id 改 `UUID` + `field(default_factory=uuid4)` 类型诚实表达；ISSUE-010：test_step11_archive_e2e.py 补 `pytest.importorskip("PIL")`。Round 4 ISSUE-003：FaceEmbeddingRepository.list_all 加可选 `limit/offset` 参数（方案 A 向后兼容），SQLite LIMIT -1 OFFSET sentinel；2 新分页单测。删 KNOWN_ISSUES ISSUE-001/002/003/006/010 |
+| Remaining | 无（本五 Issue 完整闭环，KNOWN_ISSUES 仅余 ISSUE-008/009 平台限制） |
+| Next Step | 全部已定 Issue 修复轮次完成；后续按 roadmap §18 后续 Step 推进 |
 | HEAD | 待提交（本会话收尾） |
-| 测试 | pytest 249 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
-| 质量门 | ruff 0 errors；mypy 0 errors；累计新增 10 测试全绿 |
-| 文档影响 | 本会话触及 PROJECT_STATUS §5 刷新 / KNOWN_ISSUES ISSUE-001+002+006+010 删除 |
+| 测试 | pytest 251 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
+| 质量门 | ruff 0 errors；mypy 0 errors；累计新增 12 测试全绿 |
+| 文档影响 | 本会话触及 PROJECT_STATUS §5 刷新 / KNOWN_ISSUES ISSUE-001+002+003+006+010 删除 |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 

@@ -36,18 +36,6 @@
 
 ---
 
-## 技术债（Technical Debt）
-
-### ISSUE-003 — FaceEmbeddingRepository.list_all 未分页
-
-| 字段 | 值 |
-|---|---|
-| Status | Open |
-| Description | `FaceEmbeddingRepository.list_all` 一次性返回全部 Person embedding，Person 数千时内存压力大。当前量小可接受。 |
-| Impact | Low —— 性能，仅大规模数据集触发 |
-| Temporary Workaround | 无 |
-| Planned Resolution | Step 13+ 加分页或游标接口 |
-
 ## 平台与第三方限制
 
 ### ISSUE-008 — buffalo_l 模型包未下载，集成测试 8 skip

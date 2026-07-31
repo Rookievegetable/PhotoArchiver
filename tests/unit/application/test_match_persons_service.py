@@ -66,7 +66,7 @@ class _StubFaceEmbeddingRepository(FaceEmbeddingRepository):
     def find_by_person(self, person_id) -> FaceEmbedding | None:
         return self._candidates.get(person_id)
 
-    def list_all(self) -> dict:
+    def list_all(self, limit: int | None = None, offset: int = 0) -> dict:  # noqa: ARG002
         return self._candidates
 
 

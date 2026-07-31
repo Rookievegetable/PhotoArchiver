@@ -71,20 +71,41 @@ class SQLiteFaceEmbeddingRepository(FaceEmbeddingRepository):
             return None
         return FaceEmbedding(tuple(json.loads(row["embedding"])))
 
-    def list_all(self) -> dict[UUID, FaceEmbedding]:
-        """Return a ``person_id → embedding`` mapping for all known persons.
+    def list_all(
+        self,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> dict[UUID, FaceEmbedding]:
+        """Return a ``person_id → embedding`` mapping for known persons.
+
+        Args:
+            limit: Maximum number of embeddings to return. ``None`` (default)
+                returns every persisted row — original full-scan behavior kept
+                for backward compatibility. Pass a positive int to cap memory
+                when person volume is large.
+            offset: Number of embeddings to skip before collecting rows.
+                Defaults to ``0``; combine with ``limit`` for page-style access.
 
         Returns:
-            A dict covering every persisted embedding. Empty when no person
-            has a stored embedding.
+            A dict covering the requested slice of persisted embeddings.
+            Empty when no row falls in the ``[offset, offset+limit)`` range.
 
-        Scalability note: full table scan with per-row JSON decode. Acceptable
-        for Step 10's person volume; Step 12 Worker should add pagination or
-        lazy loading when person count reaches thousands (512 floats each).
+        Raises:
+            ValueError: When ``limit`` is non-positive or ``offset`` is negative.
+
+        Implementation note: ``LIMIT -1`` is SQLite's sentinel meaning "no
+        limit" — we bind it when ``limit is None`` so the SQL shape stays
+        uniform and the offset-only path still works.
         """
+        if limit is not None and limit <= 0:
+            raise ValueError(f"limit must be positive or None, got {limit}")
+        if offset < 0:
+            raise ValueError(f"offset must be non-negative, got {offset}")
+        bound_limit = -1 if limit is None else limit
         with self._connection_provider.connect() as connection:
             rows = connection.execute(
-                "SELECT person_id, embedding FROM person_embeddings"
+                "SELECT person_id, embedding FROM person_embeddings LIMIT ? OFFSET ?",
+                (bound_limit, offset),
             ).fetchall()
         return {
             UUID(row["person_id"]): FaceEmbedding(tuple(json.loads(row["embedding"])))

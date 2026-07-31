@@ -316,3 +316,40 @@ def test_sqlite_face_embedding_repository_list_all(tmp_path: Path) -> None:
     assert len(all_embeddings) == 2
     assert all_embeddings[person1.id] == e1
     assert all_embeddings[person2.id] == e2
+
+
+def test_sqlite_face_embedding_repository_list_all_paginates(tmp_path: Path) -> None:
+    """ISSUE-003: list_all(limit, offset) must return only the requested slice."""
+    provider = create_provider(tmp_path)
+    person_repo = SQLitePersonRepository(provider)
+    embedding_repo = SQLiteFaceEmbeddingRepository(provider)
+
+    people = [Person(name=f"P{i}") for i in range(4)]
+    embeddings = [FaceEmbedding((float(i),)) for i in range(4)]
+    for person, embedding in zip(people, embeddings, strict=True):
+        person_repo.add(person)
+        embedding_repo.save(person.id, embedding)
+
+    page1 = embedding_repo.list_all(limit=2, offset=0)
+    assert len(page1) == 2
+    page2 = embedding_repo.list_all(limit=2, offset=2)
+    assert len(page2) == 2
+    assert set(page1.keys()).isdisjoint(page2.keys())
+
+    tail = embedding_repo.list_all(limit=10, offset=3)
+    assert len(tail) == 1
+
+    empty = embedding_repo.list_all(limit=2, offset=4)
+    assert empty == {}
+
+
+def test_sqlite_face_embedding_repository_list_all_rejects_invalid_args(tmp_path: Path) -> None:
+    """ISSUE-003: list_all must validate limit/offset per Protocol contract."""
+    embedding_repo = SQLiteFaceEmbeddingRepository(create_provider(tmp_path))
+
+    with pytest.raises(ValueError, match="limit must be positive"):
+        embedding_repo.list_all(limit=0)
+    with pytest.raises(ValueError, match="limit must be positive"):
+        embedding_repo.list_all(limit=-1)
+    with pytest.raises(ValueError, match="offset must be non-negative"):
+        embedding_repo.list_all(offset=-1)
