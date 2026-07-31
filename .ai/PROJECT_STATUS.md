@@ -108,35 +108,35 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-07-30 22:55（本地） |
+| 时间 | 2026-07-31 20:19（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | Issue 修复轮 Round 1 + Round 2：ISSUE-002 结构化埋点 + ISSUE-001 recognizer 双检测优化 |
-| Completed | Round 1 ISSUE-002：WorkerTask 生成 task_id = `{name}_{uuid4().hex[:8]}`，run() 用 logger.contextualize 绑定全生命周期；5 事件类加 task_id 字段；5 新测试。Round 2 ISSUE-001：方案 A 落地——新增 `FaceBoxEmbedding` Domain 值对象；`InsightFaceDetector.detect_with_embeddings` 单次 analysis.get 返 box+embedding 对；`InsightFaceRecognizer.extract_from` 复用已检测 faces 跳过二次 detect；FaceDetector/FaceRecognizer Protocol 加新方法；MatchPersonsService._match_one 改用新 API 消双检测；5 新 ai 单测（mock FaceAnalysis 不依赖真模型）；删 KNOWN_ISSUES ISSUE-001/002 |
-| Remaining | 无（本两 Issue 完整闭环） |
-| Next Step | Round 3：ISSUE-006 类型收口 + ISSUE-010 Pillow importorskip（按已定计划） |
+| 会话范围 | Issue 修复轮 Round 1-3：ISSUE-002 结构化埋点 + ISSUE-001 recognizer 双检测优化 + ISSUE-006 类型收口 + ISSUE-010 Pillow importorskip |
+| Completed | Round 1 ISSUE-002：WorkerTask task_id + Loguru contextualize。Round 2 ISSUE-001：detect_with_embeddings + extract_from 单次 analysis.get，halve AI 处理时间。Round 3 ISSUE-006：RecognitionResult.id 改 `UUID` + `field(default_factory=uuid4)` 类型诚实表达；ISSUE-010：test_step11_archive_e2e.py 补 `pytest.importorskip("PIL")`。删 KNOWN_ISSUES ISSUE-001/002/006/010 |
+| Remaining | 无（本三 Issue 完整闭环） |
+| Next Step | Round 4：ISSUE-003 Repository 分页接口（按已定计划最后一项） |
 | HEAD | 待提交（本会话收尾） |
 | 测试 | pytest 249 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
-| 质量门 | ruff 0 errors；mypy 0 errors；新增 10 测试全绿 |
-| 文档影响 | 本会话触及 PROJECT_STATUS §5 刷新 / KNOWN_ISSUES ISSUE-001+002 删除 |
+| 质量门 | ruff 0 errors；mypy 0 errors；累计新增 10 测试全绿 |
+| 文档影响 | 本会话触及 PROJECT_STATUS §5 刷新 / KNOWN_ISSUES ISSUE-001+002+006+010 删除 |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 
-本轮未新增 ADR——ISSUE-001/002 属现有 ai/workers 层能力增强与性能优化，未改变架构边界或依赖方向。新增 `FaceBoxEmbedding` Domain 值对象遵循 ADR-015 同模式（tuple 不持 numpy），task_id 生成与 Loguru contextualize 用法是实施细节，非需记录的不可改架构决策。
+本轮未新增 ADR——四 Issue 属现有 ai/workers/domain 层能力增强、性能优化与类型收口，未改变架构边界或依赖方向。新增 `FaceBoxEmbedding` Domain 值对象遵循 ADR-015 同模式；task_id 生成与 Loguru contextualize、RecognitionResult.id 类型诚实表达属实施细节，非需记录的不可改架构决策。
 
-### 5.1 本会话工作记录（2026-07-30，ISSUE-001+002 修复轮）
+### 5.1 本会话工作记录（2026-07-30~31，ISSUE-001+002+006+010 修复轮）
 
 | 项 | 值 |
 |---|---|
 | 角色 | Implementer（AtomCode GLM-5.2） |
-| 范围 | ISSUE-002 单提交 + ISSUE-001 单提交（严格一 Issue 一提交） |
+| 范围 | 严格一 Issue 一提交：Round 1 ISSUE-002 单提交 / Round 2 ISSUE-001 单提交 / Round 3 ISSUE-006+010 单提交（两低优先级顺手收口合并） |
 | HEAD | 本会话收尾提交 |
 | Branch | `main` |
 | pytest 快照 | 249 passed + 8 skipped |
 | Completed | 见 §5 Completed 字段 |
 | Remaining | 无 |
-| Next Step | Round 3 ISSUE-006 + ISSUE-010 |
+| Next Step | Round 4 ISSUE-003（按已定计划最后一项） |
 | 阻塞 | 无 |
-| §12 文档触碰自检 | 仅触及 PROJECT_STATUS/KNOWN_ISSUES，无人类文档陈述失效（新能力 + 性能优化非现状描述） |
+| §12 文档触碰自检 | 仅触及 PROJECT_STATUS/KNOWN_ISSUES，无人类文档陈述失效（新能力 + 性能优化 + 类型收口 + 测试环境加固非现状描述） |
 
 
 

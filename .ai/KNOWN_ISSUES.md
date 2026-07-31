@@ -48,16 +48,6 @@
 | Temporary Workaround | 无 |
 | Planned Resolution | Step 13+ 加分页或游标接口 |
 
-### ISSUE-006 — RecognitionResult.id 类型 UUID | None 类型未表达
-
-| 字段 | 值 |
-|---|---|
-| Status | Open |
-| Description | `RecognitionResult.id` 类型签名 `UUID | None`，`__post_init__` 保证非空但类型未表达。**注**：2026-07-24 核验 `domain/entities/recognition.py` 已不再含 `type: ignore` 注释（旧描述"带 `type: ignore`"已失效）——核心问题（类型未表达）仍在，仅 workaround 已移除。 |
-| Impact | Low —— 类型安全，静态检查不完整 |
-| Temporary Workaround | 无（原 `type: ignore` 注释已删） |
-| Planned Resolution | 未来重构改 `UUID` 非 None |
-
 ## 平台与第三方限制
 
 ### ISSUE-008 — buffalo_l 模型包未下载，集成测试 8 skip
@@ -79,18 +69,6 @@
 | Impact | Low —— 测试覆盖，UI 集成未在精简环境验证 |
 | Temporary Workaround | 安装 `requirements/dev.txt` 全套 |
 | Planned Resolution | 文档明确 dev 环境必装项；CI 装齐 |
-
-### ISSUE-010 — Pillow 集成测试依赖环境装齐
-
-| 字段 | 值 |
-|---|---|
-| Status | Mitigated |
-| Description | 真实图片元数据相关集成测试依赖 Pillow；venv 未装 Pillow 时测试缺 `pytest.importorskip("PIL")` 会 FAILED（非 skipped）。既有环境问题，非代码缺陷。 |
-| Impact | Low —— 测试，未装 Pillow 时报错而非跳过 |
-| Temporary Workaround | 装齐 `requirements/base.txt` |
-| Planned Resolution | 补 `pytest.importorskip("PIL")` 或装齐依赖 |
-
----
 
 ## 维护规则
 

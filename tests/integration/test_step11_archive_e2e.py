@@ -16,6 +16,8 @@ from uuid import UUID
 
 import pytest
 
+pytest.importorskip("PIL")
+
 from photo_archiver.application.commands import ArchivePhotosCommand
 from photo_archiver.application.services import (
     ArchiveExecutor,

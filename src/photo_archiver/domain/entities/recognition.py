@@ -1,6 +1,6 @@
 """Recognition result entity and match status enum."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
@@ -30,11 +30,16 @@ class RecognitionResult:
     is created in the ``PENDING`` state and only transitions to ``APPROVED``
     or ``REJECTED`` via the explicit state-transition methods, which keeps the
     invariant that a finalized result cannot be re-opened.
+
+    ISSUE-006 resolution: ``id`` is now typed ``UUID`` (not ``UUID | None``)
+    with ``field(default_factory=uuid4)`` so the type signature honestly
+    expresses the post-init non-null guarantee — mypy and callers no longer
+    need to None-check a field that is always populated after construction.
     """
 
     photo_id: UUID
     confidence: float
-    id: UUID | None = None
+    id: UUID = field(default_factory=uuid4)
     person_id: UUID | None = None
     status: MatchStatus = MatchStatus.PENDING
     created_at: datetime | None = None
@@ -43,8 +48,6 @@ class RecognitionResult:
         """Validate fields and initialize generated values."""
         if not 0.0 <= self.confidence <= 1.0:
             raise ValidationError("RecognitionResult confidence must be in [0.0, 1.0]")
-        if self.id is None:
-            self.id = uuid4()
         if self.created_at is None:
             self.created_at = datetime.now()
 
