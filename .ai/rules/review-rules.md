@@ -1,10 +1,10 @@
 # PhotoArchiver Code Review Rules
 
-Version: 1.0.1
+Version: 1.1.0
 
 Status: Stable
 
-Last Updated: 2026-07-24
+Last Updated: 2026-08-01
 
 ---
 
@@ -308,6 +308,63 @@ Review should verify:
 * No placeholder logic in production code
 
 AI-generated code is never exempt from review.
+
+---
+
+## 18.1 Evidence-Gated Review（AI 审查证据门槛）
+
+> 本节规定 AI 输出的 Review 发现（finding）的上报证据标准，适用于所有 AI 生成的 Review 报告；人类 Review 建议参照执行。核心原则：**Review 的产出是证据链，不是直觉清单——每条发现要么挂着可核验的锚点，要么明确标注置信度，宁可少报不可虚报。**
+>
+> 动议背景：2026-08-01 B1 Review 轮，外部 AI Review 报告出现臆造代码事实（声称某惯例存在，grep 核验不存在）、臆造行为断言（"排序不稳定"，实为确定稳定）、错引权威编号（ADR-011 实为 ADR-021）等臆造类问题。
+
+### REV-AI-001 — 证据锚点（Evidence Anchor）
+
+Every reported finding MUST carry a directly verifiable anchor:
+
+* `file:line` + quoted code excerpt（引用代码原文，不得转述）
+* Referenced rule/ADR ID（引用的规则或 ADR 编号）
+
+A claim about project conventions (e.g. "other modules all do X") MUST attach at least one grep-verified `file:line` instance of that convention. 未能给出锚点的"惯例"陈述一律降级为"建议核查"，不得作为发现上报。
+
+### REV-AI-002 — 质量门先行（Gates Before Reading）
+
+AI MUST run and report the actual output of `ruff check .` / `mypy src` / `pytest -q`（或项目当前质量门命令）before manual static review. The Review report MUST open with these measured results. 未经实测的"质量门状态"陈述（如"ruff 0"）禁止出现。
+
+### REV-AI-003 — 行为断言须复现（Behavioral Claims Need Reproduction）
+
+Any assertion of the form "this code causes behavior X" MUST attach one of:
+
+* 最小复现（命令/测试/脚本及其输出），或
+* 显式推理链（逐步数据流推演，可被他者逐步核验）
+
+无法复现也未给出推理链的行为断言，标注"未验证"并降入"建议核查"区。
+
+### REV-AI-004 — 置信度三级标注（Confidence Tiers）
+
+Every finding MUST be tagged with exactly one tier:
+
+| Tier | 含义 | 可进入区域 |
+|---|---|---|
+| 已验证（Verified） | 跑过命令 / 读过原文 / 复现成功 | Critical / Major / Minor |
+| 推断（Inferred） | 读过代码未运行，推理链完整 | Major / Minor（标注 tier） |
+| 建议核查（Needs-Check） | 直觉怀疑，上下文未读全 | 不得进入 Critical / Major，仅可列于独立"待核查"区 |
+
+### REV-AI-005 — 权威引用当场验证（Authority Citation Verification）
+
+引用 ADR / 规则编号 / 文档章节时，AI MUST 当场验证目标锚点存在（grep 目标文件确认），不得凭记忆书写编号。本条是 `rules/README.md` §6.1 指针完整性在 Review 场景的显式扩展。
+
+### REV-AI-006 — 严重度可达性校准（Reachability-First Severity）
+
+上报 Critical / Major 前 MUST 回答并写明两问：
+
+1. 这条路径今天可达吗？（当前代码与契约下能否触发）
+2. 触发后果是什么？（数据损坏 / 门红 / 用户可见故障 / 仅风格）
+
+"当前不可达的防御缺陷"与"今天就在坏"必须分级安置：前者最高入"应修"，后者方可入 Critical / Major。
+
+### REV-AI-007 — 证伪自审（Falsification Scan）
+
+提交 Review 报告前，AI MUST 对每个拟上报发现执行一次证伪扫描：自问"什么证据能证明这条是错的？"并实际查证。自我证伪的发现应当场撤销并可在报告中留痕（撤销留痕是机制生效的正常表现，不扣分）。
 
 ---
 
