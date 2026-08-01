@@ -7,8 +7,8 @@ SOURCE_ROOT = PROJECT_ROOT / "src"
 if SOURCE_ROOT.is_dir():
     sys.path.insert(0, str(SOURCE_ROOT))
 
-from photo_archiver.app import PhotoArchiverApplication, bootstrap_application
-from photo_archiver.application import ArchivePhotosCommand, ScanAndRegisterPhotosCommand
+from photo_archiver.app import PhotoArchiverApplication, bootstrap_application  # noqa: E402  # sys.path injection above is required before app imports
+from photo_archiver.application import ArchivePhotosCommand, ScanAndRegisterPhotosCommand  # noqa: E402  # sys.path injection above is required before app imports
 
 
 def build_argument_parser() -> ArgumentParser:

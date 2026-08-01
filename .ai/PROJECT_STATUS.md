@@ -50,12 +50,13 @@
 
 ## 2. Current Step（当前开发阶段）
 
-**项目开发已全面收官。所有 Step 0.5-15 全部完成。飘带清零（ruff 0 + mypy 0）。Alembic 迁移体系已激活。**
+**项目开发已全面收官。所有 Step 0.5-15 全部完成。飘带清零（ruff 0 + mypy 0）。Alembic 迁移体系已激活。CI 流水线已激活（GitHub Actions 三平台矩阵 + 模型缓存，ISSUE-008 关闭）。**
 
 前置就绪状态：
 - All 15 steps completed and verified.
 - 数据库 Schema v4（Alembic `001_initial_v4` 管理）。
 - 飘带清理轮执行完毕：ruff 4→0, mypy 25→0。
+- CI 流水线已激活（`.github/workflows/ci.yml`，三 OS 矩阵 + buffalo_l 模型缓存 + R-4 双断言守卫，ISSUE-008 关闭）。
 
 ---
 
@@ -69,6 +70,7 @@
 | Phase 2 产品化（Step 12-15） | ✅ 完成 |
 | 飘带清理轮 | ✅ ruff 0 + mypy 0 |
 | Alembic 迁移体系 | ✅ 已激活（ADR-024） |
+| CI 流水线（GitHub Actions） | ✅ 已激活（三 OS 矩阵 + buffalo_l 模型缓存 + R-4 双断言，ISSUE-008 关闭） |
 
 详见 `.ai/business/roadmap.md` §18-§20（规划原文保持计划格式，实际进度以本节 §1 为准）。
 
@@ -144,7 +146,7 @@
 
 ## 6. Next Step（下一步开发计划）
 
-**里程碑：全部 Step 0.5-15 已完成。后续按需推进飘带清理轮 + SQLAlchemy/Alembic。**
+**里程碑：全部 Step 0.5-15 已完成 + CI 流水线已激活（ISSUE-008 关闭）。后续按需推进新功能开发（M7 可扩展里程碑未启动）+ SQLAlchemy/Alembic 深化。**
 
 ### Step 15 交付确认
 

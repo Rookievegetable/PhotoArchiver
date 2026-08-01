@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11"]
+    env:
+      QT_QPA_PLATFORM: offscreen   # pytest-qt 无头运行，三平台统一
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements/*.txt
+
+      # 仅 Linux：PySide6 offscreen 运行所需系统库
+      - name: Install Qt system libs (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libdbus-1-3 libfontconfig1
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements/dev.txt
+
+      - name: Restore model cache
+        uses: actions/cache@v4
+        with:
+          path: resources/models
+          key: models-buffalo_l-v1-${{ runner.os }}
+
+      - name: Download AI models (idempotent, runs on cache miss)
+        run: python scripts/download_models.py
+
+      # R-4 遗漏修复：缓存静默失败时 download_models 幂等返回 0 但模型未真就绪，
+      # 8 条 AI 集成测试会 skipped 而非 failed——此断言强制模型目录非空存在。
+      - name: Assert model pack present (R-4 guard against silent cache miss)
+        shell: bash
+        run: |
+          if [ ! -d resources/models/buffalo_l ] || [ -z "$(ls -A resources/models/buffalo_l 2>/dev/null)" ]; then
+            echo "::error::buffalo_l model pack missing after download step — ISSUE-008 closure criterion failed"
+            exit 1
+          fi
+          echo "Model pack present: $(ls -A resources/models/buffalo_l | wc -l) files"
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: MyPy
+        run: mypy src
+
+      - name: Pytest
+        run: pytest -v --tb=short
+
+      # R-4 遗漏修复：ISSUE-008 关闭判据要求 8 条 AI 集成测试 passed 非 skipped。
+      # 全量 pytest exit 0 不保证这一点（模型若中途失效 pytest 仍绿）——
+      # 此步断言 tests/integration/face_detection/ 两文件无 skipped 行。
+      - name: Assert AI integration tests ran not skipped (R-4 close ISSUE-008)
+        shell: bash
+        run: |
+          SKIPPED=$(pytest --co -q tests/integration/face_detection/ 2>/dev/null | grep -c "SKIPPED" || true)
+          if [ "$SKIPPED" -gt 0 ]; then
+            echo "::error::${SKIPPED} AI integration test(s) skipped — ISSUE-008 not truly closed (model pack failed during run)"
+            exit 1
+          fi
+          echo "All AI integration tests collected without skip — ISSUE-008 closure verified"

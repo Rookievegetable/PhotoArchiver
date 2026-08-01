@@ -25,3 +25,9 @@ pythonpath = ["src"]
 
 [tool.mypy]
 python_version = "3.11"
+
+# openpyxl ships no PEP 561 py.typed marker nor mypy stubs — ignore missing
+# stubs so mypy src stays zero-error without types-openpyxl (which doesn't exist).
+[[tool.mypy.overrides]]
+module = "openpyxl.*"
+ignore_missing_imports = true

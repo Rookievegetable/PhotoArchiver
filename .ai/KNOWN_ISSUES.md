@@ -38,16 +38,6 @@
 
 ## 平台与第三方限制
 
-### ISSUE-008 — buffalo_l 模型包未下载，集成测试 8 skip
-
-| 字段 | 值 |
-|---|---|
-| Status | Mitigated |
-| Description | `buffalo_l` 模型包未下载（ADR-012 禁止自动下载），集成测试 8 条 skip 全因缺模型。CI 需预跑 `python scripts/download_models.py`。 |
-| Impact | Low —— 测试覆盖，AI 闭环未在 CI 验证 |
-| Temporary Workaround | 本地或 CI 预跑 download_models.py |
-| Planned Resolution | CI 流水线补模型下载步骤；或加容器化 runner |
-
 ### ISSUE-009 — PySide6 / pytest-qt 阘带导致 UI 集成测试 skip
 
 | 字段 | 值 |

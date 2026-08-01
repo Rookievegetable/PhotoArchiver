@@ -141,7 +141,31 @@ mypy src
 - pytest 测试目录：`tests`
 - MyPy Python 版本：3.11
 
-## 9. 开发流程建议
+## 9. 持续集成（CI）
+
+项目配备 GitHub Actions 工作流 `.github/workflows/ci.yml`，在每次 push 到 `main` 与所有 pull request 时自动运行，三平台矩阵（Ubuntu / Windows / macOS）× Python 3.11 全跑。
+
+**流水线步骤**：
+
+1. `ruff check .` — 静态分析
+2. `mypy src` — 类型检查
+3. `pytest -v --tb=short` — 全量测试，含 AI 集成测试
+
+**AI 模型供给**：CI 用 `actions/cache@v4` 缓存 `resources/models/buffalo_l` 模型包，缓存命中时秒退；未命中时跑 `scripts/download_models.py` 幂等下载。模型就绪后追加一步显性断言 `test -d resources/models/buffalo_l` 防止缓存静默失败导致 8 条 AI 集成测试 skipped 而非 failed（ISSUE-008 关闭判据）。
+
+**本地复现 CI**：
+
+```bash
+pip install -r requirements/dev.txt
+python scripts/download_models.py
+ruff check .
+mypy src
+pytest -v --tb=short
+```
+
+**Linux 无头环境**：CI 设 `QT_QPA_PLATFORM=offscreen` 让 pytest-qt 无显示运行；Linux runner 预装 Qt 系统库（`libgl1 libegl1 libxkbcommon0 libdbus-1-3 libfontconfig1`）。本地远程终端跑 UI 测试可同设此环境变量。
+
+## 10. 开发流程建议
 
 每个开发任务建议遵循：
 
@@ -165,7 +189,7 @@ mypy src
 
 AI 编码助手必须遵守 `.ai/AI_ONBOARDING.md`（新 AI Runtime Context 入口，取代旧 `.ai/TASK_WORKFLOW.md`）。
 
-## 10. 关键开发约束
+## 11. 关键开发约束
 
 - 不要绕过 `application/` 直接从 UI 调用基础设施。
 - 不要在 `domain/` 中导入 PySide6、OpenCV、SQLite、pandas、InsightFace 等框架。
@@ -176,7 +200,7 @@ AI 编码助手必须遵守 `.ai/AI_ONBOARDING.md`（新 AI Runtime Context 入�
 - 新增依赖、修改公开 API、调整数据库 Schema 或改变架构前需要明确确认。
 - 修改代码时保持最小范围，避免无关重构。
 
-## 11. 常见问题
+## 12. 常见问题
 
 ### 找不到 `photo_archiver` 包
 
@@ -194,7 +218,7 @@ AI 编码助手必须遵守 `.ai/AI_ONBOARDING.md`（新 AI Runtime Context 入�
 
 AI 推理已接入（InsightFace / ONNX Runtime，Step 8-10）。`MODEL_PATH` 默认 `resources/models`，**不自动创建该目录**（ADR-012）——由 `scripts/download_models.py` 手动下载模型，禁止自动下载。首次运行前需先跑该脚本。
 
-## 12. 下一步阅读
+## 13. 下一步阅读
 
 - `README.md`
 - `docs/development/configuration.md`

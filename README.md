@@ -1,5 +1,7 @@
 # PhotoArchiver
 
+[![CI](https://github.com/Rookievegetable/PhotoArchiver/actions/workflows/ci.yml/badge.svg)](https://github.com/Rookievegetable/PhotoArchiver/actions/workflows/ci.yml)
+
 PhotoArchiver 是一个面向长期维护的企业级桌面照片归档管理系统，目标是帮助学校、政府机构、企业、档案馆、博物馆、摄影工作室和个人用户管理大量历史照片。
 
 > **当前进度唯一权威**：`.ai/PROJECT_STATUS.md`。本节仅作人类入口概览，不承载任何会过期的状态陈述——所有 Step 状态、测试计数、lint 数字均以 `PROJECT_STATUS.md` 为准。
