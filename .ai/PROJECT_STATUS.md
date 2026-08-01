@@ -118,7 +118,7 @@
 | Completed | dev-plan-phase-b.md v1.1 修订；§6 八项裁决点定案；B1 落地：PillowPhotoMetadataReader 可选注入 ContentHashCalculator + app/services.py 装配注入 hasher + PhotoRepository.list_duplicate_groups Protocol 扩展 + SQLite 单查询 IN（消除 N+1）+ InMemory 内存过滤双实现 + DetectDuplicatesService（fail-loud 替空串 fallback）+ DuplicateReport/Group DTO + BackfillContentHashService（双层 replace 仅替 content_hash 守 ADR-021）+ backfill-content-hash CLI 子命令 + DuplicateReportDialog 首版只读 + DetectDuplicatesController + 装配链 + MainWindow toolbar 入口；新增测试 32 项。Review 修复轮：A-1 ruff F841 去赋值 + A-2 跨平台 encoding=utf-8 + A-4 Backfill 双层 replace + B-1 空串 fallback 改 raise + B-2 SQLite N+1 改单查询 IN + B-3 InMemory 分桶改 setdefault + B-4 6 处局部 import 提顶部 + B-5 noop setData 删 + B-6 parent 注解统一 QWidget + B-7 frozen 注释改 slots + B-8 dev-plan 指针改自述理由 + §5 如实刷新 + 乱码修复（飘带/矩阵 各 3 处） |
 | Remaining | 无（B1 已全绿：ruff 0 + mypy 0 + pytest 284 passed + 8 skipped） |
 | Next Step | 阶段 B2 搜索/筛选（§7 顺序：B1→B2→B3→B4→B5，B2 已拍板 SQLite SQL 下推 + InMemory 内存过滤 + PhotoSearchCriteria 归 Domain + 新建 filter_bar.py） |
-| HEAD | 待提交（B1 全链路 + Review 修复轮，单 Step 单提交按 ADR-023） |
+| HEAD | `6301612`（B1 全链路 + Review 修复轮已提交） |
 | 测试 | pytest 284 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
 | 质量门 | ruff 0 errors；mypy 0 errors；B1 新增 32 测试全绿（reader 6 + repository 10 + service 6 + backfill 6 + CLI 集成 4） |
 | 文档影响 | 本会话触及 PROJECT_STATUS §3/§4/§5 刷新 + 乱码修复（飘带/矩阵）+ dev-plan-phase-b.md v1.1 修订 + §6 八项裁决点定案 + KNOWN_ISSUES 无新增 + Review 修复轮文档指针清理（src 内 8 文件 dev-plan 指针改自述理由） |
@@ -141,6 +141,17 @@
 | Next Step | Round 4 ISSUE-003（按已定计划最后一项） |
 | 阻塞 | 无 |
 | §12 文档触碰自检 | 仅触及 PROJECT_STATUS/KNOWN_ISSUES，无人类文档陈述失效（新能力 + 性能优化 + 类型收口 + 测试环境加固非现状描述） |
+
+### 5.2 规则变更记录（2026-08-01，REV-AI 证据门槛落地）
+
+| 项 | 值 |
+|---|---|
+| 时间 | 2026-08-01 20:52（本地） |
+| 生成者 | Kimi（Moonshot AI） |
+| 范围 | `review-rules.md` 新增 §18.1 Evidence-Gated Review（REV-AI-001~007：证据锚点/质量门先行/行为断言须复现/置信度三级/权威引用当场验证/严重度可达性校准/证伪自审），Version 1.0.1→1.1.0 |
+| 依据 | `review-rules-addition-draft.md`（临时草案）§裁决点 1-4 按默认建议定案；动议背景：当日 B1 Review 轮外部报告臆造类问题（惯例臆造/行为臆断/错引 ADR 编号） |
+| HEAD | `5dc2cd3`（单文件 docs 提交，未触碰当时未提交的 B1 工作区） |
+| 文档影响 | review-rules.md §18.1 + 版本头；DOCUMENT_INDEX §2.2/§3 职责一句话与 SSOT 映射无变化未同步；PROJECT_STATUS 本记录 |
 
 
 
