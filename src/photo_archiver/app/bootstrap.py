@@ -70,4 +70,5 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
         photo_list_controller=ui_controllers.photo_list,
         settings_controller=ui_controllers.settings,
         export_controller=ui_controllers.export,
+        detect_duplicates_controller=ui_controllers.detect_duplicates,
     )

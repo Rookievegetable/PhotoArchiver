@@ -30,6 +30,7 @@ from photo_archiver.infrastructure.persistence.qsettings_user_settings_store imp
     QSettingsUserSettingsStore,
 )
 from photo_archiver.presentation.controllers import (
+    DetectDuplicatesController,
     ExportController,
     PhotoListController,
     ReviewController,
@@ -49,6 +50,7 @@ class UIControllers:
     photo_list: PhotoListController
     settings: SettingsController
     export: ExportController
+    detect_duplicates: DetectDuplicatesController
 
 
 class _AppSettingsSystemSettings(SystemSettings):
@@ -125,6 +127,9 @@ def build_ui_controllers(
             service=services.export,
             exporter=ExcelExporter(),
             executor=worker_executor,  # type: ignore[arg-type]  # QtWorkerExecutor | None resolved by runtime caller
+        ),
+        detect_duplicates=DetectDuplicatesController(
+            service=services.detect_duplicates,
         ),
     )
 

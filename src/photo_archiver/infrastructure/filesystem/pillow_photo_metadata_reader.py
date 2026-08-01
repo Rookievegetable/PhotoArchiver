@@ -6,6 +6,13 @@ Archive 阶段只消费 ``Photo.captured_at`` 领域字段，本适配器是该�
 唯一数据源。EXIF 字段号 36868（DateTimeOriginal）是相机原生记录，
 可信度最高；缺 EXIF 时回退 mtime（扫描过程中转存/拷贝会破坏 mtime，
 不可靠但好过留 None）。
+
+content_hash 计算（B1 重复图片检测）：
+    可选注入 ``ContentHashCalculator`` 实例——注入时在 Pillow 开图读 EXIF
+    的同一 pass 内顺手算 SHA-256 填 ``PhotoMetadata.content_hash``；未注入
+    时 reader 不算哈希保持向后兼容（既有调用方零改动）。归属 reader 而非
+    Application service 的理由：保持 Application 零 Infrastructure 依赖
+    （DEP-010），同一 pass 读图+哈希避免二次读盘（ai-rules §18 性能）。
 """
 
 from datetime import datetime
@@ -15,6 +22,7 @@ from loguru import logger
 
 from photo_archiver.application.ports import PhotoMetadataReader
 from photo_archiver.domain import PhotoMetadata
+from photo_archiver.infrastructure.image import ContentHashCalculator
 
 # Pillow EXIF tag id for DateTimeOriginal (相机原生拍摄时刻)。
 # 用整数 id 而非字符串 tag 名以兼容旧 Pillow 版本对本名的差异。
@@ -22,14 +30,36 @@ _EXIF_TAG_DATETIME_ORIGINAL = 36868
 
 
 class PillowPhotoMetadataReader(PhotoMetadataReader):
-    """Read basic image metadata using Pillow."""
+    """Read basic image metadata using Pillow.
+
+    When constructed with a ``ContentHashCalculator`` the reader also fills
+    ``PhotoMetadata.content_hash`` during the same read pass, supporting B1
+    duplicate detection without forcing the Application layer to coordinate a
+    second Infrastructure adapter.
+    """
+
+    def __init__(self, content_hasher: ContentHashCalculator | None = None) -> None:
+        """Initialize the reader with an optional content hash calculator.
+
+        Args:
+            content_hasher: When provided, the reader computes the SHA-256
+                content hash of each photo in the same pass that reads Pillow
+                metadata. When ``None`` (default) the reader keeps historical
+                behavior and does not fill ``content_hash`` — existing callers
+                are unaffected.
+        """
+        self._content_hasher = content_hasher
 
     def read(self, path: Path) -> PhotoMetadata:
-        """Return image dimensions, filesystem metadata, and captured_at for a photo.
+        """Return image dimensions, filesystem metadata, captured_at, and content hash.
 
         captured_at 降级链：EXIF DateTimeOriginal → 文件 mtime → None。
         EXIF 解析失败不抛错（只 log warning），mtime 兜底——保持本适配器
         对"无 EXIF 图片"（如 PNG、被剥离 EXIF 的 JPG）的非致命容忍。
+
+        content_hash 仅当构造时注入了 ``ContentHashCalculator`` 才填充；
+        否则保持 ``None``。哈希计算在 Pillow 开图读 EXIF 的同一 pass 内
+        完成（文件已读入内存或可读），避免二次读盘。
         """
         try:
             from PIL import Image, UnidentifiedImageError
@@ -56,13 +86,30 @@ class PillowPhotoMetadataReader(PhotoMetadataReader):
         # EXIF 缺失时用 mtime 兜底；EXIF 异常时 captured_at 已为 None，同样兜底。
         if captured_at is None:
             captured_at = modified_at
+        content_hash = self._compute_content_hash(image_path)
         return PhotoMetadata(
             width=width,
             height=height,
             file_size_bytes=stat.st_size,
             modified_at=modified_at,
             captured_at=captured_at,
+            content_hash=content_hash,
         )
+
+    def _compute_content_hash(self, image_path: Path) -> str | None:
+        """Return the SHA-256 content hash, or None when no hasher is configured.
+
+        哈希失败不抛错（只 log warning）——元数据读取的主职责不应因哈希算
+        法 I/O 异常而中断扫描整批。调用方（B1 查重）按 content_hash 为 None
+        处理"该照片不参与查重分组"的语义，与历史数据行为一致。
+        """
+        if self._content_hasher is None:
+            return None
+        try:
+            return self._content_hasher.calculate(image_path)
+        except (OSError, FileNotFoundError) as exc:
+            logger.warning("Content hash failed for {}: {}", image_path, exc)
+            return None
 
     @staticmethod
     def _extract_captured_at(image, image_path: Path) -> datetime | None:
@@ -79,7 +126,7 @@ class PillowPhotoMetadataReader(PhotoMetadataReader):
             exif_data = image.getexif()
         except (AttributeError, OSError, ValueError) as exc:
             # getexif() 可在某些 Pillow 版本对无 EXIF 格式抛 ValueError；
-            # OSError 涉及读文件底層；AttributeError 防御性兼容。
+            # OSError 涉及读文件底层；AttributeError 防御性兼容。
             logger.debug("No EXIF block for {}: {}", image_path, exc)
             return None
         if not exif_data:

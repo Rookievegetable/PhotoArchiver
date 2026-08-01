@@ -113,6 +113,10 @@ class MainWindow(QMainWindow):
         archive_action.triggered.connect(self._on_archive_clicked)
         toolbar.addAction(archive_action)
 
+        detect_duplicates_action = QAction("Detect Duplicates", self)
+        detect_duplicates_action.triggered.connect(self._on_detect_duplicates_clicked)
+        toolbar.addAction(detect_duplicates_action)
+
         settings_action = QAction("Settings", self)
         settings_action.setShortcut(QKeySequence("Ctrl+,"))
         settings_action.triggered.connect(self._on_settings_clicked)
@@ -337,3 +341,12 @@ class MainWindow(QMainWindow):
         """
         dialog = SettingsDialog(self._settings_controller, self)
         dialog.exec()
+
+    def _on_detect_duplicates_clicked(self) -> None:
+        """Run duplicate detection and pop up the read-only report dialog.
+
+        B1 首版只读：detect_duplicates_controller.detect_and_show() 内已编排
+        同步查询 + DuplicateReportDialog 展示，且对空结果/异常均有兜底文案。
+        不下沉 Worker——查重是 SQL 下推的快速查询。
+        """
+        self._context.detect_duplicates_controller.detect_and_show()

@@ -46,6 +46,11 @@ def build_argument_parser() -> ArgumentParser:
         action="store_true",
         help="log intended operations without touching the filesystem",
     )
+
+    subparsers.add_parser(
+        "backfill-content-hash",
+        help="one-time backfill of content_hash for photos registered before B1 wiring",
+    )
     return parser
 
 
@@ -101,6 +106,24 @@ def run_archive_command(arguments: Namespace) -> int:
     return 0 if result.succeeded else 1
 
 
+def run_backfill_content_hash_command(arguments: Namespace) -> int:
+    """One-time backfill of content_hash for photos registered before B1 wiring.
+
+    B1-a 裁决已拍板：历史 NULL 哈希照片走显式 CLI 子命令而非启动时惰性补齐——
+    显式、可测、不拖慢启动。Idempotent：对已全回填的数据库再调用是 no-op。
+    """
+    context = bootstrap_application()
+    result = context.services.backfill_content_hash.execute()
+    sys.stdout.write(
+        "Backfill complete: "
+        f"scanned={result.scanned}, "
+        f"backfilled={result.backfilled}, "
+        f"skipped_missing={result.skipped_missing}, "
+        f"failed={result.failed}\n"
+    )
+    return 0 if result.succeeded else 1
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run the PhotoArchiver desktop application.
 
@@ -113,6 +136,8 @@ def main(arguments: list[str] | None = None) -> int:
         return run_scan_command(parsed_arguments)
     if parsed_arguments.command == "archive":
         return run_archive_command(parsed_arguments)
+    if parsed_arguments.command == "backfill-content-hash":
+        return run_backfill_content_hash_command(parsed_arguments)
 
     context = bootstrap_application()
     application = PhotoArchiverApplication(sys.argv, context=context)

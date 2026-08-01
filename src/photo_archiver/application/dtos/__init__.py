@@ -6,6 +6,7 @@ from photo_archiver.application.dtos.archive import (
     ArchivePlanItem,
     ArchiveResult,
 )
+from photo_archiver.application.dtos.duplicates import DuplicateGroup, DuplicateReport
 from photo_archiver.application.dtos.export import ExportData, ExportScope
 from photo_archiver.application.dtos.import_people import ImportPeopleResult, PersonImportRow
 from photo_archiver.application.dtos.photo_scan import PhotoScanItem, ScanPhotoFolderResult
@@ -44,6 +45,8 @@ __all__ = [
     "DEFAULT_MATCH_THRESHOLD",
     "DEFAULT_MAX_WORKERS",
     "DEFAULT_THEME",
+    "DuplicateGroup",
+    "DuplicateReport",
     "ExportData",
     "ExportScope",
     "FaceDetectionItem",

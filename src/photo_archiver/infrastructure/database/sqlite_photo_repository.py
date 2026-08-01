@@ -101,3 +101,47 @@ class SQLitePhotoRepository(PhotoRepository):
                 (str(folder_id),),
             ).fetchall()
         return [photo_from_row(row) for row in rows]
+
+    def list_duplicate_groups(self) -> list[list[Photo]]:
+        """Return groups of photos sharing the same non-null content hash.
+
+        SQLite 下推：单查询 ``WHERE metadata_content_hash IN (SELECT ... GROUP BY ... HAVING ...)``
+        一次性取所有重复组的照片行，Python 层按哈希切片分组。避免 N+1 查询（review-rules §15
+        性能；ai-rules §18 避免重复数据库查询）——万级照片中若有 M 组重复，旧实现 M+1 次查询，
+        新实现固定 2 次（含子查询）。NULL 哈希的历史照片被 ``WHERE metadata_content_hash IS NOT NULL``
+        显式排除，与 Protocol 契约一致——它们走一次性回填 CLI 而非混入本查询。
+
+        组间顺序：Python 层按 ``-len(members)`` 降序（与 DetectDuplicatesService 排序键一致，
+        虽 service 会再排一次，但仓储侧先排保证对照测试稳定）。组内顺序：``created_at, id``。
+        """
+        with self._connection_provider.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM photos
+                WHERE metadata_content_hash IN (
+                    SELECT metadata_content_hash
+                    FROM photos
+                    WHERE metadata_content_hash IS NOT NULL
+                    GROUP BY metadata_content_hash
+                    HAVING COUNT(*) > 1
+                )
+                ORDER BY metadata_content_hash, created_at, id
+                """,
+            ).fetchall()
+        # Python 层按哈希切片分组——rows 已按 metadata_content_hash 排序，连续同哈希归一组
+        groups: list[list[Photo]] = []
+        current_hash: str | None = None
+        current_group: list[Photo] = []
+        for row in rows:
+            hash_value = row["metadata_content_hash"]
+            if hash_value != current_hash:
+                if current_group:
+                    groups.append(current_group)
+                current_group = []
+                current_hash = hash_value
+            current_group.append(photo_from_row(row))
+        if current_group:
+            groups.append(current_group)
+        # 组间按成员数降序，与 DetectDuplicatesService 排序键对齐便于对照测试
+        groups.sort(key=lambda g: -len(g))
+        return groups

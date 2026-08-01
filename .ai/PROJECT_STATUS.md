@@ -50,27 +50,28 @@
 
 ## 2. Current Step（当前开发阶段）
 
-**项目开发已全面收官。所有 Step 0.5-15 全部完成。飘带清零（ruff 0 + mypy 0）。Alembic 迁移体系已激活。CI 流水线已激活（GitHub Actions 三平台矩阵 + 模型缓存，ISSUE-008/009 双关闭，KNOWN_ISSUES 清零）。**
+**项目开发已全面收官。所有 Step 0.5-15 全部完成。陔带清零（ruff 0 + mypy 0）。Alembic 迁移体系已激活。CI 流水线已激活（GitHub Actions 三平台矩陂 + 模型缓存，ISSUE-008/009 双关闭，KNOWN_ISSUES 清零）。**
 
 前置就绪状态：
 - All 15 steps completed and verified.
 - 数据库 Schema v4（Alembic `001_initial_v4` 管理）。
-- 阘带清理轮执行完毕：ruff 4→0, mypy 25→0。
-- CI 流水线已激活（`.github/workflows/ci.yml`，三 OS 矩阵 + buffalo_l 模型缓存 + R-4 AI 断言 + UI 断言双守卫，ISSUE-008/009 关闭，KNOWN_ISSUES 清零）。
+- 陔带清理轮执行完毕：ruff 4→0, mypy 25→0。
+- CI 流水线已激活（`.github/workflows/ci.yml`，三 OS 矩陂 + buffalo_l 模型缓存 + R-4 AI 断言 + UI 断言双守卫，ISSUE-008/009 关闭，KNOWN_ISSUES 清零）。
 
 ---
 
 ## 3. Project Status（项目当前状态）
 
-**全部 15 个 Roadmap Step 均已实现并验证通过**（pytest 239 passed + 8 skipped，ruff 0，mypy 0）。
+**全部 15 个 Roadmap Step 均已实现并验证通过**；阶段 B 业务增强 B1 重复图片检测已落地（本会话）。pytest 284 passed + 8 skipped，ruff 0，mypy 0。
 
 | 阶段 | 状态 |
 |---|---|
 | Phase 1（Step 0.5-11） | ✅ 完成 |
 | Phase 2 产品化（Step 12-15） | ✅ 完成 |
-| 飘带清理轮 | ✅ ruff 0 + mypy 0 |
+| 陔带清理轮 | ✅ ruff 0 + mypy 0 |
 | Alembic 迁移体系 | ✅ 已激活（ADR-024） |
-| CI 流水线（GitHub Actions） | ✅ 已激活（三 OS 矩阵 + buffalo_l 模型缓存 + R-4 AI 断言 + UI 断言双守卫，ISSUE-008/009 关闭，KNOWN_ISSUES 清零） |
+| CI 流水线（GitHub Actions） | ✅ 已激活（三 OS 矩陂 + buffalo_l 模型缓存 + R-4 AI 断言 + UI 断言双守卫，ISSUE-008/009 关闭，KNOWN_ISSUES 清零） |
+| 阶段 B 业务增强 B1 重复图片检测 | ✅ 已落地（本会话，2026-08-01） |
 
 详见 `.ai/business/roadmap.md` §18-§20（规划原文保持计划格式，实际进度以本节 §1 为准）。
 
@@ -93,6 +94,7 @@
 | Settings | ✅ Step 13 就绪（QSettings + 抽象端口双适配器 + SettingsDialog + SettingsController + SettingsService + ReviewRecognitionService UoW 闭环） | `application/services/settings_service.py`、`presentation/views/settings_dialog.py`、`infrastructure/persistence/` |
 | Export | ✅ Step 14 就绪（ExportService + Excel/CSV exporter + ExportWorker + ExportDialog + Controller） | `application/services/export_service.py`、`infrastructure/exporters/{excel_exporter,csv_exporter}.py`、`workers/export_task.py`、`presentation/{controllers/export_controller,views/export_dialog}.py` |
 | Plugins | ✅ Step 15 就绪（Plugin system: interface + loader + example + MainWindow action registration + plugin guide） | `src/photo_archiver/plugins/loader.py`、`application/ports/plugin.py`、`examples/plugins/hello_plugin.py`、`docs/development/plugin-guide.md` |
+| 阶段 B / B1 重复图片检测 | ✅ 已落地（本会话）：PillowPhotoMetadataReader 可选注入 ContentHashCalculator（B1-c）+ PhotoRepository.list_duplicate_groups（SQLite SQL 下推 + InMemory 内存过滤）+ DetectDuplicatesService + DuplicateReport DTO + BackfillContentHashService + `backfill-content-hash` CLI 子命令（B1-a）+ DuplicateReportDialog 首版只读 + DetectDuplicatesController + MainWindow toolbar 入口 | `infrastructure/filesystem/pillow_photo_metadata_reader.py`、`domain/repositories/photo_repository.py`、`infrastructure/database/sqlite_photo_repository.py`、`infrastructure/repositories/in_memory_photo_repository.py`、`application/services/{detect_duplicates,backfill_content_hash}_service.py`、`application/dtos/duplicates.py`、`presentation/views/duplicate_report_dialog.py`、`presentation/controllers/detect_duplicates_controller.py`、`main.py` |
 
 ### 数据库 Schema 版本
 
@@ -110,16 +112,16 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-08-01 20:30（本地） |
+| 时间 | 2026-08-01 23:30（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | Issue 修复轮 Round 1-4 + CI 轮：ISSUE-002/001/006/010/003 + ISSUE-008 CI 流水线 + ISSUE-009 UI 断言 |
-| Completed | Round 1-4：ISSUE-002 task_id + ISSUE-001 消双检测 + ISSUE-006 类型收口 + ISSUE-010 importorskip + ISSUE-003 分页。CI 轮：ISSUE-008 新建 ci.yml 三 OS 矮阵 + buffalo_l 缓存 + R-4 AI 断言 + 预存基线清零（ruff noqa + mypy openpyxl 配置）。ISSUE-009：getting-started.md §4/§7/§12 文档补强 + ci.yml 追加 UI 断言步 + KNOWN_ISSUES 清零 + 修重复 § 维护规则标题。删 KNOWN_ISSUES 全 7 ISSUE |
-| Remaining | 无（本七 Issue 完整闭环，KNOWN_ISSUES 清零） |
-| Next Step | 全部已定 Issue 修复轮次完成；后续按需推进新功能开发（M7 可扩展里程碑未启动）+ SQLAlchemy/Alembic 深化 |
-| HEAD | 待提交（ISSUE-009 收尾） |
-| 测试 | pytest 252 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
-| 质量门 | ruff 0 errors；mypy 0 errors；累计新增 12 测试全绿 |
-| 文档影响 | 本会话触及 PROJECT_STATUS §2/§3/§5 刷新 / KNOWN_ISSUES 全 7 ISSUE 删除 + 重复标题修 / getting-started.md §4/§7/§9/§12 更新 / README CI badge / ci.yml 新建 |
+| 会话范围 | Project Onboarding + dev-plan-phase-b.md 核验修订 + §6 八项裁决点拍板 + 阶段 B1 全链路落地 + B1 Review 修复轮（A-1~A-4 阻塞 + B-1~B-8 应修） |
+| Completed | dev-plan-phase-b.md v1.1 修订；§6 八项裁决点定案；B1 落地：PillowPhotoMetadataReader 可选注入 ContentHashCalculator + app/services.py 装配注入 hasher + PhotoRepository.list_duplicate_groups Protocol 扩展 + SQLite 单查询 IN（消除 N+1）+ InMemory 内存过滤双实现 + DetectDuplicatesService（fail-loud 替空串 fallback）+ DuplicateReport/Group DTO + BackfillContentHashService（双层 replace 仅替 content_hash 守 ADR-021）+ backfill-content-hash CLI 子命令 + DuplicateReportDialog 首版只读 + DetectDuplicatesController + 装配链 + MainWindow toolbar 入口；新增测试 32 项。Review 修复轮：A-1 ruff F841 去赋值 + A-2 跨平台 encoding=utf-8 + A-4 Backfill 双层 replace + B-1 空串 fallback 改 raise + B-2 SQLite N+1 改单查询 IN + B-3 InMemory 分桶改 setdefault + B-4 6 处局部 import 提顶部 + B-5 noop setData 删 + B-6 parent 注解统一 QWidget + B-7 frozen 注释改 slots + B-8 dev-plan 指针改自述理由 + §5 如实刷新 + 乱码修复（飘带/矩阵 各 3 处） |
+| Remaining | 无（B1 已全绿：ruff 0 + mypy 0 + pytest 284 passed + 8 skipped） |
+| Next Step | 阶段 B2 搜索/筛选（§7 顺序：B1→B2→B3→B4→B5，B2 已拍板 SQLite SQL 下推 + InMemory 内存过滤 + PhotoSearchCriteria 归 Domain + 新建 filter_bar.py） |
+| HEAD | 待提交（B1 全链路 + Review 修复轮，单 Step 单提交按 ADR-023） |
+| 测试 | pytest 284 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
+| 质量门 | ruff 0 errors；mypy 0 errors；B1 新增 32 测试全绿（reader 6 + repository 10 + service 6 + backfill 6 + CLI 集成 4） |
+| 文档影响 | 本会话触及 PROJECT_STATUS §3/§4/§5 刷新 + 乱码修复（飘带/矩阵）+ dev-plan-phase-b.md v1.1 修订 + §6 八项裁决点定案 + KNOWN_ISSUES 无新增 + Review 修复轮文档指针清理（src 内 8 文件 dev-plan 指针改自述理由） |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 

@@ -8,9 +8,11 @@ directly from photo_archiver.presentation.views.main_window instead.
 """
 
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
+from photo_archiver.presentation.views.duplicate_report_dialog import DuplicateReportDialog
 from photo_archiver.presentation.views.photo_list_model import PhotoListModel
 
 __all__ = [
     "ArchivePreviewDialog",
+    "DuplicateReportDialog",
     "PhotoListModel",
 ]

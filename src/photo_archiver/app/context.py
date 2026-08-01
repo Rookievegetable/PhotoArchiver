@@ -6,6 +6,7 @@ from photo_archiver.app.repositories import ApplicationRepositories
 from photo_archiver.app.services import ApplicationServices
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.presentation.controllers import (
+    DetectDuplicatesController,
     ExportController,
     PhotoListController,
     ReviewController,
@@ -26,3 +27,4 @@ class ApplicationContext:
     photo_list_controller: PhotoListController
     settings_controller: SettingsController
     export_controller: ExportController
+    detect_duplicates_controller: DetectDuplicatesController

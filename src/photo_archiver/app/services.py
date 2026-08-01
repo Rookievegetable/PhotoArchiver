@@ -8,6 +8,8 @@ from photo_archiver.application import (
     ArchivePathBuilderService,
     ArchivePhotosService,
     ArchivePlanner,
+    BackfillContentHashService,
+    DetectDuplicatesService,
     ExportService,
     ImportPeopleService,
     MatchPersonsService,
@@ -25,6 +27,7 @@ from photo_archiver.infrastructure import (
     TxtPersonImportReader,
 )
 from photo_archiver.infrastructure.config import AppSettings
+from photo_archiver.infrastructure.image import ContentHashCalculator
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +43,8 @@ class ApplicationServices:
     review_recognition: ReviewRecognitionService
     settings: SettingsService
     export: ExportService
+    detect_duplicates: DetectDuplicatesService
+    backfill_content_hash: BackfillContentHashService
 
 
 def build_application_services(
@@ -70,7 +75,10 @@ def build_application_services(
     ~500MB model pack runnable for every other feature.
     """
     scanner = LocalPhotoFileScanner()
-    metadata_reader = PillowPhotoMetadataReader()
+    # B1 重复图片检测：向 PillowPhotoMetadataReader 注入 ContentHashCalculator，
+    # 让注册照片的同一 pass 内顺手算 SHA-256 填 PhotoMetadata.content_hash。既有
+    # CLI/单测路径未注入 hasher 时 reader 不算哈希保持向后兼容——生产装配在此注入。
+    metadata_reader = PillowPhotoMetadataReader(content_hasher=ContentHashCalculator())
     unit_of_work = SQLiteUnitOfWork(repositories._connection_provider)
 
     archive_path_builder = ArchivePathBuilderService()
@@ -105,6 +113,14 @@ def build_application_services(
         recognition_repository=repositories.recognition,
         archive_record_repository=repositories.archive_records,
     )
+    detect_duplicates_service = DetectDuplicatesService(repositories.photos)
+    # 一次性回填服务复用已注入 hasher 的 metadata_reader，
+    # 让历史 NULL 哈希照片经 CLI 子命令补齐。reader 装配含 ContentHashCalculator
+    # （上文已注入），故本服务调 reader.read 即可拿到含哈希的 fresh metadata。
+    backfill_content_hash_service = BackfillContentHashService(
+        repositories.photos,
+        metadata_reader,
+    )
 
     return ApplicationServices(
         import_people=ImportPeopleService(TxtPersonImportReader(), repositories.people),
@@ -122,6 +138,8 @@ def build_application_services(
         review_recognition=review_service,
         settings=settings_service,
         export=export_service,
+        detect_duplicates=detect_duplicates_service,
+        backfill_content_hash=backfill_content_hash_service,
     )
 
 

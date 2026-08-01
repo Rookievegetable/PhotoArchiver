@@ -33,6 +33,8 @@ def run_main(arguments: list[str], *, env: dict[str, str] | None = None) -> subp
         cwd=PROJECT_ROOT,
         env=command_env,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         check=False,
     )

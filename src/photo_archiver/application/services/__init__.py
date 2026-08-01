@@ -4,6 +4,8 @@ from photo_archiver.application.services.archive_executor import ArchiveExecutor
 from photo_archiver.application.services.archive_path_builder_service import ArchivePathBuilderService
 from photo_archiver.application.services.archive_photos_service import ArchivePhotosService
 from photo_archiver.application.services.archive_planner import ArchivePlanner
+from photo_archiver.application.services.backfill_content_hash_service import BackfillContentHashService
+from photo_archiver.application.services.detect_duplicates_service import DetectDuplicatesService
 from photo_archiver.application.services.export_service import ExportService
 from photo_archiver.application.services.import_people_service import ImportPeopleService
 from photo_archiver.application.services.match_persons_service import MatchPersonsService
@@ -18,6 +20,8 @@ __all__ = [
     "ArchivePathBuilderService",
     "ArchivePhotosService",
     "ArchivePlanner",
+    "BackfillContentHashService",
+    "DetectDuplicatesService",
     "ExportService",
     "ImportPeopleService",
     "MatchPersonsService",
