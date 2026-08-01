@@ -48,6 +48,7 @@ from photo_archiver.application.services import (
     ReviewRecognitionService,
     ScanAndRegisterPhotosService,
     ScanPhotoFolderService,
+    SearchPhotosService,
     SettingsService,
 )
 from photo_archiver.application.use_cases import (
@@ -105,6 +106,7 @@ __all__ = [
     "ScanPhotoFolderResult",
     "ScanPhotoFolderService",
     "ScanPhotoFolderUseCase",
+    "SearchPhotosService",
     "SettingsService",
     "SettingsUseCase",
     "SystemSettings",

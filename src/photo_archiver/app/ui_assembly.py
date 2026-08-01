@@ -121,6 +121,7 @@ def build_ui_controllers(
             repositories.photos,
             thumbnail_cache,
             thumbnail_generator,
+            search_service=services.search_photos,
         ),
         settings=SettingsController(services.settings),
         export=ExportController(

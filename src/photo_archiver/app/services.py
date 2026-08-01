@@ -17,6 +17,7 @@ from photo_archiver.application import (
     ReviewRecognitionService,
     ScanAndRegisterPhotosService,
     ScanPhotoFolderService,
+    SearchPhotosService,
     SettingsService,
 )
 from photo_archiver.infrastructure import (
@@ -45,6 +46,7 @@ class ApplicationServices:
     export: ExportService
     detect_duplicates: DetectDuplicatesService
     backfill_content_hash: BackfillContentHashService
+    search_photos: SearchPhotosService
 
 
 def build_application_services(
@@ -121,6 +123,7 @@ def build_application_services(
         repositories.photos,
         metadata_reader,
     )
+    search_photos_service = SearchPhotosService(repositories.photos)
 
     return ApplicationServices(
         import_people=ImportPeopleService(TxtPersonImportReader(), repositories.people),
@@ -140,6 +143,7 @@ def build_application_services(
         export=export_service,
         detect_duplicates=detect_duplicates_service,
         backfill_content_hash=backfill_content_hash_service,
+        search_photos=search_photos_service,
     )
 
 

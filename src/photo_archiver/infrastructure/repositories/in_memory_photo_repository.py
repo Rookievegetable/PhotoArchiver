@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from photo_archiver.domain import Photo, PhotoPath, PhotoRepository
+from photo_archiver.domain import Photo, PhotoPath, PhotoRepository, PhotoSearchCriteria
 
 
 class InMemoryPhotoRepository(PhotoRepository):
@@ -31,6 +31,36 @@ class InMemoryPhotoRepository(PhotoRepository):
     def list_by_folder_id(self, folder_id: UUID) -> list[Photo]:
         """Return photos belonging to the given folder."""
         return [photo for photo in self._photos_by_id.values() if photo.folder_id == folder_id]
+
+    def search(self, criteria: PhotoSearchCriteria) -> list[Photo]:
+        """Return photos matching every supplied criterion (AND combination).
+
+        InMemory 走内存过滤（B2-a 裁决已拍板：InMemory 为测试替身，复杂度让位
+        可读性；与 SQLite 实现的结果一致性靠对照测试守护）。person_id 与
+        match_status 需查 recognition_results——但 InMemory 仓储不持 recognition
+        结果，故这两个轴在 InMemory 下**无对应数据可过**，按契约"无 recognition
+        结果的照片被 match_status 排除"——person_id/match_status 非空时返回空列表
+        （测试替身场景下不会真筛这两轴，对照测试只用 captured_from/to 轴）。
+        captured_from/to 走 Photo.captured_at 区间，NULL captured_at 默认排除。
+        """
+        results: list[Photo] = []
+        for photo in self._photos_by_id.values():
+            if criteria.person_id is not None or criteria.match_status is not None:
+                # InMemory 仓储不持 recognition_results，这两轴无数据可过——按契
+                # 约"无 recognition 结果的照片被 match_status 排除"返回空。对照测
+                # 试只用 captured 轴守护一致性，避免在此两轴做 SQLite/InMemory 对照
+                continue
+            if criteria.captured_from is not None and photo.captured_at is None:
+                continue  # NULL captured_at 默认排除（契约文档化）
+            if criteria.captured_from is not None and photo.captured_at is not None:
+                if photo.captured_at < criteria.captured_from:
+                    continue
+            if criteria.captured_to is not None and photo.captured_at is not None:
+                if photo.captured_at > criteria.captured_to:
+                    continue
+            results.append(photo)
+        # 排序与 SQLite 实现对齐——created_at + id
+        return sorted(results, key=lambda p: (p.created_at, str(p.id)))
 
     def list_duplicate_groups(self) -> list[list[Photo]]:
         """Return groups of photos sharing the same non-null content hash.

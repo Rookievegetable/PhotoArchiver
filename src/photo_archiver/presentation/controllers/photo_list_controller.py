@@ -7,12 +7,16 @@ Step 7 ThumbnailCache 已就绪（resolve + is_stale），本 controller 持它�
 """
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from PySide6.QtCore import QObject, Qt, QRunnable, QThreadPool, Signal, Slot
 
 from photo_archiver.application.ports import ThumbnailCache, ThumbnailGenerator
-from photo_archiver.domain import Photo, PhotoRepository
+from photo_archiver.domain import Photo, PhotoRepository, PhotoSearchCriteria
+
+if TYPE_CHECKING:
+    from photo_archiver.application.services import SearchPhotosService
 
 # Default thumbnail bounding box size matches ThumbnailGenerator.generate default.
 _DEFAULT_THUMBNAIL_SIZE = 256
@@ -66,13 +70,23 @@ class PhotoListController(QObject):
         photo_repository: PhotoRepository,
         thumbnail_cache: ThumbnailCache,
         thumbnail_generator: ThumbnailGenerator,
+        search_service: "SearchPhotosService | None" = None,
         parent: QObject | None = None,
     ) -> None:
-        """Initialize the controller with its repository and thumbnail services."""
+        """Initialize the controller with its repository and thumbnail services.
+
+        Args:
+            search_service: Optional ``SearchPhotosService`` for B2 filtering.
+                When provided, ``search_photos(criteria)`` delegates to it;
+                when None (legacy/CLI/CI paths without Qt filtering), calls
+                to ``search_photos`` raise NotImplementedError. MainWindow
+                assembly wires this; CLI paths leave it unset.
+        """
         super().__init__(parent)
         self._photo_repository = photo_repository
         self._thumbnail_cache = thumbnail_cache
         self._thumbnail_generator = thumbnail_generator
+        self._search_service = search_service
         self._in_flight: set[UUID] = set()
         # Wire the async completion back through a QueuedConnection so the
         # signal fires on the UI thread, not the QThreadPool worker thread.
@@ -81,6 +95,21 @@ class PhotoListController(QObject):
     def list_photos(self) -> list[Photo]:
         """Return all registered photos for the photo-list view."""
         return self._photo_repository.list_all()
+
+    def search_photos(self, criteria: PhotoSearchCriteria) -> list[Photo]:
+        """Return photos matching the supplied search criteria.
+
+        Delegates to ``SearchPhotosService`` when wired (B2 filtering path);
+        raises NotImplementedError when the service was not injected (CLI/CI
+        paths that don't need filtering). The query is synchronous — fast SQL
+        push-down per the dual-strategy decision, no Worker submission.
+        """
+        if self._search_service is None:
+            raise NotImplementedError(
+                "search_photos requires a SearchPhotosService to be wired at construction; "
+                "this controller instance was built without one (CLI/CI path).",
+            )
+        return self._search_service.execute(criteria)
 
     def load_thumbnail(self, photo_id: UUID, source_path: Path) -> None:
         """Load a thumbnail for one photo, emitting thumbnail_loaded when ready.

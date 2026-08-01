@@ -25,12 +25,14 @@ from PySide6.QtWidgets import (
 )
 
 from photo_archiver.app.context import ApplicationContext
+from photo_archiver.domain import PhotoSearchCriteria
 from photo_archiver.presentation.controllers import (
     ArchiveController,
     ImportPeopleController,
     ScanController,
 )
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
+from photo_archiver.presentation.views.filter_bar import FilterBar
 from photo_archiver.presentation.views.photo_list_model import PhotoListModel
 from photo_archiver.presentation.views.review_dialog import ReviewDialog
 from photo_archiver.presentation.views.settings_dialog import SettingsDialog
@@ -177,9 +179,15 @@ class MainWindow(QMainWindow):
                 break
 
     def _build_central(self) -> None:
-        """Create the central photo list view."""
+        """Create the central photo list view with a filter bar above it."""
         central = QWidget(self)
         layout = QVBoxLayout(central)
+
+        # B2 搜索/筛选：FilterBar 在列表上方，发 criteria_changed → 刷新列表。
+        # criteria None 时回退 list_all；否则走 PhotoListController.search_photos。
+        self._filter_bar = FilterBar(self)
+        self._filter_bar.criteria_changed.connect(self._on_filter_changed)
+        layout.addWidget(self._filter_bar)
 
         self._photo_list_model = PhotoListModel(parent=self)
         self._photo_list = QListView(self)
@@ -191,6 +199,23 @@ class MainWindow(QMainWindow):
         self._photo_list_controller.thumbnail_loaded.connect(
             self._photo_list_model.set_thumbnail,
         )
+
+    def _on_filter_changed(self, criteria: object) -> None:
+        """Reload photos filtered by the supplied criteria, or all when None.
+
+        Synchronous on the UI thread: ``search_photos`` is fast SQL push-down
+        (<50ms typical), no Worker submission per the dual-strategy decision.
+        ``criteria`` is typed ``object`` because Qt Signal carries it opaquely;
+        the FilterBar only ever emits ``PhotoSearchCriteria | None``.
+        """
+        if not isinstance(criteria, PhotoSearchCriteria):
+            # None or unexpected type → fall back to unfiltered list.
+            self._refresh_photo_list()
+            return
+        photos = self._photo_list_controller.search_photos(criteria)
+        self._photo_list_model.load_photos(photos)
+        for photo in photos:
+            self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__
 
     def _build_status(self) -> None:
         """Create the status bar with a progress bar and persistent label."""

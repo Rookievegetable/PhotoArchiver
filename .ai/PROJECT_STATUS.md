@@ -62,7 +62,7 @@
 
 ## 3. Project Status（项目当前状态）
 
-**全部 15 个 Roadmap Step 均已实现并验证通过**；阶段 B 业务增强 B1 重复图片检测已落地（本会话）。pytest 284 passed + 8 skipped，ruff 0，mypy 0。
+**全部 15 个 Roadmap Step 均已实现并验证通过**；阶段 B 业务增强 B1 重复图片检测 + B2 搜索/筛选已落地。pytest 300 passed + 8 skipped，ruff 0，mypy 0。
 
 | 阶段 | 状态 |
 |---|---|
@@ -71,7 +71,8 @@
 | 陔带清理轮 | ✅ ruff 0 + mypy 0 |
 | Alembic 迁移体系 | ✅ 已激活（ADR-024） |
 | CI 流水线（GitHub Actions） | ✅ 已激活（三 OS 矩陂 + buffalo_l 模型缓存 + R-4 AI 断言 + UI 断言双守卫，ISSUE-008/009 关闭，KNOWN_ISSUES 清零） |
-| 阶段 B 业务增强 B1 重复图片检测 | ✅ 已落地（本会话，2026-08-01） |
+| 阶段 B 业务增强 B1 重复图片检测 | ✅ 已落地（2026-08-01，HEAD 6301612） |
+| 阶段 B 业务增强 B2 搜索/筛选 | ✅ 已落地（本会话） |
 
 详见 `.ai/business/roadmap.md` §18-§20（规划原文保持计划格式，实际进度以本节 §1 为准）。
 
@@ -94,7 +95,8 @@
 | Settings | ✅ Step 13 就绪（QSettings + 抽象端口双适配器 + SettingsDialog + SettingsController + SettingsService + ReviewRecognitionService UoW 闭环） | `application/services/settings_service.py`、`presentation/views/settings_dialog.py`、`infrastructure/persistence/` |
 | Export | ✅ Step 14 就绪（ExportService + Excel/CSV exporter + ExportWorker + ExportDialog + Controller） | `application/services/export_service.py`、`infrastructure/exporters/{excel_exporter,csv_exporter}.py`、`workers/export_task.py`、`presentation/{controllers/export_controller,views/export_dialog}.py` |
 | Plugins | ✅ Step 15 就绪（Plugin system: interface + loader + example + MainWindow action registration + plugin guide） | `src/photo_archiver/plugins/loader.py`、`application/ports/plugin.py`、`examples/plugins/hello_plugin.py`、`docs/development/plugin-guide.md` |
-| 阶段 B / B1 重复图片检测 | ✅ 已落地（本会话）：PillowPhotoMetadataReader 可选注入 ContentHashCalculator（B1-c）+ PhotoRepository.list_duplicate_groups（SQLite SQL 下推 + InMemory 内存过滤）+ DetectDuplicatesService + DuplicateReport DTO + BackfillContentHashService + `backfill-content-hash` CLI 子命令（B1-a）+ DuplicateReportDialog 首版只读 + DetectDuplicatesController + MainWindow toolbar 入口 | `infrastructure/filesystem/pillow_photo_metadata_reader.py`、`domain/repositories/photo_repository.py`、`infrastructure/database/sqlite_photo_repository.py`、`infrastructure/repositories/in_memory_photo_repository.py`、`application/services/{detect_duplicates,backfill_content_hash}_service.py`、`application/dtos/duplicates.py`、`presentation/views/duplicate_report_dialog.py`、`presentation/controllers/detect_duplicates_controller.py`、`main.py` |
+| 阶段 B / B1 重复图片检测 | ✅ 已落地（2026-08-01，HEAD 6301612）：PillowPhotoMetadataReader 可选注入 ContentHashCalculator + PhotoRepository.list_duplicate_groups（SQLite 单查询 IN + InMemory 内存过滤）+ DetectDuplicatesService + DuplicateReport DTO + BackfillContentHashService + `backfill-content-hash` CLI 子命令 + DuplicateReportDialog 首版只读 + DetectDuplicatesController + MainWindow toolbar 入口 | `infrastructure/filesystem/pillow_photo_metadata_reader.py`、`domain/repositories/photo_repository.py`、`infrastructure/database/sqlite_photo_repository.py`、`infrastructure/repositories/in_memory_photo_repository.py`、`application/services/{detect_duplicates,backfill_content_hash}_service.py`、`application/dtos/duplicates.py`、`presentation/views/duplicate_report_dialog.py`、`presentation/controllers/detect_duplicates_controller.py`、`main.py` |
+| 阶段 B / B2 搜索/筛选 | ✅ 已落地（本会话）：PhotoSearchCriteria Domain 值对象 + PhotoRepository.search Protocol 扩展（SQLite SQL 下推 JOIN recognition_results + InMemory 内存过滤双实现）+ SearchPhotosService + FilterBar QWidget（状态下拉 + 日期区间 + 清除按钮；人员下拉首版留空待后续轮）+ PhotoListController.search_photos + MainWindow `_build_central` 插入筛选栏 + `_on_filter_changed` 信号槽 + 装配链注入 search_service | `domain/value_objects/photo_search_criteria.py`、`domain/repositories/photo_repository.py`、`infrastructure/database/sqlite_photo_repository.py`、`infrastructure/repositories/in_memory_photo_repository.py`、`application/services/search_photos_service.py`、`presentation/views/filter_bar.py`、`presentation/controllers/photo_list_controller.py`、`presentation/views/main_window.py`、`app/ui_assembly.py`、`app/services.py` |
 
 ### 数据库 Schema 版本
 
@@ -112,16 +114,16 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-08-01 23:30（本地） |
+| 时间 | 2026-08-01 23:55（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | Project Onboarding + dev-plan-phase-b.md 核验修订 + §6 八项裁决点拍板 + 阶段 B1 全链路落地 + B1 Review 修复轮（A-1~A-4 阻塞 + B-1~B-8 应修） |
-| Completed | dev-plan-phase-b.md v1.1 修订；§6 八项裁决点定案；B1 落地：PillowPhotoMetadataReader 可选注入 ContentHashCalculator + app/services.py 装配注入 hasher + PhotoRepository.list_duplicate_groups Protocol 扩展 + SQLite 单查询 IN（消除 N+1）+ InMemory 内存过滤双实现 + DetectDuplicatesService（fail-loud 替空串 fallback）+ DuplicateReport/Group DTO + BackfillContentHashService（双层 replace 仅替 content_hash 守 ADR-021）+ backfill-content-hash CLI 子命令 + DuplicateReportDialog 首版只读 + DetectDuplicatesController + 装配链 + MainWindow toolbar 入口；新增测试 32 项。Review 修复轮：A-1 ruff F841 去赋值 + A-2 跨平台 encoding=utf-8 + A-4 Backfill 双层 replace + B-1 空串 fallback 改 raise + B-2 SQLite N+1 改单查询 IN + B-3 InMemory 分桶改 setdefault + B-4 6 处局部 import 提顶部 + B-5 noop setData 删 + B-6 parent 注解统一 QWidget + B-7 frozen 注释改 slots + B-8 dev-plan 指针改自述理由 + §5 如实刷新 + 乱码修复（飘带/矩阵 各 3 处） |
-| Remaining | 无（B1 已全绿：ruff 0 + mypy 0 + pytest 284 passed + 8 skipped） |
-| Next Step | 阶段 B2 搜索/筛选（§7 顺序：B1→B2→B3→B4→B5，B2 已拍板 SQLite SQL 下推 + InMemory 内存过滤 + PhotoSearchCriteria 归 Domain + 新建 filter_bar.py） |
-| HEAD | `6301612`（B1 全链路 + Review 修复轮已提交） |
-| 测试 | pytest 284 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
-| 质量门 | ruff 0 errors；mypy 0 errors；B1 新增 32 测试全绿（reader 6 + repository 10 + service 6 + backfill 6 + CLI 集成 4） |
-| 文档影响 | 本会话触及 PROJECT_STATUS §3/§4/§5 刷新 + 乱码修复（飘带/矩阵）+ dev-plan-phase-b.md v1.1 修订 + §6 八项裁决点定案 + KNOWN_ISSUES 无新增 + Review 修复轮文档指针清理（src 内 8 文件 dev-plan 指针改自述理由） |
+| 会话范围 | Project Onboarding + dev-plan-phase-b.md 核验修订 + §6 八项裁决点拍板 + 阶段 B1 全链路落地 + B1 Review 修复轮 + 阶段 B2 搜索/筛选全链路落地 + B2 Review 修复轮 |
+| Completed | dev-plan-phase-b.md v1.1 修订；§6 八项裁决点定案；B1 落地（HEAD 6301612）+ B1 Review 修复轮（A-1~A-4/B-1~B-8）；B2 落地：PhotoSearchCriteria Domain 值对象 + PhotoRepository.search Protocol 扩展（SQLite SQL 下推 JOIN recognition_results + InMemory 内存过滤双实现）+ SearchPhotosService + FilterBar QWidget（首版仅 status 轴生效；人员下拉/日期区间留空禁用待后续轮）+ PhotoListController.search_photos + MainWindow `_build_central` 插入筛选栏 + `_on_filter_changed` 信号槽 + 装配链注入 search_service；新增测试 16 项。B2 Review 修复轮：Major-1 删未用 Photo import（ruff 清零）+ Major-2 FilterBar 日期轴禁用对齐首版契约 + Minor-1 两处局部 import 提顶部 + Minor-2 删误导注释 + Minor-3 clear() 走 _emit_criteria 单源 + Minor-4 日志改显式列字段 + Minor-5 docstring person_id 语义注释修正 |
+| Remaining | 无（B2 + Review 修复轮已全绿：ruff 0 + mypy 0 + pytest 300 passed + 8 skipped） |
+| Next Step | 阶段 B3 批量操作（§7 顺序：B1→B2→B3→B4→B5，B3 已拍板仅"照片多选 + 批量归档" + 批准扩展 ArchivePhotosCommand/ArchivePlanner.plan 加 photo_ids 参数 B3-b） |
+| HEAD | 待提交（B2 全链路 + Review 修复轮，单 Step 单提交按 ADR-023） |
+| 测试 | pytest 300 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
+| 质量门 | ruff 0 errors；mypy 0 errors；B2 新增 16 测试全绿（repository search 12 含 SQLite/InMemory 对照 + service 4） |
+| 文档影响 | 本会话触及 PROJECT_STATUS §3/§4/§5 刷新 + KNOWN_ISSUES 无新增 + roadmap §22"搜索/筛选"条目无需改（既有）+ 无新 ADR 需求 |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 

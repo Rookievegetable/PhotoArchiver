@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from photo_archiver.domain import Photo, PhotoPath, PhotoRepository
+from photo_archiver.domain import Photo, PhotoPath, PhotoRepository, PhotoSearchCriteria
 from photo_archiver.infrastructure.database.sqlite_connection import SQLiteConnectionProvider
 from photo_archiver.infrastructure.database.sqlite_mappers import (
     datetime_to_text,
@@ -100,6 +100,38 @@ class SQLitePhotoRepository(PhotoRepository):
                 "SELECT * FROM photos WHERE folder_id = ? ORDER BY created_at, id",
                 (str(folder_id),),
             ).fetchall()
+        return [photo_from_row(row) for row in rows]
+
+    def search(self, criteria: PhotoSearchCriteria) -> list[Photo]:
+        """Return photos matching every supplied criterion (AND combination).
+
+        SQLite 下推：动态拼 WHERE + 可选 JOIN recognition_results。person_id 与
+        match_status 均涉 recognition_results，走同一 JOIN（person_id 过滤 person_id
+        列、match_status 过滤 status 列）。captured_from/to 走 photos.captured_at
+        区间。SQL 仅在本 infrastructure/database 层（ADR-004），参数化防注入。
+        """
+        clauses: list[str] = []
+        params: list[str] = []
+        join_needed = criteria.person_id is not None or criteria.match_status is not None
+        if criteria.person_id is not None:
+            clauses.append("rr.person_id = ?")
+            params.append(str(criteria.person_id))
+        if criteria.match_status is not None:
+            clauses.append("rr.status = ?")
+            params.append(criteria.match_status.value)
+        if criteria.captured_from is not None:
+            clauses.append("p.captured_at >= ?")
+            params.append(datetime_to_text(criteria.captured_from))
+        if criteria.captured_to is not None:
+            clauses.append("p.captured_at <= ?")
+            params.append(datetime_to_text(criteria.captured_to))
+        where = " AND ".join(clauses) if clauses else "1 = 1"
+        sql = "SELECT p.* FROM photos p"
+        if join_needed:
+            sql += " JOIN recognition_results rr ON rr.photo_id = p.id"
+        sql += f" WHERE {where} ORDER BY p.created_at, p.id"
+        with self._connection_provider.connect() as connection:
+            rows = connection.execute(sql, tuple(params)).fetchall()
         return [photo_from_row(row) for row in rows]
 
     def list_duplicate_groups(self) -> list[list[Photo]]:
