@@ -50,13 +50,13 @@
 
 ## 2. Current Step（当前开发阶段）
 
-**项目开发已全面收官。所有 Step 0.5-15 全部完成。飘带清零（ruff 0 + mypy 0）。Alembic 迁移体系已激活。CI 流水线已激活（GitHub Actions 三平台矩阵 + 模型缓存，ISSUE-008 关闭）。**
+**项目开发已全面收官。所有 Step 0.5-15 全部完成。飘带清零（ruff 0 + mypy 0）。Alembic 迁移体系已激活。CI 流水线已激活（GitHub Actions 三平台矩阵 + 模型缓存，ISSUE-008/009 双关闭，KNOWN_ISSUES 清零）。**
 
 前置就绪状态：
 - All 15 steps completed and verified.
 - 数据库 Schema v4（Alembic `001_initial_v4` 管理）。
-- 飘带清理轮执行完毕：ruff 4→0, mypy 25→0。
-- CI 流水线已激活（`.github/workflows/ci.yml`，三 OS 矩阵 + buffalo_l 模型缓存 + R-4 双断言守卫，ISSUE-008 关闭）。
+- 阘带清理轮执行完毕：ruff 4→0, mypy 25→0。
+- CI 流水线已激活（`.github/workflows/ci.yml`，三 OS 矩阵 + buffalo_l 模型缓存 + R-4 AI 断言 + UI 断言双守卫，ISSUE-008/009 关闭，KNOWN_ISSUES 清零）。
 
 ---
 
@@ -70,7 +70,7 @@
 | Phase 2 产品化（Step 12-15） | ✅ 完成 |
 | 飘带清理轮 | ✅ ruff 0 + mypy 0 |
 | Alembic 迁移体系 | ✅ 已激活（ADR-024） |
-| CI 流水线（GitHub Actions） | ✅ 已激活（三 OS 矩阵 + buffalo_l 模型缓存 + R-4 双断言，ISSUE-008 关闭） |
+| CI 流水线（GitHub Actions） | ✅ 已激活（三 OS 矩阵 + buffalo_l 模型缓存 + R-4 AI 断言 + UI 断言双守卫，ISSUE-008/009 关闭，KNOWN_ISSUES 清零） |
 
 详见 `.ai/business/roadmap.md` §18-§20（规划原文保持计划格式，实际进度以本节 §1 为准）。
 
@@ -112,14 +112,14 @@
 |---|---|
 | 时间 | 2026-08-01 20:30（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | Issue 修复轮 Round 1-4：ISSUE-002 结构化埋点 + ISSUE-001 recognizer 双检测优化 + ISSUE-006 类型收口 + ISSUE-010 Pillow importorskip + ISSUE-003 Repository 分页接口 |
-| Completed | Round 1 ISSUE-002：WorkerTask task_id + Loguru contextualize。Round 2 ISSUE-001：detect_with_embeddings + extract_from 单次 analysis.get，halve AI 处理时间。Round 3 ISSUE-006：RecognitionResult.id 改 `UUID` + `field(default_factory=uuid4)` 类型诚实表达；ISSUE-010：test_step11_archive_e2e.py 补 `pytest.importorskip("PIL")`。Round 4 ISSUE-003：FaceEmbeddingRepository.list_all 加可选 `limit/offset` 参数（方案 A 向后兼容），SQLite LIMIT -1 OFFSET sentinel；2 新分页单测。删 KNOWN_ISSUES ISSUE-001/002/003/006/010 |
-| Remaining | 无（本五 Issue 完整闭环，KNOWN_ISSUES 仅余 ISSUE-008/009 平台限制） |
-| Next Step | 全部已定 Issue 修复轮次完成；后续按 roadmap §18 后续 Step 推进 |
-| HEAD | 待提交（本会话收尾） |
-| 测试 | pytest 251 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
+| 会话范围 | Issue 修复轮 Round 1-4 + CI 轮：ISSUE-002/001/006/010/003 + ISSUE-008 CI 流水线 + ISSUE-009 UI 断言 |
+| Completed | Round 1-4：ISSUE-002 task_id + ISSUE-001 消双检测 + ISSUE-006 类型收口 + ISSUE-010 importorskip + ISSUE-003 分页。CI 轮：ISSUE-008 新建 ci.yml 三 OS 矮阵 + buffalo_l 缓存 + R-4 AI 断言 + 预存基线清零（ruff noqa + mypy openpyxl 配置）。ISSUE-009：getting-started.md §4/§7/§12 文档补强 + ci.yml 追加 UI 断言步 + KNOWN_ISSUES 清零 + 修重复 § 维护规则标题。删 KNOWN_ISSUES 全 7 ISSUE |
+| Remaining | 无（本七 Issue 完整闭环，KNOWN_ISSUES 清零） |
+| Next Step | 全部已定 Issue 修复轮次完成；后续按需推进新功能开发（M7 可扩展里程碑未启动）+ SQLAlchemy/Alembic 深化 |
+| HEAD | 待提交（ISSUE-009 收尾） |
+| 测试 | pytest 252 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
 | 质量门 | ruff 0 errors；mypy 0 errors；累计新增 12 测试全绿 |
-| 文档影响 | 本会话触及 PROJECT_STATUS §5 刷新 / KNOWN_ISSUES ISSUE-001+002+003+006+010 删除 |
+| 文档影响 | 本会话触及 PROJECT_STATUS §2/§3/§5 刷新 / KNOWN_ISSUES 全 7 ISSUE 删除 + 重复标题修 / getting-started.md §4/§7/§9/§12 更新 / README CI badge / ci.yml 新建 |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 

@@ -1,7 +1,6 @@
 # PhotoArchiver 开发入门指南
 
-> Version: 1.1  
-> Last Updated: 2026-07-19
+> Version: 1.2  ｜ Last Updated: 2026-08-01
 
 本文档面向参与 PhotoArchiver 开发的人类开发者，说明如何准备环境、安装依赖、运行应用、执行测试和遵守基本开发约束。
 
@@ -55,11 +54,13 @@ source .venv/bin/activate
 pip install -r requirements/base.txt
 ```
 
-安装开发依赖：
+安装开发依赖（**跑测试必须装 dev.txt 全套**，非可选）：
 
 ```bash
 pip install -r requirements/dev.txt
 ```
+
+> dev.txt 首行 `-r base.txt`，一条命令即装齐全套（含 PySide6 6.11.1 + pytest-qt 4.5.0）。`tests/unit/presentation/` 的 UI 测试用 `pytest.importorskip` 守卫——缺 PySide6 / pytest-qt 时这些测试会 skipped 而非 failed，静默掩盖缺口。装齐 dev.txt 是运行测试集的硬前提。
 
 依赖说明见 `requirements/README.md`。
 
@@ -120,6 +121,19 @@ pytest
 - Infrastructure 适配器测试。
 - Worker 行为测试。
 - 必要的 UI 手动验证说明。
+
+### 诊断 skipped 测试
+
+缺 PySide6 / pytest-qt 或缺 buffalo_l 模型时，相关测试会 skipped 而非 failed。查看 skip 原因：
+
+```bash
+pytest -rs
+```
+
+两类典型 skip 原因：
+
+- **缺 PySide6 / pytest-qt**：装 `pip install -r requirements/dev.txt`（见 §4，跑测试的硬前提）。
+- **缺 buffalo_l 模型**：跑 `python scripts/download_models.py`（见 §12，ADR-012 禁自动下载）。
 
 ## 8. 代码质量检查
 
@@ -217,6 +231,15 @@ AI 编码助手必须遵守 `.ai/AI_ONBOARDING.md`（新 AI Runtime Context 入�
 ### AI 模型目录为空
 
 AI 推理已接入（InsightFace / ONNX Runtime，Step 8-10）。`MODEL_PATH` 默认 `resources/models`，**不自动创建该目录**（ADR-012）——由 `scripts/download_models.py` 手动下载模型，禁止自动下载。首次运行前需先跑该脚本。
+
+### 为什么有测试被 skip？
+
+两类原因：
+
+- **缺 PySide6 / pytest-qt**：`tests/unit/presentation/` 的 UI 测试用 `pytest.importorskip` 守卫，缺装即 skip。装齐 `pip install -r requirements/dev.txt`（见 §4，跑测试的硬前提）后即转为真实运行。
+- **缺 buffalo_l 模型**：`tests/integration/face_detection/` 的 AI 集成测试缺模型即 skip。跑 `python scripts/download_models.py` 后即转为真实运行。
+
+用 `pytest -rs` 查看每条 skip 的具体原因（见 §7）。装齐 dev.txt + 模型后全量测试应无 skip（CI 流水线已用硬断言锁定此判据，见 §9）。
 
 ## 13. 下一步阅读
 

@@ -75,3 +75,16 @@ jobs:
             exit 1
           fi
           echo "All AI integration tests collected without skip — ISSUE-008 closure verified"
+
+      # ISSUE-009 关闭判据：dev.txt 装齐后 presentation 测试必须真实运行。
+      # importorskip 零默 skip 不使 pytest 变红——此步断言收集结果无 SKIPPED 行。
+      # 与 R-4 AI 断言步同构（同 shell、同 pytest --co -q 采集、同 grep -c SKIPPED）。
+      - name: Assert UI tests ran not skipped (close ISSUE-009)
+        shell: bash
+        run: |
+          SKIPPED=$(pytest --co -q tests/unit/presentation/ 2>/dev/null | grep -c "SKIPPED" || true)
+          if [ "$SKIPPED" -gt 0 ]; then
+            echo "::error::${SKIPPED} UI test(s) skipped — ISSUE-009 not truly closed (PySide6/pytest-qt missing on runner)"
+            exit 1
+          fi
+          echo "All UI tests collected without skip — ISSUE-009 closure verified"

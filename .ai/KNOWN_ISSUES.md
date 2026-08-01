@@ -38,17 +38,7 @@
 
 ## 平台与第三方限制
 
-### ISSUE-009 — PySide6 / pytest-qt 阘带导致 UI 集成测试 skip
-
-| 字段 | 值 |
-|---|---|
-| Status | Mitigated |
-| Description | 部分集成测试在缺 PySide6 或 pytest-qt 环境 时 skip。venv 未装齐时 UI smoke test 跑不起来。 |
-| Impact | Low —— 测试覆盖，UI 集成未在精简环境验证 |
-| Temporary Workaround | 安装 `requirements/dev.txt` 全套 |
-| Planned Resolution | 文档明确 dev 环境必装项；CI 装齐 |
-
-## 维护规则
+_当前无未决平台与第三方限制条目。_
 
 ## 维护规则
 
