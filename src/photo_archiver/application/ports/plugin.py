@@ -12,7 +12,11 @@ specific plugin (acceptance criterion 1).
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from photo_archiver.application.dtos.plugin_action_result import ActionResult
+    from photo_archiver.application.ports.plugin_context import PluginContext
 
 
 class PluginAction:
@@ -72,10 +76,18 @@ class Plugin(Protocol):
 
     # ── Lifecycle ────────────────────────────────────────────────────────
 
-    def enable(self) -> None:
-        """Activate the plugin (called after loading or on user enable).
+    def enable(self, context: "PluginContext | None" = None) -> None:
+        """Activate the plugin, optionally with the host-provided context.
 
-        Implementations should perform any resource allocation here.
+        Implementations should perform any resource allocation here AND, when
+        context is provided, store it for later use in execute_action().
+
+        Args:
+            context: PluginContext read-only facade — plugins access a limited
+                Application Service subset through it. Optional (None) so purely
+                declarative plugins (e.g. HelloPlugin) need no Context wiring;
+                the host injects it when available. v2 收敛：可选注入。
+
         The default is a no-op.
         """
 
@@ -102,12 +114,22 @@ class Plugin(Protocol):
         """
         return []
 
-    def execute_action(self, action_id: str) -> None:
-        """Execute the command identified by ``action_id``.
+    def execute_action(self, action_id: str) -> "ActionResult":
+        """Execute the command identified by ``action_id`` and return a result.
 
         ``action_id`` matches one of the IDs returned by ``actions()``.
-        The host calls this when the user clicks the corresponding menu item.
+        The host calls this when the user clicks the corresponding menu item,
+        then renders the returned ``ActionResult`` to the user (拍板 v2 收敛：
+        宿主渲染动作结果——插件不直触 UI/文件系统).
 
         Args:
             action_id: The stable ``PluginAction.id`` of the action to execute.
+
+        Returns:
+            ActionResult with status "success" / "failure" / "noop". When
+            ``action_id`` is not owned by this plugin, return ``noop()`` so
+            the host continues searching other plugins.
         """
+        from photo_archiver.application.dtos.plugin_action_result import noop
+
+        return noop()

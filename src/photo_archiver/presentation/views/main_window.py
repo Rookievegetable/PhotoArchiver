@@ -9,9 +9,11 @@ Status:  progress bar + status label
 """
 
 from pathlib import Path
+from uuid import UUID
 
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QFileDialog,
     QLabel,
     QMainWindow,
@@ -24,7 +26,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from loguru import logger
+
 from photo_archiver.app.context import ApplicationContext
+from photo_archiver.application.dtos.plugin_action_result import ActionResult
 from photo_archiver.domain import PhotoSearchCriteria
 from photo_archiver.presentation.controllers import (
     ArchiveController,
@@ -33,7 +38,7 @@ from photo_archiver.presentation.controllers import (
 )
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
 from photo_archiver.presentation.views.filter_bar import FilterBar
-from photo_archiver.presentation.views.photo_list_model import PhotoListModel
+from photo_archiver.presentation.views.photo_list_model import PHOTO_ID_ROLE, PhotoListModel
 from photo_archiver.presentation.views.review_dialog import ReviewDialog
 from photo_archiver.presentation.views.settings_dialog import SettingsDialog
 from photo_archiver.plugins import PluginRegistry
@@ -139,7 +144,7 @@ class MainWindow(QMainWindow):
         ``actions()`` are turned into QAction entries appended to the toolbar.
         Malformed plugins never crash the window — the loader logs and skips.
         """
-        self._plugin_registry = PluginRegistry()
+        self._plugin_registry = PluginRegistry(self._context.plugin_context)
         examples_plugins = Path(__file__).resolve().parent.parent.parent.parent / "examples" / "plugins"
         if examples_plugins.is_dir():
             self._plugin_registry.load_from_path(examples_plugins)
@@ -162,21 +167,50 @@ class MainWindow(QMainWindow):
                 self._plugin_actions.append(qaction)
 
     def _on_plugin_action(self, action_id: str) -> None:
-        """Dispatch a plugin action click to the owning plugin."""
+        """Dispatch a plugin action click to the owning plugin and render the result.
+
+        B5 v2 收敛：宿主渲染动作结果——plugin.execute_action 返 ActionResult，
+        宿主据 status 渲染：success → information 对话框 + payload、failure → warning、
+        noop → 续查下一个插件（不应出现因 _add_plugin_actions 已按 id 路由）。
+        """
         for plugin in self._plugin_registry.enabled_plugins.values():
             ids_in_plugin = {a.id for a in plugin.actions()}
-            if action_id in ids_in_plugin:
-                try:
-                    plugin.execute_action(action_id)
-                except Exception:
-                    from loguru import logger
-                    logger.exception("Plugin action {} failed", action_id)
-                    QMessageBox.warning(
-                        self,
-                        "Plugin Error",
-                        f"Plugin action '{action_id}' failed. See logs for details.",
-                    )
-                break
+            if action_id not in ids_in_plugin:
+                continue
+            try:
+                result: ActionResult = plugin.execute_action(action_id)
+            except Exception:
+                logger.exception("Plugin action {} failed", action_id)
+                QMessageBox.warning(
+                    self,
+                    "Plugin Error",
+                    f"Plugin action '{action_id}' failed. See logs for details.",
+                )
+                return
+            self._render_plugin_action_result(action_id, result)
+            return
+
+    def _render_plugin_action_result(self, action_id: str, result: object) -> None:
+        """Render a plugin ActionResult to the user via a QMessageBox.
+
+        ``result`` is typed object because Plugin Protocol returns it opaquely;
+        the only emitted shape is ActionResult. payload rendering is placeholder
+        (str(result.payload)) — future plugins may negotiate richer rendering.
+        """
+        if not isinstance(result, ActionResult):
+            return  # unexpected shape — silently ignore (defensive)
+        title = f"Plugin: {action_id}"
+        if result.status == "success":
+            body = result.message
+            if result.payload is not None:
+                body += f"\n\nPayload: {result.payload}"
+            QMessageBox.information(self, title, body)
+        elif result.status == "failure":
+            body = result.message or "Action failed (no detail provided)."
+            if result.payload is not None:
+                body += f"\n\nDetail: {result.payload}"
+            QMessageBox.warning(self, title, body)
+        # noop → 不渲染（_add_plugin_actions 已按 id 路由，不应走到）
 
     def _build_central(self) -> None:
         """Create the central photo list view with a filter bar above it."""
@@ -191,6 +225,7 @@ class MainWindow(QMainWindow):
 
         self._photo_list_model = PhotoListModel(parent=self)
         self._photo_list = QListView(self)
+        self._photo_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._photo_list.setModel(self._photo_list_model)
         layout.addWidget(self._photo_list)
 
@@ -311,7 +346,12 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def _on_archive_clicked(self) -> None:
-        """Open the archive preview dialog; on accept, start the archive task."""
+        """Open the archive preview dialog; on accept, start the archive task.
+
+        B3 批量归档：读 QListView 选中项的 photo_id 透传 preview/execute——
+        用户多选的 photos 直下推 plan 过滤。无选中时 photo_ids=() 走原路径
+        （全部 APPROVED 照片），向后兼容。
+        """
         archive_root = self._context.settings.archive_root
         if archive_root is None:
             QMessageBox.warning(
@@ -320,7 +360,8 @@ class MainWindow(QMainWindow):
                 "ARCHIVE_ROOT is not configured. Set it in .env or use the CLI --archive-root flag.",
             )
             return
-        plan = self._archive_controller.preview(archive_root, ())
+        photo_ids = self._collect_selected_photo_ids()
+        plan = self._archive_controller.preview(archive_root, (), photo_ids=photo_ids)
         if plan.planned_count == 0:
             QMessageBox.information(
                 self,
@@ -337,10 +378,24 @@ class MainWindow(QMainWindow):
         runnable = self._archive_controller.execute(
             archive_root,
             person_ids=(),  # review M-5 fix: symmetric with preview(()) — "all persons with approvals"
+            photo_ids=photo_ids,  # B3 批量归档：用户多选透传
             conflict_strategy=dialog.conflict_strategy,
             dry_run=dialog.dry_run,
         )
         self._connect_task_signals(runnable)
+
+    def _collect_selected_photo_ids(self) -> tuple[UUID, ...]:
+        """Read the QListView current selection and return their photo ids.
+
+        B3 批量归档辅助：映射每 selectedIndex 的 PHOTO_ID_ROLE → UUID tuple。
+        ExtendedSelection 下空选区返回 () 走原"全部 APPROVED"路径，向后兼容。
+        """
+        ids: list[UUID] = []
+        for index in self._photo_list.selectedIndexes():
+            pid = self._photo_list_model.data(index, PHOTO_ID_ROLE)
+            if isinstance(pid, UUID):
+                ids.append(pid)
+        return tuple(ids)
 
     def _refresh_photo_list(self) -> None:
         """Reload photos from the repository into the model.

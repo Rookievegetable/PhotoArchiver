@@ -19,16 +19,40 @@ from loguru import logger
 
 if TYPE_CHECKING:
     from photo_archiver.application.ports.plugin import Plugin
+    from photo_archiver.application.ports.plugin_context import PluginContext
 
 
 class PluginRegistry:
     """Holds all loaded plugins and manages their lifecycle."""
 
-    def __init__(self) -> None:
-        """Initialize an empty registry."""
+    def __init__(self, context: "PluginContext | None" = None) -> None:
+        """Initialize an empty registry with an optional PluginContext.
+
+        Args:
+            context: PluginContext read-only facade injected into each plugin's
+                enable(). Optional (None) so CI / unit tests can load plugins
+                without a full Application bootstrap; v2 收敛拍板：可选注入。
+        """
+        self._context: "PluginContext | None" = context
         self._plugins: dict[str, Plugin] = {}
         self._enabled: set[str] = set()
         self._errors: list[tuple[str, str]] = []  # (plugin_name, error_message)
+
+    # ── Registration ───────────────────────────────────────────────────────
+
+    def register(self, plugin: Plugin) -> None:
+        """Register a plugin instance directly without going through discovery.
+
+        Public API for white-box tests and host-side wiring（review Minor-5 fix：
+        替 ``registry._plugins[name] = plugin`` 私有访问）. Conflicts by name
+        overwrite the previous registration — last write wins, matching the
+        discovery path's behavior on re-loading a plugin module.
+
+        Args:
+            plugin: A Plugin-satisfying instance. Its ``name`` is used as the
+                registry key.
+        """
+        self._plugins[plugin.name] = plugin  # type: ignore[index]  # UUID | None resolved by Protocol contract
 
     # ── Loading ──────────────────────────────────────────────────────────
 
@@ -59,10 +83,10 @@ class PluginRegistry:
     # ── Lifecycle ────────────────────────────────────────────────────────
 
     def enable_all(self) -> None:
-        """Call ``enable()`` on every loaded plugin."""
+        """Call ``enable()`` on every loaded plugin, injecting the context."""
         for name, plugin in self._plugins.items():
             try:
-                plugin.enable()
+                plugin.enable(self._context)
                 self._enabled.add(name)
                 logger.info("Plugin enabled: {}", name)
             except Exception:

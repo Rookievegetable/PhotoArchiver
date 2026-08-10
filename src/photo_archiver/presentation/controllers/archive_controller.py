@@ -48,33 +48,39 @@ class ArchiveController(QObject):
         self,
         archive_root: Path,
         person_ids: tuple[UUID, ...] = (),
+        photo_ids: tuple[UUID, ...] = (),
     ) -> ArchivePlan:
         """Synchronously plan the archive and return the plan for UI preview.
 
         Delegates to the UseCase's preview method — no worker submission, no
         filesystem mutation. The UI can inspect the returned ArchivePlan
-        before deciding whether to call execute().
+        before deciding whether to call execute(). B3 透 photo_ids 入 preview
+        批量归档路径（用户多选的 photos 直下推 plan 过滤）。
         """
         return self._use_case.preview(
             archive_root=str(archive_root),
             person_ids=person_ids,
+            photo_ids=photo_ids,
         )
 
     def execute(
         self,
         archive_root: Path,
         person_ids: tuple[UUID, ...] = (),
+        photo_ids: tuple[UUID, ...] = (),
         conflict_strategy: str | None = None,
         dry_run: bool = False,
     ):
         """Start an archive task and return its runnable handle.
 
         The returned runnable exposes a ``signals`` attribute the caller uses
-        to connect UI slots via :meth:`connect_signals`.
+        to connect UI slots via :meth:`connect_signals`. B3 透 photo_ids 入
+        ArchivePhotosCommand 批量归档路径。
         """
         command = ArchivePhotosCommand(
             archive_root=archive_root,
             person_ids=person_ids,
+            photo_ids=photo_ids,
             conflict_strategy=conflict_strategy,
             dry_run=dry_run,
         )

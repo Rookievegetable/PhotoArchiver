@@ -23,11 +23,13 @@ class ArchivePhotosUseCase:
         self,
         archive_root: str,
         person_ids: tuple[UUID, ...] = (),
+        photo_ids: tuple[UUID, ...] = (),
     ) -> ArchivePlan:  # type: ignore[empty-body]
         """Synchronously plan the archive and return the plan for UI preview.
 
         No filesystem mutation — the returned ArchivePlan is side-effect free
-        so callers (CLI dry-run, UI preview dialog) can inspect it safely.
+        so callers (CLI dry-run, UI preview dialog) can inspect it safely. B3
+        透 photo_ids 入批归档路径（用户多选 photos 直下推 plan 过滤）。
         """
         raise NotImplementedError
 

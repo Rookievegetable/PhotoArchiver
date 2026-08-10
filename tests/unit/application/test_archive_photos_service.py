@@ -31,8 +31,8 @@ class _FakePlanner:
         self._plan = plan
         self.calls: list = []
 
-    def plan(self, archive_root, person_ids):
-        self.calls.append((archive_root, person_ids))
+    def plan(self, archive_root, person_ids, photo_ids=()):
+        self.calls.append((archive_root, person_ids, photo_ids))
         return self._plan
 
 

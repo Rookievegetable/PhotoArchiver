@@ -69,6 +69,7 @@ class ArchivePlanner:
         self,
         archive_root: str,
         person_ids: tuple[UUID, ...],
+        photo_ids: tuple[UUID, ...] = (),
     ) -> ArchivePlan:
         """Return the archive plan for the given persons (or all if empty).
 
@@ -76,12 +77,29 @@ class ArchivePlanner:
             archive_root: Root directory string, validated by the caller.
             person_ids: Persons to archive; empty tuple means "all persons
                 with at least one APPROVED recognition result".
+            photo_ids: Specific photos to archive (B3 批量归档); empty tuple
+                means "use person_ids selection". When non-empty, the APPROVED
+                recognition set is filtered to these photos only — letting the
+                UI hand the user's multi-select straight through without
+                rescanning. Backward compatible: legacy callers leave it unset.
+
+        person_ids 与 photo_ids 组合语义（review Major-3 fix 显式文档化）：
+            - person_ids=() + photo_ids=()  → 全部 persons 的全部 APPROVED 照片
+            - person_ids=(pid,..) + photo_ids=() → 仅此 persons 的全部 APPROVED
+            - person_ids=() + photo_ids=(pid,..) → 遍历全部 persons 的 APPROVED
+              集合过滤到此 photo_ids（行为正确但 O(persons × approved) 遍历，
+              性能可优化为按 photo_id 直查 recognition_repository 跳过 persons
+              遍历——留后续轮；当前 O(persons × approved) 典型 <50ms 可受）
+            - person_ids=(pid,..) + photo_ids=(pid2,..) → 仅此 persons 的
+              APPROVED 集合过滤到此 photo_ids（最窄集）
 
         Each photo is planned at most once even if multiple persons were
         matched historically — we archive under the first APPROVED match's
         person name, mirroring the 1:N Top-1 strategy fixed in裁决 #5.
         """
         target_person_ids = self._resolve_target_persons(person_ids)
+        # B3 批量归档：photo_ids 非空时把它转成 set 做 O(1) 过滤；空表走原路径。
+        photo_id_filter: set[UUID] | None = set(photo_ids) if photo_ids else None
 
         items: list[ArchivePlanItem] = []
         skipped_count = 0
@@ -100,6 +118,9 @@ class ArchivePlanner:
 
             for recognition in approved:
                 photo_id = recognition.photo_id
+                if photo_id_filter is not None and photo_id not in photo_id_filter:
+                    # B3 photo_ids 过滤：跳过不在用户选定集的 APPROVED 项。
+                    continue
                 if photo_id in seen_photo_ids:
                     # 已经为另一个 person 规划了此 photo（1:N Top-1 落地）。
                     skipped_count += 1

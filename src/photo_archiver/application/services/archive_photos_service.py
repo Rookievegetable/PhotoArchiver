@@ -62,14 +62,19 @@ class ArchivePhotosService(ArchivePhotosUseCase):
         self,
         archive_root: str,
         person_ids: tuple[UUID, ...] = (),
+        photo_ids: tuple[UUID, ...] = (),
     ) -> ArchivePlan:
         """Synchronously plan the archive and return the plan for UI preview.
 
-        Delegates to the planner so the controller/UI can call preview on the
+        Thin wrapper over ``ArchivePlanner.plan`` so the Presentation layer calls a
         UseCase boundary without knowing the ArchivePlanner concrete class
-        (review M-3 fix).
+        (review M-3 fix). B3 透 photo_ids 入 plan() 批量归档路径。
         """
-        return self._planner.plan(archive_root=archive_root, person_ids=person_ids)
+        return self._planner.plan(
+            archive_root=archive_root,
+            person_ids=person_ids,
+            photo_ids=photo_ids,
+        )
 
     def execute(self, command: ArchivePhotosCommand) -> ArchiveResult:
         """Plan and execute archiving for the command's persons.
@@ -87,6 +92,7 @@ class ArchivePhotosService(ArchivePhotosUseCase):
         plan = self._planner.plan(
             archive_root=archive_root_str,
             person_ids=command.person_ids,
+            photo_ids=command.photo_ids,
         )
         if plan.planned_count == 0:
             logger.info(

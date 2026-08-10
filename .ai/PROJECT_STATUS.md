@@ -72,7 +72,10 @@
 | Alembic 迁移体系 | ✅ 已激活（ADR-024） |
 | CI 流水线（GitHub Actions） | ✅ 已激活（三 OS 矩陂 + buffalo_l 模型缓存 + R-4 AI 断言 + UI 断言双守卫，ISSUE-008/009 关闭，KNOWN_ISSUES 清零） |
 | 阶段 B 业务增强 B1 重复图片检测 | ✅ 已落地（2026-08-01，HEAD 6301612） |
-| 阶段 B 业务增强 B2 搜索/筛选 | ✅ 已落地（本会话） |
+| 阶段 B 业务增强 B2 搜索/筛选 | ✅ 已落地（2026-08-01，HEAD 39bd576） |
+| 阶段 B 业务增强 B3 批量操作 | ✅ 已落地（2026-08-02，HEAD 待提交） |
+| 阶段 B 业务增强 B4 HTML 导出 | ✅ 已落地（2026-08-02，HEAD 待提交） |
+| 阶段 B 业务增强 B5 插件上下文 | ✅ 已落地（本会话） |
 
 详见 `.ai/business/roadmap.md` §18-§20（规划原文保持计划格式，实际进度以本节 §1 为准）。
 
@@ -96,7 +99,8 @@
 | Export | ✅ Step 14 就绪（ExportService + Excel/CSV exporter + ExportWorker + ExportDialog + Controller） | `application/services/export_service.py`、`infrastructure/exporters/{excel_exporter,csv_exporter}.py`、`workers/export_task.py`、`presentation/{controllers/export_controller,views/export_dialog}.py` |
 | Plugins | ✅ Step 15 就绪（Plugin system: interface + loader + example + MainWindow action registration + plugin guide） | `src/photo_archiver/plugins/loader.py`、`application/ports/plugin.py`、`examples/plugins/hello_plugin.py`、`docs/development/plugin-guide.md` |
 | 阶段 B / B1 重复图片检测 | ✅ 已落地（2026-08-01，HEAD 6301612）：PillowPhotoMetadataReader 可选注入 ContentHashCalculator + PhotoRepository.list_duplicate_groups（SQLite 单查询 IN + InMemory 内存过滤）+ DetectDuplicatesService + DuplicateReport DTO + BackfillContentHashService + `backfill-content-hash` CLI 子命令 + DuplicateReportDialog 首版只读 + DetectDuplicatesController + MainWindow toolbar 入口 | `infrastructure/filesystem/pillow_photo_metadata_reader.py`、`domain/repositories/photo_repository.py`、`infrastructure/database/sqlite_photo_repository.py`、`infrastructure/repositories/in_memory_photo_repository.py`、`application/services/{detect_duplicates,backfill_content_hash}_service.py`、`application/dtos/duplicates.py`、`presentation/views/duplicate_report_dialog.py`、`presentation/controllers/detect_duplicates_controller.py`、`main.py` |
-| 阶段 B / B2 搜索/筛选 | ✅ 已落地（本会话）：PhotoSearchCriteria Domain 值对象 + PhotoRepository.search Protocol 扩展（SQLite SQL 下推 JOIN recognition_results + InMemory 内存过滤双实现）+ SearchPhotosService + FilterBar QWidget（状态下拉 + 日期区间 + 清除按钮；人员下拉首版留空待后续轮）+ PhotoListController.search_photos + MainWindow `_build_central` 插入筛选栏 + `_on_filter_changed` 信号槽 + 装配链注入 search_service | `domain/value_objects/photo_search_criteria.py`、`domain/repositories/photo_repository.py`、`infrastructure/database/sqlite_photo_repository.py`、`infrastructure/repositories/in_memory_photo_repository.py`、`application/services/search_photos_service.py`、`presentation/views/filter_bar.py`、`presentation/controllers/photo_list_controller.py`、`presentation/views/main_window.py`、`app/ui_assembly.py`、`app/services.py` |
+| 阶段 B / B3 批量操作 | ✅ 已落地（2026-08-02，HEAD 待提交）：ArchivePhotosCommand 加 photo_ids 可选参数（向后兼容）+ ArchivePlanner.plan 加 photo_ids 过滤（O(1) set 过滤 APPROVED 集合）+ ArchivePhotosService execute/preview 双处透传 photo_ids + ArchiveController preview/execute 加 photo_ids 参数 + PhotoList QListView 改 ExtendedSelection 多选 + MainWindow `_on_archive_clicked` 读选中项透传 + `_collect_selected_photo_ids` 辅助 | `application/commands/archive.py`、`application/services/archive_planner.py`、`application/services/archive_photos_service.py`、`application/use_cases/archive.py`、`presentation/controllers/archive_controller.py`、`presentation/views/main_window.py` |
+| 阶段 B / B5 插件上下文 | ✅ 已落地（本会话）：PluginContext Port 新建（v2 收敛只读版：search_photos + detect_duplicates 读方法；import/export 写能力暂缓留后续轮单独裁决）+ ActionResult DTO（success/failure/noop 三态，宿主渲染动作结果）+ Plugin Protocol enable 扩可选 context 参 + execute_action 改返 ActionResult + PluginRegistry 扩可选 context 参 + enable_all 透传 + bootstrap 装配 _ReadOnlyPluginContext 实例 + ApplicationContext 扩 plugin_context 字段 + MainWindow `_load_plugins` 改从 context 取 + `_on_plugin_action` 接住 ActionResult 渲染 + `_render_plugin_action_result` + HelloPlugin example enable 扩参 + execute_action 改返 ActionResult | `application/ports/plugin_context.py`、`application/dtos/plugin_action_result.py`、`application/ports/plugin.py`、`plugins/loader.py`、`app/bootstrap.py`、`app/context.py`、`presentation/views/main_window.py`、`examples/plugins/hello_plugin.py`、`docs/development/plugin-context-design.md` |
 
 ### 数据库 Schema 版本
 
@@ -114,16 +118,16 @@
 
 | 项 | 值 |
 |---|---|
-| 时间 | 2026-08-01 23:55（本地） |
+| 时间 | 2026-08-10（本地） |
 | 生成者 | AtomCode (GLM-5.2) |
-| 会话范围 | Project Onboarding + dev-plan-phase-b.md 核验修订 + §6 八项裁决点拍板 + 阶段 B1 全链路落地 + B1 Review 修复轮 + 阶段 B2 搜索/筛选全链路落地 + B2 Review 修复轮 |
-| Completed | dev-plan-phase-b.md v1.1 修订；§6 八项裁决点定案；B1 落地（HEAD 6301612）+ B1 Review 修复轮（A-1~A-4/B-1~B-8）；B2 落地：PhotoSearchCriteria Domain 值对象 + PhotoRepository.search Protocol 扩展（SQLite SQL 下推 JOIN recognition_results + InMemory 内存过滤双实现）+ SearchPhotosService + FilterBar QWidget（首版仅 status 轴生效；人员下拉/日期区间留空禁用待后续轮）+ PhotoListController.search_photos + MainWindow `_build_central` 插入筛选栏 + `_on_filter_changed` 信号槽 + 装配链注入 search_service；新增测试 16 项。B2 Review 修复轮：Major-1 删未用 Photo import（ruff 清零）+ Major-2 FilterBar 日期轴禁用对齐首版契约 + Minor-1 两处局部 import 提顶部 + Minor-2 删误导注释 + Minor-3 clear() 走 _emit_criteria 单源 + Minor-4 日志改显式列字段 + Minor-5 docstring person_id 语义注释修正 |
-| Remaining | 无（B2 + Review 修复轮已全绿：ruff 0 + mypy 0 + pytest 300 passed + 8 skipped） |
-| Next Step | 阶段 B3 批量操作（§7 顺序：B1→B2→B3→B4→B5，B3 已拍板仅"照片多选 + 批量归档" + 批准扩展 ArchivePhotosCommand/ArchivePlanner.plan 加 photo_ids 参数 B3-b） |
-| HEAD | 待提交（B2 全链路 + Review 修复轮，单 Step 单提交按 ADR-023） |
-| 测试 | pytest 300 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
-| 质量门 | ruff 0 errors；mypy 0 errors；B2 新增 16 测试全绿（repository search 12 含 SQLite/InMemory 对照 + service 4） |
-| 文档影响 | 本会话触及 PROJECT_STATUS §3/§4/§5 刷新 + KNOWN_ISSUES 无新增 + roadmap §22"搜索/筛选"条目无需改（既有）+ 无新 ADR 需求 |
+| 会话范围 | Project Onboarding + dev-plan-phase-b.md 核验修订 + §6 八项裁决点拍板 + 阶段 B1 全链路落地 + B1 Review 修复轮 + 阶段 B2 搜索/筛选全链路落地 + B2 Review 修复轮 + 阶段 B3 批量操作全链路落地 + 阶段 B4 HTML 导出全链路落地 + 阶段 B5 插件上下文全链路落地 + B3+B4+B5 Review 修复轮 |
+| Completed | dev-plan-phase-b.md v1.1 修订；§6 八项裁决点定案；B1 落地（HEAD 6301612）+ B1 Review 修复轮（A-1~A-4/B-1~B-8）；B2 落地（HEAD 39bd576）+ B2 Review 修复轮（Major-1~2/Minor-1~5）；B3 落地：ArchivePhotosCommand 加 photo_ids + ArchivePlanner.plan 加 photo_ids 过滤 + 双处透传 + ArchiveController/UseCase Protocol 扩 + QListView ExtendedSelection + MainWindow `_on_archive_clicked` 读选中项透传；新增测试 5 项。B4 落地：HtmlExporter 零依赖（stdlib html.escape + string.Template，XSS 转义）+ ExportController format_name 参数 + ExportDialog HTML 选项；新增测试 7 项。B5 落地（v2 收敛拍板：只读 PluginContext + 可选上下文注入 + 宿主渲染动作结果；暂缓 import/export 写能力）：PluginContext Port 新建（search_photos + detect_duplicates 读方法）+ ActionResult DTO（success/failure/noop 三态）+ Plugin Protocol enable 扩可选 context 参 + execute_action 改返 ActionResult + PluginRegistry 扩可选 context 参 + enable_all 透传 + bootstrap 装配 _ReadOnlyPluginContext 实例 + ApplicationContext 扩 plugin_context 字段 + MainWindow `_load_plugins` 改从 context 取 + `_on_plugin_action` 接住 ActionResult 渲染 + `_render_plugin_action_result` + HelloPlugin example enable 扩参 + execute_action 改返 ActionResult；新增测试 8 项。B3+B4+B5 Review 修复轮（0 Critical / 3 Major / 5 Minor 全修）：Major-1 bootstrap _ReadOnlyPluginContext 补完整类型注解 + 删 type:ignore 让 mypy 真核 Protocol 呑约 + Major-2 MainWindow 三处局部 import 提顶部 + Major-3 ArchivePlanner.plan docstring 显式述 person_ids + photo_ids 组合语义 + Minor-1 HelloPlugin.enable 补 PluginContext | None 注解 + Minor-2 HtmlExporter docstring 注 _HEADERS 与 _to_row 顺序手工对齐约束 + Minor-3 ActionResult.status 改 Literal 静态守护 typo + Minor-4 bootstrap _ReadOnlyPluginContext 提为模块级私有类 + Minor-5 PluginRegistry.register 公开方法替测试私有 _plugins 访问 |
+| Remaining | 无（B5 已全绿：ruff 0 + mypy 0 + pytest 320 passed + 8 skipped） |
+| Next Step | 阶段 B 全链路（B1→B2→B3→B4→B5）已闭环；下一阶段可选方向（PROJECT_STATUS §6）：M7 可扩展里程碑未启动 / SQLAlchemy/Alembic 深化 / 性能加固 / 新独立功能提案 / 阶段 B Review 修复轮（若需） |
+| HEAD | 待提交（B3 + B4 + B5 全链路，单 Step 单提交按 ADR-023） |
+| 测试 | pytest 320 passed + 8 skipped；ruff 0 errors；mypy 0 errors |
+| 质量门 | ruff 0 errors；mypy 0 errors；B3 新增 5 + B4 新增 7 + B5 新增 8 = 20 新测试全绿；既有 test_loader.py 内嵌 _LifecyclePlugin.enable 签名已同步扩参对齐 |
+| 文档影响 | 本会话触及 PROJECT_STATUS §3/§4/§5 刷新 + docs/development/plugin-context-design.md v2 收敛方案落盘 + KNOWN_ISSUES 无新增 + 无新 ADR 需求（B5-a 裁决已记入 ARCHITECTURE_DECISIONS） |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 

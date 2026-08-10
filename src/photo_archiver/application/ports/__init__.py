@@ -7,6 +7,7 @@ from photo_archiver.application.ports.person_import_reader import PersonImportRe
 from photo_archiver.application.ports.person_matcher import PersonMatcher
 from photo_archiver.application.ports.photo_file_scanner import PhotoFileScanner
 from photo_archiver.application.ports.photo_metadata_reader import PhotoMetadataReader
+from photo_archiver.application.ports.plugin_context import PluginContext
 from photo_archiver.application.ports.progress_reporter import ProgressReporter
 from photo_archiver.application.ports.system_settings import SystemSettings
 from photo_archiver.application.ports.thumbnail_cache import ThumbnailCache
@@ -22,6 +23,7 @@ __all__ = [
     "PersonMatcher",
     "PhotoFileScanner",
     "PhotoMetadataReader",
+    "PluginContext",
     "ProgressReporter",
     "SystemSettings",
     "ThumbnailCache",

@@ -30,7 +30,7 @@ _SCOPE_LABELS = {
     ExportScope.FILTERED: "Filtered results (current selection)",
 }
 
-_FORMAT_CHOICES = ("Excel (.xlsx)", "CSV (.csv)")
+_FORMAT_CHOICES = ("Excel (.xlsx)", "CSV (.csv)", "HTML (.html)")
 
 
 class ExportDialog(QDialog):
@@ -123,11 +123,13 @@ class ExportDialog(QDialog):
     def format_name(self) -> str:
         """Return the canonical format name for the selected choice.
 
-        Returns ``"xlsx"`` or ``"csv"`` for the exporter lookup.
+        Returns ``"xlsx"`` / ``"csv"`` / ``"html"`` for the exporter lookup.
         """
         text = self._format_combo.currentText()
         if "CSV" in text:
             return "csv"
+        if "HTML" in text:
+            return "html"
         return "xlsx"
 
     # ── Slots ────────────────────────────────────────────────────────────────
@@ -135,7 +137,12 @@ class ExportDialog(QDialog):
     def _on_browse(self) -> None:
         """Open a file-save dialog and populate the path edit."""
         selected_format = self.format_name
-        filter_str = "Excel files (*.xlsx)" if selected_format == "xlsx" else "CSV files (*.csv)"
+        if selected_format == "xlsx":
+            filter_str = "Excel files (*.xlsx)"
+        elif selected_format == "csv":
+            filter_str = "CSV files (*.csv)"
+        else:
+            filter_str = "HTML files (*.html)"
         default_name = f"export.{selected_format}"
 
         path_str, _ = QFileDialog.getSaveFileName(

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from photo_archiver.app.repositories import ApplicationRepositories
 from photo_archiver.app.services import ApplicationServices
+from photo_archiver.application.ports import PluginContext
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.presentation.controllers import (
     DetectDuplicatesController,
@@ -28,3 +29,4 @@ class ApplicationContext:
     settings_controller: SettingsController
     export_controller: ExportController
     detect_duplicates_controller: DetectDuplicatesController
+    plugin_context: PluginContext | None = None  # B5 v2 收敛：可选注入（None for CLI/CI paths without Qt plugin host）

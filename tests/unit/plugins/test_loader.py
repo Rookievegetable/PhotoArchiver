@@ -69,7 +69,7 @@ class _LifecyclePlugin:
     version = "0.1.0"
     enabled_flag = False
     disabled_flag = False
-    def enable(self):
+    def enable(self, context=None):
         self.enabled_flag = True
     def disable(self):
         self.disabled_flag = True

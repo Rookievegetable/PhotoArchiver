@@ -3,11 +3,18 @@
 This plugin exercises the full Plugin protocol: identity, lifecycle, and a
 single menu action. It serves as both a smoke test for the loader and a
 template for third-party plugin authors.
+
+B5 v2 收敛：enable 扩可选 context 参（HelloPlugin 纯声明不消费 Context）+
+execute_action 改返 ActionResult（宿主渲染动作结果）。
 """
+
+from __future__ import annotations
 
 from loguru import logger
 
+from photo_archiver.application.dtos.plugin_action_result import ActionResult, noop, success
 from photo_archiver.application.ports.plugin import PluginAction
+from photo_archiver.application.ports.plugin_context import PluginContext
 
 
 class HelloPlugin:
@@ -23,8 +30,8 @@ class HelloPlugin:
         """Return the plugin version."""
         return "1.0.0"
 
-    def enable(self) -> None:
-        """Log activation."""
+    def enable(self, context: PluginContext | None = None) -> None:
+        """Log activation. context unused — HelloPlugin is declarative-only."""
         logger.info("HelloPlugin enabled")
 
     def disable(self) -> None:
@@ -41,10 +48,12 @@ class HelloPlugin:
             ),
         ]
 
-    def execute_action(self, action_id: str) -> None:
-        """Execute the requested action by its ID."""
+    def execute_action(self, action_id: str) -> ActionResult:
+        """Execute the requested action by its ID, returning a structured result."""
         if action_id == "hello.greet":
             logger.info("Hello from the HelloPlugin!")
+            return success(message="Hello from the HelloPlugin!")
+        return noop()
 
 
 # Module-level export the loader discovers.

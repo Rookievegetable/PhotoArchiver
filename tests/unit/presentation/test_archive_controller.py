@@ -19,8 +19,8 @@ class _FakeArchiveUseCase:
         self.preview_calls: list = []
         self._plan = plan or ArchivePlan()
 
-    def preview(self, archive_root, person_ids=()):
-        self.preview_calls.append((archive_root, person_ids))
+    def preview(self, archive_root, person_ids=(), photo_ids=()):
+        self.preview_calls.append((archive_root, person_ids, photo_ids))
         return self._plan
 
     def execute(self, command):
@@ -58,7 +58,7 @@ def test_preview_calls_use_case_preview_with_root_and_person_ids() -> None:
     )
     pid = uuid4()
     controller.preview(Path("/archive"), (pid,))
-    assert use_case.preview_calls[0] == (str(Path("/archive")), (pid,))
+    assert use_case.preview_calls[0] == (str(Path("/archive")), (pid,), ())
 
 
 def test_execute_builds_command_with_strategy_and_dry_run() -> None:

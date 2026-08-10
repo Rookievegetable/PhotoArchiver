@@ -10,6 +10,7 @@ from photo_archiver.application.dtos.duplicates import DuplicateGroup, Duplicate
 from photo_archiver.application.dtos.export import ExportData, ExportScope
 from photo_archiver.application.dtos.import_people import ImportPeopleResult, PersonImportRow
 from photo_archiver.application.dtos.photo_scan import PhotoScanItem, ScanPhotoFolderResult
+from photo_archiver.application.dtos.plugin_action_result import ActionResult
 from photo_archiver.application.dtos.recognition import (
     FaceDetectionItem,
     FaceDetectionResult,
@@ -48,6 +49,7 @@ __all__ = [
     "DuplicateGroup",
     "DuplicateReport",
     "ExportData",
+    "ActionResult",
     "ExportScope",
     "FaceDetectionItem",
     "FaceDetectionResult",
