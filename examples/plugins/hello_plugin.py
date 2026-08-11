@@ -1,11 +1,11 @@
-"""Hello Plugin — minimal Step 15 Plugin System example.
+"""Hello Plugin — minimal Plugin System example（阶段 1 ContextAwarePlugin 标准）.
 
-This plugin exercises the full Plugin protocol: identity, lifecycle, and a
-single menu action. It serves as both a smoke test for the loader and a
-template for third-party plugin authors.
+演示 ADR-026 拍板的新标准插件协议——``ContextAwarePlugin``：
+``set_context(context) → enable() → actions() / execute_action()``。
+HelloPlugin 是纯声明式插件（不消费 Context），但演示完整新标准签名。
 
-B5 v2 收敛：enable 扩可选 context 参（HelloPlugin 纯声明不消费 Context）+
-execute_action 改返 ActionResult（宿主渲染动作结果）。
+旧 ``enable(context)`` 兼容路径 Deprecated 保留一个版本——迁移期限与移除
+轮次留 v2.0.0 单独裁决，详见 ``docs/development/plugin-guide.md``。
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from photo_archiver.application.ports.plugin_context import PluginContext
 
 
 class HelloPlugin:
-    """A minimal plugin that registers a single 'Hello' action."""
+    """A minimal plugin demonstrating the ContextAwarePlugin standard (ADR-026)."""
 
     @property
     def name(self) -> str:
@@ -28,10 +28,19 @@ class HelloPlugin:
     @property
     def version(self) -> str:
         """Return the plugin version."""
-        return "1.0.0"
+        return "1.1.0"
 
-    def enable(self, context: PluginContext | None = None) -> None:
-        """Log activation. context unused — HelloPlugin is declarative-only."""
+    def set_context(self, context: PluginContext) -> None:
+        """Store the host-provided read-only PluginContext.
+
+        HelloPlugin is declarative-only — context is accepted to demonstrate
+        the ContextAwarePlugin standard but unused in execute_action().
+        """
+        self._context: PluginContext = context
+        logger.debug("HelloPlugin received context (unused — declarative plugin)")
+
+    def enable(self) -> None:
+        """Log activation. Context (if any) was injected via set_context before this."""
         logger.info("HelloPlugin enabled")
 
     def disable(self) -> None:
