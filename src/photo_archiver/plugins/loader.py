@@ -6,12 +6,21 @@ attribute conforming to the ``Plugin`` protocol.
 
 Error handling: malformed/error plugins are logged and skipped; a single bad
 plugin never crashes the host application (acceptance criterion 3).
+
+阶段 1 加固（ADR-026，前置门拍板 2026-08-11）：
+
+- Registry 启用三类生命周期兼容——``ContextAwarePlugin``（``set_context → enable``）
+  / 旧 ``enable(context)`` 兼容签名 / 旧无参 ``enable()``。用 ``inspect.signature``
+  识别而非"捕获 TypeError 重试"——插件内部真实 TypeError 不会被误判为兼容问题。
+- 静默失败防护——启用后 ``actions()`` 返空且非声明式插件（走 Protocol 默认 noop）
+  时日志 warning，提示可能误漏 ``enable`` 实现。
 """
 
 from __future__ import annotations
 
 import importlib
 import importlib.util
+import inspect
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -83,15 +92,71 @@ class PluginRegistry:
     # ── Lifecycle ────────────────────────────────────────────────────────
 
     def enable_all(self) -> None:
-        """Call ``enable()`` on every loaded plugin, injecting the context."""
+        """Enable every loaded plugin via three-way compatibility dispatch.
+
+        阶段 1 加固（ADR-026）：
+
+        - ``ContextAwarePlugin``（``set_context`` 存）——``set_context(context) → enable()``。
+        - 旧 ``enable(context)`` 兼容签名——``inspect.signature`` 识别 ``context`` 参后走兼容路径。
+        - 旧无参 ``enable()``——直调。
+        - 静默失败防护——启用后 ``actions()`` 返空且非声明式时日志 warning。
+
+        context 为 None 时（CI / 单测环境）三类路径均保降级可用。
+        """
         for name, plugin in self._plugins.items():
             try:
-                plugin.enable(self._context)
+                self._enable_plugin(name, plugin)
                 self._enabled.add(name)
                 logger.info("Plugin enabled: {}", name)
+                self._warn_silent_failure(name, plugin)
             except Exception:
                 logger.exception("Failed to enable plugin: {}", name)
                 self._errors.append((name, "enable() raised an exception"))
+
+    def _enable_plugin(self, name: str, plugin: "Plugin") -> None:
+        """Dispatch enable via ContextAwarePlugin / legacy enable(context) / plain enable.
+
+        用 ``inspect.signature`` 在调用前识别签名——不靠"捕获 TypeError 后重试"
+        （ADR-026 MAJOR-1 处置：插件内部真实 TypeError不会被误判为兼容问题）。
+        """
+        if hasattr(plugin, "set_context"):
+            # 新标准：set_context(context) → enable()
+            if self._context is None:
+                raise RuntimeError(
+                    f"Plugin {name} requires ContextAwarePlugin path but context is None"
+                )
+            plugin.set_context(self._context)  # type: ignore[attr-defined]
+            plugin.enable()  # type: ignore[call-arg]
+            return
+
+        sig = inspect.signature(plugin.enable)
+        params = sig.parameters
+        if "context" in params:
+            # 兜底：旧 enable(context) 兼容签名
+            plugin.enable(self._context)  # type: ignore[call-arg]
+            return
+
+        # 旧无参：enable()
+        plugin.enable()  # type: ignore[call-arg]
+
+    def _warn_silent_failure(self, name: str, plugin: "Plugin") -> None:
+        """Log warning if enabled plugin returns no actions and is non-declarative.
+
+        防护兜底（ADR-026 MAJOR-1）：误漏 ``enable`` 实现（走 Protocol 默认 noop）
+        后 ``actions()`` 返空且非声明式插件 → 日志 warning 提示可能误漏。
+        ``ContextAwarePlugin(Plugin)`` 继承关系使此风险大幅降低——mypy 即报错，
+        本防护属二道兜底。
+        """
+        try:
+            actions = plugin.actions()
+        except Exception:
+            return  # actions() itself raising is separately logged elsewhere
+        if not actions and not hasattr(plugin, "_context"):
+            # 非声明式插件（无 set_context/_context 持）返空 actions——可能误漏 enable
+            logger.warning(
+                "Plugin {} enabled but actions() is empty — possible missed enable() override",
+                name,
+            )
 
     def disable_all(self) -> None:
         """Call ``disable()`` on every enabled plugin."""
@@ -153,14 +218,20 @@ class PluginRegistry:
             return
 
         # Duck-type check: the object must have name, version, enable, disable
+        # 阶段 1 加固（ADR-026 ISSUE-016 Minor-1 顺手修）：空 pass 改显式校验
         for attr in ("name", "version", "enable", "disable"):
-            if not callable(getattr(raw, attr, None)) and attr not in ("name", "version"):
-                pass  # properties are okay even if not callable
-            if attr in ("name", "version") and not isinstance(getattr(raw, attr, None), str):
-                msg = f"{module_name}.plugin.{attr} is not a string property"
-                logger.warning("Skipping plugin {}: {}", module_name, msg)
-                self._errors.append((module_name, msg))
-                return
+            if attr in ("name", "version"):
+                if not isinstance(getattr(raw, attr, None), str):
+                    msg = f"{module_name}.plugin.{attr} is not a string property"
+                    logger.warning("Skipping plugin {}: {}", module_name, msg)
+                    self._errors.append((module_name, msg))
+                    return
+            else:
+                if not callable(getattr(raw, attr, None)):
+                    msg = f"{module_name}.plugin.{attr} is not callable"
+                    logger.warning("Skipping plugin {}: {}", module_name, msg)
+                    self._errors.append((module_name, msg))
+                    return
 
         pname = raw.name if hasattr(raw, "name") else module_name
         if pname in self._plugins:
