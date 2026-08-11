@@ -72,7 +72,8 @@ plugin = MyPlugin()
 |---|---|---|
 | `name` | Stable unique identifier (`str`) | Yes |
 | `version` | SemVer version string (`str`) | Yes |
-| `enable(context=None)` | Activate plugin (acquire resources); optionally receives the host-injected read-only `PluginContext` | Yes |
+| `set_context(context)` | Inject host-provided read-only `PluginContext` (new standard, ADR-026) | Yes |
+| `enable()` | Activate plugin (acquire resources)——context注入改走 `set_context` (ADR-026) | Yes |
 | `disable()` | Deactivate plugin (release resources) | Yes |
 | `actions()` | Return list of `PluginAction` descriptors | No (default: `[]`) |
 | `execute_action(action_id)` | Execute a registered action, returning an `ActionResult` (success / failure / noop) | No (default: noop) |

@@ -2,7 +2,7 @@
 
 > **文档性质**：B5-a 裁决前置门产出——按 §6 B5-a 要求"开工前必须先出 PluginContext interface 草案评审"，本文件即该草案的完整方案版。评审拍板后才进 loader 装配与示例插件实施。
 >
-> **文档状态（2026-08-11）**：已纳入正式文档体系（`.ai/DOCUMENT_INDEX.md` §2.4 登记），作为 B5 PluginContext 接口设计决策依据文档；非 SSOT——实现现状以代码与 `PROJECT_STATUS.md` 为准，B5-a 裁决见 `ARCHITECTURE_DECISIONS.md`。
+> **文档状态（2026-08-11）**：已纳入正式文档体系（`.ai/DOCUMENT_INDEX.md` §2.4 登记），作为 B5 PluginContext 接口设计决策依据文档；非 SSOT——实现现状以代码与 `PROJECT_STATUS.md` 为准，B5-a 裁决见 `ARCHITECTURE_DECISIONS.md`。阶段 1 加固（ADR-026）后本草案 v3 收敛：``ContextAwarePlugin(Plugin)`` 继承 + ``set_context(context) → enable()`` 新标准 + Plugin DTO 边界（``PluginPhotoQuery`` 3 态 / ``PluginPhotoSummary`` 4 态含 none）+ ``PluginReport`` 单元格 ``str | int | float`` 混合 + ``ActionResult.report`` 收紧替旧 ``payload:Any``——详见 `docs/development/phase1-adr-draft.md`。
 >
 > **裁决编号**：B5-a（已拍板"批准设计"+ 前置门"开工前出草案评审"）
 >

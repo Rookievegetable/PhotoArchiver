@@ -129,11 +129,11 @@
 | HEAD | 3ae3cd3（阶段 0 文档收口提交：docs: synchronize phase b and plugin documentation）；B3+B4+B5 落地于 cafff2b |
 | 测试 | 实测 pytest 320 passed + 8 skipped（8 skip：InsightFace 模型包或示例人脸图片缺失——`tests/integration/face_detection/` 的 skip 条件，装齐 `download_models.py` 模型 + 样例 JPG 后实跑）；ruff 0 errors；mypy 0 errors |
 | 质量门 | 全部实测通过（2026-08-11，.venv Python 3.11.9）：ruff 0 + mypy 0 + pytest 320 passed + 8 skipped；git diff --check 干净 |
-| 文档影响 | 本会话触及 PROJECT_STATUS §1/§3/§4/§5/§6 + plugin-guide.md（v2 API 同步）+ DOCUMENT_INDEX §2.4（plugin-context-design.md 登记）+ KNOWN_ISSUES（新增 ISSUE-016：ExportController DEP-002 越界，阶段 1 修复）+ plugin-context-design.md 头部状态标注（纳入正式体系）；无新 ADR |
+| 文档影响 | 本会话触及 PROJECT_STATUS §1/§3/§4/§5/§6 + plugin-guide.md（v3 API 同步：ContextAwarePlugin + set_context → enable + PluginReport 渲染契约）+ DOCUMENT_INDEX §2.4（phase1-adr-draft.md 登记）+ KNOWN_ISSUES（新增 ISSUE-016：ExportController DEP-002 越界，阶段 1b 独立修复）+ plugin-context-design.md 头部状态标注（v3 收敛）+ ARCHITECTURE_DECISIONS（新增 ADR-026：阶段 1 PluginContext 公共边界加固）+ phase1-adr-draft.md（前置门定稿草案落盘）；新增 ADR-026 |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 
-本轮未新增 ADR——四 Issue 属现有 ai/workers/domain 层能力增强、性能优化与类型收口，未改变架构边界或依赖方向。新增 `FaceBoxEmbedding` Domain 值对象遵循 ADR-015 同模式；task_id 生成与 Loguru contextualize、RecognitionResult.id 类型诚实表达属实施细节，非需记录的不可改架构决策。
+本轮新增 ADR-026（阶段 1 PluginContext 公共边界加固，前置门拍板 2026-08-11）：ContextAwarePlugin(Plugin) 继承关系 + set_context(context) → enable() 新标准 + Plugin DTO 边界（PluginPhotoQuery 3 态 / PluginPhotoSummary 4 态含 none）+ PluginReport 单元格 str | int | float 混合 + ActionResult.report 收紧替旧 payload:Any + Protocol-first 实施顺序 + ISSUE-016 独立修复提交边界。详见 `docs/development/phase1-adr-draft.md`。
 
 ### 5.1 本会话工作记录（2026-07-30~31，ISSUE-001+002+006+010 修复轮）
 
@@ -167,7 +167,7 @@
 
 ## 6. Next Step（下一步开发计划）
 
-**里程碑：全部 Step 0.5-15 已完成 + 阶段 B（B1-B5）全链路已闭环 + 阶段 0 质量基线与文档收口已完成（2026-08-11）。下一步：进入 PluginContext 边界加固（阶段 1）——消除 ExportController 对 infrastructure.exporters 的直接依赖（DEP-002 越界，发现于阶段 0 审查）；之后再考虑插件写能力（import/export 暂缓项）、Alembic 深化与性能加固。**
+**里程碑：全部 Step 0.5-15 已完成 + 阶段 B（B1-B5）全链路已闭环 + 阶段 0 质量基线与文档收口已完成（2026-08-11）。阶段 1 PluginContext 公共边界加固（ADR-026）实施中——前置门草案已拍板，按 Protocol-first 顺序推进；ISSUE-016（ExportController DEP-002 越界）属阶段 1b 独立修复提交。后续考虑：插件写能力（import/export 暂缓项）、Alembic 深化与性能加固。**
 
 ### Step 15 交付确认
 
