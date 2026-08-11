@@ -269,6 +269,16 @@
 | 影响范围 | `domain/value_objects/face_box_embedding.py`、`domain/value_objects/__init__.py`、`domain/__init__.py`；不迁移、不改公开 API。 |
 | 反驳驳回 | Review MAJOR-2 提出「FaceBoxEmbedding 为适配 InsightFace API 形状而生，应迁 `application/dts/`」——驳回：该论断以「值对象的存在动机」判定归属而非以「字段语义 + 依赖合规 + 跨用例复用性」判定，与 DDD 值对象判定标准不符。值对象归属取决于它是否表达 Domain 概念且不持框架依赖，而非首次出现的用例在哪层。 |
 
+### ADR-026 — 阶段 1 PluginContext 公共边界加固（公开 API 破坏性变更）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（前置门拍板 2026-08-11，定稿草案 `docs/development/phase1-adr-draft.md`） |
+| 决策 | 阶段 1 将 B5 PluginContext 收敛为稳定插件公共边界——四项拍板：(1) `ContextAwarePlugin(Plugin)` 继承关系——新标准插件须同时实现 `set_context(context) + enable() + disable() + actions() + execute_action()`，mypy 静态守护完整，`enable(context)` 旧签名作兼容路径 Deprecated 保留一个版本；(2) Plugin DTO 边界——`PluginPhotoQuery.match_status` 3 态（pending/approved/rejected，与 Domain `MatchStatus(str, Enum)` 一致），`PluginPhotoSummary.match_status` 4 态含 none（RecognitionResult 不存在即未注册审核），Query 不含 none 与 Domain 三态一致，stats 插件取 none 数量取全集后客户端过滤；(3) `PluginReport` 单元格 `str | int | float` 混合——宿主渲染层做格式化（数值列右对齐/排序/国际化数量格式），插件给结构化数据；(4) `ActionResult` 收紧——`payload: Any` 改为 `report: PluginReport | None`，废止 `str(payload)` 兜底渲染。PluginContext 协议不再导入 Domain（加固 DEP-060 Plugins → Application only）。不改 Schema、不加依赖、不实现插件写操作。 |
+| 理由 | B5 v2 落地三项公开 API 债务——插件间接依赖 Domain（`PhotoSearchCriteria`/`Photo`/`DuplicateReport`）、`ActionResult.payload: Any` 无类型守护、`enable(context)` 签名混淆生命周期与上下文注入。阶段 1 收敛为稳定公共边界。四项裁决点经前置门拍板：MAJOR-1 Protocol 继承选 A（mypy 静态守护完整）、MAJOR-2 "none" 语义选 A（实测 Domain `MatchStatus` 三态无 none，none 是插件层聚合概念）、MAJOR-3 单元格类型选 A（宿主管渲染职责正切）、MAJOR-4 执行顺序调 Protocol-first（先契约后实现减少跨步骤返工）。 |
+| 影响范围 | `application/dtos/plugin_context.py`（新建）、`application/dtos/plugin_action_result.py`（改造）、`application/ports/plugin_context.py`（改造）、`application/ports/plugin.py`（改造）、`application/services/plugin_context_service.py`（新建）、`app/bootstrap.py`（改造）、`plugins/loader.py`（改造）、`presentation/views/main_window.py`（改造）、`examples/plugins/{stats_report_plugin,hello_plugin}.py`（新建/改造）、7 个测试文件、`docs/development/{plugin-guide,plugin-context-design,phase1-adr-draft}.md`、`.ai/PROJECT_STATUS.md`。ISSUE-016 ExportController DEP-002 修复同阶段独立提交（`fix: decouple export controller from infrastructure`），不在本 ADR 管辖。定稿草案 `docs/development/phase1-adr-draft.md`（含拍板记录 + Protocol-first 顺序 + 完成标准）。 |
+| 反驳驳回 | 阶段 1 开工前审查报告识别 4 项 Major 设计问题——MAJOR-1 Protocol 关系缺失致静默失败风险（处置：继承 + 二道兜底）、MAJOR-2 `match_status` Literal 与 Domain 不一致（处置：实测 MatchStatus 字面值 + Query/Summary 分态）、MAJOR-3 强制全 str 与 stats 数值用例冲突（处置：混合类型 + 宿主格式化）、MAJOR-4 顺序违反依赖方向（处置：Protocol-first）。4 项 Major 经前置门拍板选 A 全部处置，7 项 Minor 同批登记。 |
+
 ---
 
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）
