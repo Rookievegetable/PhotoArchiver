@@ -9,6 +9,7 @@ from photo_archiver.application.services.detect_duplicates_service import Detect
 from photo_archiver.application.services.export_service import ExportService
 from photo_archiver.application.services.import_people_service import ImportPeopleService
 from photo_archiver.application.services.match_persons_service import MatchPersonsService
+from photo_archiver.application.services.plugin_context_service import PluginContextService
 from photo_archiver.application.services.register_photo_service import RegisterPhotoService
 from photo_archiver.application.services.review_recognition_service import ReviewRecognitionService
 from photo_archiver.application.services.scan_and_register_photos_service import ScanAndRegisterPhotosService
@@ -26,6 +27,7 @@ __all__ = [
     "ExportService",
     "ImportPeopleService",
     "MatchPersonsService",
+    "PluginContextService",
     "RegisterPhotoService",
     "ReviewRecognitionService",
     "ScanAndRegisterPhotosService",

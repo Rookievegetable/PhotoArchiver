@@ -38,6 +38,7 @@ from photo_archiver.presentation.controllers import (
 )
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
 from photo_archiver.presentation.views.filter_bar import FilterBar
+from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
 from photo_archiver.presentation.views.photo_list_model import PHOTO_ID_ROLE, PhotoListModel
 from photo_archiver.presentation.views.review_dialog import ReviewDialog
 from photo_archiver.presentation.views.settings_dialog import SettingsDialog
@@ -191,24 +192,23 @@ class MainWindow(QMainWindow):
             return
 
     def _render_plugin_action_result(self, action_id: str, result: object) -> None:
-        """Render a plugin ActionResult to the user via a QMessageBox.
+        """Render a plugin ActionResult to the user via report dialog or QMessageBox.
 
-        ``result`` is typed object because Plugin Protocol returns it opaquely;
-        the only emitted shape is ActionResult. payload rendering is placeholder
-        (str(result.payload)) — future plugins may negotiate richer rendering.
+        阶段 1 加固（ADR-026）：``payload: Any`` 改为 ``report: PluginReport | None``——
+        ``success + report`` → PluginReportDialog 通用只读报告对话框；
+        ``success 无 report`` → 信息提示；``failure`` → 警告提示；``noop`` → 续查。
         """
         if not isinstance(result, ActionResult):
             return  # unexpected shape — silently ignore (defensive)
         title = f"Plugin: {action_id}"
         if result.status == "success":
-            body = result.message
-            if result.payload is not None:
-                body += f"\n\nPayload: {result.payload}"
-            QMessageBox.information(self, title, body)
+            if result.report is not None:
+                dialog = PluginReportDialog(result.report, self)
+                dialog.exec()  # type: ignore[attr-defined]
+            else:
+                QMessageBox.information(self, title, result.message)
         elif result.status == "failure":
             body = result.message or "Action failed (no detail provided)."
-            if result.payload is not None:
-                body += f"\n\nDetail: {result.payload}"
             QMessageBox.warning(self, title, body)
         # noop → 不渲染（_add_plugin_actions 已按 id 路由，不应走到）
 
