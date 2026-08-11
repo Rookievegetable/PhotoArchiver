@@ -84,6 +84,7 @@ flowchart TD
 | `docs/development/getting-started.md` | 环境准备、运行、测试、质量检查 | 开发入门 |
 | `docs/development/configuration.md` | `.env` 配置项、默认值、约束 | 配置详解 |
 | `docs/development/plugin-guide.md` | 插件开发指南（Step 15） | 开发者文档 |
+| `docs/development/plugin-context-design.md` | B5 PluginContext 接口设计方案（B5-a 前置门产出 + v2 收敛版）——设计决策依据，非 SSOT（现状以代码与 `PROJECT_STATUS.md` 为准；B5-a 裁决在 `ARCHITECTURE_DECISIONS.md`） | 设计文档 |
 | `LICENSE_PLACEHOLDER.md` | License 占位 | 待定 |
 
 ### 2.5 工程配置

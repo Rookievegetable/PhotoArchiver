@@ -123,13 +123,13 @@
 | 时间 | 2026-08-11（本地） |
 | 生成者 | AtomCode |
 | 会话范围 | 阶段 0 质量基线与文档收口（承接阶段 B1-B5 落地会话，B 方案与落地细节见 §3/§4） |
-| Completed | 阶段 0 收口：① 实测质量门（ruff 0 / mypy 0 / pytest 320 passed + 8 skipped，Python 3.11.9 @ .venv）；② B3/B4/B5 架构边界审查（B3 photo_ids 向后兼容 + 过滤留 ArchivePlanner；B4 HtmlExporter 仅 Infrastructure + XSS 转义 + 走 ExportTask；B5 只读 PluginContext 不暴露 Repository/UoW/Archive/WorkerExecutor/ApplicationContext，宿主渲染 ActionResult；发现 1 项代码问题只记录不修：ExportController 直连 infrastructure.exporters 违反 DEP-002，见阶段 0 报告）；③ 静态规则检查全项 0 命中（print/TODO/except:/插件 infra 导入）；④ 文档收口：plugin-guide.md 同步 v2 API（enable(context=None) + execute_action→ActionResult + 只读限制 + 非沙箱声明）；PROJECT_STATUS §1/§3/§4/§5/§6 刷新；plugin-context-design.md 分类为临时草案、不纳入正式文档体系 |
+| Completed | 阶段 0 收口：① 实测质量门（ruff 0 / mypy 0 / pytest 320 passed + 8 skipped，Python 3.11.9 @ .venv）；② B3/B4/B5 架构边界审查（B3 photo_ids 向后兼容 + 过滤留 ArchivePlanner；B4 HtmlExporter 仅 Infrastructure + XSS 转义 + 走 ExportTask；B5 只读 PluginContext 不暴露 Repository/UoW/Archive/WorkerExecutor/ApplicationContext，宿主渲染 ActionResult；发现 1 项代码问题只记录不修：ExportController 直连 infrastructure.exporters 违反 DEP-002，见阶段 0 报告）；③ 静态规则检查全项 0 命中（print/TODO/except:/插件 infra 导入）；④ 文档收口：plugin-guide.md 同步 v2 API（enable(context=None) + execute_action→ActionResult + 只读限制 + 非沙箱声明）；PROJECT_STATUS §1/§3/§4/§5/§6 刷新；plugin-context-design.md 纳入正式文档体系（DOCUMENT_INDEX §2.4 登记 + 头部状态标注） |
 | Remaining | 无阻塞（代码问题 1 项仅记录：ExportController 直连 Infrastructure，待阶段 1 修复） |
 | Next Step | 阶段 0 收口完成后进入 PluginContext 边界加固（阶段 1）：消除 Presentation→Infrastructure 越界（exporter 注册表迁 app 装配层或 Application 侧注册）；之后再考虑插件写能力（import/export 暂缓项）、Alembic 深化与性能加固 |
-| HEAD | cafff2b（B3+B4+B5 已提交）；阶段 0 文档收口提交（docs: synchronize phase b and plugin documentation） |
-| 测试 | 实测 pytest 320 passed + 8 skipped（8 skip 需 buffalo_l 模型）；ruff 0 errors；mypy 0 errors |
+| HEAD | 3ae3cd3（阶段 0 文档收口提交：docs: synchronize phase b and plugin documentation）；B3+B4+B5 落地于 cafff2b |
+| 测试 | 实测 pytest 320 passed + 8 skipped（8 skip：InsightFace 模型包或示例人脸图片缺失——`tests/integration/face_detection/` 的 skip 条件，装齐 `download_models.py` 模型 + 样例 JPG 后实跑）；ruff 0 errors；mypy 0 errors |
 | 质量门 | 全部实测通过（2026-08-11，.venv Python 3.11.9）：ruff 0 + mypy 0 + pytest 320 passed + 8 skipped；git diff --check 干净 |
-| 文档影响 | 本会话触及 PROJECT_STATUS §1/§3/§4/§5/§6 + plugin-guide.md（v2 API 同步）；plugin-context-design.md 维持临时草案不纳入 DOCUMENT_INDEX；KNOWN_ISSUES 无新增；无新 ADR |
+| 文档影响 | 本会话触及 PROJECT_STATUS §1/§3/§4/§5/§6 + plugin-guide.md（v2 API 同步）+ DOCUMENT_INDEX §2.4（plugin-context-design.md 登记）+ KNOWN_ISSUES（新增 ISSUE-016：ExportController DEP-002 越界，阶段 1 修复）+ plugin-context-design.md 头部状态标注（纳入正式体系）；无新 ADR |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 
