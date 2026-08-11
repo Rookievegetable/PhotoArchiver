@@ -1,13 +1,24 @@
 """Plugin port protocol for Step 15 Plugin System.
 
-Defines the ``Plugin`` interface that all plugins must implement. The interface
-lives in the Application layer port boundary so that plugins (which may reside
-in external packages) depend only on Application public API, never on
-Infrastructure internals (DEP-060/061/062).
+Defines the ``Plugin`` and ``ContextAwarePlugin`` interfaces that all plugins
+must implement. The interface lives in the Application layer port boundary so
+that plugins (which may reside in external packages) depend only on Application
+public API, never on Infrastructure internals (DEP-060/061/062).
 
 The Application and Presentation layers consume plugins through this protocol
 without importing concrete plugin classes — core code never depends on any
 specific plugin (acceptance criterion 1).
+
+阶段 1 加固（ADR-026，前置门拍板 2026-08-11）：
+
+- ``Plugin.enable()`` 改无参——生命周期与上下文注入解耦，``context`` 不再
+  混入 ``enable`` 签名。旧 ``enable(context)`` 签名作兼容路径 Deprecated
+  保留一个版本（Registry 用 ``inspect.signature`` 识别兼容，详见
+  ``plugins/loader.py``）。
+- 新增 ``ContextAwarePlugin(Plugin)``——继承 Plugin，多一个
+  ``set_context(context)`` 方法。新标准插件须同时实现 ``set_context +
+  enable + disable + actions + execute_action``，mypy 静态守护完整。
+  Registry 启用顺序：``set_context(context) → enable()``。
 """
 
 from __future__ import annotations
@@ -60,6 +71,9 @@ class Plugin(Protocol):
         ...
         loader.disable_all() # call plugin.disable() for each active plugin
         loader.unload_all()  # call plugin.unload() for each loaded plugin
+
+    阶段 1 加固（ADR-026）：``enable()`` 改无参。需上下文的新插件应实现
+    ``ContextAwarePlugin``（Registry 启用顺序 ``set_context → enable``）。
     """
 
     # ── Identity ─────────────────────────────────────────────────────────
@@ -76,17 +90,14 @@ class Plugin(Protocol):
 
     # ── Lifecycle ────────────────────────────────────────────────────────
 
-    def enable(self, context: "PluginContext | None" = None) -> None:
-        """Activate the plugin, optionally with the host-provided context.
+    def enable(self) -> None:
+        """Activate the plugin.
 
-        Implementations should perform any resource allocation here AND, when
-        context is provided, store it for later use in execute_action().
-
-        Args:
-            context: PluginContext read-only facade — plugins access a limited
-                Application Service subset through it. Optional (None) so purely
-                declarative plugins (e.g. HelloPlugin) need no Context wiring;
-                the host injects it when available. v2 收敛：可选注入。
+        Implementations should perform any resource allocation here. 阶段 1
+        加固（ADR-026）：``enable`` 不再接收 ``context`` 参——上下文注入
+        改走 ``ContextAwarePlugin.set_context(context)``（Registry 启用顺序
+        ``set_context → enable``）。旧 ``enable(context)`` 签名作兼容路径
+        Deprecated 保留一个版本，Registry 用 ``inspect.signature`` 识别。
 
         The default is a no-op.
         """
@@ -130,6 +141,58 @@ class Plugin(Protocol):
             ``action_id`` is not owned by this plugin, return ``noop()`` so
             the host continues searching other plugins.
         """
+        from photo_archiver.application.dtos.plugin_action_result import noop
+
+        return noop()
+
+
+class ContextAwarePlugin(Protocol):
+    """Context-aware plugin interface — new standard (ADR-026).
+
+    继承 ``Plugin`` 协议形态（``enable + disable + actions + execute_action``）
+    并扩一个 ``set_context(context)`` 方法。Registry 启用顺序：
+    ``set_context(context) → enable()``。新插件应实现本协议而非旧
+    ``enable(context)`` 签名——mypy 静态守护完整，误漏任一方法即编译报错。
+
+    旧 ``enable(context)`` 兼容路径 Deprecated 保留一个版本，移除轮次
+    留 v2.0.0 单独裁决。
+    """
+
+    @property
+    def name(self) -> str:
+        """Return the plugin's display name (stable, unique)."""
+        return "unnamed"
+
+    @property
+    def version(self) -> str:
+        """Return the plugin's version string."""
+        return "0.1.0"
+
+    def set_context(self, context: "PluginContext") -> None:
+        """Inject the host-provided read-only PluginContext.
+
+        Called by the Registry before ``enable()``. Implementations should
+        store ``context`` for later use in ``execute_action()``.
+
+        Args:
+            context: PluginContext read-only facade — plugins access a limited
+                Application Service subset through it. 暴露 search_photos
+                + detect_duplicates 读方法，不持 Repository / UnitOfWork /
+                ApplicationContext 引用。
+        """
+
+    def enable(self) -> None:
+        """Activate the plugin (called after ``set_context``)."""
+
+    def disable(self) -> None:
+        """Deactivate the plugin."""
+
+    def actions(self) -> list[PluginAction]:
+        """Return the list of menu/toolbar actions this plugin contributes."""
+        return []
+
+    def execute_action(self, action_id: str) -> "ActionResult":
+        """Execute the command identified by ``action_id``."""
         from photo_archiver.application.dtos.plugin_action_result import noop
 
         return noop()

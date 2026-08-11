@@ -10,7 +10,13 @@ from photo_archiver.application.dtos.duplicates import DuplicateGroup, Duplicate
 from photo_archiver.application.dtos.export import ExportData, ExportScope
 from photo_archiver.application.dtos.import_people import ImportPeopleResult, PersonImportRow
 from photo_archiver.application.dtos.photo_scan import PhotoScanItem, ScanPhotoFolderResult
-from photo_archiver.application.dtos.plugin_action_result import ActionResult
+from photo_archiver.application.dtos.plugin_action_result import ActionResult, PluginReport
+from photo_archiver.application.dtos.plugin_context import (
+    PluginDuplicateGroup,
+    PluginDuplicateReport,
+    PluginPhotoQuery,
+    PluginPhotoSummary,
+)
 from photo_archiver.application.dtos.recognition import (
     FaceDetectionItem,
     FaceDetectionResult,
@@ -65,6 +71,11 @@ __all__ = [
     "MatchResult",
     "PersonImportRow",
     "PhotoScanItem",
+    "PluginDuplicateGroup",
+    "PluginDuplicateReport",
+    "PluginPhotoQuery",
+    "PluginPhotoSummary",
+    "PluginReport",
     "RegisterPhotoResult",
     "ScanAndRegisterPhotosResult",
     "ScanPhotoFolderResult",
