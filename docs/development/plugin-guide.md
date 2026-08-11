@@ -26,7 +26,10 @@ examples/plugins/
 
 ```python
 from loguru import logger
+
+from photo_archiver.application.dtos.plugin_action_result import ActionResult, noop, success
 from photo_archiver.application.ports.plugin import Plugin, PluginAction
+from photo_archiver.application.ports.plugin_context import PluginContext
 
 
 class MyPlugin:
@@ -38,7 +41,7 @@ class MyPlugin:
     def version(self) -> str:
         return "1.0.0"
 
-    def enable(self) -> None:
+    def enable(self, context: PluginContext | None = None) -> None:
         logger.info("MyPlugin enabled")
 
     def disable(self) -> None:
@@ -53,9 +56,11 @@ class MyPlugin:
             ),
         ]
 
-    def execute_action(self, action_id: str) -> None:
+    def execute_action(self, action_id: str) -> ActionResult:
         if action_id == "my_plugin.say_hello":
             logger.info("Hello from MyPlugin!")
+            return success(message="Hello from MyPlugin!")
+        return noop()
 
 
 plugin = MyPlugin()
@@ -67,10 +72,10 @@ plugin = MyPlugin()
 |---|---|---|
 | `name` | Stable unique identifier (`str`) | Yes |
 | `version` | SemVer version string (`str`) | Yes |
-| `enable()` | Activate plugin (acquire resources) | Yes |
+| `enable(context=None)` | Activate plugin (acquire resources); optionally receives the host-injected read-only `PluginContext` | Yes |
 | `disable()` | Deactivate plugin (release resources) | Yes |
 | `actions()` | Return list of `PluginAction` descriptors | No (default: `[]`) |
-| `execute_action(action_id)` | Execute a registered action | No (default: no-op) |
+| `execute_action(action_id)` | Execute a registered action, returning an `ActionResult` (success / failure / noop) | No (default: noop) |
 
 ### 4. PluginAction
 
@@ -88,6 +93,37 @@ A `PluginAction` describes one menu item the plugin wants to register:
 - If a plugin file cannot be imported, the loader logs a warning and skips it
 - If `enable()` raises, the plugin is logged and marked disabled
 - If `execute_action()` raises, the error is shown in a message box but the app continues
+
+### 6. PluginContext (Read-Only Facade)
+
+Since Phase B5 (v2 convergence), the host may inject a read-only `PluginContext`
+into `enable(context=None)`. Plugins store it and use it to access a limited
+Application Service subset:
+
+```python
+def enable(self, context: PluginContext | None = None) -> None:
+    self._context = context  # keep for use in execute_action()
+```
+
+Exposed read-only capabilities:
+
+| Method | Description |
+|---|---|
+| `search_photos(criteria)` | Query photos by person / match status / capture-date range |
+| `detect_duplicates()` | Return the duplicate-photo report across all loaded photos |
+
+Current limits:
+
+- `PluginContext` exposes **read-only** capabilities only (`search_photos` + `detect_duplicates`).
+- **Import / Export write capabilities are deferred** to a later round (暂缓).
+- Plugins access business data only through the context — never through
+  Repository, UnitOfWork, Archive services, WorkerExecutor, or the full
+  `ApplicationContext`.
+- `execute_action()` returns an `ActionResult`; the **host renders** it. Plugins
+  MUST NOT touch UI widgets, the filesystem, or Infrastructure directly.
+- A plugin that fails to load or enable never crashes the host (logged + skipped).
+- The plugin system is **not a security sandbox** — it is a trusted local
+  Python plugin model. Only load plugins you trust.
 
 ## Testing a Plugin
 
