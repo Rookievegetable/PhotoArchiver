@@ -6,7 +6,7 @@
 >
 > 动态维护，实时更新。问题解决后**立即删除**，不保留历史记录。
 >
-> Version: 1.4.0 ｜ Last Updated: 2026-08-11 ｜ Status: Live
+> Version: 1.5.0 ｜ Last Updated: 2026-08-12 ｜ Status: Live
 
 ---
 
@@ -38,18 +38,7 @@
 
 ## 未决问题
 
-### ISSUE-016 — ExportController（Presentation）直接导入 Infrastructure 导出器（DEP-002 越界）
-
-| 字段 | 值 |
-|---|---|
-| ID | ISSUE-016 |
-| Description | `presentation/controllers/export_controller.py` 模块级导入 `photo_archiver.infrastructure.exporters` 并在类属性 `_EXPORTERS` 中实例化 `CsvExporter / ExcelExporter / HtmlExporter`，违反 DEP-002（Presentation MUST NOT import infrastructure）与 ARC-001。由 B4 提交 `cafff2b` 引入（Step 14 基线 `086acaa` 为构造器注入单一 exporter，无 infrastructure 导入；B4 为支持 format_name 查找新增了该映射）。 |
-| Status | Open |
-| Impact | Medium——架构边界越界，B4 HTML 导出功能路径可达；不破坏功能或数据，但打破分层契约、Presentation 直接依赖具体实现、模块加载期实例化 exporter 增加耦合与测试难度 |
-| Temporary Workaround | 无（功能可用，仅架构违规；ExportDialog HTML 选项依赖该映射） |
-| Planned Resolution | 阶段 1 PluginContext 边界加固：format→Exporter 注册表迁至 app 装配层（`ui_assembly` / bootstrap 注入）或 Application 侧 `ExporterRegistry`，Presentation 仅依赖 `Exporter` Protocol + `format_name` 字符串；属公开 API 变更，按 `AI_ONBOARDING.md` §6 确认后实施 |
-
----
+_当前无未决问题。_
 
 ## 平台与第三方限制
 

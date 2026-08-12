@@ -24,7 +24,11 @@ from photo_archiver.application import SettingsService
 from photo_archiver.application.ports.system_settings import SystemSettings
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.infrastructure.config.settings import DEFAULT_APP_NAME
-from photo_archiver.infrastructure.exporters import ExcelExporter
+from photo_archiver.infrastructure.exporters import (
+    CsvExporter,
+    ExcelExporter,
+    HtmlExporter,
+)
 from photo_archiver.infrastructure.image import PillowThumbnailGenerator, ThumbnailCache
 from photo_archiver.infrastructure.persistence.qsettings_user_settings_store import (
     QSettingsUserSettingsStore,
@@ -128,6 +132,14 @@ def build_ui_controllers(
             service=services.export,
             exporter=ExcelExporter(),
             executor=worker_executor,  # type: ignore[arg-type]  # QtWorkerExecutor | None resolved by runtime caller
+            # 阶段 1b 修复（ISSUE-016）：format→Exporter 注册表迁 app 装配层
+            # （ui_assembly 持具体 Exporter 实例化——装配层职责合理），
+            # ExportController 仅依赖 Exporter Protocol + format_name（DEP-002 守护）。
+            exporters={
+                "xlsx": ExcelExporter(),
+                "csv": CsvExporter(),
+                "html": HtmlExporter(),
+            },
         ),
         detect_duplicates=DetectDuplicatesController(
             service=services.detect_duplicates,

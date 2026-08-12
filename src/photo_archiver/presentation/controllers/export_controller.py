@@ -2,6 +2,11 @@
 
 Matches the ``ArchiveController`` precedent: export() submits an ExportTask
 to the QtWorkerExecutor so long-running exports don't block the UI thread.
+
+阶段 1b 修复（ISSUE-016，ADR-026 §5 同阶段独立提交）：移除 infrastructure.exporters
+直接导入 + `_EXPORTERS` 类属性实例化（违反 DEP-002 Presentation MUST NOT import
+infrastructure）。format→Exporter 注册表迁 app 装配层（ui_assembly），ExportController
+仅依赖 Exporter Protocol + 注入的 exporters dict + format_name 字符串。
 """
 
 from pathlib import Path
@@ -11,34 +16,26 @@ from PySide6.QtCore import QObject, Slot
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.application.services.export_service import ExportService
 from photo_archiver.application.ports.exporter import Exporter
-from photo_archiver.infrastructure.exporters import (
-    CsvExporter,
-    ExcelExporter,
-    HtmlExporter,
-)
 from photo_archiver.workers import ExportTask, QtWorkerExecutor
 
 
 class ExportController(QObject):
     """Bridge export use case requests to worker execution.
 
-    Holds the ExportService and a format-name → Exporter mapping so the dialog
-    can pick XLSX / CSV / HTML and the controller resolves the concrete exporter
-    at export time (落 B4-a 裁决：HTML 走 HtmlExporter 零依赖档）。
-    """
+    Holds the ExportService + a format-name → Exporter mapping injected by
+    the app 装配层（ui_assembly）so the dialog can pick XLSX / CSV / HTML and
+    the controller resolves the concrete exporter at export time（落 B4-a 裁决：
+    HTML 走 HtmlExporter 零依赖档）。
 
-    # format name → concrete Exporter instance（B4 扩 HtmlExporter）。
-    _EXPORTERS: dict[str, Exporter] = {
-        "xlsx": ExcelExporter(),
-        "csv": CsvExporter(),
-        "html": HtmlExporter(),
-    }
+    Presentation 不导入 infrastructure.exporters——DEP-002 守护（ISSUE-016 修复）。
+    """
 
     def __init__(
         self,
         service: ExportService,
         exporter: Exporter,
         executor: QtWorkerExecutor,
+        exporters: dict[str, Exporter] | None = None,
         parent: QObject | None = None,
     ) -> None:
         """Initialize the controller with its service, exporter, and worker executor.
@@ -47,13 +44,17 @@ class ExportController(QObject):
             service: Application-layer ``ExportService``.
             exporter: Default ``Exporter`` (backward compat for legacy wiring
                 that still injects a single exporter; format-aware callers
-                should pass ``export`` a ``format_name`` instead).
+                should pass ``exporters`` dict + ``format_name`` instead).
             executor: ``QtWorkerExecutor`` to run the export off the UI thread.
+            exporters: format-name → Exporter mapping injected by app 装配层
+                （ui_assembly 持具体 Exporter 实例化）。None 时仅用 default exporter
+                （backward compat for legacy 单 exporter wiring）。
         """
         super().__init__(parent)
         self._service = service
         self._default_exporter = exporter
         self._executor = executor
+        self._exporters: dict[str, Exporter] = exporters or {}
 
     def export(
         self,
@@ -84,10 +85,10 @@ class ExportController(QObject):
         """Pick the concrete exporter by format name, or fall back to default."""
         if format_name is None:
             return self._default_exporter
-        exporter = self._EXPORTERS.get(format_name)
+        exporter = self._exporters.get(format_name)
         if exporter is None:
             raise ValueError(
-                f"Unknown export format '{format_name}'; expected one of {list(self._EXPORTERS.keys())}",
+                f"Unknown export format '{format_name}'; expected one of {list(self._exporters.keys())}",
             )
         return exporter
 

@@ -125,15 +125,15 @@
 | 会话范围 | 阶段 0 质量基线与文档收口（承接阶段 B1-B5 落地会话，B 方案与落地细节见 §3/§4） |
 | Completed | 阶段 0 收口：① 实测质量门（ruff 0 / mypy 0 / pytest 320 passed + 8 skipped，Python 3.11.9 @ .venv）；② B3/B4/B5 架构边界审查（B3 photo_ids 向后兼容 + 过滤留 ArchivePlanner；B4 HtmlExporter 仅 Infrastructure + XSS 转义 + 走 ExportTask；B5 只读 PluginContext 不暴露 Repository/UoW/Archive/WorkerExecutor/ApplicationContext，宿主渲染 ActionResult；发现 1 项代码问题只记录不修：ExportController 直连 infrastructure.exporters 违反 DEP-002，见阶段 0 报告）；③ 静态规则检查全项 0 命中（print/TODO/except:/插件 infra 导入）；④ 文档收口：plugin-guide.md 同步 v2 API（enable(context=None) + execute_action→ActionResult + 只读限制 + 非沙箱声明）；PROJECT_STATUS §1/§3/§4/§5/§6 刷新；plugin-context-design.md 纳入正式文档体系（DOCUMENT_INDEX §2.4 登记 + 头部状态标注） |
 | Remaining | 无阻塞（代码问题 1 项仅记录：ExportController 直连 Infrastructure，待阶段 1 修复） |
-| Next Step | 阶段 0 收口完成后进入 PluginContext 边界加固（阶段 1）：消除 Presentation→Infrastructure 越界（exporter 注册表迁 app 装配层或 Application 侧注册）；之后再考虑插件写能力（import/export 暂缓项）、Alembic 深化与性能加固 |
-| HEAD | 3ae3cd3（阶段 0 文档收口提交：docs: synchronize phase b and plugin documentation）；B3+B4+B5 落地于 cafff2b |
+| Next Step | 阶段 1 PluginContext 公共边界加固（ADR-026）已完成 1a+1b；后续考虑：插件写能力（import/export 暂缓项）、Alembic 深化与性能加固 |
+| HEAD | 6bbc671（阶段 1b ISSUE-016 修复：fix: decouple export controller from infrastructure）；阶段 1a 6 提交 f08bb78→6f7de71；阶段 0 收口 3ae3cd3；B3+B4+B5 落地 cafff2b |
 | 测试 | 实测 pytest 320 passed + 8 skipped（8 skip：InsightFace 模型包或示例人脸图片缺失——`tests/integration/face_detection/` 的 skip 条件，装齐 `download_models.py` 模型 + 样例 JPG 后实跑）；ruff 0 errors；mypy 0 errors |
 | 质量门 | 全部实测通过（2026-08-11，.venv Python 3.11.9）：ruff 0 + mypy 0 + pytest 320 passed + 8 skipped；git diff --check 干净 |
-| 文档影响 | 本会话触及 PROJECT_STATUS §1/§3/§4/§5/§6 + plugin-guide.md（v3 API 同步：ContextAwarePlugin + set_context → enable + PluginReport 渲染契约）+ DOCUMENT_INDEX §2.4（phase1-adr-draft.md 登记）+ KNOWN_ISSUES（新增 ISSUE-016：ExportController DEP-002 越界，阶段 1b 独立修复）+ plugin-context-design.md 头部状态标注（v3 收敛）+ ARCHITECTURE_DECISIONS（新增 ADR-026：阶段 1 PluginContext 公共边界加固）+ phase1-adr-draft.md（前置门定稿草案落盘）；新增 ADR-026 |
+| 文档影响 | 阶段 1 触及 PROJECT_STATUS §1/§3/§4/§5/§6 + plugin-guide.md（v3 API 同步：ContextAwarePlugin + set_context → enable + PluginReport 渲染契约）+ DOCUMENT_INDEX §2.4（phase1-adr-draft.md 登记）+ KNOWN_ISSUES（ISSUE-016 阶段 1b 修复后删条→当前无未决问题）+ plugin-context-design.md 头部状态标注（v3 收敛）+ ARCHITECTURE_DECISIONS（新增 ADR-026：阶段 1 PluginContext 公共边界加固）+ phase1-adr-draft.md（前置门定稿草案落盘）；新增 ADR-026 |
 
 ### 本会话确立的关键架构裁决（详情见 `ARCHITECTURE_DECISIONS.md`）
 
-本轮新增 ADR-026（阶段 1 PluginContext 公共边界加固，前置门拍板 2026-08-11）：ContextAwarePlugin(Plugin) 继承关系 + set_context(context) → enable() 新标准 + Plugin DTO 边界（PluginPhotoQuery 3 态 / PluginPhotoSummary 4 态含 none）+ PluginReport 单元格 str | int | float 混合 + ActionResult.report 收紧替旧 payload:Any + Protocol-first 实施顺序 + ISSUE-016 独立修复提交边界。详见 `docs/development/phase1-adr-draft.md`。
+本轮新增 ADR-026（阶段 1 PluginContext 公共边界加固，前置门拍板 2026-08-11）：ContextAwarePlugin(Plugin) 继承关系 + set_context(context) → enable() 新标准 + Plugin DTO 边界（PluginPhotoQuery 3 态 / PluginPhotoSummary 4 态含 none）+ PluginReport 单元格 str | int | float 混合 + ActionResult.report 收紧替旧 payload:Any + Protocol-first 实施顺序。阶段 1a（6 提交 f08bb78→6f7de71）已落地 PluginContext 加固；阶段 1b（6bbc671）修复 ISSUE-016 ExportController DEP-002 越界（format→Exporter 注册表迁 ui_assembly 装配层，ExportController 仅依赖 Protocol + format_name，同提交删 KNOWN_ISSUES 整条）。详见 `docs/development/phase1-adr-draft.md`。
 
 ### 5.1 本会话工作记录（2026-07-30~31，ISSUE-001+002+006+010 修复轮）
 
@@ -167,7 +167,7 @@
 
 ## 6. Next Step（下一步开发计划）
 
-**里程碑：全部 Step 0.5-15 已完成 + 阶段 B（B1-B5）全链路已闭环 + 阶段 0 质量基线与文档收口已完成（2026-08-11）。阶段 1 PluginContext 公共边界加固（ADR-026）实施中——前置门草案已拍板，按 Protocol-first 顺序推进；ISSUE-016（ExportController DEP-002 越界）属阶段 1b 独立修复提交。后续考虑：插件写能力（import/export 暂缓项）、Alembic 深化与性能加固。**
+**里程碑：全部 Step 0.5-15 已完成 + 阶段 B（B1-B5）全链路已闭环 + 阶段 0 质量基线与文档收口已完成（2026-08-11）+ 阶段 1 PluginContext 公共边界加固（ADR-026）已完成 1a+1b（2026-08-12，7 提交 f08bb78→6bbc671，实测 pytest 382 passed + 8 skipped / ruff 0 / mypy 0，KNOWN_ISSUES 清零）。后续考虑：插件写能力（import/export 暂缓项）、Alembic 深化与性能加固。**
 
 ### Step 15 交付确认
 
