@@ -279,6 +279,16 @@
 | 影响范围 | `application/dtos/plugin_context.py`（新建）、`application/dtos/plugin_action_result.py`（改造）、`application/ports/plugin_context.py`（改造）、`application/ports/plugin.py`（改造）、`application/services/plugin_context_service.py`（新建）、`app/bootstrap.py`（改造）、`plugins/loader.py`（改造）、`presentation/views/main_window.py`（改造）、`examples/plugins/{stats_report_plugin,hello_plugin}.py`（新建/改造）、7 个测试文件、`docs/development/{plugin-guide,plugin-context-design,phase1-adr-draft}.md`、`.ai/PROJECT_STATUS.md`。ISSUE-016 ExportController DEP-002 修复同阶段独立提交（`fix: decouple export controller from infrastructure`），不在本 ADR 管辖。定稿草案 `docs/development/phase1-adr-draft.md`（含拍板记录 + Protocol-first 顺序 + 完成标准）。 |
 | 反驳驳回 | 阶段 1 开工前审查报告识别 4 项 Major 设计问题——MAJOR-1 Protocol 关系缺失致静默失败风险（处置：继承 + 二道兜底）、MAJOR-2 `match_status` Literal 与 Domain 不一致（处置：实测 MatchStatus 字面值 + Query/Summary 分态）、MAJOR-3 强制全 str 与 stats 数值用例冲突（处置：混合类型 + 宿主格式化）、MAJOR-4 顺序违反依赖方向（处置：Protocol-first）。4 项 Major 经前置门拍板选 A 全部处置，7 项 Minor 同批登记。 |
 
+### ADR-027 — 阶段 2 Alembic migration 接管 Schema DDL（架构基础设施深化）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（前置门拍板 2026-08-12，定稿草案 `docs/development/phase2-adr-draft.md`） |
+| 决策 | 阶段 2 深化 ADR-024 妥协形态——migration 从空 stamp 接管真实 Schema DDL。三拍板：(1) migration 全接管 6 表 + 6 索引 DDL（people/folders/photos/recognition_results/person_embeddings/archive_records），`initialize_schema()` 仅留 mkdir + PRAGMA 仅新库 stamp + 调 Alembic；(2) 新建 `002_split_create_ddl` 持 DDL，`001_initial_v4` 保留空 stamp 形态（避免改造 upgrade/downgrade 的首次 migration 无前版本可回难题）；(3) 保留仅新库（current_version==0）`PRAGMA user_version = 4` 兼容旧库迁移路径（ADR-024 已述兼容旧代码）。不推翻 ADR-024 raw SQL 路线，不动 ORM models / Repository 基类。 |
+| 理由 | ADR-024 落地了 Alembic 迁移体系雏形但 `001_initial_v4` 是空 stamp migration（upgrade/downgrade 全 pass），`sqlite_connection.py:109-206` 的 `initialize_schema()` 仍用 raw SQL `CREATE TABLE IF NOT EXISTS` 创建 6 表 + 6 索引，Alembic 仅 stamp 版本未接管 Schema DDL——非 roadmap §190 期望的"Alembic 接管 Schema 版本管理"完整态。本 ADR 深化此形态：DDL 迁入 migration upgrade，downgrade 持 DROP TABLE IF EXISTS（FK 依赖逆序），幂等守护（CREATE/DROP TABLE IF NOT EXISTS/EXISTS）容重复执行。 |
+| 影响范围 | `alembic/versions/002_split_create_ddl.py`（新建，6 表 + 6 索引 DDL）、`infrastructure/database/sqlite_connection.py`（`initialize_schema()` 改造移除 CREATE TABLE 重复路径）、`tests/integration/database/test_alembic_migrations.py`（新建，migration up/down + Schema 版本一致 + Repository 对照回归）、`.ai/PROJECT_STATUS.md`、`.ai/DOCUMENT_INDEX.md`（phase2-adr-draft.md 登记）。不变：Domain Schema、ORM models、Repository 基类/Session 生命周期、`alembic/env.py`/`alembic.ini`/`alembic_runner.py`、`001_initial_v4.py`（保留空 stamp）、依赖（`alembic==1.16.4` 已在）。定稿草案 `docs/development/phase2-adr-draft.md`（含拍板记录 + 完成标准）。 |
+| 反驳驳回 | 阶段 2 开工前实测推翻原假"Alembic 待初始化"——Alembic 已落地（ADR-024 Accepted 2026-07-25），`alembic/`+`alembic.ini`+`alembic/versions/001_initial_v4.py`+`alembic_runner.py`+`run_alembic_migrations()` 集成 bootstrap+`alembic==1.16.4` 在 requirements。真实缺口是 `001` 空动作+`initialize_schema()` 持 raw SQL DDL+无 Alembic 测试。本 ADR 处置此三缺口不推翻 ADR-024。 |
+
 ---
 
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）
