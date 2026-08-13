@@ -289,6 +289,16 @@
 | 影响范围 | `alembic/versions/002_split_create_ddl.py`（新建，6 表 + 6 索引 DDL）、`infrastructure/database/sqlite_connection.py`（`initialize_schema()` 改造移除 CREATE TABLE 重复路径）、`tests/integration/database/test_alembic_migrations.py`（新建，migration up/down + Schema 版本一致 + Repository 对照回归）、`.ai/PROJECT_STATUS.md`、`.ai/DOCUMENT_INDEX.md`（phase2-adr-draft.md 登记）。不变：Domain Schema、ORM models、Repository 基类/Session 生命周期、`alembic/env.py`/`alembic.ini`/`alembic_runner.py`、`001_initial_v4.py`（保留空 stamp）、依赖（`alembic==1.16.4` 已在）。定稿草案 `docs/development/phase2-adr-draft.md`（含拍板记录 + 完成标准）。 |
 | 反驳驳回 | 阶段 2 开工前实测推翻原假"Alembic 待初始化"——Alembic 已落地（ADR-024 Accepted 2026-07-25），`alembic/`+`alembic.ini`+`alembic/versions/001_initial_v4.py`+`alembic_runner.py`+`run_alembic_migrations()` 集成 bootstrap+`alembic==1.16.4` 在 requirements。真实缺口是 `001` 空动作+`initialize_schema()` 持 raw SQL DDL+无 Alembic 测试。本 ADR 处置此三缺口不推翻 ADR-024。 |
 
+### ADR-028 — 阶段 3 插件写能力 import_people（公开 API 扩展）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（前置门拍板 2026-08-13，定稿草案 `docs/development/phase3-adr-draft.md`） |
+| 决策 | 阶段 3 重新开放 B5-a 暂缓项的写能力——但仅限 import_people（最小写路径），export 续暂缓留后续轮单独裁决。四拍板：(0) 真实用例驱动——插件从外部 CSV/JSON 导入人员实体（推翻 B5-a "YAGNI 当前无清晰用例"原裁决依据）；(1=A) 仅 import_people，export 不开放（ExportController 已有宿主路径不需插件触发）；(2=A) 无审批门先行（插件直调 PluginContextService.import_people，宿主仅渲染 ActionResult，审批门留后续轮加）；(3=C) 双向 DTO 脱 Domain——PluginImportPersonRow/PluginImportPeopleCommand 入参 + PluginImportResult 结果（imported_count/skipped_count/imported_person_ids: tuple[str, ...] 非 UUID/errors），不持 Person 实体/UUID 字面/PersonRepository 实例，与 ADR-026 Plugin DTO 边界一致。 |
+| 理由 | B5-a 原裁决"暂缓 import/export"依据是"YAGNI 当前无清晰用例"——本 ADR 推翻依据：真实用例已现（插件从外部 CSV/JSON 导入人员实体），故重新开放写能力。范围限 import_people 先行：export 写文件用例暂缓（ExportController 已有宿主路径，不需插件触发，YAGNI）。宿主审批门暂缓：复杂度低先行，审批门（B/C 选项）留后续轮加（若真实用例需高危操作确认）。双向 DTO 脱 Domain：最小权限，与 ADR-026 Plugin DTO 边界一致，插件不触 ImportPeopleService/PersonRepository（DEP-060 守护）。 |
+| 影响范围 | `application/dtos/plugin_context.py`（扩 PluginImportPersonRow/PluginImportPeopleCommand/PluginImportResult）、`application/ports/plugin_context.py`（新增 import_people 签名）、`application/services/plugin_context_service.py`（扩展 import_people 映射编排 + ImportPeopleService 联动）、`app/bootstrap.py`（注入 ImportPeopleService 依赖到 PluginContextService）、`examples/plugins/`（可选新增 import demo 或扩 stats_report）、`tests/unit/application/test_plugin_context_service.py`+`test_plugin_dtos.py`（扩展）、`docs/development/plugin-guide.md`（写能力章节）、`.ai/PROJECT_STATUS.md`、`.ai/DOCUMENT_INDEX.md`（phase3-adr-draft.md 登记）。不变：Domain Schema、依赖、ExportController（宿主路径不动）、`enable(context)` 兼容路径（另项裁决）、export 写能力（续暂缓）。定稿草案 `docs/development/phase3-adr-draft.md`（含拍板记录 + 完成标准）。 |
+| 反驳驳回 | B5-a 原裁决"暂缓 import/export"依据"YAGNI 当前无清晰用例"被推翻——真实用例已现（插件从外部 CSV/JSON 导入人员实体），故重新开放写能力。但范围限 import_people 先行不双开放，export 续暂缓留后续轮单独裁决（YAGNI：ExportController 已有宿主路径不需插件触发）。宿主审批门暂缓（复杂度低先行）。 |
+
 ---
 
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）

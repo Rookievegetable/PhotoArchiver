@@ -87,6 +87,7 @@ flowchart TD
 | `docs/development/plugin-context-design.md` | B5 PluginContext 接口设计方案（B5-a 前置门产出 + v2 收敛版）——设计决策依据，非 SSOT（现状以代码与 `PROJECT_STATUS.md` 为准；B5-a 裁决在 `ARCHITECTURE_DECISIONS.md`） | 设计文档 |
 | `docs/development/phase1-adr-draft.md` | 阶段 1 PluginContext 公共边界加固 ADR-026 定稿草案（前置门产出，含拍板记录 + Protocol-first 顺序 + 完成标准；ADR-026 Accepted 条目在 `ARCHITECTURE_DECISIONS.md`） | 设计文档 |
 | `docs/development/phase2-adr-draft.md` | 阶段 2 Alembic migration 接管 Schema DDL ADR-027 定稿草案（前置门产出，含拍板记录 + 完成标准；ADR-027 Accepted 条目在 `ARCHITECTURE_DECISIONS.md`） | 设计文档 |
+| `docs/development/phase3-adr-draft.md` | 阶段 3 插件写能力 import_people ADR-028 定稿草案（前置门产出，含拍板记录 + 完成标准；ADR-028 Accepted 条目在 `ARCHITECTURE_DECISIONS.md`） | 设计文档 |
 | `LICENSE_PLACEHOLDER.md` | License 占位 | 待定 |
 
 ### 2.5 工程配置
