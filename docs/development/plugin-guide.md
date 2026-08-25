@@ -163,8 +163,9 @@ Behavior notes:
 
 - `row_number` is filled by the host service from tuple order (1-based); plugin
   rows do not carry it.
-- Rows whose `identity` already exists are **skipped**, so re-running an import
-  action is idempotent.
+- Rows whose `identity` already exists are **skipped**; re-running an import is
+  therefore idempotent **only when every row carries a stable identity** — rows
+  without `identity` are never deduplicated and insert again on each run.
 - Invalid rows (e.g. blank name) surface as per-row error strings; one bad row
   never aborts the batch.
 - A working example lives in `examples/plugins/import_people_demo_plugin.py`

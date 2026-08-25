@@ -4,6 +4,8 @@
 >
 > **文档状态（2026-08-11）**：已纳入正式文档体系（`.ai/DOCUMENT_INDEX.md` §2.4 登记），作为 B5 PluginContext 接口设计决策依据文档；非 SSOT——实现现状以代码与 `PROJECT_STATUS.md` 为准，B5-a 裁决见 `ARCHITECTURE_DECISIONS.md`。阶段 1 加固（ADR-026）后本草案 v3 收敛：``ContextAwarePlugin(Plugin)`` 继承 + ``set_context(context) → enable()`` 新标准 + Plugin DTO 边界（``PluginPhotoQuery`` 3 态 / ``PluginPhotoSummary`` 4 态含 none）+ ``PluginReport`` 单元格 ``str | int | float`` 混合 + ``ActionResult.report`` 收紧替旧 ``payload:Any``——详见 `docs/development/phase1-adr-draft.md`。
 >
+> **文档状态补充（2026-08-25）**：阶段 3 已按 ADR-028 重新开放部分写能力——`PluginContext.import_people` 已落地（仅 import_people；export 续暂缓）。本文下述 v2 收敛块中"只读 / 暂缓 import/export"的表述自该裁决起**部分过时**；实现现状以代码与 `.ai/PROJECT_STATUS.md` 为准，见 `.ai/ARCHITECTURE_DECISIONS.md` ADR-028 与 `docs/development/phase3-adr-draft.md`。
+>
 > **裁决编号**：B5-a（已拍板"批准设计"+ 前置门"开工前出草案评审"）
 >
 > **产出时间**：2026-08-02
