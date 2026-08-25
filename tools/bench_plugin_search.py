@@ -44,18 +44,28 @@ SCALES = (100, 500, 2000)
 
 
 class _CountingRecognitionRepo:
-    """Duck-typed wrapper counting ``list_by_photo`` delegations (N+1 meter)."""
+    """Duck-typed wrapper counting EVERY delegated repository call.
+
+    Phase 4 meter: after the N+1 fix the plugin search path must issue exactly
+    ONE recognition repository call per search regardless of photo count.
+    """
 
     def __init__(self, inner: object) -> None:
         self._inner = inner
         self.calls = 0
 
-    def list_by_photo(self, photo_id: object) -> list:
-        self.calls += 1
-        return self._inner.list_by_photo(photo_id)  # type: ignore[attr-defined]
-
     def __getattr__(self, name: str) -> object:
-        return getattr(self._inner, name)
+        attr = getattr(self._inner, name)
+
+        if callable(attr):
+
+            def counted(*args: object, **kwargs: object) -> object:
+                self.calls += 1
+                return attr(*args, **kwargs)  # type: ignore[arg-type]
+
+            return counted
+
+        return attr
 
 
 def _seed(repositories: ApplicationRepositories, scale: int, count: int) -> None:

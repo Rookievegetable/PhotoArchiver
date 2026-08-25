@@ -1,5 +1,6 @@
 """SQLite implementation of the recognition result repository interface."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
@@ -9,6 +10,10 @@ from photo_archiver.infrastructure.database.sqlite_mappers import (
     datetime_to_text,
     recognition_result_from_row,
 )
+
+# Bound parameters per IN-clause chunk — stays well under SQLite's compiled
+# SQLITE_MAX_VARIABLE_NUMBER on every supported build (COD-023 named constant).
+_SQLITE_PARAMETER_CHUNK = 500
 
 
 class SQLiteRecognitionRepository(RecognitionRepository):
@@ -61,6 +66,35 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                 (str(photo_id),),
             ).fetchall()
         return [recognition_result_from_row(row) for row in rows]
+
+    def list_first_by_photo_ids(
+        self, photo_ids: Sequence[UUID]
+    ) -> dict[UUID, RecognitionResult]:
+        """Return the earliest recognition result per photo via IN-clause chunks.
+
+        Ordering mirrors ``list_by_photo`` (``created_at`` then ``id``), so the
+        first row encountered per photo equals ``list_by_photo(id)[0]``.
+        """
+        if not photo_ids:
+            return {}
+        results: dict[UUID, RecognitionResult] = {}
+        with self._connection_provider.connect() as connection:
+            for chunk_start in range(0, len(photo_ids), _SQLITE_PARAMETER_CHUNK):
+                chunk = [
+                    str(pid)
+                    for pid in photo_ids[chunk_start : chunk_start + _SQLITE_PARAMETER_CHUNK]
+                ]
+                placeholders = ", ".join("?" for _ in chunk)
+                rows = connection.execute(
+                    f"SELECT * FROM recognition_results "
+                    f"WHERE photo_id IN ({placeholders}) "
+                    f"ORDER BY created_at, id",
+                    chunk,
+                ).fetchall()
+                for row in rows:
+                    result = recognition_result_from_row(row)
+                    results.setdefault(result.photo_id, result)
+        return results
 
     def list_pending(self) -> list[RecognitionResult]:
         """Return all recognition results awaiting user review."""

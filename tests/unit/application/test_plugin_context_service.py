@@ -171,8 +171,8 @@ def test_plugin_context_service_search_photos_returns_plugin_summaries() -> None
             return None  # not used in this test
 
     class _FakeRecognitionRepo:
-        def list_by_photo(self, photo_id: UUID) -> list:
-            return []  # 无 RecognitionResult → match_status="none"
+        def list_first_by_photo_ids(self, photo_ids: tuple[UUID, ...]) -> dict:
+            return {}  # 无 RecognitionResult → match_status="none"
 
     class _UnusedImportService:
         def import_rows(self, rows: object) -> ImportPeopleResult:
@@ -188,6 +188,65 @@ def test_plugin_context_service_search_photos_returns_plugin_summaries() -> None
     assert len(results) == 2
     assert all(isinstance(r, PluginPhotoSummary) for r in results)
     assert all(r.match_status == "none" for r in results), "无 RecognitionResult 应返 none"
+
+
+def test_plugin_context_service_search_uses_single_batched_status_lookup() -> None:
+    """N+1 回归守护：N 张照片恰一次批量状态查询，且 pending / none 正确映射.
+
+    阶段 4（phase4-adr-draft B4-2）：search 循环改走
+    ``RecognitionRepository.list_first_by_photo_ids`` 单往返——本用例锁定
+    “调用次数 == 1”防回退，并验证命中照片映射 pending、未命中照片为 none。
+    """
+    from photo_archiver.domain import Photo
+    from photo_archiver.domain.entities.recognition import MatchStatus
+    from photo_archiver.domain.value_objects import PhotoPath
+
+    class _StubResult:
+        def __init__(self, status: MatchStatus) -> None:
+            self.status = status
+
+    class _SearchSvc:
+        def execute(self, criteria: object) -> list:
+            return [
+                Photo(path=PhotoPath(f"/p{i}.jpg"), id=UUID(int=i))
+                for i in (1, 2, 3)
+            ]
+
+    class _DupSvc:
+        def execute(self) -> object:
+            return None
+
+    class _BatchedRecognitionRepo:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.batch_ids: tuple[UUID, ...] = ()
+
+        def list_first_by_photo_ids(self, photo_ids: object) -> dict:
+            self.calls += 1
+            self.batch_ids = tuple(photo_ids)  # type: ignore[arg-type]
+            return {UUID(int=2): _StubResult(MatchStatus.PENDING)}  # type: ignore[dict-item]
+
+    class _NoImportStub:
+        def import_rows(self, rows: object) -> ImportPeopleResult:
+            raise AssertionError("import path must not run in search tests")
+
+    recognition_repo = _BatchedRecognitionRepo()
+    service = PluginContextService(  # type: ignore[arg-type]
+        _SearchSvc(),
+        _DupSvc(),
+        recognition_repo,
+        _NoImportStub(),
+    )
+
+    summaries = service.search_photos(PluginPhotoQuery())
+
+    assert recognition_repo.calls == 1, "N 张照片必须只发一次批量状态查询"
+    assert tuple(sorted(recognition_repo.batch_ids, key=int)) == (
+        UUID(int=1),
+        UUID(int=2),
+        UUID(int=3),
+    ), "批量查询必须携带全部命中照片 id"
+    assert [s.match_status for s in summaries] == ["none", "pending", "none"]
 
 
 def test_plugin_context_service_minimal_privilege_no_repository_uow_worker() -> None:
@@ -225,8 +284,8 @@ class _NoopDupService:
 class _EmptyRecognitionRepo:
     """Stand-in recognition repository holding no results."""
 
-    def list_by_photo(self, photo_id: object) -> list:
-        return []
+    def list_first_by_photo_ids(self, photo_ids: object) -> dict:
+        return {}
 
 
 def _build_import_path_service(import_service: object) -> PluginContextService:

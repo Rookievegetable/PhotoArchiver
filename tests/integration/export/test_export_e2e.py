@@ -99,6 +99,13 @@ class _InMemoryRecognitionRepository(RecognitionRepository):
     def list_by_photo(self, photo_id: UUID) -> list[RecognitionResult]:
         return [r for r in self._results if r.photo_id == photo_id]
 
+    def list_first_by_photo_ids(self, photo_ids) -> dict:
+        return {
+            r.photo_id: r
+            for r in reversed(self._results)
+            if r.photo_id in set(photo_ids)
+        }
+
     def list_pending(self) -> list[RecognitionResult]:
         return [r for r in self._results if r.status is MatchStatus.PENDING]
 

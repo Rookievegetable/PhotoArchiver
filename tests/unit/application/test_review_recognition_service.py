@@ -27,6 +27,9 @@ class _RecordingRecognitionRepository(RecognitionRepository):
     def list_by_photo(self, photo_id) -> list:
         raise NotImplementedError
 
+    def list_first_by_photo_ids(self, photo_ids) -> dict:
+        raise NotImplementedError
+
     def list_pending(self) -> list:
         raise NotImplementedError
 

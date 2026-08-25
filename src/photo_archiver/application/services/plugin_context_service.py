@@ -12,7 +12,7 @@ Application Service 子集（search_photos + detect_duplicates），但**返 Plu
       ↓
     Application Service 编排（SearchPhotosService / DetectDuplicatesService）
       ↓
-    联查 RecognitionRepository 取 match_status（Photo 实体无此字段）
+    批量联查 RecognitionRepository（list_first_by_photo_ids 单往返取 match_status）
       ↓
     映射为 Plugin DTO 返（PluginPhotoSummary / PluginDuplicateReport）
 
@@ -158,9 +158,10 @@ class PluginContextService:
     Args:
         search_service: SearchPhotosService (B2 落地)——Photo 查询编排。
         duplicates_service: DetectDuplicatesService (B1 落地)——查重编排。
-        recognition_repository: RecognitionRepository——联查 RecognitionResult
-            取 match_status（Photo 实体无此字段，需补联查）。InMemory 仓储不持
-            recognition 时按契约返 "none"。
+        recognition_repository: RecognitionRepository——批量联查 RecognitionResult
+            取 match_status（Photo 实体无此字段）。经 list_first_by_photo_ids
+            单次往返取全部命中照片的最早识别结果；仓储不持 recognition 时
+            按契约返 "none"。
         import_people_service: ImportPeopleService (阶段 3 ADR-028)——人员导入
             写编排。插件经 import_people 调用，宿主映射 PluginImportPeopleCommand
             → tuple[PersonImportRow, ...]（补 row_number）走
@@ -182,7 +183,7 @@ class PluginContextService:
         self._import_people = import_people_service
 
     def search_photos(self, query: PluginPhotoQuery) -> tuple[PluginPhotoSummary, ...]:
-        """Delegate to SearchPhotosService + recognition repo联查，返 Plugin DTO.
+        """Delegate to SearchPhotosService + recognition 批量联查，返 Plugin DTO.
 
         Args:
             query: PluginPhotoQuery 持 3 态 match_status + person_id + date 区间。
@@ -193,16 +194,18 @@ class PluginContextService:
         """
         criteria = _query_to_criteria(query)
         photos = self._search.execute(criteria)
+        # 阶段 4（phase4-adr-draft B4-2）：识别状态一次批量取回——修复逐照片
+        # list_by_photo 的 N+1 查询（tools/bench_plugin_search.py 实测 2600 张库
+        # 1137.9ms → 单次往返）。
+        photo_ids = tuple(photo.id for photo in photos if photo.id is not None)
+        recognition_by_photo = self._recognition.list_first_by_photo_ids(photo_ids)
         summaries: list[PluginPhotoSummary] = []
         for photo in photos:
-            photo_id = photo.id
-            if photo_id is None:
+            if photo.id is None:
                 continue  # Photo.id 未赋值（search 后必赋，防御）
-            recognition_results = self._recognition.list_by_photo(photo_id)
+            recognized = recognition_by_photo.get(photo.id)
             recognition_status: MatchStatus | None = (
-                recognition_results[0].status
-                if recognition_results
-                else None
+                recognized.status if recognized is not None else None
             )
             summaries.append(_photo_to_summary(photo, recognition_status))
         return tuple(summaries)

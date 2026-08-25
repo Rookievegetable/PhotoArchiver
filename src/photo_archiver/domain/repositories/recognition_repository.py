@@ -1,5 +1,6 @@
 """Recognition result repository interface."""
 
+from collections.abc import Sequence
 from typing import Protocol
 from uuid import UUID
 
@@ -17,6 +18,17 @@ class RecognitionRepository(Protocol):
 
     def list_by_photo(self, photo_id: UUID) -> list[RecognitionResult]:
         """Return all recognition results for the given photo."""
+
+    def list_first_by_photo_ids(
+        self, photo_ids: Sequence[UUID]
+    ) -> dict[UUID, RecognitionResult]:
+        """Return the earliest recognition result per photo, in one round trip.
+
+        Mirrors the "first element of ``list_by_photo``" semantics (ordered by
+        ``created_at`` then ``id``) for every supplied photo id, so callers
+        pairing photos with review status avoid N+1 per-photo lookups.
+        Photo ids without any recognition result are absent from the mapping.
+        """
 
     def list_pending(self) -> list[RecognitionResult]:
         """Return all recognition results awaiting user review."""

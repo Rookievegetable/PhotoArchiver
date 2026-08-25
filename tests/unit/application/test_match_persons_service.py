@@ -83,6 +83,9 @@ class _StubRecognitionRepository(RecognitionRepository):
     def list_by_photo(self, photo_id) -> list:
         return []
 
+    def list_first_by_photo_ids(self, photo_ids) -> dict:
+        return {}
+
     def list_pending(self) -> list:
         return []
 

@@ -185,6 +185,57 @@ def test_sqlite_recognition_repository_round_trips_result(tmp_path: Path) -> Non
     assert recognition_repository.list_pending() == [result]
 
 
+def test_sqlite_recognition_repository_list_first_by_photo_ids(tmp_path: Path) -> None:
+    """Batch lookup returns the earliest result per photo; missing ids absent."""
+    provider = create_provider(tmp_path)
+    folder_repository = SQLiteFolderRepository(provider)
+    photo_repository = SQLitePhotoRepository(provider)
+    recognition_repository = SQLiteRecognitionRepository(provider)
+
+    folder = Folder(path=PhotoPath("school"), total_photos=3)
+    folder_repository.add(folder)
+    photos = [
+        Photo(path=PhotoPath(f"school/event{i}.jpg"), folder_id=folder.id)
+        for i in range(3)
+    ]
+    for photo in photos:
+        photo_repository.add(photo)
+
+    earlier = RecognitionResult(
+        photo_id=photos[0].id,
+        confidence=0.6,
+        created_at=datetime(2026, 8, 1),
+    )
+    later_same_photo = RecognitionResult(
+        photo_id=photos[0].id,
+        confidence=0.9,
+        created_at=datetime(2026, 8, 2),
+    )
+    only_for_second = RecognitionResult(
+        photo_id=photos[1].id,
+        confidence=0.7,
+    )
+    for result in (later_same_photo, earlier, only_for_second):
+        recognition_repository.add(result)
+
+    lookup = recognition_repository.list_first_by_photo_ids(
+        (photos[0].id, photos[1].id, photos[2].id)  # type: ignore[arg-type]
+    )
+
+    assert set(lookup) == {photos[0].id, photos[1].id}, "无识别结果的照片不得出现在字典"
+    assert lookup[photos[0].id] == earlier, "同照片多条须取 created_at 最早一条"
+    assert lookup[photos[1].id] == only_for_second
+
+
+def test_sqlite_recognition_repository_list_first_by_photo_ids_empty_input(
+    tmp_path: Path,
+) -> None:
+    """空输入直接返回空字典，不触碰数据库连接."""
+    recognition_repository = SQLiteRecognitionRepository(create_provider(tmp_path))
+
+    assert recognition_repository.list_first_by_photo_ids(()) == {}
+
+
 def test_sqlite_recognition_repository_upserts_by_id(tmp_path: Path) -> None:
     """Adding the same result id replaces persisted fields."""
     provider = create_provider(tmp_path)
