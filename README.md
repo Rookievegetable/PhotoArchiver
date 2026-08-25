@@ -7,6 +7,8 @@ PhotoArchiver 是一个面向长期维护的企业级桌面照片归档管理系
 > **当前进度唯一权威**：`.ai/PROJECT_STATUS.md`。本节仅作人类入口概览，不承载任何会过期的状态陈述——所有 Step 状态、测试计数、lint 数字均以 `PROJECT_STATUS.md` 为准。
 >
 > **项目开发已全面收官**（全部 15 Step 完成，ruff 0 + mypy 0，Alembic 迁移体系已激活）。详见 `.ai/PROJECT_STATUS.md`。
+>
+> 📖 **最终用户指南**：安装配置、业务闭环操作与常见问题见 [`docs/user-guide/`](docs/user-guide/)——[安装与首次运行](docs/user-guide/installation.md) ｜ [核心操作流程](docs/user-guide/workflow.md) ｜ [常见问题](docs/user-guide/faq.md)。
 
 ## 核心目标
 

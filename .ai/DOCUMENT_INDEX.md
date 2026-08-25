@@ -89,6 +89,9 @@ flowchart TD
 | `docs/development/phase2-adr-draft.md` | 阶段 2 Alembic migration 接管 Schema DDL ADR-027 定稿草案（前置门产出，含拍板记录 + 完成标准；ADR-027 Accepted 条目在 `ARCHITECTURE_DECISIONS.md`） | 设计文档 |
 | `docs/development/phase3-adr-draft.md` | 阶段 3 插件写能力 import_people ADR-028 定稿草案（前置门产出，含拍板记录 + 完成标准；ADR-028 Accepted 条目在 `ARCHITECTURE_DECISIONS.md`） | 设计文档 |
 | `docs/development/phase4-adr-draft.md` | 阶段 4 技术债轮前置门草案（兼容路径移除轮次 / search_photos N+1 批量查询方案与实测基线 / export 写能力与审批门裁决点；已拍板定稿，ADR-029/030 登记） | 设计文档 |
+| `docs/user-guide/installation.md` | 最终用户：安装、首次配置（`.env` 关键项）、模型包下载与启动（GUI / CLI 对照） | 用户文档 |
+| `docs/user-guide/workflow.md` | 最终用户：导入→扫描→审核→归档六环节闭环操作、附加能力与命令行对照表 | 用户文档 |
+| `docs/user-guide/faq.md` | 最终用户：识别 / 归档 / 数据备份 / 平台支持等常见问题解答 | 用户文档 |
 | `LICENSE_PLACEHOLDER.md` | License 占位 | 待定 |
 
 ### 2.5 工程配置
