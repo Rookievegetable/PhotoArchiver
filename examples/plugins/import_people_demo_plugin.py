@@ -11,8 +11,9 @@ errors 明细）——宿主 PluginReportDialog 渲染。
 - 裁决点 3=C 双向 DTO 脱 Domain——入参/结果均 Plugin DTO，
   ``imported_person_ids`` 为 ``tuple[str, ...]`` 非 UUID。
 
-样例行含一条重复身份记录用于演示 skipped 计数；重复执行本动作是幂等的——
-已导入的身份再次出现只会计入 skipped，不会产生重复人员。
+样例行均携带 identity（其中一条与首条重复，用于演示 skipped 计数）——带
+identity 的行重复执行只会计入 skipped，因此本插件重复执行是幂等的、不会产生
+重复人员；注意无 identity 的行不做去重，每次执行都会重新导入。
 """
 
 from __future__ import annotations
@@ -29,10 +30,12 @@ from photo_archiver.application.ports.plugin_context import PluginContext
 class ImportPeopleDemoPlugin:
     """Import people demo plugin — 阶段 3 端到端验收插件（ContextAware 标准）."""
 
-    # 内置样例行：两条可导入 + 一条重复身份（演示 skipped 计数）。
+    # 内置样例行：两条可导入 + 一条重复身份（演示 skipped 计数）。全部携带
+    # identity——去重仅作用于带 identity 的行（见 ImportPeopleService.import_rows），
+    # 全量带身份保证重复执行本动作时整批幂等。
     _DEMO_ROWS = (
         PluginImportPersonRow(name="张三", identity="DEMO-001", department="Demo Dept"),
-        PluginImportPersonRow(name="李四", department="Demo Dept"),
+        PluginImportPersonRow(name="李四", identity="DEMO-002", department="Demo Dept"),
         PluginImportPersonRow(name="张三-重复", identity="DEMO-001"),
     )
 
