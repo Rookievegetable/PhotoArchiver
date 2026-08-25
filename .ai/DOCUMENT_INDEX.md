@@ -92,7 +92,8 @@ flowchart TD
 | `docs/user-guide/installation.md` | 最终用户：安装、首次配置（`.env` 关键项）、模型包下载与启动（GUI / CLI 对照） | 用户文档 |
 | `docs/user-guide/workflow.md` | 最终用户：导入→扫描→审核→归档六环节闭环操作、附加能力与命令行对照表 | 用户文档 |
 | `docs/user-guide/faq.md` | 最终用户：识别 / 归档 / 数据备份 / 平台支持等常见问题解答 | 用户文档 |
-| `LICENSE_PLACEHOLDER.md` | License 占位 | 待定 |
+| `CHANGELOG.md` | 用户可见的版本变更记录（Keep a Changelog 格式；git log 是提交级历史的 SSOT，本文件是其上层摘要） | 变更日志 |
+| `LICENSE` | MIT 许可证（2026-08-25 负责人选定，v1.0.0 起生效；占位文件已删除） | 许可证 |
 
 ### 2.5 工程配置
 
