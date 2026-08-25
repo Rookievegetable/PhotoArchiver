@@ -299,6 +299,25 @@
 | 影响范围 | `application/dtos/plugin_context.py`（扩 PluginImportPersonRow/PluginImportPeopleCommand/PluginImportResult）、`application/ports/plugin_context.py`（新增 import_people 签名）、`application/services/plugin_context_service.py`（扩展 import_people 映射编排 + ImportPeopleService 联动）、`app/bootstrap.py`（注入 ImportPeopleService 依赖到 PluginContextService）、`examples/plugins/`（可选新增 import demo 或扩 stats_report）、`tests/unit/application/test_plugin_context_service.py`+`test_plugin_dtos.py`（扩展）、`docs/development/plugin-guide.md`（写能力章节）、`.ai/PROJECT_STATUS.md`、`.ai/DOCUMENT_INDEX.md`（phase3-adr-draft.md 登记）。不变：Domain Schema、依赖、ExportController（宿主路径不动）、`enable(context)` 兼容路径（另项裁决）、export 写能力（续暂缓）。定稿草案 `docs/development/phase3-adr-draft.md`（含拍板记录 + 完成标准）。 |
 | 反驳驳回 | B5-a 原裁决"暂缓 import/export"依据"YAGNI 当前无清晰用例"被推翻——真实用例已现（插件从外部 CSV/JSON 导入人员实体），故重新开放写能力。但范围限 import_people 先行不双开放，export 续暂缓留后续轮单独裁决（YAGNI：ExportController 已有宿主路径不需插件触发）。宿主审批门暂缓（复杂度低先行）。 |
 
+### ADR-029 — search_photos 识别状态批量联查修复 N+1（公开端口扩展）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（前置门拍板 2026-08-25，定稿草案 `docs/development/phase4-adr-draft.md` B4-2） |
+| 决策 | `RecognitionRepository` Protocol 新增 `list_first_by_photo_ids(photo_ids) -> dict[UUID, RecognitionResult]`——SQLite 以 IN 子句分块（每块 500 参数）单次往返取回每张照片最早识别结果（ORDER BY created_at, id，镜像 `list_by_photo(id)[0]` 语义）；`PluginContextService.search_photos` 从逐照片 `list_by_photo` 改为一次批量取回后内存配对。 |
+| 理由 | `tools/bench_plugin_search.py` 实测 N+1：调用次数恒等于照片数（2600 张 → 1137.9ms），且该路径运行于主窗口筛选刷新与插件报表的 UI 线程同步路径。设计细化论证：前置门原荐「PhotoRepository 承载联查」在详细设计中确认使 InMemory 测试替身无法独立实现 status 轴（photo 仓储反向耦合 recognition 聚合），等效细化为 RecognitionRepository 批量接口——同达 O(1) 往返目标、端口面更小、替身可实现（判定标准与 ADR-025 一致：以字段语义 + 跨用例复用性定归属，不以首次出现用例倒推）。 |
+| 影响范围 | `domain/repositories/recognition_repository.py`（协议扩展）、`infrastructure/database/sqlite_recognition_repository.py`（分块 IN 实现）、`application/services/plugin_context_service.py`（search 循环改批量）、`tests/unit/application/test_plugin_context_service.py`（N+1 回归守护用例：calls==1）、`tests/unit/infrastructure/repositories/test_sqlite_repositories.py`(批量语义 + 空输入 2 用例)、3 个显式继承 RecognitionRepository 的测试替身补齐 stub、`tools/bench_plugin_search.py` 基线工具入库。不变：Schema、依赖、SearchPhotosService 签名、list_by_photo 及其余端口成员。 |
+| 实施结果 | 2600 张库 1137.9ms → **62.5ms（18.2×）**；识别仓储往返 2600 次 → 1 次。前后对比见 phase4 定稿草案 §6。 |
+
+### ADR-030 — 阶段 4 技术债三项轮次裁决（兼容路径挂账 / export 终结 / 审批门续暂缓）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（前置门拍板 2026-08-25，定稿草案 `docs/development/phase4-adr-draft.md` B4-1/B4-4/B4-5） |
+| 决策 | 三项裁决：(1) 旧 `enable(context)` 兼容分发分支的移除绑定 v1.0.0 发布后的首个破坏性窗口（即 v2.0.0）执行——兑现 ADR-026 "Deprecated 保留一个版本"承诺，本轮不动 loader；(2) export 插件写能力经负责人确认**无真实用例**，B5-a/ADR-028 的 export 暂缓项就此 **YAGNI 正式关闭**（获得确定性终态而非无限期悬挂），未来出现真实用例须另起前置门草案重新裁决；(3) 宿主审批门继续暂缓——无已知高危写用例前不引入确认复杂度（ADR-028 裁决点 2=A 逻辑延续）。 |
+| 理由 | grep 实证旧签名在生产与示例代码零消费者（仅测试 fake 自身使用），影响面完全可控但仍属破坏性变更，须绑定主版本窗口以守 GIT 语义化承诺；YAGNI 结论使长期开放的暂缓项获得确定性终态，消除文档中"续暂缓"开放态的歧义与漂移温床。 |
+| 影响范围 | v2.0.0 轮实施清单（loader `_enable_plugin` 二分叉收敛 + `test_plugin_lifecycle_compatibility.py` 兼容矩阵删改 + plugin-guide legacy 表述刷新 + Release Notes 破坏性标注）；`plugin-context-design.md` 头部取代注记已就位；本轮无代码变更。 |
+
 ---
 
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）

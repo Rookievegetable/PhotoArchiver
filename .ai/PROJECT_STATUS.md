@@ -31,7 +31,8 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 - 阶段 0（质量基线与文档收口）：✅ 完成。
 - 阶段 1（PluginContext 公共边界加固，ADR-026）：✅ 完成。
 - 阶段 2（Alembic 接管 Schema DDL，ADR-027）：✅ 完成。
-- 阶段 3（插件写能力 import_people，ADR-028）：✅ 完成（仅 import_people；export 续暂缓）。
+- 阶段 3（插件写能力 import_people，ADR-028）：✅ 完成（仅 import_people；export 经 ADR-030 裁决 YAGNI 正式关闭）。
+- 阶段 4（技术债轮：search_photos N+1 加固 ADR-029 + 轮次裁决 ADR-030）：✅ 完成（兼容路径移除挂账 v2.0.0；审批门续暂缓）。
 
 当前无已登记的未解决问题；`KNOWN_ISSUES.md` 为空。
 
@@ -46,7 +47,8 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 阶段 0 质量基线 | ✅ | 质量门和文档收口已完成。 |
 | 阶段 1 PluginContext | ✅ | ADR-026：`ContextAwarePlugin` 生命周期、Plugin DTO 边界、结构化 `PluginReport`。 |
 | 阶段 2 Schema DDL 所有权 | ✅ | ADR-027：`002_split_create_ddl` 为 Schema DDL 唯一权威。 |
-| 阶段 3 插件写能力 | ✅ | ADR-028：`PluginContext.import_people` 已实现——插件经 `PluginImportPeopleCommand`/`PluginImportPersonRow` 写入人员实体（宿主补 row_number），结果 `PluginImportResult` 以 str ids 脱 Domain；无宿主审批门；export 续暂缓留后续轮单独裁决。示例插件 `examples/plugins/import_people_demo_plugin.py` 端到端演示。 |
+| 阶段 3 插件写能力 | ✅ | ADR-028：`PluginContext.import_people` 已实现——插件经 `PluginImportPeopleCommand`/`PluginImportPersonRow` 写入人员实体（宿主补 row_number），结果 `PluginImportResult` 以 str ids 脱 Domain；无宿主审批门；export 写能力经 ADR-030 裁决 YAGNI 正式关闭。示例插件 `examples/plugins/import_people_demo_plugin.py` 端到端演示。 |
+| 阶段 4 技术债轮 | ✅ | ADR-029：插件查询识别状态批量联查——2600 张库单次查询 1137.9ms → 62.5ms（18.2×），往返 O(N)→O(1)；ADR-030：兼容路径移除挂账 v2.0.0、export 暂缓终结、审批门续暂缓。基线工具 `tools/bench_plugin_search.py` 入库可复跑。 |
 | CI | ✅ | GitHub Actions 三 OS 矩阵、模型缓存与 AI/UI 断言已启用。 |
 
 当前 HEAD：阶段 3 实现提交 + 状态文档同步提交（均本轮）。前置基线：`cdb0fd7`（ADR-028 登记）、`a76c8ed`（阶段 2 状态同步）、`64ec47a`（阶段 2 实现）。
@@ -78,11 +80,11 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 时间 | 2026-08-25（本地） |
 | 生成者 | Cline |
 | 会话范围 | 阶段 3（ADR-028 插件写能力 import_people）实现收尾。 |
-| 已完成 | ① 修正草案前提偏差——`docs/development/phase3-adr-draft.md` §1.2 误载 ImportPeopleCommand 持 rows（实际为 source_path 形状），半成品代码照抄导致运行时 TypeError；新增 `ImportPeopleService.import_rows()` 承接预解析行路径并在草案加勘误注。② `PluginContextService.import_people` 改调 `import_rows`，移除对不存在命令形状的构造。③ bootstrap 注入第 4 参 `services.import_people`。④ `PluginImportResult.succeeded` 对齐项目惯例改为属性；三个 import DTO 补入 `application/dtos/__init__.py` 导出。⑤ 测试扩展：test_plugin_context_service 新增 4 个映射/真实链路用例并更新 Protocol 白名单断言（含 import_people）；test_plugin_dtos 新增 6 个 DTO 边界用例。⑥ 新增端到端示例插件 import_people_demo_plugin（静态依赖审计自动覆盖）。⑦ 文档同步：plugin-guide.md 写能力章节 + 本状态文件刷新。⑧ Review 处置（依据 review-rules.md §18.1）：两项 Minor 修毕——import demo 样例行全量补 identity 使幂等声明成立并修正 demo/指南措辞（限定幂等仅覆盖带 identity 行）；plugin-context-design.md 头部加 ADR-028 部分取代注记。⑨ P0 收口执行——四个未跟踪过程文档经内容逐份核验后物理删除（dev-plan-phase-b B1–B5 方案已全量实施；REV-AI-001~007 草案已 100% 并入 review-rules.md §18.1；B1 双 Review 报告全部修复项闭环，外部 M-1 backfill 单字段替换经源码锚点复核已落地）+ shell 故障垃圾文件清理；按 audit-methodology 五维比对完成阶段 2+3 轻量复审（规则内部一致性 / 规则 vs 代码 / 规则 vs docs / 重复承载 / 占位空文档均无新增矛盾）。⑩ P1-B 技术债轮启动——产出 `docs/development/phase4-adr-draft.md` 前置门草案（三项技术债证据与五个裁决点 B4-1~B4-5）；新增零依赖基准脚本 `tools/bench_plugin_search.py` 并实测 N+1 基线：插件查询调用次数恒等于照片数（100/600/2600 张 → 47.1/266.8/1137.9 ms，线性），2600 张库单次查询超 1.1 秒且运行于 UI 线程同步路径。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src`：168 个源文件无问题；`pytest -q`：402 passed、8 skipped。 |
+| 已完成 | ① 修正草案前提偏差——`docs/development/phase3-adr-draft.md` §1.2 误载 ImportPeopleCommand 持 rows（实际为 source_path 形状），半成品代码照抄导致运行时 TypeError；新增 `ImportPeopleService.import_rows()` 承接预解析行路径并在草案加勘误注。② `PluginContextService.import_people` 改调 `import_rows`，移除对不存在命令形状的构造。③ bootstrap 注入第 4 参 `services.import_people`。④ `PluginImportResult.succeeded` 对齐项目惯例改为属性；三个 import DTO 补入 `application/dtos/__init__.py` 导出。⑤ 测试扩展：test_plugin_context_service 新增 4 个映射/真实链路用例并更新 Protocol 白名单断言（含 import_people）；test_plugin_dtos 新增 6 个 DTO 边界用例。⑥ 新增端到端示例插件 import_people_demo_plugin（静态依赖审计自动覆盖）。⑦ 文档同步：plugin-guide.md 写能力章节 + 本状态文件刷新。⑧ Review 处置（依据 review-rules.md §18.1）：两项 Minor 修毕——import demo 样例行全量补 identity 使幂等声明成立并修正 demo/指南措辞（限定幂等仅覆盖带 identity 行）；plugin-context-design.md 头部加 ADR-028 部分取代注记。⑨ P0 收口执行——四个未跟踪过程文档经内容逐份核验后物理删除（dev-plan-phase-b B1–B5 方案已全量实施；REV-AI-001~007 草案已 100% 并入 review-rules.md §18.1；B1 双 Review 报告全部修复项闭环，外部 M-1 backfill 单字段替换经源码锚点复核已落地）+ shell 故障垃圾文件清理；按 audit-methodology 五维比对完成阶段 2+3 轻量复审（规则内部一致性 / 规则 vs 代码 / 规则 vs docs / 重复承载 / 占位空文档均无新增矛盾）。⑩ P1-B 技术债轮启动——产出 `docs/development/phase4-adr-draft.md` 前置门草案（三项技术债证据与五个裁决点 B4-1~B4-5）；新增零依赖基准脚本 `tools/bench_plugin_search.py` 并实测 N+1 基线：插件查询调用次数恒等于照片数（100/600/2600 张 → 47.1/266.8/1137.9 ms，线性），2600 张库单次查询超 1.1 秒且运行于 UI 线程同步路径。⑪ P1-B B2 落地（ADR-029）+ 三项裁决登记（ADR-030）——`RecognitionRepository.list_first_by_photo_ids` 批量端口（SQLite IN 分块 500）+ search_photos 改单往返；基准 2600 张 1137.9ms → 62.5ms（18.2×）、往返 2600 次 → 1 次；新增 N+1 回归守护用例与 SQLite 批量语义测试；B4-1 兼容路径移除挂账 v2.0.0、B4-4 export 暂缓项 YAGNI 正式关闭、B4-5 审批门续暂缓。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src`：168 个源文件无问题；`pytest -q`：405 passed、8 skipped。 |
 | 工作区 | 过程审阅文档仍未跟踪：`dev-plan-phase-b.md`、`review-b1-merged.md`、`review-report-external.txt`、`review-rules-addition-draft.md`；它们不是已批准的项目状态。 |
 | Remaining | 无已登记阻塞项。已知历史文档瑕疵：phase3-adr-draft.md §1.2 命令形状描述错误已加勘误注（草案按历史保留原文，正确契约以代码 docstring 与本文件为准）。遗留待裁决：docs/{api,design,user-guide} 三个空目录的填实或删除（归入 P1-A 用户文档任务）。 |
-| Next Step | **等待 phase4 草案拍板**——五个裁决点 B4-1~B4-5 见 `docs/development/phase4-adr-draft.md`（兼容路径移除轮次 / N+1 批量查询方案选型 / 基准脚本归属 / export 用例确认 / 审批门）；M8「可发布」里程碑候选并行待排期。 |
+| Next Step | 技术债轮已闭环（ADR-029 性能加固落地 / ADR-030 三项裁决终态）。下一主线候选：**M8「可发布」里程碑**（License 选定 ⚠禁改清单、首个语义化 tag 与发布工程、user-guide 补齐与空目录处置、macOS 抽验）——待负责人排期启动；v2.0.0 清单已挂账（`enable(context)` 兼容路径移除，实施清单见 ADR-030）。 |
 
 ---
 
@@ -108,6 +110,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 插件加载与应用装配 | `src/photo_archiver/plugins/loader.py`、`src/photo_archiver/app/bootstrap.py`、`src/photo_archiver/app/context.py` |
 | 示例插件 | `examples/plugins/stats_report_plugin.py`（读）、`examples/plugins/import_people_demo_plugin.py`（写） |
 | 插件设计与决策 | `docs/development/plugin-context-design.md`、`docs/development/phase3-adr-draft.md`、`.ai/ARCHITECTURE_DECISIONS.md`（ADR-026/028） |
+| 性能基线 | `tools/bench_plugin_search.py`（零依赖可离线复跑，前后对比数据见 phase4 定稿草案 §6） |
 | Schema 初始化与迁移 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`、`src/photo_archiver/infrastructure/database/alembic_runner.py`、`alembic/versions/002_split_create_ddl.py` |
 | 质量验证 | `tests/`、`.github/workflows/ci.yml` |
 
