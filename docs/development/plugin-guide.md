@@ -28,11 +28,13 @@ examples/plugins/
 from loguru import logger
 
 from photo_archiver.application.dtos.plugin_action_result import ActionResult, noop, success
-from photo_archiver.application.ports.plugin import Plugin, PluginAction
+from photo_archiver.application.ports.plugin import PluginAction
 from photo_archiver.application.ports.plugin_context import PluginContext
 
 
 class MyPlugin:
+    """ContextAwarePlugin-style plugin (new standard since Phase 1, ADR-026)."""
+
     @property
     def name(self) -> str:
         return "my_plugin"
@@ -41,7 +43,10 @@ class MyPlugin:
     def version(self) -> str:
         return "1.0.0"
 
-    def enable(self, context: PluginContext | None = None) -> None:
+    def set_context(self, context: PluginContext) -> None:
+        self._context = context  # store for use in execute_action()
+
+    def enable(self) -> None:
         logger.info("MyPlugin enabled")
 
     def disable(self) -> None:
@@ -95,28 +100,32 @@ A `PluginAction` describes one menu item the plugin wants to register:
 - If `enable()` raises, the plugin is logged and marked disabled
 - If `execute_action()` raises, the error is shown in a message box but the app continues
 
-### 6. PluginContext (Read-Only Facade)
+### 6. PluginContext Facade
 
-Since Phase B5 (v2 convergence), the host may inject a read-only `PluginContext`
-into `enable(context=None)`. Plugins store it and use it to access a limited
-Application Service subset:
+The host injects the `PluginContext` facade through `set_context(context)`
+(new standard since Phase 1 / ADR-026; legacy `enable(context)` remains as a
+deprecated compatibility path for one release). Plugins store it and use it to
+access a limited Application Service subset:
 
 ```python
-def enable(self, context: PluginContext | None = None) -> None:
+def set_context(self, context: PluginContext) -> None:
     self._context = context  # keep for use in execute_action()
 ```
 
-Exposed read-only capabilities:
+Exposed capabilities:
 
-| Method | Description |
-|---|---|
-| `search_photos(criteria)` | Query photos by person / match status / capture-date range |
-| `detect_duplicates()` | Return the duplicate-photo report across all loaded photos |
+| Method | Kind | Description |
+|---|---|---|
+| `search_photos(query)` | Read | Query photos by person / match status / capture-date range |
+| `detect_duplicates()` | Read | Return the duplicate-photo report across all loaded photos |
+| `import_people(command)` | Write | Import person entities from plugin-supplied rows (Phase 3, ADR-028) |
 
 Current limits:
 
-- `PluginContext` exposes **read-only** capabilities only (`search_photos` + `detect_duplicates`).
-- **Import / Export write capabilities are deferred** to a later round (暂缓).
+- `import_people` is the **only** write capability (ADR-028 裁决点 1=A);
+  **export stays deferred** to a later round.
+- There is **no host approval gate** yet (ADR-028 裁决点 2=A): plugins call the
+  context directly and the host renders the returned ActionResult.
 - Plugins access business data only through the context — never through
   Repository, UnitOfWork, Archive services, WorkerExecutor, or the full
   `ApplicationContext`.
@@ -125,6 +134,42 @@ Current limits:
 - A plugin that fails to load or enable never crashes the host (logged + skipped).
 - The plugin system is **not a security sandbox** — it is a trusted local
   Python plugin model. Only load plugins you trust.
+
+## Write Capability: import_people (Phase 3, ADR-028)
+
+Plugins can write person entities through the context without touching files,
+repositories, or Domain types (双向 DTO 脱 Domain，ADR-028 裁决点 3=C):
+
+```python
+from photo_archiver.application.dtos.plugin_context import (
+    PluginImportPeopleCommand,
+    PluginImportPersonRow,
+)
+
+rows = (
+    PluginImportPersonRow(name="张三", identity="DEMO-001", department="Demo"),
+    PluginImportPersonRow(name="李四"),  # identity optional
+)
+result = self._context.import_people(PluginImportPeopleCommand(rows=rows))
+
+result.imported_count        # newly persisted persons
+result.skipped_count         # duplicate-identity rows skipped by dedup
+result.imported_person_ids   # tuple[str, ...] — str ids, NOT UUID (de-Domain)
+result.errors                # tuple[str, ...] row-level messages like "row 3: ..."
+result.succeeded             # property: True when errors is empty
+```
+
+Behavior notes:
+
+- `row_number` is filled by the host service from tuple order (1-based); plugin
+  rows do not carry it.
+- Rows whose `identity` already exists are **skipped**, so re-running an import
+  action is idempotent.
+- Invalid rows (e.g. blank name) surface as per-row error strings; one bad row
+  never aborts the batch.
+- A working example lives in `examples/plugins/import_people_demo_plugin.py`
+  (toolbar action "Import People (Demo)", rendered through the generic
+  `PluginReportDialog`).
 
 ## Testing a Plugin
 

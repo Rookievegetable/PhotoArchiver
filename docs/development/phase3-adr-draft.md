@@ -36,6 +36,8 @@
 
 ### 1.2 现有 Application Service API（实测 2026-08-12）
 
+> ⚠ **勘误（2026-08-25 实施时发现）**：本节所载 "ImportPeopleCommand 持 `rows`" 与代码不符——实际 `ImportPeopleCommand` 为 `source_path/has_header/sheet_name` 形状（行数据经 `PersonImportReader` 端口从文件读取）。实施裁决：新增 `ImportPeopleService.import_rows()` 预解析行入口承接本 ADR 的插件写路径（`execute()` 文件路径委托同一落库核心，语义不变）；`PluginContextService.import_people` 映射 Plugin DTO 后调用 `import_rows()`。
+
 **ImportPeopleService**（`application/services/import_people_service.py`）：
 - `execute(command: ImportPeopleCommand) -> ImportPeopleResult`
 - ImportPeopleCommand 持 `rows: tuple[PersonImportRow, ...]`（name/identity/department/note/row_number）
