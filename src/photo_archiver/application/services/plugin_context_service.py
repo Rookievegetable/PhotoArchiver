@@ -28,6 +28,14 @@ Application Service 子集（search_photos + detect_duplicates），但**返 Plu
 - ``PluginDuplicateReport`` 跎 DuplicateReport 但脱 content_hash 与 Photo 实体引用——
   groups 持 PluginDuplicateGroup（photo_ids + count），不暴露哈希原值。
 
+阶段 3 写能力（ADR-028，拍板 2026-08-13）：
+
+- 新增 ``import_people`` 写方法——``PluginImportPeopleCommand.rows`` 映射为
+  Application ``PersonImportRow``（补 row_number 元组序 1-based），委托
+  ``ImportPeopleService.import_rows`` 落库，结果 ``ImportPeopleResult.person_ids``
+  （UUID）→ ``PluginImportResult.imported_person_ids``（str）脱 Domain 字面。
+  仅此一条写路径开放（裁决点 1=A）；export 续暂缓；无宿主审批门（裁决点 2=A）。
+
 不持 Repository 实例给插件——本服务是 PluginContext 的具体实现，插件只触
 PluginContext Protocol 签名，不触本服务类。
 """
@@ -37,14 +45,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from photo_archiver.application.dtos import PersonImportRow
 from photo_archiver.application.dtos.plugin_context import (
     PluginDuplicateGroup,
     PluginDuplicateReport,
+    PluginImportPeopleCommand,
+    PluginImportResult,
     PluginMatchStatusSummary,
     PluginPhotoQuery,
     PluginPhotoSummary,
 )
 from photo_archiver.application.services.detect_duplicates_service import DetectDuplicatesService
+from photo_archiver.application.services.import_people_service import ImportPeopleService
 from photo_archiver.application.services.search_photos_service import SearchPhotosService
 from photo_archiver.domain import Photo, PhotoSearchCriteria
 from photo_archiver.domain.entities.recognition import MatchStatus
@@ -137,7 +149,7 @@ def _query_to_criteria(query: PluginPhotoQuery) -> PhotoSearchCriteria:
 
 
 class PluginContextService:
-    """Concrete PluginContext impl wiring two read-only Application services.
+    """Concrete PluginContext impl wiring read-only services + import write path.
 
     Injected by bootstrap into ApplicationContext.plugin_context. Host
     (MainWindow / PluginRegistry) consumes via PluginContext Protocol签名——
@@ -149,6 +161,11 @@ class PluginContextService:
         recognition_repository: RecognitionRepository——联查 RecognitionResult
             取 match_status（Photo 实体无此字段，需补联查）。InMemory 仓储不持
             recognition 时按契约返 "none"。
+        import_people_service: ImportPeopleService (阶段 3 ADR-028)——人员导入
+            写编排。插件经 import_people 调用，宿主映射 PluginImportPeopleCommand
+            → tuple[PersonImportRow, ...]（补 row_number）走
+            ImportPeopleService.import_rows，ImportPeopleResult →
+            PluginImportResult（UUID → str 脱 Domain）。
     """
 
     def __init__(
@@ -156,11 +173,13 @@ class PluginContextService:
         search_service: SearchPhotosService,
         duplicates_service: DetectDuplicatesService,
         recognition_repository: "RecognitionRepository",
+        import_people_service: "ImportPeopleService",
     ) -> None:
-        """Wire the two read-only Application services + recognition repo."""
+        """Wire the read-only Application services + recognition repo + import service."""
         self._search = search_service
         self._duplicates = duplicates_service
         self._recognition = recognition_repository
+        self._import_people = import_people_service
 
     def search_photos(self, query: PluginPhotoQuery) -> tuple[PluginPhotoSummary, ...]:
         """Delegate to SearchPhotosService + recognition repo联查，返 Plugin DTO.
@@ -197,3 +216,44 @@ class PluginContextService:
         """
         report = self._duplicates.execute()
         return _duplicate_report_to_plugin(report)
+
+    def import_people(self, command: PluginImportPeopleCommand) -> PluginImportResult:
+        """Delegate to ImportPeopleService，映射 Plugin DTO ↔ Application DTO（ADR-028）.
+
+        阶段 3 写能力（裁决点 1=A 仅 import_people，2=A 无审批门，3=C 双向 DTO）。
+
+        映射编排：
+        - 入参 PluginImportPeopleCommand.rows: tuple[PluginImportPersonRow, ...]
+          → Sequence[PersonImportRow]——补 row_number（元组序 +1，1-based）补
+          PluginImportPersonRow 脱的字段，交 ImportPeopleService.import_rows。
+        - 结果 ImportPeopleResult（person_ids: tuple[UUID, ...]）
+          → PluginImportResult（imported_person_ids: tuple[str, ...]）——
+          UUID → str 脱 Domain 字面。
+
+        Args:
+            command: PluginImportPeopleCommand 持 rows: tuple[PluginImportPersonRow, ...]
+                （name 必填 / identity/department/note 可选）。
+
+        Returns:
+            PluginImportResult——imported_count/skipped_count/imported_person_ids
+            （str 非 UUID）/errors。宿主渲染 ActionResult 摘要。
+        """
+        # PluginImportPersonRow → PersonImportRow（补 row_number 元组序 1-based）
+        rows = tuple(
+            PersonImportRow(
+                name=row.name,
+                identity=row.identity,
+                department=row.department,
+                note=row.note,
+                row_number=index + 1,
+            )
+            for index, row in enumerate(command.rows)
+        )
+        app_result = self._import_people.import_rows(rows)
+        # ImportPeopleResult → PluginImportResult（UUID → str 脱 Domain）
+        return PluginImportResult(
+            imported_count=app_result.imported_count,
+            skipped_count=app_result.skipped_count,
+            imported_person_ids=tuple(str(pid) for pid in app_result.person_ids),
+            errors=app_result.errors,
+        )

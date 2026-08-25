@@ -66,10 +66,13 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
     # 阶段 1 加固（ADR-026）：PluginContextService 替旧 _ReadOnlyPluginContext——
     # Domain ↔ Plugin DTO 映射编排 + 联查 RecognitionRepository 取 match_status
     # （4 态含 none）。bootstrap 不含业务 DTO 转换逻辑（属 Application Service 职责）。
+    # 阶段 3 写能力（ADR-028）：注入 ImportPeopleService——插件经
+    # PluginContext.import_people 导入人员实体（唯一写路径，export 续暂缓）。
     plugin_context: PluginContext = PluginContextService(
         services.search_photos,
         services.detect_duplicates,
         repositories.recognition,
+        services.import_people,
     )
     return ApplicationContext(
         settings=resolved_settings,

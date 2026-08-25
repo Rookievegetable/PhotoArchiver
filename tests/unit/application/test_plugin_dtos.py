@@ -4,6 +4,8 @@
 - PluginPhotoQuery / PluginPhotoSummary / PluginDuplicateGroup / PluginDuplicateReport 不可变
 - match_status Literal 值域校验（Query 3 态不含 none，Summary 4 态含 none）
 - captured_at None 语义（未捕获拍摄日期）
+- PluginImportPersonRow / PluginImportPeopleCommand / PluginImportResult 不可变
+  与脱 Domain（阶段 3，ADR-028）
 """
 
 from __future__ import annotations
@@ -106,3 +108,72 @@ def test_plugin_duplicate_group_does_not_expose_content_hash() -> None:
     g = PluginDuplicateGroup(photo_ids=(UUID(int=1),), count=1)
     assert not hasattr(g, "content_hash"), "PluginDuplicateGroup MUST NOT expose content_hash"
     assert not hasattr(g, "members"), "PluginDuplicateGroup MUST NOT expose Domain Photo members"
+
+
+# ── 阶段 3 import_people DTO（ADR-028，裁决点 3=C 双向 DTO 脱 Domain）───────
+
+
+def test_plugin_import_person_row_frozen_slots_immutable() -> None:
+    """PluginImportPersonRow 不可变（frozen + slots）."""
+    from photo_archiver.application.dtos.plugin_context import PluginImportPersonRow
+
+    row = PluginImportPersonRow(name="Alice")
+    with pytest.raises(Exception):
+        row.name = "Bob"  # type: ignore[misc]
+
+
+def test_plugin_import_person_row_optional_fields_default_none() -> None:
+    """identity/department/note 可选字段缺省 None（name 必填）."""
+    from photo_archiver.application.dtos.plugin_context import PluginImportPersonRow
+
+    row = PluginImportPersonRow(name="Alice")
+    assert row.identity is None
+    assert row.department is None
+    assert row.note is None
+
+
+def test_plugin_import_command_frozen_slots_immutable() -> None:
+    """PluginImportPeopleCommand 不可变（frozen + slots）."""
+    from photo_archiver.application.dtos.plugin_context import (
+        PluginImportPeopleCommand,
+        PluginImportPersonRow,
+    )
+
+    command = PluginImportPeopleCommand(rows=(PluginImportPersonRow(name="Alice"),))
+    with pytest.raises(Exception):
+        command.rows = ()  # type: ignore[misc]
+
+
+def test_plugin_import_result_defaults_and_succeeded_property() -> None:
+    """缺省值全零 + succeeded 属性语义（无 errors 即成功）——与 ImportPeopleResult 一致."""
+    from photo_archiver.application.dtos.plugin_context import PluginImportResult
+
+    ok = PluginImportResult()
+    assert ok.imported_count == 0
+    assert ok.skipped_count == 0
+    assert ok.imported_person_ids == ()
+    assert ok.errors == ()
+    assert ok.succeeded is True
+
+    failed = PluginImportResult(errors=("row 1: boom",))
+    assert failed.succeeded is False
+
+
+def test_plugin_import_result_frozen_slots_immutable() -> None:
+    """PluginImportResult 不可变（frozen + slots）."""
+    from photo_archiver.application.dtos.plugin_context import PluginImportResult
+
+    result = PluginImportResult()
+    with pytest.raises(Exception):
+        result.imported_count = 5  # type: ignore[misc]
+
+
+def test_plugin_import_result_does_not_expose_domain_or_application_fields() -> None:
+    """脱 Domain/Application：不持 person_ids(UUID)/Person 实体/Repository 实例."""
+    from photo_archiver.application.dtos.plugin_context import PluginImportResult
+
+    result = PluginImportResult(imported_person_ids=("id-1",))
+    assert not hasattr(result, "person_ids"), "MUST NOT expose Application person_ids (UUID)"
+    assert not hasattr(result, "people")
+    assert not hasattr(result, "repository")
+    assert all(isinstance(pid, str) for pid in result.imported_person_ids)

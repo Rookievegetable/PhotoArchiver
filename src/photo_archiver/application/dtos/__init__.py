@@ -14,6 +14,9 @@ from photo_archiver.application.dtos.plugin_action_result import ActionResult, P
 from photo_archiver.application.dtos.plugin_context import (
     PluginDuplicateGroup,
     PluginDuplicateReport,
+    PluginImportPeopleCommand,
+    PluginImportPersonRow,
+    PluginImportResult,
     PluginPhotoQuery,
     PluginPhotoSummary,
 )
@@ -73,6 +76,9 @@ __all__ = [
     "PhotoScanItem",
     "PluginDuplicateGroup",
     "PluginDuplicateReport",
+    "PluginImportPeopleCommand",
+    "PluginImportPersonRow",
+    "PluginImportResult",
     "PluginPhotoQuery",
     "PluginPhotoSummary",
     "PluginReport",

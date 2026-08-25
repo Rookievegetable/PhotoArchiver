@@ -1,10 +1,12 @@
-"""Tests for PluginContextService — Domain ↔ Plugin DTO 映射编排（阶段 1，ADR-026）.
+"""Tests for PluginContextService — Domain ↔ Plugin DTO 映射编排（ADR-026 读路径 / ADR-028 写路径）.
 
 覆盖：
 - PluginPhotoQuery（3 态 match_status）→ PhotoSearchCriteria（MatchStatus）映射正确
 - Photo + RecognitionResult.status → PluginPhotoSummary（4 态含 none）映射正确
 - RecognitionResult 不存在 → match_status="none"
 - DuplicateReport → PluginDuplicateReport 映射（脱 content_hash 与 Photo 引用）
+- PluginImportPeopleCommand → ImportPeopleService.import_rows 映射正确
+  （row_number 元组序补齐、结果 UUID → str 脱 Domain、counts/errors 透传）
 - 最小权限：不暴露路径/Repository/UoW/Worker/ApplicationContext
 """
 
@@ -13,16 +15,25 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
+from photo_archiver.application.dtos import ImportPeopleResult, PersonImportRow
 from photo_archiver.application.dtos.plugin_context import (
+    PluginImportPeopleCommand,
+    PluginImportPersonRow,
     PluginPhotoQuery,
     PluginPhotoSummary,
 )
+from photo_archiver.application.services.import_people_service import ImportPeopleService
 from photo_archiver.application.services.plugin_context_service import (
     PluginContextService,
     _map_match_status_to_domain,
     _map_match_status_to_plugin,
     _photo_to_summary,
     _query_to_criteria,
+)
+from photo_archiver.domain import PersonIdentity
+from photo_archiver.infrastructure.importers.txt_person_import_reader import TxtPersonImportReader
+from photo_archiver.infrastructure.repositories.in_memory_person_repository import (
+    InMemoryPersonRepository,
 )
 
 
@@ -163,10 +174,15 @@ def test_plugin_context_service_search_photos_returns_plugin_summaries() -> None
         def list_by_photo(self, photo_id: UUID) -> list:
             return []  # 无 RecognitionResult → match_status="none"
 
+    class _UnusedImportService:
+        def import_rows(self, rows: object) -> ImportPeopleResult:
+            raise AssertionError("import path must not run in search tests")
+
     service = PluginContextService(  # type: ignore[arg-type]
         _FakeSearchService(),
         _FakeDupService(),
         _FakeRecognitionRepo(),
+        _UnusedImportService(),
     )
     results = service.search_photos(PluginPhotoQuery())
     assert len(results) == 2
@@ -178,9 +194,148 @@ def test_plugin_context_service_minimal_privilege_no_repository_uow_worker() -> 
     """PluginContextService 不暴露 Repository/UoW/Worker/ApplicationContext 给插件."""
     from photo_archiver.application.ports.plugin_context import PluginContext
 
-    # Protocol 契约：只暴露 search_photos + detect_duplicates，无其他方法
-    allowed = {"search_photos", "detect_duplicates"}
+    # Protocol 契约：只暴露 search_photos + detect_duplicates + import_people
+    # （阶段 3 ADR-028 写路径），无其他方法
+    allowed = {"search_photos", "detect_duplicates", "import_people"}
     protocol_methods = {
         m for m in dir(PluginContext) if not m.startswith("_") and callable(getattr(PluginContext, m, None))
     }
     assert protocol_methods == allowed, f"PluginContext MUST only expose {allowed}, got {protocol_methods}"
+
+
+# ── import_people 写路径（阶段 3，ADR-028）──────────────────────────────────
+
+
+class _NoopSearchService:
+    """Stand-in SearchPhotosService returning no photos."""
+
+    def execute(self, criteria: object) -> list:
+        return []
+
+
+class _NoopDupService:
+    """Stand-in DetectDuplicatesService returning an empty report."""
+
+    def execute(self) -> object:
+        from photo_archiver.application.dtos.duplicates import DuplicateReport
+
+        return DuplicateReport(groups=(), group_count=0, photos_in_groups=0)
+
+
+class _EmptyRecognitionRepo:
+    """Stand-in recognition repository holding no results."""
+
+    def list_by_photo(self, photo_id: object) -> list:
+        return []
+
+
+def _build_import_path_service(import_service: object) -> PluginContextService:
+    """Assemble PluginContextService with stand-in read deps + the given import service."""
+    return PluginContextService(  # type: ignore[arg-type]
+        _NoopSearchService(),
+        _NoopDupService(),
+        _EmptyRecognitionRepo(),
+        import_service,
+    )
+
+
+def test_import_people_maps_plugin_rows_with_row_number_and_fields() -> None:
+    """PluginImportPersonRow → PersonImportRow：row_number 元组序 1-based 补齐 + 字段透传."""
+    captured: list[tuple[PersonImportRow, ...]] = []
+
+    class _RecordingImportService:
+        def import_rows(self, rows: object) -> ImportPeopleResult:
+            captured.append(tuple(rows))  # type: ignore[arg-type]
+            return ImportPeopleResult()
+
+    service = _build_import_path_service(_RecordingImportService())
+    command = PluginImportPeopleCommand(
+        rows=(
+            PluginImportPersonRow(name="Alice"),
+            PluginImportPersonRow(name="Bob", identity="B001", department="Dev", note="n"),
+        )
+    )
+
+    service.import_people(command)
+
+    assert len(captured) == 1, "应恰好调用一次 ImportPeopleService.import_rows"
+    mapped = captured[0]
+    assert [row.row_number for row in mapped] == [1, 2], "row_number 必须按元组序补齐"
+    assert mapped[0].name == "Alice"
+    assert mapped[0].identity is None
+    assert mapped[1].identity == "B001"
+    assert mapped[1].department == "Dev"
+    assert mapped[1].note == "n"
+
+
+def test_import_people_maps_result_uuid_ids_to_str() -> None:
+    """ImportPeopleResult.person_ids（UUID）→ PluginImportResult.imported_person_ids（str）."""
+    from uuid import uuid4
+
+    person_id = uuid4()
+
+    class _FixedImportService:
+        def import_rows(self, rows: object) -> ImportPeopleResult:
+            return ImportPeopleResult(
+                imported_count=1,
+                skipped_count=1,
+                person_ids=(person_id,),
+                errors=("row 3: bad name",),
+            )
+
+    service = _build_import_path_service(_FixedImportService())
+
+    result = service.import_people(
+        PluginImportPeopleCommand(rows=(PluginImportPersonRow(name="X"),))
+    )
+
+    assert result.imported_count == 1
+    assert result.skipped_count == 1
+    assert result.imported_person_ids == (str(person_id),)
+    ids_are_str = all(isinstance(pid, str) for pid in result.imported_person_ids)
+    assert ids_are_str, "imported_person_ids 必须为 str 非 UUID"
+    assert result.errors == ("row 3: bad name",)
+    assert result.succeeded is False
+
+
+def test_import_people_writes_person_entities_into_repository() -> None:
+    """完成标准（phase3-adr-draft.md §6）：插件经 import_people 能导入人员实体到库.
+
+    真实链路 PluginContextService → ImportPeopleService.import_rows →
+    InMemoryPersonRepository：成功导入 + 身份重复跳过 + 空名行报错。
+    """
+    repository = InMemoryPersonRepository()
+    real_import_service = ImportPeopleService(TxtPersonImportReader(), repository)
+    service = _build_import_path_service(real_import_service)
+    command = PluginImportPeopleCommand(
+        rows=(
+            PluginImportPersonRow(name="Alice", identity="A001"),
+            PluginImportPersonRow(name="Alice-duplicate", identity="A001"),
+            PluginImportPersonRow(name="   "),
+        )
+    )
+
+    result = service.import_people(command)
+
+    assert result.imported_count == 1
+    assert result.skipped_count == 1, "同 identity 第二条应被去重跳过"
+    assert len(result.errors) == 1
+    assert result.errors[0].startswith("row 3:"), "空名行错误须携带补齐后的 row_number"
+    stored = repository.find_by_identity(PersonIdentity("A001"))
+    assert stored is not None
+    assert stored.name == "Alice"
+    assert result.succeeded is False
+
+
+def test_import_people_empty_rows_is_noop_success() -> None:
+    """空 rows 命令 → 零导入零错误（幂等无害路径）."""
+    repository = InMemoryPersonRepository()
+    service = _build_import_path_service(ImportPeopleService(TxtPersonImportReader(), repository))
+
+    result = service.import_people(PluginImportPeopleCommand(rows=()))
+
+    assert result.imported_count == 0
+    assert result.skipped_count == 0
+    assert result.errors == ()
+    assert result.succeeded is True
+    assert repository.list_all() == []

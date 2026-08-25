@@ -1,5 +1,7 @@
 """Service implementation for importing people."""
 
+from collections.abc import Sequence
+
 from photo_archiver.application.commands import ImportPeopleCommand
 from photo_archiver.application.dtos import ImportPeopleResult, PersonImportRow
 from photo_archiver.application.ports import PersonImportReader
@@ -23,6 +25,23 @@ class ImportPeopleService(ImportPeopleUseCase):
             has_header=command.has_header,
             sheet_name=command.sheet_name,
         )
+        return self.import_rows(rows)
+
+    def import_rows(self, rows: Sequence[PersonImportRow]) -> ImportPeopleResult:
+        """Import pre-parsed person rows into the repository (ADR-028 plugin path).
+
+        ``PluginContextService.import_people`` maps Plugin DTOs onto this entry
+        point so plugins can write person entities without touching a file
+        reader or the ``PersonRepository`` directly (DEP-060 guard).
+
+        Args:
+            rows: Normalized person rows; callers should fill ``row_number``
+                so row-level errors stay attributable.
+
+        Returns:
+            Aggregate outcome with imported/skipped counts, imported ids,
+            and one error message per failed row.
+        """
         imported_ids = []
         errors = []
         skipped_count = 0
