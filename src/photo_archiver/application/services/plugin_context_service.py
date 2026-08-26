@@ -1,4 +1,4 @@
-"""Plugin context service — Plugin DTO ↔ Domain 映射编排（阶段 1，ADR-026）.
+"""Plugin context service — Plugin DTO ↔ Domain 映射编排（ADR-026 读路径 / ADR-028 写路径）.
 
 本服务是 PluginContext Protocol 的具体实现——宿主经此向插件暴露只读
 Application Service 子集（search_photos + detect_duplicates），但**返 Plugin DTO

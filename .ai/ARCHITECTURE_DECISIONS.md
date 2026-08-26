@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.0.2 ｜ Status: Stable ｜ Last Updated: 2026-07-26
+> Version: 1.1.0 ｜ Status: Stable ｜ Last Updated: 2026-08-26
 
 ---
 

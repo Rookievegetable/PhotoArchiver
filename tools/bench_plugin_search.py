@@ -6,6 +6,11 @@ path against a real temporary SQLite database at several photo scales, so the
 N+1 pattern (one ``RecognitionRepository.list_by_photo`` call per matched photo,
 see ``plugin_context_service.py`` search loop) is quantified rather than assumed.
 
+**Cumulative-scale semantics**: sweeps share ONE database — the ``photos``
+column reports the TOTAL library size accumulated across sweeps (100 → 600 →
+2600), not per-sweep increments. Read ADR-029 before/after numbers against the
+same cumulative column.
+
 Zero third-party dependencies — stdlib only, safe to run offline:
 
     python tools/bench_plugin_search.py

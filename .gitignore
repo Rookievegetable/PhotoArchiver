@@ -288,12 +288,13 @@ Desktop.ini
 # These names recur as empty files in the working root when a bash command
 # contains unquoted CJK/special characters that the shell parses as redirect
 # targets. Ignoring them keeps git status clean despite shell recurrence.
-# NOTE: patterns are root-anchored ("/Version*" not "Version*") — an unanchored
-# "Version*" matched every "versions/" directory case-insensitively on Windows
-# and silently dropped alembic/versions/001_initial_v4.py from the repo.
-Last
-PySide6
-SQLite
+# NOTE: patterns are root-anchored ("/Last" not "Last") — an unanchored name
+# matches every directory level case-insensitively on Windows (core.ignorecase)
+# and silently dropped alembic/versions/001_initial_v4.py from the repo via the
+# sibling "/Version*" pattern before it was anchored. Keep them anchored.
+/Last
+/PySide6
+/SQLite
 /Version*
 /application
 /domain
