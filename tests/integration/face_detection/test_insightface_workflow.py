@@ -24,7 +24,7 @@ from photo_archiver.ai import (
 from photo_archiver.domain.value_objects import FaceBox
 from photo_archiver.infrastructure.ai import InsightFaceLoader, ModelPackMissing
 
-_ROOT = Path(__file__).resolve().parents[2]
+_ROOT = Path(__file__).resolve().parents[3]
 _MODEL_ROOT = _ROOT / "resources" / "models"
 _SAMPLE_IMAGE = _ROOT / "tests" / "integration" / "resources" / "sample_face.jpg"
 

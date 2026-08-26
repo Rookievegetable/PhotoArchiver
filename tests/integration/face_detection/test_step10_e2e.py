@@ -36,7 +36,7 @@ from photo_archiver.infrastructure import (
 )
 from photo_archiver.infrastructure.ai import InsightFaceLoader
 
-_ROOT = Path(__file__).resolve().parents[2]
+_ROOT = Path(__file__).resolve().parents[3]
 _MODEL_ROOT = _ROOT / "resources" / "models"
 _SAMPLE_IMAGE = _ROOT / "tests" / "integration" / "resources" / "sample_face.jpg"
 
