@@ -248,7 +248,7 @@ flowchart TD
 ## 11. 禁止动作（除项目负责人明确确认）
 
 - 修改 `.ai/rules/` 任何规则条文
-- 修改 `LICENSE` / `LICENSE_PLACEHOLDER.md`
+- 修改 `LICENSE`
 - 修改 `.github/workflows/` CI 配置
 - 修改 `pyproject.toml` 工程配置
 - 修改 `.env.example` / `config/` 配置格式

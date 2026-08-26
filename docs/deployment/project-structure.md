@@ -46,7 +46,7 @@ PhotoArchiver/
 ├── main.py
 ├── pyproject.toml
 ├── README.md
-└── LICENSE_PLACEHOLDER.md
+└── LICENSE
 ```
 
 整个项目可以划分为六大部分：

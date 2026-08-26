@@ -90,14 +90,13 @@
 
 ---
 
-## 8. 拍板记录（2026-08-25）
+## 8. 拍板记录（2026-08-26）
 
 | # | 裁决点 | 拍板结果 |
 |---|---|---|
 | B5-1 | 运行形态定位 | **A**——仓库 clone + venv + `python main.py` 为唯一受支持运行形态；Release wheel/sdist 定位为源码元数据产物并在页 body 置顶安装态标注 |
 | B5-2 | ISSUE-018 终态 | **A by-design 正式关闭**——安装态断点 E1-E6 不再作为缺陷追踪；未来出现非技术用户分发需求时另起前置门草案按方案 B 重开 |
 | B5-3 | Release 页标注 | 采纳 §4 文案，owner 粘贴至 v1.0.0 Release body 置顶 |
-| B4-4 附带 | 性能基准常态化复测 | 维持「性能相关 PR 附 bench 对比数字」惯例，不设独立周期任务 |
 
 裁决已写入 `.ai/ARCHITECTURE_DECISIONS.md` ADR-031；KNOWN_ISSUES ISSUE-018 条目同提交移除。
 
