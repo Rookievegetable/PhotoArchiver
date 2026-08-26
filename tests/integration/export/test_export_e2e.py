@@ -164,7 +164,7 @@ class TestExportExcel:
         photo_repo = _InMemoryPhotoRepository()
         photo_repo.add(
             Photo(
-                path=PhotoPath("/photos/alice_wedding.jpg"),
+                path=PhotoPath("photos/alice_wedding.jpg"),
                 id=photo_id,
             )
         )

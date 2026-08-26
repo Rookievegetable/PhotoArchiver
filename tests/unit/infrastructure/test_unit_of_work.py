@@ -10,9 +10,10 @@ from photo_archiver.infrastructure import SQLiteConnectionProvider, SQLiteUnitOf
 from photo_archiver.infrastructure.database.sqlite_folder_repository import SQLiteFolderRepository
 
 
-def _make_folder(path: str) -> Folder:
+def _make_folder(path: Path) -> Folder:
+    """Build a folder whose photo path is an OS-native absolute path."""
     return Folder(
-        path=PhotoPath(raw_path=Path(path), base=PhotoPathBase.ABSOLUTE),
+        path=PhotoPath(raw_path=path, base=PhotoPathBase.ABSOLUTE),
         display_name="test",
     )
 
@@ -25,21 +26,21 @@ def provider(tmp_path: Path) -> SQLiteConnectionProvider:
     return provider
 
 
-def test_unit_of_work_commits_on_normal_exit(provider: SQLiteConnectionProvider) -> None:
+def test_unit_of_work_commits_on_normal_exit(provider: SQLiteConnectionProvider, tmp_path: Path) -> None:
     """Folder added within scope should be visible after commit."""
     repo = SQLiteFolderRepository(provider)
     uow = SQLiteUnitOfWork(provider)
     with uow:
-        folder = _make_folder("C:/commit")
+        folder = _make_folder(tmp_path / "commit")
         repo.add(folder)
     assert repo.find_by_id(folder.id) is not None
 
 
-def test_unit_of_work_rolls_back_on_exception(provider: SQLiteConnectionProvider) -> None:
+def test_unit_of_work_rolls_back_on_exception(provider: SQLiteConnectionProvider, tmp_path: Path) -> None:
     """Folder added within scope should not persist when scope raises."""
     repo = SQLiteFolderRepository(provider)
     uow = SQLiteUnitOfWork(provider)
-    folder = _make_folder("C:/rollback")
+    folder = _make_folder(tmp_path / "rollback")
     with pytest.raises(RuntimeError, match="simulated"):
         with uow:
             repo.add(folder)
@@ -47,13 +48,13 @@ def test_unit_of_work_rolls_back_on_exception(provider: SQLiteConnectionProvider
     assert repo.find_by_id(folder.id) is None
 
 
-def test_unit_of_work_supports_concurrent_threads(provider: SQLiteConnectionProvider) -> None:
+def test_unit_of_work_supports_concurrent_threads(provider: SQLiteConnectionProvider, tmp_path: Path) -> None:
     """Two threads should each open independent transactions without cross-talk."""
     repo = SQLiteFolderRepository(provider)
     uow = SQLiteUnitOfWork(provider)
     results: dict[str, str] = {}
 
-    def worker(name: str, path: str) -> None:
+    def worker(name: str, path: Path) -> None:
         try:
             with uow:
                 folder = _make_folder(path)
@@ -62,8 +63,8 @@ def test_unit_of_work_supports_concurrent_threads(provider: SQLiteConnectionProv
         except Exception as exc:
             results[name] = f"fail: {exc}"
 
-    t1 = threading.Thread(target=worker, args=("T1", "C:/t1"))
-    t2 = threading.Thread(target=worker, args=("T2", "C:/t2"))
+    t1 = threading.Thread(target=worker, args=("T1", tmp_path / "t1"))
+    t2 = threading.Thread(target=worker, args=("T2", tmp_path / "t2"))
     t1.start()
     t2.start()
     t1.join()

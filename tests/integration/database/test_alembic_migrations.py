@@ -195,7 +195,7 @@ def test_repository_crud_works_after_migration(tmp_db: Path) -> None:
 
     repo: PhotoRepository = SQLitePhotoRepository(provider)  # type: ignore[arg-type, assignment]
     # add photo（SQLitePhotoRepository API 是 add 非 save）
-    photo = Photo(path=PhotoPath("/tmp/test.jpg"), id=None)
+    photo = Photo(path=PhotoPath("tmp/test.jpg"), id=None)
     repo.add(photo)
 
     # list photos（验 add 真落库）

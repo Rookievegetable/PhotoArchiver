@@ -192,12 +192,24 @@ def test_register_photo_service_registers_photo_with_metadata(tmp_path: Path) ->
 
 
 def test_register_photo_service_normalizes_relative_path_separators() -> None:
-    """Treat equivalent relative path separator forms as the same photo path."""
+    """Treat platform-equivalent relative path forms as the same photo path.
+
+    Duplicate form is platform-specific: a backslash variant on Windows and a
+    dot-segment variant on POSIX — both normalize onto ``school/event.jpg``
+    inside ``_build_photo_path``, so the second registration must dedupe.
+    """
+    import os
+
     repository = InMemoryPhotoRepository()
     service = RegisterPhotoService(repository)
 
+    if os.name == "nt":
+        duplicate = Path("school\\event.jpg")
+    else:
+        duplicate = Path("./school/event.jpg")
+
     first_result = service.execute(RegisterPhotoCommand(path=Path("school/event.jpg")))
-    second_result = service.execute(RegisterPhotoCommand(path=Path("school\\event.jpg")))
+    second_result = service.execute(RegisterPhotoCommand(path=duplicate))
 
     assert first_result.created is True
     assert second_result.created is False

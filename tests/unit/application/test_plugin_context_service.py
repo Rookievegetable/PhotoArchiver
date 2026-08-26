@@ -119,7 +119,7 @@ def test_photo_to_summary_captured_at_none_passes_through() -> None:
     from photo_archiver.domain import Photo
     from photo_archiver.domain.value_objects import PhotoPath
 
-    photo = Photo(path=PhotoPath("/tmp/x.jpg"), id=UUID(int=1), created_at=datetime.now())
+    photo = Photo(path=PhotoPath("tmp/x.jpg"), id=UUID(int=1), created_at=datetime.now())
     summary = _photo_to_summary(photo, recognition_status=None)
     assert summary.captured_at is None
     assert summary.match_status == "none"
@@ -131,7 +131,7 @@ def test_photo_to_summary_registered_at_from_created_at() -> None:
     from photo_archiver.domain.value_objects import PhotoPath
 
     created = datetime(2026, 8, 11, 10, 30, 0)
-    photo = Photo(path=PhotoPath("/tmp/y.jpg"), id=UUID(int=2), created_at=created)
+    photo = Photo(path=PhotoPath("tmp/y.jpg"), id=UUID(int=2), created_at=created)
     summary = _photo_to_summary(photo, recognition_status=None)
     assert summary.registered_at == created
 
@@ -141,7 +141,7 @@ def test_photo_to_summary_minimal_privilege_no_path_or_original_name() -> None:
     from photo_archiver.domain import Photo
     from photo_archiver.domain.value_objects import PhotoPath
 
-    photo = Photo(path=PhotoPath("/tmp/secret.jpg"), id=UUID(int=3), created_at=datetime.now())
+    photo = Photo(path=PhotoPath("tmp/secret.jpg"), id=UUID(int=3), created_at=datetime.now())
     summary = _photo_to_summary(photo, recognition_status=None)
     assert not hasattr(summary, "path"), "PluginPhotoSummary MUST NOT expose path"
     assert not hasattr(summary, "original_name"), "PluginPhotoSummary MUST NOT expose original_name"
@@ -162,8 +162,8 @@ def test_plugin_context_service_search_photos_returns_plugin_summaries() -> None
     class _FakeSearchService:
         def execute(self, criteria: PhotoSearchCriteria) -> list[Photo]:
             return [
-                Photo(path=PhotoPath("/a.jpg"), id=UUID(int=1), created_at=datetime.now()),
-                Photo(path=PhotoPath("/b.jpg"), id=UUID(int=2), created_at=datetime.now()),
+                Photo(path=PhotoPath("a.jpg"), id=UUID(int=1), created_at=datetime.now()),
+                Photo(path=PhotoPath("b.jpg"), id=UUID(int=2), created_at=datetime.now()),
             ]
 
     class _FakeDupService:
@@ -208,7 +208,7 @@ def test_plugin_context_service_search_uses_single_batched_status_lookup() -> No
     class _SearchSvc:
         def execute(self, criteria: object) -> list:
             return [
-                Photo(path=PhotoPath(f"/p{i}.jpg"), id=UUID(int=i))
+                Photo(path=PhotoPath(f"p{i}.jpg"), id=UUID(int=i))
                 for i in (1, 2, 3)
             ]
 
