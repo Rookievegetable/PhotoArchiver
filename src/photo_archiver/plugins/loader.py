@@ -9,18 +9,21 @@ plugin never crashes the host application (acceptance criterion 3).
 
 阶段 1 加固（ADR-026，前置门拍板 2026-08-11）：
 
-- Registry 启用三类生命周期兼容——``ContextAwarePlugin``（``set_context → enable``）
-  / 旧 ``enable(context)`` 兼容签名 / 旧无参 ``enable()``。用 ``inspect.signature``
-  识别而非"捕获 TypeError 重试"——插件内部真实 TypeError 不会被误判为兼容问题。
+- Registry 启用两类生命周期分发——``ContextAwarePlugin``（``set_context → enable``）
+  与无参 ``enable()``直调。签名识别走 ``hasattr(set_context)`` 探测而非
+  "捕获 TypeError 重试"——插件内部真实 TypeError 不会被误判为兼容问题。
 - 静默失败防护——启用后 ``actions()`` 返空且非声明式插件（走 Protocol 默认 noop）
   时日志 warning，提示可能误漏 ``enable`` 实现。
+
+v2.0.0 收敛（ADR-030 兑现）：旧 ``enable(context)`` 兼容分发分支已移除——
+Deprecated 承诺「保留一个版本」到期。持旧签名的外部插件将启用失败并进入
+错误隔离（不启用该插件、记录 error，宿主续运行）。
 """
 
 from __future__ import annotations
 
 import importlib
 import importlib.util
-import inspect
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -92,16 +95,17 @@ class PluginRegistry:
     # ── Lifecycle ────────────────────────────────────────────────────────
 
     def enable_all(self) -> None:
-        """Enable every loaded plugin via three-way compatibility dispatch.
+        """Enable every loaded plugin via two-path dispatch.
 
-        阶段 1 加固（ADR-026）：
+        阶段 1 加固（ADR-026）；v2.0.0 收敛（ADR-030，旧兼容分支移除）：
 
         - ``ContextAwarePlugin``（``set_context`` 存）——``set_context(context) → enable()``。
-        - 旧 ``enable(context)`` 兼容签名——``inspect.signature`` 识别 ``context`` 参后走兼容路径。
-        - 旧无参 ``enable()``——直调。
+        - 无参 ``enable()``——直调。
         - 静默失败防护——启用后 ``actions()`` 返空且非声明式时日志 warning。
 
-        context 为 None 时（CI / 单测环境）三类路径均保降级可用。
+        持旧 ``enable(context)`` 签名的插件不再受支持：调用即抛 TypeError 并落入
+        错误隔离（该插件不启用、记 error、宿主续运行）。context 为 None 时
+        （CI / 单测环境）两路均保降级可用。
         """
         for name, plugin in self._plugins.items():
             try:
@@ -114,10 +118,11 @@ class PluginRegistry:
                 self._errors.append((name, "enable() raised an exception"))
 
     def _enable_plugin(self, name: str, plugin: "Plugin") -> None:
-        """Dispatch enable via ContextAwarePlugin / legacy enable(context) / plain enable.
+        """Dispatch enable via ContextAwarePlugin / plain no-arg enable.
 
-        用 ``inspect.signature`` 在调用前识别签名——不靠"捕获 TypeError 后重试"
-        （ADR-026 MAJOR-1 处置：插件内部真实 TypeError不会被误判为兼容问题）。
+        v2.0.0 收敛（ADR-030）：旧 ``enable(context)`` 分发分支已删除，无需
+        ``inspect.signature`` 探测——无参调用直接下发。持旧签名的外部插件在此
+        抛出 TypeError，由上层错误隔离捕获（该插件不启用，宿主续运行）。
         """
         if hasattr(plugin, "set_context"):
             # 新标准：set_context(context) → enable()
@@ -129,14 +134,7 @@ class PluginRegistry:
             plugin.enable()  # type: ignore[call-arg]
             return
 
-        sig = inspect.signature(plugin.enable)
-        params = sig.parameters
-        if "context" in params:
-            # 兜底：旧 enable(context) 兼容签名
-            plugin.enable(self._context)  # type: ignore[call-arg]
-            return
-
-        # 旧无参：enable()
+        # 无参：enable()
         plugin.enable()  # type: ignore[call-arg]
 
     def _warn_silent_failure(self, name: str, plugin: "Plugin") -> None:

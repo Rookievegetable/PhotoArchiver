@@ -12,9 +12,9 @@ specific plugin (acceptance criterion 1).
 阶段 1 加固（ADR-026，前置门拍板 2026-08-11）：
 
 - ``Plugin.enable()`` 改无参——生命周期与上下文注入解耦，``context`` 不再
-  混入 ``enable`` 签名。旧 ``enable(context)`` 签名作兼容路径 Deprecated
-  保留一个版本（Registry 用 ``inspect.signature`` 识别兼容，详见
-  ``plugins/loader.py``）。
+  混入 ``enable`` 签名。旧 ``enable(context)`` 签名经一个版本 Deprecated 缓冲后
+  已于 v2.0.0 移除分发支持（ADR-030）——持旧签名的外部插件将启用失败并被
+  错误隔离跳过（详见 ``plugins/loader.py``）。
 - 新增 ``ContextAwarePlugin(Plugin)``——继承 Plugin，多一个
   ``set_context(context)`` 方法。新标准插件须同时实现 ``set_context +
   enable + disable + actions + execute_action``，mypy 静态守护完整。
@@ -154,8 +154,8 @@ class ContextAwarePlugin(Protocol):
     ``set_context(context) → enable()``。新插件应实现本协议而非旧
     ``enable(context)`` 签名——mypy 静态守护完整，误漏任一方法即编译报错。
 
-    旧 ``enable(context)`` 兼容路径 Deprecated 保留一个版本，移除轮次
-    留 v2.0.0 单独裁决。
+    旧 ``enable(context)`` 兼容路径已于 v2.0.0 移除（ADR-030）——外部插件须
+    迁移到本协议的 ``set_context + enable`` 形态，否则无法启用。
     """
 
     @property

@@ -1,8 +1,7 @@
 """Tests for Plugin lifecycle compatibility matrix（阶段 1，ADR-026）.
 
 覆盖 §5 测试矩阵：
-- 旧无参插件 enable() 成功启用
-- 当前 B5 的 enable(context) 插件成功启用（兼容路径）
+- 无参 enable() 插件成功启用
 - 新 ContextAwarePlugin 成功接收 Context（set_context → enable）
 - set_context() 抛异常时该插件不启用且宿主续运行
 - enable() 抛异常时错误隔离保持有效
@@ -102,36 +101,6 @@ class _ContextAwareSetContextRaises:
         return noop()
 
 
-# ── 旧 enable(context) 兼容路径 ────────────────────────────────────────────
-
-
-class _LegacyEnableContextOK:
-    """旧 enable(context) 兼容签名——正常."""
-
-    def __init__(self) -> None:
-        self.captured_ctx: object = object()
-
-    @property
-    def name(self) -> str:
-        return "legacy_ctx_ok"
-
-    @property
-    def version(self) -> str:
-        return "1.0.0"
-
-    def enable(self, context=None) -> None:
-        self.captured_ctx = context
-
-    def disable(self) -> None:
-        pass
-
-    def actions(self) -> list[PluginAction]:
-        return [PluginAction(id="legacy.run", label="Legacy")]
-
-    def execute_action(self, action_id: str):
-        return noop()
-
-
 # ── 旧无参 enable() 路径 ───────────────────────────────────────────────────
 
 
@@ -214,18 +183,6 @@ def test_context_aware_plugin_set_context_raises_isolated() -> None:
     assert registry.has_errors()
 
 
-def test_legacy_enable_context_compat_path_works() -> None:
-    """旧 enable(context) 兼容路径——inspect.signature 识别 context 参."""
-    from photo_archiver.plugins.loader import PluginRegistry
-
-    ctx = _make_fake_ctx()
-    registry = PluginRegistry(context=ctx)
-    plugin = _LegacyEnableContextOK()
-    registry.register(plugin)
-    registry.enable_all()
-    assert plugin.captured_ctx is ctx, "legacy enable(context) must receive registry context"
-
-
 def test_plain_enable_no_args_path_works() -> None:
     """旧无参 enable() 路径——直调."""
     from photo_archiver.plugins.loader import PluginRegistry
@@ -252,29 +209,25 @@ def test_enable_raises_isolated() -> None:
     assert registry.has_errors()
 
 
-def test_context_none_three_paths_all_degrade_gracefully() -> None:
-    """context=None 时三类路径保降级可用（CI / 单测环境）.
+def test_context_none_two_paths_degrade_gracefully() -> None:
+    """context=None 时两类路径保降级可用（CI / 单测环境）.
 
     ContextAwarePlugin 路径在 context=None 时应报错跳过（需 Context 才能启用），
-    旧 enable(context=None) 与无参 enable() 路径应正常启用。
+    无参 enable() 路径应正常启用。
     """
     from photo_archiver.plugins.loader import PluginRegistry
 
     registry = PluginRegistry()  # context=None default
     ctx_aware = _ContextAwareOK()
-    legacy = _LegacyEnableContextOK()
     plain = _PlainEnableOK()
     registry.register(ctx_aware)
-    registry.register(legacy)
     registry.register(plain)
     registry.enable_all()
 
     # ContextAwarePlugin 在 context=None 时报错跳过
     assert ctx_aware.name not in registry.enabled_plugins
-    # 旧兼容路径与无参路径正常
-    assert legacy.name in registry.enabled_plugins
+    # 无参路径正常
     assert plain.name in registry.enabled_plugins
-    assert legacy.captured_ctx is None, "legacy enable(context) must receive None passthrough"
 
 
 def test_silent_failure_warning_for_empty_actions_non_declarative(caplog) -> None:

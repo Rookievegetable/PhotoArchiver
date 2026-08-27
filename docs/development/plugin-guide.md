@@ -103,8 +103,9 @@ A `PluginAction` describes one menu item the plugin wants to register:
 ### 6. PluginContext Facade
 
 The host injects the `PluginContext` facade through `set_context(context)`
-(new standard since Phase 1 / ADR-026; legacy `enable(context)` remains as a
-deprecated compatibility path for one release). Plugins store it and use it to
+(new standard since Phase 1 / ADR-026; the legacy `enable(context)` dispatch
+was REMOVED in v2.0.0 per ADR-030 — plugins carrying the old signature fail
+to enable and are skipped with a logged error). Plugins store it and use it to
 access a limited Application Service subset:
 
 ```python
@@ -123,7 +124,8 @@ Exposed capabilities:
 Current limits:
 
 - `import_people` is the **only** write capability (ADR-028 裁决点 1=A);
-  **export stays deferred** to a later round.
+  export was **closed as YAGNI** by ADR-030 — a genuine future use case
+  requires a fresh design gate.
 - There is **no host approval gate** yet (ADR-028 裁决点 2=A): plugins call the
   context directly and the host renders the returned ActionResult.
 - Plugins access business data only through the context — never through

@@ -51,9 +51,10 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 阶段 4 技术债轮 | ✅ | ADR-029：插件查询识别状态批量联查——2600 张库单次查询 1137.9ms → 62.5ms（18.2×），往返 O(N)→O(1)；ADR-030：兼容路径移除挂账 v2.0.0、export 暂缓终结、审批门续暂缓。基线工具 `tools/bench_plugin_search.py` 入库可复跑。 |
 | M8 可发布里程碑 | ✅ | MIT License 落定（占位已删除）；pyproject 元数据落位（version 1.0.0 / license / classifiers / readme / description）；`.github/workflows/release.yml` 增补（tag 触发 sdist+wheel 构建并发布 GitHub Release）；`CHANGELOG.md` 建立；tag `v1.0.0` 已推送，GitHub Release v1.0.0 资产挂载确认（sdist+wheel）。 |
 | M9 分发定位裁决 | ✅ | ADR-031 登记并执行完毕——运行形态定位为「源码/clone 唯一受支持」；Release v1.0.0 body 置顶安装态标注已由 owner 粘贴（2026-08-26 API 实测生效，B5-3 销账）；ISSUE-018 以 by-design 正式终结（KNOWN_ISSUES 回归空态）。 |
+| v2.0.0 破坏性窗口 | ✅ | ADR-030/B4-1 兑现——旧 `enable(context)` 分发分支移除（loader 三分叉收敛为二分叉：ContextAware / 无参 enable），生产与示例代码零消费者 grep 实证；测试矩阵净减 3 个 legacy 用例（413→410 全绿）；CHANGELOG `[2.0.0]` BREAKING 标注落定；版本链 bump 2.0.0（pyproject + .env.example 示例值；settings 回退值按 configuration.md 口径保持不动）。Release 待 tag 推送自动创建后由 owner 置顶 Breaking Notes。 |
 | CI | ✅ | GitHub Actions 三 OS 矩阵、模型缓存与 AI/UI 断言已启用。 |
 
-当前 HEAD：阶段 3 实现提交 + 状态文档同步提交（均本轮）。前置基线：`cdb0fd7`（ADR-028 登记）、`a76c8ed`（阶段 2 状态同步）、`64ec47a`（阶段 2 实现）。
+当前 HEAD：v2.0.0 执行轮实现提交 + 状态文档同步提交（均本轮）。前置基线：`2bbbfb8`（B5-3 收官登记）、`48c7493`（photopath 跨平台修复 + AI 用例路径修复）、`cdb0fd7`（ADR-028 登记）。
 
 ---
 
@@ -79,27 +80,25 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-08-25（本地） |
+| 时间 | 2026-08-27（本地） |
 | 生成者 | Cline |
-| 会话范围 | 阶段 3（ADR-028 插件写能力 import_people）实现收尾。 |
-| 已完成 | ① 修正草案前提偏差——`docs/development/phase3-adr-draft.md` §1.2 误载 ImportPeopleCommand 持 rows（实际为 source_path 形状），半成品代码照抄导致运行时 TypeError；新增 `ImportPeopleService.import_rows()` 承接预解析行路径并在草案加勘误注。② `PluginContextService.import_people` 改调 `import_rows`，移除对不存在命令形状的构造。③ bootstrap 注入第 4 参 `services.import_people`。④ `PluginImportResult.succeeded` 对齐项目惯例改为属性；三个 import DTO 补入 `application/dtos/__init__.py` 导出。⑤ 测试扩展：test_plugin_context_service 新增 4 个映射/真实链路用例并更新 Protocol 白名单断言（含 import_people）；test_plugin_dtos 新增 6 个 DTO 边界用例。⑥ 新增端到端示例插件 import_people_demo_plugin（静态依赖审计自动覆盖）。⑦ 文档同步：plugin-guide.md 写能力章节 + 本状态文件刷新。⑧ Review 处置（依据 review-rules.md §18.1）：两项 Minor 修毕——import demo 样例行全量补 identity 使幂等声明成立并修正 demo/指南措辞（限定幂等仅覆盖带 identity 行）；plugin-context-design.md 头部加 ADR-028 部分取代注记。⑨ P0 收口执行——四个未跟踪过程文档经内容逐份核验后物理删除（dev-plan-phase-b B1–B5 方案已全量实施；REV-AI-001~007 草案已 100% 并入 review-rules.md §18.1；B1 双 Review 报告全部修复项闭环，外部 M-1 backfill 单字段替换经源码锚点复核已落地）+ shell 故障垃圾文件清理；按 audit-methodology 五维比对完成阶段 2+3 轻量复审（规则内部一致性 / 规则 vs 代码 / 规则 vs docs / 重复承载 / 占位空文档均无新增矛盾）。⑩ P1-B 技术债轮启动——产出 `docs/development/phase4-adr-draft.md` 前置门草案（三项技术债证据与五个裁决点 B4-1~B4-5）；新增零依赖基准脚本 `tools/bench_plugin_search.py` 并实测 N+1 基线：插件查询调用次数恒等于照片数（100/600/2600 张 → 47.1/266.8/1137.9 ms，线性），2600 张库单次查询超 1.1 秒且运行于 UI 线程同步路径。⑪ P1-B B2 落地（ADR-029）+ 三项裁决登记（ADR-030）——`RecognitionRepository.list_first_by_photo_ids` 批量端口（SQLite IN 分块 500）+ search_photos 改单往返；基准 2600 张 1137.9ms → 62.5ms（18.2×）、往返 2600 次 → 1 次；新增 N+1 回归守护用例与 SQLite 批量语义测试；B4-1 兼容路径移除挂账 v2.0.0、B4-4 export 暂缓项 YAGNI 正式关闭、B4-5 审批门续暂缓。⑫ M8 启动（A3 文档先行）——新增 `docs/user-guide/` 三篇最终用户文档（安装与首次运行 / 核心业务闭环操作 / FAQ，内容全部锚定代码事实）；清理空目录 `docs/api`、`docs/design`；README 头部增加用户指南入口并经 DOCUMENT_INDEX §2.4 登记。⑬ M8 发布工程执行（四项决策点获批：MIT / v1.0.0 / 源码分发 / workflow 批准）——`LICENSE` 替换占位（MIT, Rookievegetable）、pyproject version=1.0.0 + license/classifiers/readme/description 元数据落位、`.env.example` APP_VERSION 同步、`.github/workflows/release.yml` 增补（tag 触发 build→GH Release）、`CHANGELOG.md` 建立（Keep a Changelog）；本地 tag `v1.0.0` 已创建，push 由负责人执行。⑭ 发布后 CI 修复——首次全量推送暴露 `alembic/versions/001_initial_v4.py` 从未入库（本地磁盘遗留文件遮蔽；002 的 down_revision 指向它 → 干净检出 Alembic `KeyError` → 16 个用例 setup 失败、三平台 CI 红）。临时克隆树复现→补文件后 405 全绿验证→正式入库。注意：已发布 Release 资产构建自修复前快照，wheel 本不含 alembic 目录（按仓库布局运行的设计），受影响路径仅"clone 旧 tag 源码运行"，clone main 最新即得修复。⑯ 增量复审清偿（范围 4fd72f5..e454488，依据 review-rules.md §18.1）——无 Critical/Major；五项 Minor 文档卫生当轮一次清偿：`.gitignore` 三处未锚定同族模式根锚定（`/Last`//`PySide6`//`SQLite`，与已修 `/Version*` 同机制隐患）；ADR Register 头部刷新（1.0.2/07-26 → 1.1.0/08-26，覆盖 ADR-028~030 追加）；本文件 Last Updated 对齐内容日期；bench 脚本 docstring 补「累计库容」口径声明；plugin_context_service 模块标题阶段标注对齐。架构边界七层扫描零违规（cv2-in-ai 列 Info 观察项 O-1 待 DEP §13 注记裁决）。⑰ 发布后 CI 三平台全绿确认（run 32937966294：windows/ubuntu/macos 三 job success）——M8 尾巴闭环；8 个 AI 集成用例在 macOS/Ubuntu 完成首次真跑验证。⑱ M9 前置门启动——产出 `docs/development/phase5-adr-draft.md`（ISSUE-018 终局裁决）：实测安装态断点六项（wheel 无 main.py / 无 console 入口 / alembic 五层 parent 解析断裂 / 插件目录 4×parent 缺失 / 三大默认路径 CWD 相对 / 无 MANIFEST 与 package-data），方案 A「源码形态定位」vs B「安装态支持」对比与推荐 A；待拍板 B5-1~B5-3。⑲ M9 拍板与执行——三项裁决全按推荐通过：ADR-031 登记（源码/clone 唯一受支持运行形态，打包安装态按设计不支持，含反例守护条款）；KNOWN_ISSUES ISSUE-018 移除（by-design 终结，清单回归空态）；phase5 草案定稿；Release 页标注文案已交付 owner 粘贴。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src`：168 个源文件无问题；`pytest -q`：405 passed、8 skipped。 |
-| 工作区 | 过程审阅文档仍未跟踪：`dev-plan-phase-b.md`、`review-b1-merged.md`、`review-report-external.txt`、`review-rules-addition-draft.md`；它们不是已批准的项目状态。 |
-| Remaining | 无阻塞项、无站外待办——B5-3 已销账（Release v1.0.0 body 置顶标注 owner 已粘贴，2026-08-26 API 实测 body 首行即 Installation note）。CI 实证：head `48c7493` 三平台全绿（run 32962654309）。KNOWN_ISSUES 回归空态（ISSUE-018 经 ADR-031 by-design 终结，历史注记保留于文件内）。 |
-| Next Step | v1.0.0 发布治理全链收官（M8 + M9 + B5-3 全部落地）。后续候选：性能基准常态化复测；v2.0.0 清单执行（`enable(context)` 移除，见 ADR-030）；PDF 导出等依赖审批项按需触发；若出现非技术用户分发需求，按 phase5 定稿方案 B 另起前置门。 |
+| 会话范围 | v2.0.0 破坏性窗口执行轮——兑现 ADR-030/B4-1：移除旧 `enable(context)` 插件兼容分发分支。 |
+| 已完成 | ① 开工复核：`def enable(self, context…` 在 src/examples/plugins/app 生产与示例代码零命中（仅 loader 兼容分支自身 + 测试 stub + docs 使用）。② `plugins/loader.py` `_enable_plugin` 删除 `inspect.signature` 探测分支收敛为二分叉并移除 `import inspect`；模块头 / `enable_all` / `_enable_plugin` docstring 同步 v2.0.0 收敛表述（旧签名调用即 TypeError 落错误隔离，宿主续运行）。③ 测试矩阵删改——test_plugin_context.py 移除 `_LegacyEnableContextStub` 类与 2 个 legacy 用例、契约注释改两类生命周期分发；test_plugin_lifecycle_compatibility.py 整段移除兼容 section/class 并将 context=None 三路径矩阵改写为两路径版（`test_context_none_two_paths_degrade_gracefully`）。④ API 表述刷新：application/ports/plugin.py 两处「Deprecated 保留一个版本」→「已于 v2.0.0 移除」；examples/plugins/hello_plugin.py 头注同步迁移指引。⑤ plugin-guide.md §6 legacy 表述改为 REMOVED-in-v2.0.0 + 影响面说明；limits 中 export「stays deferred」陈旧表述顺手对齐 ADR-030 YAGNI 终态。⑥ 版本链 bump：pyproject.toml version=2.0.0、`.env.example` APP_VERSION=2.0.0。⑦ CHANGELOG.md 新增 `[2.0.0] - 2026-08-27` 段——Removed **BREAKING** 显著标注 + 外部插件影响面 + 迁移指引指针 + 零消费者实证注记，原 Deferred 条目中 enable(context) 子项迁出并加已执行注记。⑧ 门禁全回归：ruff ✓ / mypy 168 文件 ✓ / pytest **410 passed**（恰为 413−3 净减预期）。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src`：168 个源文件无问题；`pytest -q`：410 passed、0 skipped（8 warnings 为第三方库弃用提示，无失败）。 |
+| 工作区 | 本轮 9 文件改动全量提交；过程脚本即建即删，无未跟踪文档遗留。 |
+| Remaining | 发版序列两项：a) 打 tag 前执行 B1 性能基准复测（`python tools/bench_plugin_search.py` 对照 ADR-029 的 2600 张 62.5ms 基线留档）；b) tag `v2.0.0` 推送触发 Release 自动创建后，owner 向 body 置顶粘贴 Breaking Notes（CHANGELOG [2.0.0] Removed 段文案，复用 B5-3 流程）。 |
+| Next Step | 完成上述发版序列 ①→②→③ 后在本文件销账登记。此后为条件触发行：识别管线批量吞吐性能加固；真实高危插件写用例出现时再评审宿主审批门（ADR-028 裁决点 2=B/C）；非技术用户分发需求出现时按 phase5 定稿方案 B 另起前置门。 |
 
 ---
 
 ## 6. Next Step（下一步开发计划）
 
-阶段 3 已收尾。后续均为独立候选项，开工前先由项目负责人裁决排期：
+v2.0.0 执行轮代码/测试/文档已全部收尾（质量门全绿）。剩余为纯发版序列：
 
-1. 在下一个主版本评审 `enable(context)` 兼容路径的移除。
-2. 性能加固（识别管线批量吞吐等）。
-3. export 插件写能力是否开放的单独裁决（YAGNI：ExportController 宿主路径已可用）。
-4. 如真实用例出现高危写操作，再评审宿主审批门（ADR-028 裁决点 2=B/C）。
-
----
+1. 打 tag 前：`python tools/bench_plugin_search.py` 三档库容复跑，对照 ADR-029 基线（2600 张 62.5ms / 往返 1 次）留档防回退对照数字。
+2. 提交推送 + 观察 CI 三平台全绿，随后 push tag `v2.0.0` 触发 release workflow（sdist/wheel 构建 + GitHub Release 自动创建）。
+3. owner 向新 Release body 置顶粘贴 Breaking Notes（取 CHANGELOG `[2.0.0]` Removed 段文案），完成后在 §5 Remaining 销账。
+4. 之后均为条件触发行：识别管线批量吞吐等性能加固；真实高危插件写用例出现时再评审宿主审批门（ADR-028 裁决点 2=B/C）；非技术用户分发需求出现时按 phase5 定稿方案 B 另起前置门。
 
 ## 7. Key Files（关键文件索引）
 

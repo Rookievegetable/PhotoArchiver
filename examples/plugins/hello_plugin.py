@@ -4,8 +4,8 @@
 ``set_context(context) → enable() → actions() / execute_action()``。
 HelloPlugin 是纯声明式插件（不消费 Context），但演示完整新标准签名。
 
-旧 ``enable(context)`` 兼容路径 Deprecated 保留一个版本——迁移期限与移除
-轮次留 v2.0.0 单独裁决，详见 ``docs/development/plugin-guide.md``。
+旧 ``enable(context)`` 兼容路径已于 v2.0.0 移除（ADR-030）——外部插件须迁移
+至本文件的 ``set_context + enable`` 标准形态，详见 ``docs/development/plugin-guide.md``。
 """
 
 from __future__ import annotations

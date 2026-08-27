@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [2.0.0] - 2026-08-27
+
+Breaking release executing the destructive window scheduled by ADR-030
+(one-version deprecation grace promised by ADR-026 has elapsed).
+
+### Removed (**BREAKING**)
+
+- **Plugins: legacy `enable(context)` signature support dropped.** The plugin
+  registry no longer detects or dispatches the deprecated one-parameter
+  `enable(context)` signature. External plugins must implement the standard
+  `ContextAwarePlugin` lifecycle (`set_context(context)` + no-arg `enable()`)
+  or a plain no-arg `enable()`.
+  - Impact: plugins still carrying the old signature will fail to enable;
+    they are skipped with a logged error while the host keeps running.
+  - Migration guide: `docs/development/plugin-guide.md` §6.
+  - Zero production/example consumers were affected (grep-verified, ADR-030).
+
+### Changed
+
+- Version chain bumped to 2.0.0 (`pyproject.toml`; `.env.example` example).
+
 ## [1.0.0] - 2026-08-25
 
 First official release. Includes the complete 15-step product roadmap,
@@ -46,7 +67,7 @@ phases 0–4 (ADR-024 through ADR-030).
 
 ### Deferred by decision
 
-- Removal of the deprecated `enable(context)` plugin signature is scheduled
-  for v2.0.0 (ADR-030). Export plugin write capability was closed as YAGNI
-  (ADR-030); the host approval gate stays deferred until a high-risk plugin
-  write use case appears.
+- Export plugin write capability was closed as YAGNI (ADR-030); the host
+  approval gate stays deferred until a high-risk plugin write use case
+  appears. (The `enable(context)` removal once scheduled here was executed
+  in v2.0.0 — see the [2.0.0] section above.)

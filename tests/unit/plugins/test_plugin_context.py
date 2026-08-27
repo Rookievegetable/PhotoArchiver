@@ -3,7 +3,7 @@
 覆盖：
 - PluginContext Protocol 契约（search_photos + detect_duplicates 读方法存在，返 Plugin DTO）
 - ContextAwarePlugin Protocol 契约（set_context + enable + disable + actions + execute_action）
-- PluginRegistry 三类生命周期兼容（ContextAwarePlugin / 旧 enable(context) / 旧无参 enable）
+- PluginRegistry 两类生命周期分发（ContextAwarePlugin / 无参 enable）
 - context=None 测试环境保降级可用
 - ActionResult 三态（success/failure/noop）+ PluginReport 构造正确
 - 静默失败防护（误漏 enable 实现 actions() 返空时 warning）
@@ -74,7 +74,7 @@ def test_context_aware_plugin_protocol_declares_set_context() -> None:
     assert hasattr(ContextAwarePlugin, "enable"), "ContextAwarePlugin must inherit enable from Plugin"
 
 
-# ── PluginRegistry 三类生命周期兼容 ────────────────────────────────────────
+# ── PluginRegistry 两类生命周期分发 ────────────────────────────────────────
 
 
 class _ContextAwareStub:
@@ -103,33 +103,6 @@ class _ContextAwareStub:
 
     def actions(self) -> list[PluginAction]:
         return [PluginAction(id="stub.run", label="Stub")]
-
-    def execute_action(self, action_id: str) -> ActionResult:
-        return noop()
-
-
-class _LegacyEnableContextStub:
-    """旧 enable(context) 兼容签名 stub."""
-
-    def __init__(self) -> None:
-        self.captured_context: object = object()
-
-    @property
-    def name(self) -> str:
-        return "legacy_context"
-
-    @property
-    def version(self) -> str:
-        return "1.0.0"
-
-    def enable(self, context=None) -> None:  # 旧兼容签名
-        self.captured_context = context
-
-    def disable(self) -> None:
-        pass
-
-    def actions(self) -> list[PluginAction]:
-        return [PluginAction(id="legacy.run", label="Legacy")]
 
     def execute_action(self, action_id: str) -> ActionResult:
         return noop()
@@ -170,16 +143,6 @@ def test_registry_enable_context_aware_plugin_via_set_context_then_enable() -> N
     assert plugin.enable_called, "enable() must be called after set_context"
 
 
-def test_registry_enable_legacy_enable_context_compatibility_path() -> None:
-    """旧 enable(context) 兼容路径——inspect.signature 识别 context 参."""
-    ctx = _make_fake_plugin_context()
-    registry = PluginRegistry(context=ctx)
-    plugin = _LegacyEnableContextStub()
-    registry.register(plugin)
-    registry.enable_all()
-    assert plugin.captured_context is ctx, "legacy enable(context) must receive the registry context"
-
-
 def test_registry_enable_plain_enable_no_args() -> None:
     """旧无参 enable() 路径——直调无参."""
     ctx = _make_fake_plugin_context()
@@ -198,16 +161,6 @@ def test_registry_context_none_context_aware_plugin_raises() -> None:
     # 错误隔离：plugin 未启用，registry.has_errors() 真
     assert plugin.name not in registry.enabled_plugins
     assert registry.has_errors()
-
-
-def test_registry_context_none_legacy_enable_context_compat_works() -> None:
-    """context=None 时旧 enable(context) 兼容路径——传 None 调通."""
-    registry = PluginRegistry()  # context=None default
-    plugin = _LegacyEnableContextStub()
-    registry.register(plugin)
-    registry.enable_all()
-    assert plugin.captured_context is None, "legacy enable(context) must receive None passthrough"
-    assert plugin.name in registry.enabled_plugins
 
 
 def test_registry_context_none_plain_enable_works() -> None:
