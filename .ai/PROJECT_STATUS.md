@@ -51,10 +51,10 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 阶段 4 技术债轮 | ✅ | ADR-029：插件查询识别状态批量联查——2600 张库单次查询 1137.9ms → 62.5ms（18.2×），往返 O(N)→O(1)；ADR-030：兼容路径移除挂账 v2.0.0、export 暂缓终结、审批门续暂缓。基线工具 `tools/bench_plugin_search.py` 入库可复跑。 |
 | M8 可发布里程碑 | ✅ | MIT License 落定（占位已删除）；pyproject 元数据落位（version 1.0.0 / license / classifiers / readme / description）；`.github/workflows/release.yml` 增补（tag 触发 sdist+wheel 构建并发布 GitHub Release）；`CHANGELOG.md` 建立；tag `v1.0.0` 已推送，GitHub Release v1.0.0 资产挂载确认（sdist+wheel）。 |
 | M9 分发定位裁决 | ✅ | ADR-031 登记并执行完毕——运行形态定位为「源码/clone 唯一受支持」；Release v1.0.0 body 置顶安装态标注已由 owner 粘贴（2026-08-26 API 实测生效，B5-3 销账）；ISSUE-018 以 by-design 正式终结（KNOWN_ISSUES 回归空态）。 |
-| v2.0.0 破坏性窗口 | ✅ | ADR-030/B4-1 兑现——旧 `enable(context)` 分发分支移除（loader 三分叉收敛为二分叉：ContextAware / 无参 enable），生产与示例代码零消费者 grep 实证；测试矩阵净减 3 个 legacy 用例（413→410 全绿）；CHANGELOG `[2.0.0]` BREAKING 标注落定；版本链 bump 2.0.0（pyproject + .env.example 示例值；settings 回退值按 configuration.md 口径保持不动）。Release 待 tag 推送自动创建后由 owner 置顶 Breaking Notes。 |
+| v2.0.0 破坏性窗口 | ✅ | ADR-030/B4-1 兑现——旧 `enable(context)` 分发分支移除（loader 三分叉收敛为二分叉：ContextAware / 无参 enable），生产与示例代码零消费者 grep 实证；测试矩阵净减 3 个 legacy 用例（413→410 全绿）；CHANGELOG `[2.0.0]` BREAKING 标注落定；版本链 bump 2.0.0（pyproject + .env.example 示例值；settings 回退值按 configuration.md 口径保持不动）。发版链实证——tag `v2.0.0` 已推送并触发 release workflow（run 33071797649 双 job success）：GitHub Release v2.0.0 自动创建且双资产挂载 API 实测确认（wheel 220KB / sdist 152KB）；发布前实现提交 `ba3ad02` CI 三平台全绿（run 33070707134）。仅余 owner 向 body 置顶粘贴 Breaking Notes。 |
 | CI | ✅ | GitHub Actions 三 OS 矩阵、模型缓存与 AI/UI 断言已启用。 |
 
-当前 HEAD：v2.0.0 执行轮实现提交 + 状态文档同步提交（均本轮）。前置基线：`2bbbfb8`（B5-3 收官登记）、`48c7493`（photopath 跨平台修复 + AI 用例路径修复）、`cdb0fd7`（ADR-028 登记）。
+当前 HEAD：`ba3ad02`（origin/main 同步 = 实现 `8f317a6` + B1 基准留档；tag `v2.0.0` 已指向此线并推至远端）。前置基线：`2bbbfb8`（B5-3 收官登记）、`48c7493`（photopath 跨平台修复 + AI 用例路径修复）、`cdb0fd7`（ADR-028 登记）。
 
 ---
 
@@ -86,8 +86,8 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 已完成 | ① 开工复核：`def enable(self, context…` 在 src/examples/plugins/app 生产与示例代码零命中（仅 loader 兼容分支自身 + 测试 stub + docs 使用）。② `plugins/loader.py` `_enable_plugin` 删除 `inspect.signature` 探测分支收敛为二分叉并移除 `import inspect`；模块头 / `enable_all` / `_enable_plugin` docstring 同步 v2.0.0 收敛表述（旧签名调用即 TypeError 落错误隔离，宿主续运行）。③ 测试矩阵删改——test_plugin_context.py 移除 `_LegacyEnableContextStub` 类与 2 个 legacy 用例、契约注释改两类生命周期分发；test_plugin_lifecycle_compatibility.py 整段移除兼容 section/class 并将 context=None 三路径矩阵改写为两路径版（`test_context_none_two_paths_degrade_gracefully`）。④ API 表述刷新：application/ports/plugin.py 两处「Deprecated 保留一个版本」→「已于 v2.0.0 移除」；examples/plugins/hello_plugin.py 头注同步迁移指引。⑤ plugin-guide.md §6 legacy 表述改为 REMOVED-in-v2.0.0 + 影响面说明；limits 中 export「stays deferred」陈旧表述顺手对齐 ADR-030 YAGNI 终态。⑥ 版本链 bump：pyproject.toml version=2.0.0、`.env.example` APP_VERSION=2.0.0。⑦ CHANGELOG.md 新增 `[2.0.0] - 2026-08-27` 段——Removed **BREAKING** 显著标注 + 外部插件影响面 + 迁移指引指针 + 零消费者实证注记，原 Deferred 条目中 enable(context) 子项迁出并加已执行注记。⑧ 门禁全回归：ruff ✓ / mypy 168 文件 ✓ / pytest **410 passed**（恰为 413−3 净减预期）。 |
 | 当前质量门 | `ruff check .` 通过；`mypy src`：168 个源文件无问题；`pytest -q`：410 passed、0 skipped（8 warnings 为第三方库弃用提示，无失败）。 |
 | 工作区 | 本轮 9 文件改动全量提交；过程脚本即建即删，无未跟踪文档遗留。 |
-| Remaining | 发版序列：a) ~~打 tag 前 B1 基准复测~~ ✅ 已完成（2026-08-27 实测 `tools/bench_plugin_search.py`：100/600/2600 张 → 5.0/16.2/63.4ms，recognition repo calls 全档恒为 1；vs ADR-029 基线 62.5ms 变动 +1.4%，单次运行噪声区间，判定零回退）；b) 提交 `8f317a6` 推送（遇间歇网络失败已自动重试 4 次，本地就位）；c) tag `v2.0.0` 推送触发 Release 自动创建后，owner 向 body 置顶粘贴 Breaking Notes（CHANGELOG [2.0.0] Removed 段文案，复用 B5-3 流程）。 |
-| Next Step | 完成上述发版序列 ①→②→③ 后在本文件销账登记。此后为条件触发行：识别管线批量吞吐性能加固；真实高危插件写用例出现时再评审宿主审批门（ADR-028 裁决点 2=B/C）；非技术用户分发需求出现时按 phase5 定稿方案 B 另起前置门。 |
+| Remaining | 发版序列 a) 推送 ✅（origin/main = `ba3ad02`）、b) CI 三平台全绿 ✅（run 33070707134 completed/success——破坏性变更远端矩阵真实首验通过）、c) tag `v2.0.0` 推送 + Release 自动创建 ✅（release workflow run 33071797649 双 job success；资产 wheel 220KB / sdist 152KB 挂载实测确认）。**唯一站外待办**：owner 向 Release v2.0.0 body 置顶粘贴 Breaking Notes（CHANGELOG `[2.0.0]` Removed 段文案）。 |
+| Next Step | owner 粘贴 Breaking Notes 后在本文件销账，v2.0.0 轮全闭环。此后条件触发行不变：识别管线批量吞吐性能加固；真实高危插件写用例出现时再评审宿主审批门（ADR-028 裁决点 2=B/C）；非技术用户分发需求出现时按 phase5 定稿方案 B 另起前置门。 |
 
 ---
 
@@ -96,8 +96,8 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 v2.0.0 执行轮代码/测试/文档已全部收尾（质量门全绿）。剩余为纯发版序列：
 
 1. ~~打 tag 前：`python tools/bench_plugin_search.py` 三档库容复跑~~ ✅ 已执行（2026-08-27）：100/600/2600 张 → 5.0/16.2/63.4ms，calls 全档 = 1；对照 ADR-029 基线（2600 张 62.5ms）零回退。
-2. 提交推送 + 观察 CI 三平台全绿，随后 push tag `v2.0.0` 触发 release workflow（sdist/wheel 构建 + GitHub Release 自动创建）。
-3. owner 向新 Release body 置顶粘贴 Breaking Notes（取 CHANGELOG `[2.0.0]` Removed 段文案），完成后在 §5 Remaining 销账。
+2. ~~推送 + 观察 CI + push tag~~ ✅ 全部完成（2026-08-27）：`ba3ad02` 三平台全绿（run 33070707134）→ tag `v2.0.0` 推送 → release workflow run 33071797649 成功 → GitHub Release v2.0.0 创建、双资产挂载。
+3. **待办**：owner 向新 Release body 置顶粘贴 Breaking Notes（取 CHANGELOG `[2.0.0]` Removed 段文案），完成后在 §5 Remaining 销账。
 4. 之后均为条件触发行：识别管线批量吞吐等性能加固；真实高危插件写用例出现时再评审宿主审批门（ADR-028 裁决点 2=B/C）；非技术用户分发需求出现时按 phase5 定稿方案 B 另起前置门。
 
 ## 7. Key Files（关键文件索引）
