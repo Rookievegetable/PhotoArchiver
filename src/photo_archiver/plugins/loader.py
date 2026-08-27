@@ -16,8 +16,10 @@ plugin never crashes the host application (acceptance criterion 3).
   时日志 warning，提示可能误漏 ``enable`` 实现。
 
 v2.0.0 收敛（ADR-030 兑现）：旧 ``enable(context)`` 兼容分发分支已移除——
-Deprecated 承诺「保留一个版本」到期。持旧签名的外部插件将启用失败并进入
-错误隔离（不启用该插件、记录 error，宿主续运行）。
+Deprecated 承诺「保留一个版本」到期。必选位置参签名的旧插件将启用失败并
+进入错误隔离（不启用该插件、记录 error，宿主续运行）；若旧签名形参带默认
+值（如 ``context=None``），无参直调仍会成功启用但收不到上下文注入，后果
+延后至 ``execute_action`` 阶段才暴露。
 """
 
 from __future__ import annotations

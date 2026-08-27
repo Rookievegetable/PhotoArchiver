@@ -104,8 +104,12 @@ A `PluginAction` describes one menu item the plugin wants to register:
 
 The host injects the `PluginContext` facade through `set_context(context)`
 (new standard since Phase 1 / ADR-026; the legacy `enable(context)` dispatch
-was REMOVED in v2.0.0 per ADR-030 — plugins carrying the old signature fail
-to enable and are skipped with a logged error). Plugins store it and use it to
+was REMOVED in v2.0.0 per ADR-030 — plugins carrying the old signature with a
+required positional parameter fail to enable and are skipped with a logged
+error; plugins whose old signature merely defaults the parameter (e.g.
+`context=None`) still enable via the no-arg call but never receive the host
+context — misbehavior surfaces later at `execute_action()` time).
+Plugins store it and use it to
 access a limited Application Service subset:
 
 ```python

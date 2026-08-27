@@ -18,8 +18,11 @@ Breaking release executing the destructive window scheduled by ADR-030
   `enable(context)` signature. External plugins must implement the standard
   `ContextAwarePlugin` lifecycle (`set_context(context)` + no-arg `enable()`)
   or a plain no-arg `enable()`.
-  - Impact: plugins still carrying the old signature will fail to enable;
-    they are skipped with a logged error while the host keeps running.
+  - Impact: plugins still carrying the old signature with a required positional
+    parameter fail to enable and are skipped with a logged error while the host
+    keeps running; plugins whose old signature merely defaults the parameter
+    (e.g. `context=None`) still enable through the no-arg call but receive no
+    host context (misbehavior surfaces at execute_action time).
   - Migration guide: `docs/development/plugin-guide.md` §6.
   - Zero production/example consumers were affected (grep-verified, ADR-030).
 

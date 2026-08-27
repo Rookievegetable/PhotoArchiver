@@ -14,6 +14,18 @@ same cumulative column.
 Zero third-party dependencies — stdlib only, safe to run offline:
 
     python tools/bench_plugin_search.py
+
+Baseline numbers (durable anchor; review MINOR-3 fix, 2026-08-27):
+
+    scale = cumulative photos   | repo_calls | wall_ms
+                100             |     1      |   5.0
+                600             |     1      |  16.2
+               2600             |     1      |  63.4
+
+    ADR-029 optimized baseline: 62.5 ms @2600 — delta +1.4% is a single-run
+    noise band; calls stayed constant at 1 ⇒ zero regression (v2.0.0 tag
+    retest). Record future retests here so the anti-regression anchor survives
+    status-file housekeeping.
 """
 
 from __future__ import annotations
