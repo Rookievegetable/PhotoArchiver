@@ -87,7 +87,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 当前质量门 | `ruff check .` 通过；`mypy src`：168 个源文件无问题；pytest 本轮 scoped `tests/unit/plugins` 34 passed（清偿仅触 docs/docstring，全量 410 passed 为上一代码轮基线，未回退）。 |
 | 工作区 | 本轮 6 文件清偿改动全量提交（loader/guide/changelog/phase4 草案/status/bench 注记）；无过程脚本遗留。 |
 | Remaining | **零待办**——MINOR-4 已销账（owner 粘贴 Breaking Notes，2026-08-27 API 复验内容齐备：body 859 字符、逐字命中交付文案）；本地与远端同步无偏移；CI 近期 runs 全绿（`eea3c1b` 三平台 success、Release 流水线双 job success）。 |
-| Next Step | v2.0.0 执行轮及其 Review 闭环全部收官（M8/M9/v2.0.0/B5-3 及 Review 四 Minor 全落地）。此后进入条件触发休眠区：识别管线批量吞吐性能加固；真实高危插件写用例出现时再评审宿主审批门（ADR-028 裁决点 2=B/C）；非技术用户分发需求出现时按 phase5 定稿方案 B 另起前置门。 |
+| Next Step | **吞吐加固前置门已启动**——`docs/development/phase6-adr-draft.md` 草案产出（2026-08-28，含 §1 八项摸底事实锚点 + §2 五项裁决点 A-1~A-5 默认推荐 + §4 不变量 + §5 风险；关键摸底发现：批量识别管线已装配但零生产消费者 F5、串行 for 循环 F1、逐条持久化 F4、onnxruntime 推理释放 GIL 线程并行前提成立 F7）。**待 owner 拍板 A-1~A-5 后转定稿进入执行轮**，目标版本 v2.1.0。其余触发线不变：真实高危插件写用例→审批门复审（ADR-028 裁决点 2=B/C）；非技术用户分发需求→phase5 方案 B 前置门。 |
 
 ---
 
