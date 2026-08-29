@@ -327,6 +327,16 @@
 | 理由 | 实测证明安装态支持是运行形态级重构而非补丁：E1-E6 断点中默认路径语义（CWD 相对迁往用户目录）直接触及 ADR-010/022 的 base 设计与设置体系；在无非技术用户分发需求的现状下投入违背 YAGNI。受支持流（user-guide 链路）全程不安装包本体，方案 A 以一条页内标注获得确定性终态并消除 ISSUE-018 的开放态歧义。 |
 | 影响范围 | GitHub Release v1.0.0 body 标注（owner 粘贴，文案见 phase5 草案 §4）；KNOWN_ISSUES ISSUE-018 条目移除（by-design 关闭不入清单）；`docs/user-guide/installation.md` 已与该定位一致无需改；代码 / Schema / 依赖 / Schema 迁移体系零变更。反例守护：禁止未来无声引入「半支持安装态」（如仅修 E3 不修 E4/E5）。 |
 
+### ADR-032 — Phase 6 识别管线吞吐加固五项裁决（基准入库 / 线程并行 / 持久化批下推 / 进度保持 / UI 触发点不补）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（前置门拍板 2026-08-28，定稿草案 `docs/development/phase6-adr-draft.md` A-1~A-5 全按默认推荐） |
+| 决策 | 五项裁决：(1) A-1 基准工具 `tools/bench_recognition.py` **入库长期保留**（库容 × workers 双梯度，数字续记 docstring；管线零生产消费者 F5 使其兼作当前唯一可复跑驱动入口）；(2) A-2 并行形态 = **ThreadPoolExecutor per-photo 复用 MAX_WORKERS 先行**，并行段限纯推理（detect_with_embeddings + cosine match），持久化收敛回主线程；B（onnxruntime batch 批推理）视 A-1 证据决定是否二轮，进程池排除；(3) A-3 Domain `RecognitionRepository` 扩 `add_many`，SQLite 端单事务批量提交（往返 O(N)→O(1)）；(4) A-4 进度语义保持「完成张数」口径与上报规则（首末张 + 每 10 张）不变；(5) A-5 UI 识别触发点本轮不补（功能开发另立轮次，避免范围蔓延）。四条不变量（结果等价 / SQLite 线程安全 / 进度语义 / 失败隔离）全部必选。 |
+| 理由 | F1 串行 for 循环 + F4 逐条持久化是识别管线仅有的两个可量化瓶颈；F7 实证 onnxruntime 推理释放 GIL 使线程并行前提成立；ADR-029/B4-2 端口扩展先例直接覆盖 A-3。基准先行（A-1）把「模型对象跨线程共享是否安全」的设计风险转化为可实测证据，避免盲改。 |
+| 影响范围 | `tools/bench_recognition.py`（新建）、`application/services/match_persons_service.py`（并行化 + 批量收集）、`domain/repositories/recognition_repository.py`（协议扩 add_many）、`infrastructure/database/sqlite_recognition_repository.py`（单事务批量 INSERT）、`tests/unit/application/test_match_persons_service.py` + `tests/unit/infrastructure/repositories/test_sqlite_repositories.py`（等价/失败隔离/单事务/进度用例，410→417）、`CHANGELOG.md`（v2.1.0 段）、`.ai/PROJECT_STATUS.md`、本文件。不变：Schema、依赖、`MatchPersonsCommand` 形状（F5 零生产消费者）、`max_workers=1` 串行路径逐字节等价。 |
+| 实施结果 | 全网格基线（2026-08-29，37.4 min，exit 0）：2600 张串行 656.94s（3.96 photos/s）；4 workers 514.00s（5.06 photos/s，**1.28×**）——线程扩展弱于建议阈值 ≥2×，与 §5 预判吻合（onnxruntime intra-op 池单次推理已吃满核心，worker 线程仅重叠 Python 侧开销）；**A-2=B 二轮裁决条件已触发，是否立项由 owner 拍板**（REV-AI-003）。InsightFace session 跨线程共享实测安全（2/4 workers 全档 100% 产出、等价不变量全程成立，§5 首项风险解除）。 |
+
 ---
 
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）

@@ -6,6 +6,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [2.1.0] - 2026-08-29
+
+Recognition-pipeline throughput hardening round (phase6; five pre-gate
+decisions recorded 2026-08-28, all per default recommendation).
+
+### Added
+
+- **Batched persistence**: `RecognitionRepository` gains `add_many` — the
+  SQLite implementation commits a batch in a single transaction (round trips
+  O(N) → O(1)); the in-memory implementation stays per-item equivalent.
+- **Benchmark tool** `tools/bench_recognition.py`: library-scale × worker-count
+  grid (100/600/2600 × 1/2/4) driving the real InsightFace adapters and the
+  real `MatchPersonsService` path; baseline numbers recorded in its docstring
+  (anti-regression convention, same as `bench_plugin_search.py`).
+
+### Changed
+
+- **Parallel recognition analysis**: the per-photo inference stage of
+  `MatchPersonsService` now runs on a thread pool (reusing `MAX_WORKERS`).
+  The parallel section is restricted to pure inference (detect+embed+cosine
+  match); persistence stays on the main thread. Results are field-for-field
+  equivalent to the serial path (locked by new equivalence tests); progress
+  reporting semantics and per-photo failure isolation are unchanged, and the
+  `max_workers=1` path is byte-for-byte the previous serial behavior.
+- Measured scaling is modest (1.28× at 4 workers on the 2,600-photo CPU
+  baseline): the onnxruntime session's internal intra-op pool already
+  saturates cores during a single call, so worker threads mostly overlap
+  Python-side overhead. Batch inference (phase6 §8 A-2=B) is the recorded
+  follow-up candidate for real throughput gains — pending owner decision.
+
+
+
 ## [2.0.0] - 2026-08-27
 
 Breaking release executing the destructive window scheduled by ADR-030

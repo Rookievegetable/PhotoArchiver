@@ -92,7 +92,7 @@ def _seed(repositories: ApplicationRepositories, scale: int, count: int) -> None
     database never collide on the ``photos.raw_path`` UNIQUE constraint.
     """
     for index in range(count):
-        photo_path = PhotoPath(f"/bench/s{scale}/photo_{index}.jpg")
+        photo_path = PhotoPath(Path(f"/bench/s{scale}/photo_{index}.jpg"))
         repositories.photos.add(Photo(path=photo_path))
     for photo in repositories.photos.list_all():
         repositories.recognition.add(RecognitionResult(photo_id=photo.id, confidence=0.9))  # type: ignore[arg-type]

@@ -13,6 +13,16 @@ class RecognitionRepository(Protocol):
     def add(self, result: RecognitionResult) -> None:
         """Add a recognition result or replace the existing aggregate by id."""
 
+    def add_many(self, results: Sequence[RecognitionResult]) -> None:
+        """Add a batch of recognition results in one call.
+
+        Default implementation loops ``add`` so minimal implementations keep
+        working unchanged; SQL-backed repositories SHOULD override this with a
+        single-transaction push-down (see ``SQLiteRecognitionRepository.add_many``).
+        """
+        for result in results:
+            self.add(result)
+
     def find_by_id(self, result_id: UUID) -> RecognitionResult | None:
         """Find a recognition result by its domain identifier."""
 

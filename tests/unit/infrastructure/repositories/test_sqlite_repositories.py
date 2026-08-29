@@ -261,6 +261,62 @@ def test_sqlite_recognition_repository_upserts_by_id(tmp_path: Path) -> None:
     assert recognition_repository.find_by_id(result.id) == updated
 
 
+def test_sqlite_recognition_repository_add_many_persists_batch(tmp_path: Path) -> None:
+    """phase6 A-3: add_many 单次往返持久化整批识别记录."""
+    provider = create_provider(tmp_path)
+    folder_repository = SQLiteFolderRepository(provider)
+    photo_repository = SQLitePhotoRepository(provider)
+    recognition_repository = SQLiteRecognitionRepository(provider)
+
+    folder = Folder(path=PhotoPath("school"), total_photos=3)
+    folder_repository.add(folder)
+    photos = []
+    for index in range(3):
+        photo = Photo(path=PhotoPath(f"school/batch{index}.jpg"), folder_id=folder.id)
+        photo_repository.add(photo)
+        photos.append(photo)
+
+    results = [
+        RecognitionResult(photo_id=photos[0].id, confidence=0.8),
+        RecognitionResult(photo_id=photos[1].id, confidence=0.0),
+        RecognitionResult(photo_id=photos[2].id, confidence=0.9),
+    ]
+    recognition_repository.add_many(results)
+
+    assert recognition_repository.list_by_photo(photos[0].id) == [results[0]]
+    assert recognition_repository.list_by_photo(photos[1].id) == [results[1]]
+    assert recognition_repository.list_by_photo(photos[2].id) == [results[2]]
+    # 同微秒 created_at 并列时 list_pending 的全局顺序不保证——按 id 集合断言批量完整性
+    assert {r.id for r in recognition_repository.list_pending()} == {r.id for r in results}
+
+
+def test_sqlite_recognition_repository_add_many_edge_cases(tmp_path: Path) -> None:
+    """add_many 边界：空批为 no-op；与 add 同样的按 id upsert 语义."""
+    provider = create_provider(tmp_path)
+    folder_repository = SQLiteFolderRepository(provider)
+    photo_repository = SQLitePhotoRepository(provider)
+    recognition_repository = SQLiteRecognitionRepository(provider)
+
+    folder = Folder(path=PhotoPath("school"), total_photos=1)
+    folder_repository.add(folder)
+    photo = Photo(path=PhotoPath("school/batch.jpg"), folder_id=folder.id)
+    photo_repository.add(photo)
+
+    recognition_repository.add_many([])  # 空批——不得触碰数据库、不得抛错
+
+    result = RecognitionResult(photo_id=photo.id, confidence=0.5)
+    recognition_repository.add_many([result])
+    updated = RecognitionResult(
+        id=result.id,
+        photo_id=photo.id,
+        confidence=0.95,
+        created_at=result.created_at,
+    )
+    recognition_repository.add_many([updated])
+
+    assert recognition_repository.find_by_id(result.id) == updated
+
+
 def test_sqlite_recognition_repository_update_status(tmp_path: Path) -> None:
     """update_status must persist the new review status."""
     provider = create_provider(tmp_path)

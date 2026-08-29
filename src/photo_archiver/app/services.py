@@ -183,6 +183,7 @@ def _build_match_service(
         matcher=matcher,
         face_embedding_repository=repositories.face_embeddings,
         recognition_repository=repositories.recognition,
+        max_workers=settings.max_workers,
     )
 
 
@@ -244,3 +245,6 @@ class _NoOpRecognitionRepository:
 
     def add(self, result) -> None:
         """No-op; never exercised because execute() raises."""
+
+    def add_many(self, results) -> None:
+        """No-op batch variant kept symmetric with ``add``."""

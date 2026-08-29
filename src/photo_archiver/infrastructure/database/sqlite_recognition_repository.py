@@ -49,6 +49,43 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                 ),
             )
 
+    def add_many(self, results: Sequence[RecognitionResult]) -> None:
+        """Persist a batch of recognition results in one executemany upsert.
+
+        Single-connection push-down (phase6 裁决 A-3): one transaction and one
+        ``executemany`` round trip instead of per-result ``add`` calls. Empty
+        input is a no-op that does not open a connection.
+        """
+        if not results:
+            return
+        rows = [
+            (
+                str(result.id),
+                str(result.photo_id),
+                str(result.person_id) if result.person_id is not None else None,
+                result.status.value,
+                result.confidence,
+                datetime_to_text(self._require_created_at(result)),
+            )
+            for result in results
+        ]
+        with self._connection_provider.connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO recognition_results (
+                    id, photo_id, person_id, status, confidence, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    photo_id = excluded.photo_id,
+                    person_id = excluded.person_id,
+                    status = excluded.status,
+                    confidence = excluded.confidence,
+                    created_at = excluded.created_at
+                """,
+                rows,
+            )
+
     def find_by_id(self, result_id: UUID) -> RecognitionResult | None:
         """Find a recognition result by its domain identifier."""
         with self._connection_provider.connect() as connection:

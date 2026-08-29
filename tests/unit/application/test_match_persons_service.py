@@ -98,6 +98,7 @@ def _build_service(
     embedding: FaceEmbedding,
     matcher_result: tuple | None,
     candidates: dict | None = None,
+    max_workers: int = 1,
 ) -> tuple[MatchPersonsService, _StubMatcher, _StubRecognitionRepository]:
     """Wire a MatchPersonsService with stubbed ports."""
     detector = _StubDetector(detector_pairs)
@@ -111,6 +112,7 @@ def _build_service(
         matcher=matcher,
         face_embedding_repository=embedding_repo,
         recognition_repository=recognition_repo,
+        max_workers=max_workers,
     )
     return service, matcher, recognition_repo
 
@@ -236,3 +238,128 @@ def test_match_service_processes_batch_in_order(tmp_path: Path) -> None:
     assert results[0].box == box
     assert results[1].photo_id == id2
     assert results[1].box is None
+
+
+# ── phase6 并行路径（裁决 A-2/A-3/A-4 + §4.4 失败隔离）──────────────────────
+
+
+def test_match_service_parallel_preserves_order_and_persistence(tmp_path: Path) -> None:
+    """并行路径契约：结果按 command 顺序返回；识别记录经 add_many 下推全量持久化."""
+    box = FaceBox(x1=0, y1=0, x2=10, y2=10)
+    embedding = FaceEmbedding((0.5,))
+    person_id = uuid4()
+    ids: list = []
+    images_list: list[Path] = []
+    pairs: dict[Path, list] = {}
+    for index in range(6):
+        image = tmp_path / f"p{index}.jpg"
+        image.write_bytes(b"")
+        ids.append(uuid4())
+        images_list.append(image)
+        # 奇数位照片带脸、偶数位为空——混合批次覆盖两条持久化分支.
+        pairs[image] = [FaceBoxEmbedding(box=box, embedding=embedding)] if index % 2 else []
+    service, _, recognition_repo = _build_service(
+        pairs, embedding, (person_id, 0.8), max_workers=4
+    )
+    command = MatchPersonsCommand(photo_ids=tuple(ids), images=tuple(images_list))
+    results = service.execute(command)
+    assert [r.photo_id for r in results] == ids, "A-4 顺序契约：结果必须按 command 顺序"
+    assert sum(1 for r in results if r.box is not None) == 3
+    assert len(recognition_repo.added) == 3, "A-3：仅匹配成功的照片产生识别记录"
+    assert all(r.person_id == person_id for r in recognition_repo.added)
+
+
+def test_match_service_parallel_equivalent_to_sequential(tmp_path: Path) -> None:
+    """§6 等价性对照：同一命令在串行与并行路径下产出逐项等价."""
+    box = FaceBox(x1=0, y1=0, x2=10, y2=10)
+    embedding = FaceEmbedding((0.5,))
+    person_id = uuid4()
+    ids: list = []
+    images_list: list[Path] = []
+    pairs: dict[Path, list] = {}
+    for index in range(5):
+        image = tmp_path / f"eq{index}.jpg"
+        image.write_bytes(b"")
+        ids.append(uuid4())
+        images_list.append(image)
+        pairs[image] = [] if index == 2 else [FaceBoxEmbedding(box=box, embedding=embedding)]
+    command = MatchPersonsCommand(photo_ids=tuple(ids), images=tuple(images_list))
+    sequential, _, seq_repo = _build_service(pairs, embedding, (person_id, 0.8), max_workers=1)
+    parallel, _, par_repo = _build_service(pairs, embedding, (person_id, 0.8), max_workers=4)
+    seq_results = sequential.execute(command)
+    par_results = parallel.execute(command)
+    assert [(r.photo_id, r.box) for r in seq_results] == [(r.photo_id, r.box) for r in par_results]
+    seq_keys = [(r.photo_id, r.person_id, r.confidence) for r in seq_repo.added]
+    par_keys = [(r.photo_id, r.person_id, r.confidence) for r in par_repo.added]
+    assert seq_keys == par_keys, "识别聚合（不含生成态 id/created_at）必须逐项等价"
+
+
+def test_match_service_parallel_progress_contract(tmp_path: Path) -> None:
+    """A-4 进度契约：并行路径沿用串行上报节奏（首末张 + 每 10 张）且序号单调."""
+    class _RecordingReporter:
+        def __init__(self) -> None:
+            self.calls: list[tuple[int, int, str]] = []
+
+        def report(self, current: int, total: int, message: str) -> None:
+            self.calls.append((current, total, message))
+
+    embedding = FaceEmbedding((0.3,))
+    ids: list = []
+    images_list: list[Path] = []
+    pairs: dict[Path, list] = {}
+    for index in range(4):
+        image = tmp_path / f"pr{index}.jpg"
+        image.write_bytes(b"")
+        ids.append(uuid4())
+        images_list.append(image)
+        pairs[image] = []
+    reporter = _RecordingReporter()
+    service = MatchPersonsService(
+        detector=_StubDetector(pairs),
+        recognizer=_StubRecognizer(embedding),
+        matcher=_StubMatcher(None),
+        face_embedding_repository=_StubFaceEmbeddingRepository({}),
+        recognition_repository=_StubRecognitionRepository(),
+        progress_reporter=reporter,  # type: ignore[arg-type]
+        max_workers=3,
+    )
+    service.execute(MatchPersonsCommand(photo_ids=tuple(ids), images=tuple(images_list)))
+    currents = [current for current, _, _ in reporter.calls]
+    assert currents == sorted(currents), "进度序号必须单调（上报发生在消费线程）"
+    assert currents[0] == 1 and currents[-1] == 4, "首末张必须上报"
+    assert len(reporter.calls) == 2, "批小于间隔时仅首末两次上报（与串行口径一致）"
+
+
+@pytest.mark.parametrize("max_workers", [1, 4])
+def test_match_service_isolates_detector_failure(tmp_path: Path, max_workers: int) -> None:
+    """§4.4 失败隔离：单张分析异常不中断整批（串行与并行路径同契约）."""
+
+    class _BoomDetector(_StubDetector):
+        def detect_with_embeddings(self, image: Path) -> list:
+            if image.name == "boom.jpg":
+                raise RuntimeError("inference failure")
+            return self._pairs.get(image, [])
+
+    box = FaceBox(x1=0, y1=0, x2=10, y2=10)
+    embedding = FaceEmbedding((0.5,))
+    good = tmp_path / "good.jpg"
+    good.write_bytes(b"")
+    boom = tmp_path / "boom.jpg"
+    boom.write_bytes(b"")
+    recognition_repo = _StubRecognitionRepository()
+    service = MatchPersonsService(
+        detector=_BoomDetector({good: [FaceBoxEmbedding(box=box, embedding=embedding)]}),
+        recognizer=_StubRecognizer(embedding),
+        matcher=_StubMatcher(None),
+        face_embedding_repository=_StubFaceEmbeddingRepository({}),
+        recognition_repository=recognition_repo,
+        max_workers=max_workers,
+    )
+    id_good, id_boom = uuid4(), uuid4()
+    command = MatchPersonsCommand(photo_ids=(id_good, id_boom), images=(good, boom))
+    results = service.execute(command)
+    assert [r.photo_id for r in results] == [id_good, id_boom], "批次照常完成"
+    assert results[0].box == box, "未受影响照片正常产出"
+    assert results[1].box is None, "失败照片降级为无脸结果"
+    # 好照片（检出一脸、无候选→pending）产生唯一识别记录；失败照片零记录
+    assert [r.photo_id for r in recognition_repo.added] == [id_good], "仅未受影响照片产生识别记录"
