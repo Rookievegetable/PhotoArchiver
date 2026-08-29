@@ -2,7 +2,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 状态 | **草案（待 owner 拍板）**——W2-segment 段内分解证据已闭合，三项裁决点拍板后转定稿实施 |
+| 状态 | **Accepted（owner 拍板 2026-08-29：W2-1=A / W2-2=A（前提确认：近期无性别/年龄功能规划）/ W2-3=A）**——W2-segment 段内分解证据已闭合，进入执行轮 |
 | 日期 | 2026-08-29 |
 | 前序 | ADR-032（phase6 并行化 1.28×）/ phase6 W1 尖刺（批推理证据性出局、瓶颈定址非推理段）/ 证据工具 `tools/spike_segment_profile.py`（v2，账目闭合） |
 | 目标版本 | v2.2.0（minor，纯性能，不动 Schema/公共 API/输出语义） |
@@ -63,10 +63,10 @@ v1 计量器污染 bug 已修正（阶段边界快照法，v1 教训留档于脚
 
 ## §6 完成标准
 
-- [ ] 三项裁决点均有明确拍板记录（本文件转定稿）
-- [ ] loader `allowed_modules` 落地（W2-2 按 owner 拍板决定 genderage 是否在内）
-- [ ] `tools/bench_recognition.py` 复测数字落 docstring（2600×{1,4} 至少）
-- [ ] 门禁全绿（ruff / mypy / pytest 全量）＋ CI 三平台实证
-- [ ] 文档链收官（CHANGELOG / ADR-033 / PROJECT_STATUS / 版本链 bump → v2.2.0）
+- [x] 三项裁决点均有明确拍板记录（本文件转定稿，2026-08-29 三项全 A）
+- [x] loader `allowed_modules` 落地（W2-2=A：genderage 一并剔除，owner 确认近期无性别/年龄功能规划）
+- [x] `tools/bench_recognition.py` 复测数字落 docstring（全网格九格：2600×1 1.98× / 2600×4 2.22×）
+- [ ] 门禁全绿（ruff / mypy / pytest 全量）＋ CI 三平台实证（本地三项全绿 2026-08-29：ruff 0 / mypy 168 ✓ / pytest 417 passed；CI 待 owner push 后按 phase6 backfill 惯例回填）
+- [x] 文档链收官（CHANGELOG / ADR-033 / PROJECT_STATUS / 版本链 bump → v2.2.0）
 
 ---

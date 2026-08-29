@@ -337,6 +337,15 @@
 | 影响范围 | `tools/bench_recognition.py`（新建）、`application/services/match_persons_service.py`（并行化 + 批量收集）、`domain/repositories/recognition_repository.py`（协议扩 add_many）、`infrastructure/database/sqlite_recognition_repository.py`（单事务批量 INSERT）、`tests/unit/application/test_match_persons_service.py` + `tests/unit/infrastructure/repositories/test_sqlite_repositories.py`（等价/失败隔离/单事务/进度用例，410→417）、`CHANGELOG.md`（v2.1.0 段）、`.ai/PROJECT_STATUS.md`、本文件。不变：Schema、依赖、`MatchPersonsCommand` 形状（F5 零生产消费者）、`max_workers=1` 串行路径逐字节等价。 |
 | 实施结果 | 全网格基线（2026-08-29，37.4 min，exit 0）：2600 张串行 656.94s（3.96 photos/s）；4 workers 514.00s（5.06 photos/s，**1.28×**）——线程扩展弱于建议阈值 ≥2×，与 §5 预判吻合（onnxruntime intra-op 池单次推理已吃满核心，worker 线程仅重叠 Python 侧开销）；**A-2=B 二轮裁决条件已触发，是否立项由 owner 拍板**（REV-AI-003）。InsightFace session 跨线程共享实测安全（2/4 workers 全档 100% 产出、等价不变量全程成立，§5 首项风险解除）。 |
 
+### ADR-033 — Phase 7 识别管线死重模型剔除（allowed_modules 加载收敛 / landmark+genderage 出局 / 剩余非推理段缓议）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（前置门拍板 2026-08-29，定稿草案 `docs/development/phase7-adr-draft.md` W2-1/W2-2/W2-3 全 A，W2-2 前提经 owner 确认：近期无性别/年龄功能规划） |
+| 决策 | 三项裁决：(1) W2-1 landmark 死重剔除 = **A**——loader `FaceAnalysis` 构造传 `allowed_modules=("detection", "recognition")`，加载层直接跳过 buffalo_l 包内 1k3d68 + 2d106det 两个 landmark 模型（35.4 ms/张，生产仅消费 bbox+kps+embedding，零消费 grep 实证）；(2) W2-2 genderage 一并剔除 = **A（附条件已确认）**——`Person` 域实体无性别/年龄字段，src 全库零消费，未来需要时加回一个模块名即恢复，无数据/接口迁移成本；(3) W2-3 剔除后剩余 ~38 ms/张非推理段（rec 对齐 ~30 + det 前后处理）本轮不改造——先拿零风险增益复测，按剩余占比与真实需求再议；进程池方案已被 W1 证据排除（模型多份加载不划算）。 |
+| 理由 | W2-segment 尖刺（`tools/spike_segment_profile.py` v2，账目闭合 251.3≈249.4≈254.4 ms/张）A/B 移除实验实证：剔除后 254.4→128.2 ms/张（**1.985×**）且 bbox/kps/embedding 输出逐字节不变——最大增益不是复杂的并发改造而是两行加载配置；insightface `allowed_modules` 为公开 API（签名实测第 4 参），锁版本前提下稳定。phase6 并行化 1.28× 的根因（非推理 GIL 串行段 ~143ms/张）经本轮剔除削减近半，零结构风险。 |
+| 影响范围 | `infrastructure/ai/insightface_loader.py`（`allowed_modules` 一行 + 证据注记）、`tools/bench_recognition.py`（复测数字续记 docstring）、`CHANGELOG.md`（v2.2.0 段）、版本链 bump（pyproject + .env.example）、`docs/development/phase7-adr-draft.md`（转定稿）、`.ai/PROJECT_STATUS.md`、本文件。不变：Schema、依赖、AI 端口契约（`FaceDetector`/`FaceRecognizer` 签名）、phase6 并行结构（线程池 + `add_many` 批持久化 + 进度语义）、识别结果集与入库顺序逐字节等价。 |
+
 ---
 
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）

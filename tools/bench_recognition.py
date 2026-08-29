@@ -33,10 +33,34 @@ invariants hold at every worker count):
     2600     2     574.69     4.52   1.14x vs serial
     2600     4     514.00     5.06   1.28x vs serial
 
-Finding: per-photo thread scaling is modest — the onnxruntime session's internal
-intra-op pool already saturates CPU cores during a single FaceAnalysis.get(), so
-worker threads mostly overlap Python-side overhead. Batch inference (phase6 §8
-A-2=B) is the follow-up candidate for real throughput gains.
+Finding (phase6 A-1 baseline): per-photo thread scaling is modest — the
+onnxruntime session's internal intra-op pool already saturates CPU cores during
+a single FaceAnalysis.get(), so worker threads mostly overlap Python-side
+overhead. Batch inference (phase6 §8 A-2=B) is the follow-up candidate for
+real throughput gains.
+
+UPDATE 2026-08-29 (phase7 / ADR-033 dead-weight removal, W2-1=W2-2=A owner
+拍板): the pack's two landmark models (1k3d68 + 2d106det, 35.4 ms/photo) and
+genderage (9.8 ms/photo) were pure dead weight — zero consumers in src
+(grep-verified). The loader now passes ``allowed_modules=("detection",
+"recognition")``. Full-grid re-test on the same machine (exit 0, every cell
+100% results / all PENDING):
+
+    scale workers   wall_s  photos/s
+     100     1      15.76     6.35
+     100     2      11.37     8.79
+     100     4       8.74    11.45
+     600     1      84.98     7.06
+     600     2      55.76    10.76
+     600     4      50.21    11.95
+    2600     1     332.02     7.83   (serial path)
+    2600     2     253.25    10.27
+    2600     4     231.68    11.22
+
+vs phase6 baseline: 2600 serial 656.94→332.02 s (1.98×); production 4-worker
+5.06→11.22 photos/s (2.22×). W1 spike conclusion unchanged: batch inference
+stays falsified (≤1.04× pure-inference, W2 follow-up narrowed to segments —
+resolved here by removing the dead-weight segment entirely).
 """
 
 from __future__ import annotations

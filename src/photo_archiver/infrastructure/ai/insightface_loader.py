@@ -72,7 +72,18 @@ class InsightFaceLoader:
             )
         # FaceAnalysis's `root` is the parent directory of the named pack;
         # it internally joins `root/name` to locate model files.
-        analysis = FaceAnalysis(name=self._name, root=str(self._model_root))
+        # Phase 7 (ADR-033, W2-1/W2-2 owner 拍板 2026-08-29): load only the
+        # modules production consumes — detection + recognition. The pack's
+        # landmark models (1k3d68 + 2d106det, 35.4 ms/photo) and genderage
+        # (9.8 ms/photo) are dead weight: zero consumers in src (grep-verified;
+        # the Person entity has no gender/age fields). Removal measured
+        # 254.4 → 128.2 ms/photo (1.985×) with byte-identical bbox/kps/
+        # embedding outputs (tools/spike_segment_profile.py v2 A/B experiment).
+        analysis = FaceAnalysis(
+            name=self._name,
+            root=str(self._model_root),
+            allowed_modules=("detection", "recognition"),
+        )
         analysis.prepare(
             ctx_id=0,
             det_thresh=self._det_threshold,

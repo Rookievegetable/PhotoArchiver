@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [2.2.0] - 2026-08-29
+
+Dead-weight model removal in the recognition pipeline (phase7 / ADR-033;
+three pre-gate decisions confirmed 2026-08-29, all option A).
+
+### Performance
+
+- **~2× end-to-end recognition throughput**: the buffalo_l pack's two landmark
+  models (1k3d68 + 2d106det, 35.4 ms/photo) and genderage (9.8 ms/photo) were
+  pure dead weight — zero consumers in the codebase (grep-verified; the
+  `Person` domain entity has no gender/age fields). The loader now passes
+  `allowed_modules=("detection", "recognition")`, so `FaceAnalysis` loads and
+  runs only the detection and recognition models (3 fewer ONNX sessions,
+  faster startup; every photo skips ~45 ms of dead inference).
+- Re-benchmarked full grid (`tools/bench_recognition.py`, same machine as the
+  phase6 baseline): 2,600-photo serial 656.94 s → 332.02 s (**1.98×**);
+  production 4-worker 5.06 → 11.22 photos/s (**2.22×**); 600×4 2.45×. Every
+  cell 100% results / all PENDING — output equivalence invariants hold
+  (bbox/kps/embedding byte-identical). Remaining non-inference segments
+  (~38 ms/photo) deliberately deferred (ADR-033 W2-3=A).
+
 ## [2.1.0] - 2026-08-29
 
 Recognition-pipeline throughput hardening round (phase6; five pre-gate
