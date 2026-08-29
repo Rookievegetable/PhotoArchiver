@@ -1,10 +1,10 @@
 # PhotoArchiver Git Rules
 
-Version: 1.0.1
+Version: 1.1.0
 
 Status: Stable
 
-Last Updated: 2026-07-24
+Last Updated: 2026-08-29
 
 ---
 
@@ -309,6 +309,26 @@ AI MUST NOT rename or move files unless explicitly requested.
 
 ---
 
+## GIT-020
+
+AI MUST NOT push to the remote repository.
+
+After project code (or documentation) work is completed, AI performs local
+`git commit` only. Remote synchronization — `git push` of branches and of
+release tags alike — is reserved for the owner as a manual action.
+
+Rationale: pushing is the owner's release-control point, and AI-session
+pushes are exposed to intermittent network blocking windows that turn
+routine sync into multi-retry flapping.
+
+Violations include:
+
+* pushing `main` after committing
+* pushing release tags
+* running retry loops around `git push`
+
+---
+
 # 17. File Rename Policy
 
 Renaming public modules requires approval.
@@ -461,7 +481,7 @@ Commit
 
 ↓
 
-Push
+Push (owner only, manual — GIT-020)
 
 ↓
 
