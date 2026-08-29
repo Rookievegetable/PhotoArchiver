@@ -66,7 +66,7 @@ v1 计量器污染 bug 已修正（阶段边界快照法，v1 教训留档于脚
 - [x] 三项裁决点均有明确拍板记录（本文件转定稿，2026-08-29 三项全 A）
 - [x] loader `allowed_modules` 落地（W2-2=A：genderage 一并剔除，owner 确认近期无性别/年龄功能规划）
 - [x] `tools/bench_recognition.py` 复测数字落 docstring（全网格九格：2600×1 1.98× / 2600×4 2.22×）
-- [ ] 门禁全绿（ruff / mypy / pytest 全量）＋ CI 三平台实证（本地三项全绿 2026-08-29：ruff 0 / mypy 168 ✓ / pytest 417 passed；CI 待 owner push 后按 phase6 backfill 惯例回填）
+- [x] 门禁全绿（ruff / mypy / pytest 全量）＋ CI 三平台实证（本地三项全绿 2026-08-29：ruff 0 / mypy 168 ✓ / pytest 417 passed；CI 已实证——owner push 后 API 实测 head `4fe8aa4` CI run completed/success 三平台全绿，2026-08-29 回填）
 - [x] 文档链收官（CHANGELOG / ADR-033 / PROJECT_STATUS / 版本链 bump → v2.2.0）
 
 ---
