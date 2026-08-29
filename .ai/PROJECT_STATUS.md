@@ -33,6 +33,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 - 阶段 2（Alembic 接管 Schema DDL，ADR-027）：✅ 完成。
 - 阶段 3（插件写能力 import_people，ADR-028）：✅ 完成（仅 import_people；export 经 ADR-030 裁决 YAGNI 正式关闭）。
 - 阶段 4（技术债轮：search_photos N+1 加固 ADR-029 + 轮次裁决 ADR-030）：✅ 完成（兼容路径移除原挂账 v2.0.0，已于 v2.0.0 轮兑现——见下表「v2.0.0 破坏性窗口」行；审批门续暂缓）。
+- 阶段 5（识别管线吞吐加固，ADR-032）：✅ 完成——线程并行 + `add_many` 单事务批下推 + 基准工具入库（全网格基线落档；线程扩展 1.28× 弱于建议阈值，batch 批推理二轮证据已触发、待 owner 立项拍板）。
 
 当前无已登记的未解决问题；`KNOWN_ISSUES.md` 为空。
 
@@ -52,9 +53,10 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | M8 可发布里程碑 | ✅ | MIT License 落定（占位已删除）；pyproject 元数据落位（version 1.0.0 / license / classifiers / readme / description）；`.github/workflows/release.yml` 增补（tag 触发 sdist+wheel 构建并发布 GitHub Release）；`CHANGELOG.md` 建立；tag `v1.0.0` 已推送，GitHub Release v1.0.0 资产挂载确认（sdist+wheel）。 |
 | M9 分发定位裁决 | ✅ | ADR-031 登记并执行完毕——运行形态定位为「源码/clone 唯一受支持」；Release v1.0.0 body 置顶安装态标注已由 owner 粘贴（2026-08-26 API 实测生效，B5-3 销账）；ISSUE-018 以 by-design 正式终结（KNOWN_ISSUES 回归空态）。 |
 | v2.0.0 破坏性窗口 | ✅ | ADR-030/B4-1 兑现——旧 `enable(context)` 分发分支移除（loader 三分叉收敛为二分叉：ContextAware / 无参 enable），生产与示例代码零消费者 grep 实证；测试矩阵净减 3 个 legacy 用例（413→410 全绿）；CHANGELOG `[2.0.0]` BREAKING 标注落定；版本链 bump 2.0.0（pyproject + .env.example 示例值；settings 回退值按 configuration.md 口径保持不动）。发版链实证——tag `v2.0.0` 已推送并触发 release workflow（run 33071797649 双 job success）：GitHub Release v2.0.0 自动创建且双资产挂载 API 实测确认（wheel 220KB / sdist 152KB）；发布前实现提交 `ba3ad02` CI 三平台全绿（run 33070707134）。Breaking Notes 已由 owner 粘贴（2026-08-27 API 复验：body 859 字符、文案逐字到位，紧随自动生成的 Full Changelog 行呈现，Review MINOR-4 销账）。 |
+| Phase 6 吞吐加固 | ✅ | ADR-032 五项裁决落地——ThreadPoolExecutor per-photo 并行（并行段限纯推理、持久化回主线程、`max_workers=1` 逐字节串行原路径）；Domain `RecognitionRepository` 扩 `add_many`、SQLite 端单事务批量提交（往返 O(N)→O(1)）；基准工具 `tools/bench_recognition.py` 入库（全网格基线落 docstring：2600 张串行 656.9s → 4 workers 514.0s = **1.28×**；InsightFace session 跨线程共享实测安全）；等价不变量测试锁定（pytest 410→**417** passed）。线程扩展弱于 ≥2× 建议阈值——batch 批推理（A-2=B）二轮证据已触发，是否立项由 owner 拍板。 |
 | CI | ✅ | GitHub Actions 三 OS 矩阵、模型缓存与 AI/UI 断言已启用。 |
 
-当前 HEAD：`eea3c1b`（Review 四 Minor 清偿）→ 本销账登记提交随本轮推送前移（origin/main 同步）；tag `v2.0.0` 指向 `ba3ad02`（实现 `8f317a6` + B1 基准留档）。前置基线：`eddc8ee`（发版链实证登记）、`2bbbfb8`（B5-3 收官登记）、`48c7493`（photopath 跨平台修复 + AI 用例路径修复）、`cdb0fd7`（ADR-028 登记）。
+当前 HEAD：实现提交 `0871048`（Phase 6 吞吐加固：并行化 + add_many 批持久化 + 基准工具 + 版本链 2.1.0 + CHANGELOG/ADR-032/phase6 核销）→ 本状态登记提交随本笔并入；本地领先 origin/main 三笔（GIT-020 规则 `75a4fe6` + 实现 `0871048` + 本登记提交；push 由 owner 手动执行，CI 三平台实证随 push 触发）。tag `v2.0.0` 指向 `ba3ad02`（v2.0.0 周期）；历史基线链：`eea3c1b`（Review 四 Minor 清偿）、`eddc8ee`（发版链实证登记）、`2bbbfb8`（B5-3 收官登记）。
 
 ---
 
@@ -80,25 +82,25 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-08-27（本地） |
+| 时间 | 2026-08-29（本地） |
 | 生成者 | Cline |
-| 会话范围 | v2.0.0 执行轮 Review——依据 `.ai/rules/review-rules.md` §18 全量审查主提交与发布链产物（只审不改），随后按报告完成四项 Minor 清偿。 |
-| 已完成 | ① Review 执行：主提交 `8f317a6` 全量 diff 审读（423 行）＋ `ba3ad02`/`eddc8ee` 附属提交内核＋全库残留扫描（旧签名提及 42 处逐一定性「历史记录/已更新」）；结论 **0 Critical / 0 Major / 4 Minor**；门禁复跑 ruff 0 / mypy 168 文件 ✓ / plugins 区 34 passed。② MINOR-1 清偿——三处同源破坏性文案绝对化失准补边界限定（必选位置参签名启用失败并隔离；带默认值形参如 `context=None` 则无参直调仍启用但不获注入，后果延后至 execute_action 暴露）：loader.py 模块头、plugin-guide.md §6、CHANGELOG `[2.0.0]` Impact 条目。③ MINOR-2 清偿——phase4 定稿 §1.3 B1 复选框行后加勘误注（冻结件惯例保留框态）＋ PROJECT_STATUS §3 阶段 4 行与阶段表行各加「已兑现」指针至 v2.0.0 行。④ MINOR-3 清偿——基准防回退数字持久锚点落入 `tools/bench_plugin_search.py` docstring（100/600/2600 → 5.0/16.2/63.4ms，calls≡1，vs ADR-029 基线 62.5ms 零回退），注明后续复测续记于此以抗状态文件清理。⑤ MINOR-4（流程·非代码）当时实测 body 首行仍为 Full Changelog——保持 owner 待办。⑥ MINOR-4 终局销账——owner 完成 Release v2.0.0 body Breaking Notes 粘贴，API 复验文案逐字到位（body 84→859 字符），**四项 Minor 全部关闭，v2.0.0 轮正式收官**。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src`：168 个源文件无问题；pytest 本轮 scoped `tests/unit/plugins` 34 passed（清偿仅触 docs/docstring，全量 410 passed 为上一代码轮基线，未回退）。 |
-| 工作区 | 本轮 6 文件清偿改动全量提交（loader/guide/changelog/phase4 草案/status/bench 注记）；无过程脚本遗留。 |
-| Remaining | **零待办**——MINOR-4 已销账（owner 粘贴 Breaking Notes，2026-08-27 API 复验内容齐备：body 859 字符、逐字命中交付文案）；本地与远端同步无偏移；CI 近期 runs 全绿（`eea3c1b` 三平台 success、Release 流水线双 job success）。 |
-| Next Step | **吞吐加固前置门已启动**——`docs/development/phase6-adr-draft.md` 草案产出（2026-08-28，含 §1 八项摸底事实锚点 + §2 五项裁决点 A-1~A-5 默认推荐 + §4 不变量 + §5 风险；关键摸底发现：批量识别管线已装配但零生产消费者 F5、串行 for 循环 F1、逐条持久化 F4、onnxruntime 推理释放 GIL 线程并行前提成立 F7）。**待 owner 拍板 A-1~A-5 后转定稿进入执行轮**，目标版本 v2.1.0。其余触发线不变：真实高危插件写用例→审批门复审（ADR-028 裁决点 2=B/C）；非技术用户分发需求→phase5 方案 B 前置门。 |
+| 会话范围 | Phase 6 吞吐加固执行轮——前置门拍板转定稿后全程实施（并行化 + 批持久化 + 基准实测 + 文档收官）。 |
+| 已完成 | ① 草案转定稿（2026-08-28 owner 五项全按默认推荐拍板）并登记 **ADR-032**；② 实施落地——`match_persons_service.py` 串行段改 ThreadPoolExecutor 并行（并行段限纯推理、持久化收敛主线程、`max_workers=1` 逐字节原路径）、Domain 协议扩 `add_many` + SQLite 单事务批量 INSERT、等价/失败隔离/进度/单事务测试新增（pytest **410→417**）；③ 基准工具 `tools/bench_recognition.py` 完成五处 SIG-PATCH 真实签名对齐（`load()`/构造参/实体形状/`list_all()` dict 返回）+ 6 处修正后冒烟通过；④ 全网格基线实测（37.4 min，exit 0）：2600 张串行 656.94s → 4 workers 514.00s（**1.28×**），session 跨线程共享实测安全，数字落 docstring 防回退；⑤ 主 diff 合规审查 **0 Critical / 0 Major / 0 Minor**；⑥ 门禁全绿：ruff ✓ / mypy 168 文件 ✓ / pytest **417 passed**；⑦ 文档收官——CHANGELOG `[2.1.0]` 段、phase6 §6 核销（4/6 勾销 + 性能目标与 CI 两项诚实注记）、版本链 bump 2.1.0（pyproject + .env.example）、ADR-032 登记、GIT-020 工作流规则入库（commit-only）。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 168 个源文件无问题；pytest 全量 **417 passed**（本地实测）。CI 三平台待 push 后触发（GIT-020：本轮不自动 push）。 |
+| 工作区 | 实施改动 9 文件 + 收官文档 6 文件分两笔提交（实现 / 状态登记）；无过程脚本遗留；基准数字持久锚点在 `tools/bench_recognition.py` docstring。 |
+| Remaining | 两项 owner 动作：(1) 手动 `git push origin main`——触发 CI 三平台实证后回填 phase6 §6 末行 checkbox；(2) **A-2=B（onnxruntime batch 批推理）立项拍板**——1.28× 线程扩展证据已触发二轮裁决条件（REV-AI-003：不以修改代替裁决）。 |
+| Next Step | owner 拍板 A-2=B 后即起草二轮前置门附页（batch 维度改造设计：session 内 batch 推理 + padding 策略 + 等价不变量沿用）；若暂不立项，v2.1.0 按当前态发版（push + tag 由 owner 执行，Release body 建议粘贴 CHANGELOG `[2.1.0]` 段摘要）。 |
 
 ---
 
 ## 6. Next Step（下一步开发计划）
 
-v2.0.0 执行轮代码/测试/文档已全部收尾（质量门全绿）。剩余为纯发版序列：
+Phase 6 吞吐加固执行轮已全部收尾（代码/测试/基准/文档，质量门本地全绿）。剩余两项 owner 动作：
 
-1. ~~打 tag 前：`python tools/bench_plugin_search.py` 三档库容复跑~~ ✅ 已执行（2026-08-27）：100/600/2600 张 → 5.0/16.2/63.4ms，calls 全档 = 1；对照 ADR-029 基线（2600 张 62.5ms）零回退。
-2. ~~推送 + 观察 CI + push tag~~ ✅ 全部完成（2026-08-27）：`ba3ad02` 三平台全绿（run 33070707134）→ tag `v2.0.0` 推送 → release workflow run 33071797649 成功 → GitHub Release v2.0.0 创建、双资产挂载。
-3. **待办**：owner 向新 Release body 置顶粘贴 Breaking Notes（取 CHANGELOG `[2.0.0]` Removed 段文案），完成后在 §5 Remaining 销账。
-4. 之后均为条件触发行：识别管线批量吞吐等性能加固；真实高危插件写用例出现时再评审宿主审批门（ADR-028 裁决点 2=B/C）；非技术用户分发需求出现时按 phase5 定稿方案 B 另起前置门。
+1. **手动 push**（GIT-020 规则：AI 只 commit 不 push）——`git push origin main` 触发 CI 三平台矩阵，全绿后回填 phase6 定稿 §6 末行 checkbox；发版时 push tag `v2.1.0.0`（或按本仓 tag 惯例 `v2.1.0`）触发 release workflow，Release body 建议粘贴 CHANGELOG `[2.1.0]` 段摘要。
+2. **A-2=B 立项拍板**——实测线程扩展 1.28×（4 workers @2600 张）弱于 ≥2× 建议阈值，与 §5 预判吻合；onnxruntime batch 批推理是记录在案的二轮候选（ADR-032 实施结果栏）。拍板「立项」即起草二轮前置门附页；拍板「暂缓」则该证据留档为基线结论，v2.1.0 按当前态发版。
+
+其余条件触发行不变：真实高危插件写用例→审批门复审（ADR-028 裁决点 2=B/C）；非技术用户分发需求→phase5 定稿方案 B 另起前置门；UI 识别触发点→功能轮另立（A-5=B）。
 
 ## 7. Key Files（关键文件索引）
 
@@ -111,7 +113,7 @@ v2.0.0 执行轮代码/测试/文档已全部收尾（质量门全绿）。剩�
 | 插件加载与应用装配 | `src/photo_archiver/plugins/loader.py`、`src/photo_archiver/app/bootstrap.py`、`src/photo_archiver/app/context.py` |
 | 示例插件 | `examples/plugins/stats_report_plugin.py`（读）、`examples/plugins/import_people_demo_plugin.py`（写） |
 | 插件设计与决策 | `docs/development/plugin-context-design.md`、`docs/development/phase3-adr-draft.md`、`.ai/ARCHITECTURE_DECISIONS.md`（ADR-026/028） |
-| 性能基线 | `tools/bench_plugin_search.py`（零依赖可离线复跑，前后对比数据见 phase4 定稿草案 §6） |
+| 性能基线 | `tools/bench_plugin_search.py`（插件查询路径，零依赖可离线复跑，数据见 phase4 定稿 §6）、`tools/bench_recognition.py`（识别管线全网格基线，数字续记 docstring，phase6/ADR-032） |
 | Schema 初始化与迁移 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`、`src/photo_archiver/infrastructure/database/alembic_runner.py`、`alembic/versions/002_split_create_ddl.py` |
 | 质量验证 | `tests/`、`.github/workflows/ci.yml` |
 
