@@ -67,7 +67,7 @@ ADR-029 修的是**插件查询路径**（18.2×）；AI 识别管线本身（�
 - [x] 并行化落地且等价性对照测试通过——`test_match_persons_service.py` 新增串/并等价、失败隔离（参数化覆盖双路径）、进度语义用例；本地 pytest 全量绿。
 - [x] 持久化批量下推，往返 O(N)→O(1)——Domain 协议扩 `add_many`，SQLite 端单事务批量提交；diff 审查 0 Critical / 0 Major / 0 Minor。
 - [ ] 性能目标达成——**未达建议起点**：实测 4 workers 1.28× @2600 张（建议 ≥2×），与 §5 预判吻合（onnxruntime intra-op 池单次推理已吃满核心，per-photo 线程仅重叠 Python 侧开销）。证据已触发 §8 A-2=B 二轮裁决条件（batch 批推理）——**是否立项由 owner 拍板**（REV-AI-003：不以修改代替裁决）。
-- [ ] 全量质量门绿——本地 ruff ✓ / mypy 168 文件 ✓ / pytest 全量 ✓；**CI 三平台待 owner push（GIT-020 commit-only）后实证，推后回填本行**。
+- [x] 全量质量门绿——本地 ruff ✓ / mypy 168 文件 ✓ / pytest 全量 ✓（417 passed）；CI 三平台实证全绿（owner push 后 run 33237717725 @ `14cfe1b`，2026-08-29 API 实测 windows/macos/ubuntu 三 job completed/success）——本行为 push 后回填。
 
 ## §7 文档触碰清单（执行轮）
 
