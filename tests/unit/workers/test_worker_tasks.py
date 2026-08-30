@@ -1,14 +1,27 @@
 """Tests for worker task primitives and application task wrappers."""
 
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from loguru import logger
 
-from photo_archiver.application.commands import ImportPeopleCommand, ScanAndRegisterPhotosCommand
-from photo_archiver.application.dtos import ImportPeopleResult, ScanAndRegisterPhotosResult
+from photo_archiver.application.commands import (
+    ImportPeopleCommand,
+    MatchPersonsCommand,
+    ScanAndRegisterPhotosCommand,
+)
+from photo_archiver.application.dtos import (
+    ImportPeopleResult,
+    MatchResult,
+    ScanAndRegisterPhotosResult,
+)
+from photo_archiver.application.ports import ProgressReporter
 from photo_archiver.workers import (
     ImportPeopleTask,
+    MatchPersonsTask,
     QtWorkerExecutor,
     TaskCancelled,
     ScanAndRegisterPhotosTask,
@@ -299,3 +312,250 @@ def test_qt_worker_runnable_cancel_requests_task_cancellation() -> None:
     assert task.is_cancel_requested is True
     with pytest.raises(WorkerTaskCancelled, match="stop"):
         task.raise_if_cancelled()
+
+
+class MatchPersonsUseCaseStub:
+    """Stub match use case exposing the ``bind_progress_reporter`` capability.
+
+    Mirrors the real ``MatchPersonsService`` binding contract: the reporter is
+    temporarily bound during ``execute`` and restored afterwards, and progress
+    is streamed through the bound reporter's ``report`` adapter.
+    """
+
+    def __init__(self, results: tuple[MatchResult, ...]) -> None:
+        self.results = results
+        self.commands: list[MatchPersonsCommand] = []
+        self.reporter_during_execute: list[ProgressReporter] = []
+        self._reporter: ProgressReporter | None = None
+
+    @property
+    def current_reporter(self) -> ProgressReporter | None:
+        """Expose the reporter currently bound (restoration assertions)."""
+        return self._reporter
+
+    def bind_progress_reporter(
+        self, reporter: ProgressReporter
+    ) -> AbstractContextManager[None]:
+        """Temporarily bind ``reporter`` for the duration of one execute."""
+        return _temporary_reporter_binding(self, reporter)
+
+    def execute(self, command: MatchPersonsCommand) -> tuple[MatchResult, ...]:
+        self.commands.append(command)
+        assert self._reporter is not None, "task must bind itself before execute"
+        self.reporter_during_execute.append(self._reporter)
+        if self.results:
+            self._reporter.report(1, len(self.results), "Matched photo X")
+        return self.results
+
+
+@contextmanager
+def _temporary_reporter_binding(
+    stub: MatchPersonsUseCaseStub, reporter: ProgressReporter
+) -> Iterator[None]:
+    previous = stub._reporter
+    stub._reporter = reporter
+    try:
+        yield
+    finally:
+        stub._reporter = previous
+
+
+class BareMatchPersonsUseCaseStub:
+    """Stub match use case WITHOUT the binder capability (sniff fallback path)."""
+
+    def __init__(self, results: tuple[MatchResult, ...]) -> None:
+        self.results = results
+        self.commands: list[MatchPersonsCommand] = []
+
+    def execute(self, command: MatchPersonsCommand) -> tuple[MatchResult, ...]:
+        self.commands.append(command)
+        return self.results
+
+
+class ExplodingMatchPersonsUseCaseStub(MatchPersonsUseCaseStub):
+    """Stub whose execute raises — verifies failure propagation + binder restore."""
+
+    def execute(self, command: MatchPersonsCommand) -> tuple[MatchResult, ...]:
+        self.commands.append(command)
+        raise RuntimeError("model exploded")
+
+
+class MidBatchCancelMatchPersonsUseCaseStub(MatchPersonsUseCaseStub):
+    """Stub that cancels its task mid-execute (simulates user cancel during batch).
+
+    The task reference is late-bound (assigned after construction) because the
+    task itself needs the stub in its constructor.
+    """
+
+    task: object | None = None
+
+    def execute(self, command: MatchPersonsCommand) -> tuple[MatchResult, ...]:
+        self.commands.append(command)
+        assert self.task is not None, "test must late-bind the task"
+        self.task.cancel("user stopped mid-batch")  # type: ignore[attr-defined]
+        return self.results
+
+
+def _match_command(count: int = 2) -> MatchPersonsCommand:
+    return MatchPersonsCommand(
+        photo_ids=tuple(uuid4() for _ in range(count)),
+        images=tuple(Path(f"photo_{i}.jpg") for i in range(count)),
+    )
+
+
+def _match_results(command: MatchPersonsCommand) -> tuple[MatchResult, ...]:
+    return tuple(MatchResult(photo_id=pid) for pid in command.photo_ids)
+
+
+def test_match_persons_task_binds_reporter_and_returns_service_results() -> None:
+    """Normal path: bind task as reporter, forward command, pass results through.
+
+    The reporter must be bound *during* execute (so service progress reaches the
+    task event bus) and restored afterwards, and the service return value is
+    returned verbatim — the task adds no business decisions.
+    """
+    command = _match_command(2)
+    results = _match_results(command)
+    use_case = MatchPersonsUseCaseStub(results)
+    task = MatchPersonsTask(use_case, command)  # type: ignore[arg-type]
+    events = []
+    task.subscribe(events.append)
+
+    actual = task.run()
+
+    assert actual is results
+    assert use_case.commands == [command]
+    # Reporter was the task itself during execute (progress adapter wired).
+    assert use_case.reporter_during_execute == [task]
+    # Binding is temporary — restored after the run.
+    assert use_case.current_reporter is None
+    # Coarse task markers + the service-driven per-photo progress.
+    assert [type(event) for event in events] == [
+        TaskStarted,
+        TaskProgress,
+        TaskProgress,
+        TaskProgress,
+        TaskCompleted,
+    ]
+    assert events[1].message == "Matching faces"
+    # Service-reported progress surfaced verbatim through the task adapter.
+    assert events[2].current == 1
+    assert events[2].total == 2
+    assert events[2].message == "Matched photo X"
+    assert events[3].message == "Face matching finished"
+    assert events[3].current == 2
+    assert events[3].total == 2
+
+
+def test_match_persons_task_restores_previous_reporter_after_execute() -> None:
+    """A pre-existing reporter binding is restored after the task finishes."""
+    command = _match_command(1)
+    use_case = MatchPersonsUseCaseStub(_match_results(command))
+    sentinel = object()
+    use_case._reporter = sentinel
+    task = MatchPersonsTask(use_case, command)  # type: ignore[arg-type]
+
+    task.run()
+
+    assert use_case.current_reporter is sentinel
+
+
+def test_match_persons_task_falls_back_when_service_lacks_binder() -> None:
+    """Services without ``bind_progress_reporter`` still execute (getattr sniff)."""
+    command = _match_command(1)
+    results = _match_results(command)
+    use_case = BareMatchPersonsUseCaseStub(results)
+    task = MatchPersonsTask(use_case, command)  # type: ignore[arg-type]
+
+    actual = task.run()
+
+    assert actual is results
+    assert use_case.commands == [command]
+
+
+def test_match_persons_task_propagates_service_exception_as_failure() -> None:
+    """Service exceptions surface as TaskFailed and restore the reporter binding."""
+    command = _match_command(2)
+    use_case = ExplodingMatchPersonsUseCaseStub(())
+    task = MatchPersonsTask(use_case, command)  # type: ignore[arg-type]
+    events = []
+    task.subscribe(events.append)
+
+    with pytest.raises(RuntimeError, match="model exploded"):
+        task.run()
+
+    assert use_case.commands == [command]
+    # Coarse "Matching faces" marker was emitted before the service blew up.
+    assert [type(event) for event in events] == [TaskStarted, TaskProgress, TaskFailed]
+    assert events[1].message == "Matching faces"
+    assert events[2].message == "model exploded"
+    assert use_case.current_reporter is None
+
+
+def test_match_persons_task_reports_cancellation_not_failure() -> None:
+    """WorkerTaskCancelled raised inside the service is never swallowed as failure.
+
+    This is the Task-level half of the cancellation contract: the real service
+    re-raises ``WorkerTaskCancelled`` ahead of its broad per-photo handler, so
+    a mid-batch user cancel must surface as TaskCancelled — never TaskFailed.
+    """
+    command = _match_command(3)
+
+    class CancelFromReporterStub(MatchPersonsUseCaseStub):
+        """Simulates the real service: reporter-driven cancel re-raised."""
+
+        def execute(self, command: MatchPersonsCommand) -> tuple[MatchResult, ...]:
+            self.commands.append(command)
+            assert self._reporter is not None, "task must bind itself before execute"
+            self._reporter.report(1, 3, "first photo")
+            raise WorkerTaskCancelled("user stopped recognition")
+
+    use_case = CancelFromReporterStub(_match_results(command))
+    task = MatchPersonsTask(use_case, command)  # type: ignore[arg-type]
+    events = []
+    task.subscribe(events.append)
+
+    with pytest.raises(WorkerTaskCancelled, match="user stopped recognition"):
+        task.run()
+
+    assert [type(event) for event in events] == [
+        TaskStarted,
+        TaskProgress,
+        TaskProgress,
+        TaskCancelled,
+    ]
+    assert events[-1].reason == "user stopped recognition"
+
+
+def test_match_persons_task_skips_service_when_cancelled_before_run() -> None:
+    """Cancellation requested before run() never reaches the service."""
+    command = _match_command(2)
+    use_case = MatchPersonsUseCaseStub(_match_results(command))
+    task = MatchPersonsTask(use_case, command)  # type: ignore[arg-type]
+    events = []
+    task.subscribe(events.append)
+    task.cancel("no longer needed")
+
+    with pytest.raises(WorkerTaskCancelled, match="no longer needed"):
+        task.run()
+
+    assert use_case.commands == []
+    assert [type(event) for event in events] == [TaskStarted, TaskCancelled]
+
+
+def test_match_persons_task_detects_mid_batch_cancellation() -> None:
+    """Cancel during execute: run() discards results and reports TaskCancelled."""
+    command = _match_command(2)
+    results = _match_results(command)
+    cancellable = MidBatchCancelMatchPersonsUseCaseStub(results)
+    task = MatchPersonsTask(cancellable, command)  # type: ignore[arg-type]
+    cancellable.task = task
+    events = []
+    task.subscribe(events.append)
+
+    with pytest.raises(WorkerTaskCancelled, match="user stopped mid-batch"):
+        task.run()
+
+    assert cancellable.commands == [command]
+    assert [type(event) for event in events] == [TaskStarted, TaskProgress, TaskCancelled]
+    assert events[-1].reason == "user stopped mid-batch"

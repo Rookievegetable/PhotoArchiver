@@ -3,16 +3,19 @@
 from photo_archiver.application.commands import (
     ArchivePhotosCommand,
     ImportPeopleCommand,
+    MatchPersonsCommand,
     ScanAndRegisterPhotosCommand,
 )
 from photo_archiver.application.dtos import (
     ArchiveResult,
     ImportPeopleResult,
+    MatchResult,
     ScanAndRegisterPhotosResult,
 )
 from photo_archiver.application.use_cases import (
     ArchivePhotosUseCase,
     ImportPeopleUseCase,
+    MatchPersonsUseCase,
     ScanAndRegisterPhotosUseCase,
 )
 from photo_archiver.workers.task import WorkerTask
@@ -76,6 +79,46 @@ class ScanAndRegisterPhotosTask(WorkerTask[ScanAndRegisterPhotosResult]):
             total=result.discovered_count,
         )
         return result
+
+
+class MatchPersonsTask(WorkerTask[tuple[MatchResult, ...]]):
+    """Run the face matching use case as a worker task.
+
+    Streams per-photo progress by binding itself as the use case's
+    ``ProgressReporter`` (capability-sniffed via ``getattr`` so the worker
+    layer depends only on the ``MatchPersonsUseCase`` Protocol, never on a
+    concrete service class). The service reports first/every-10th/last photo
+    through the task's ``report`` adapter; the task adds coarse start and
+    finish markers around the batch, matching the scan task precedent.
+    """
+
+    def __init__(
+        self,
+        use_case: MatchPersonsUseCase,
+        command: MatchPersonsCommand,
+    ) -> None:
+        """Initialize the task with its application use case and command."""
+        super().__init__("match_persons")
+        self._use_case = use_case
+        self._command = command
+
+    def execute(self) -> tuple[MatchResult, ...]:
+        """Execute the match use case with per-photo progress streamed through the task."""
+        self.raise_if_cancelled()
+        self.report_progress("Matching faces")
+        binder = getattr(self._use_case, "bind_progress_reporter", None)
+        if binder is not None:
+            with binder(self):
+                results = self._use_case.execute(self._command)
+        else:
+            results = self._use_case.execute(self._command)
+        self.raise_if_cancelled()
+        self.report_progress(
+            "Face matching finished",
+            current=len(results),
+            total=len(results),
+        )
+        return results
 
 
 class ArchivePhotosTask(WorkerTask[ArchiveResult]):

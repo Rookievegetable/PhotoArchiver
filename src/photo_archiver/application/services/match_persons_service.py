@@ -12,7 +12,9 @@ single best ``(person_id, confidence)`` pair above ``match_threshold``, or
 strategies are explicitly out of scope for Step 10.
 """
 
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 from uuid import UUID
 
@@ -259,3 +261,18 @@ class MatchPersonsService(MatchPersonsUseCase):
         if not (is_boundary or is_interval):
             return
         self._progress_reporter.report(current, total, message)
+
+    @contextmanager
+    def bind_progress_reporter(self, reporter: ProgressReporter) -> Iterator[None]:
+        """Temporarily bind a progress reporter for the duration of a use case.
+
+        Worker tasks use this to stream per-photo progress through their own
+        ``report`` adapter without permanently mutating the service configuration.
+        The previous reporter (typically ``None``) is restored on exit.
+        """
+        previous = self._progress_reporter
+        self._progress_reporter = reporter
+        try:
+            yield None
+        finally:
+            self._progress_reporter = previous
