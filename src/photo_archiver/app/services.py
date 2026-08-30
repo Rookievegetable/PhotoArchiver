@@ -80,7 +80,13 @@ def build_application_services(
     # B1 重复图片检测：向 PillowPhotoMetadataReader 注入 ContentHashCalculator，
     # 让注册照片的同一 pass 内顺手算 SHA-256 填 PhotoMetadata.content_hash。既有
     # CLI/单测路径未注入 hasher 时 reader 不算哈希保持向后兼容——生产装配在此注入。
-    metadata_reader = PillowPhotoMetadataReader(content_hasher=ContentHashCalculator())
+    metadata_reader = PillowPhotoMetadataReader(
+        content_hasher=ContentHashCalculator(),
+        # P2-002 fix: propagate the decompression-bomb guard from settings so
+        # oversized images are refused with a clear per-photo error instead of
+        # exhausting memory during scans.
+        max_image_pixels=settings.max_image_pixels,
+    )
     unit_of_work = SQLiteUnitOfWork(repositories._connection_provider)
 
     archive_path_builder = ArchivePathBuilderService()

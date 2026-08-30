@@ -38,7 +38,11 @@ class PillowPhotoMetadataReader(PhotoMetadataReader):
     second Infrastructure adapter.
     """
 
-    def __init__(self, content_hasher: ContentHashCalculator | None = None) -> None:
+    def __init__(
+        self,
+        content_hasher: ContentHashCalculator | None = None,
+        max_image_pixels: int | None = None,
+    ) -> None:
         """Initialize the reader with an optional content hash calculator.
 
         Args:
@@ -47,8 +51,15 @@ class PillowPhotoMetadataReader(PhotoMetadataReader):
                 metadata. When ``None`` (default) the reader keeps historical
                 behavior and does not fill ``content_hash`` — existing callers
                 are unaffected.
+            max_image_pixels: Optional decompression-bomb guard applied to the
+                Pillow pixel limit (P2-002 fix). ``None`` keeps Pillow's
+                built-in default; a positive value tunes the global limit.
         """
         self._content_hasher = content_hasher
+        if max_image_pixels is not None:
+            from PIL import Image
+
+            Image.MAX_IMAGE_PIXELS = max_image_pixels
 
     def read(self, path: Path) -> PhotoMetadata:
         """Return image dimensions, filesystem metadata, captured_at, and content hash.
@@ -78,6 +89,13 @@ class PillowPhotoMetadataReader(PhotoMetadataReader):
                 captured_at = self._extract_captured_at(image, image_path)
         except UnidentifiedImageError as exc:
             raise ValueError(f"Unsupported or invalid image file: {image_path}") from exc
+        except Image.DecompressionBombError as exc:
+            # P2-002 fix: map the bomb guard onto the existing ValueError path
+            # so the scan loop's per-photo error isolation records it and keeps
+            # processing the remaining photos.
+            raise ValueError(
+                f"Image exceeds the configured MAX_IMAGE_PIXELS guard: {image_path}"
+            ) from exc
         except OSError as exc:
             raise ValueError(f"Failed to read image metadata: {image_path}") from exc
 

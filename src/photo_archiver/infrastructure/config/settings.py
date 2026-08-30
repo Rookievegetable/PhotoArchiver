@@ -25,6 +25,12 @@ SQLITE_URL_PREFIX = "sqlite:///"
 DEFAULT_MATCH_THRESHOLD = 0.40
 MIN_MATCH_THRESHOLD = 0.0
 MAX_MATCH_THRESHOLD = 1.0
+# Decompression-bomb guard (P2-002 fix): matches Pillow's built-in default so a
+# hostile oversized image is refused instead of exhausting memory on decode.
+DEFAULT_MAX_IMAGE_PIXELS = 89_478_485
+# The guard must stay enabled: 0 / negative values are rejected so the limit
+# can be tuned but never disabled via configuration.
+MIN_MAX_IMAGE_PIXELS = 1
 DEFAULT_ARCHIVE_CONFLICT_STRATEGY = "skip"
 VALID_ARCHIVE_CONFLICT_STRATEGIES = ("skip", "overwrite", "rename")
 
@@ -58,6 +64,7 @@ class AppSettings(BaseSettings):
     archive_conflict_strategy: str = Field(default=DEFAULT_ARCHIVE_CONFLICT_STRATEGY)
     max_workers: int = Field(default=DEFAULT_MAX_WORKERS)
     match_threshold: float = Field(default=DEFAULT_MATCH_THRESHOLD)
+    max_image_pixels: int = Field(default=DEFAULT_MAX_IMAGE_PIXELS)
 
     @field_validator("log_level", mode="before")
     @classmethod
@@ -120,6 +127,17 @@ class AppSettings(BaseSettings):
             raise ValueError(
                 "MATCH_THRESHOLD must be between "
                 f"{MIN_MATCH_THRESHOLD} and {MAX_MATCH_THRESHOLD}. Received: {value}"
+            )
+        return value
+
+    @field_validator("max_image_pixels")
+    @classmethod
+    def validate_max_image_pixels(cls, value: int) -> int:
+        """Ensure the image pixel guard stays a finite, positive limit (P2-002)."""
+        if value < MIN_MAX_IMAGE_PIXELS:
+            raise ValueError(
+                "MAX_IMAGE_PIXELS must be a positive pixel count. Received: "
+                f"{value}. The decompression-bomb guard must never be disabled."
             )
         return value
 

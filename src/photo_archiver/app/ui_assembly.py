@@ -112,7 +112,12 @@ def build_ui_controllers(
         else Path.home() / ".photo_archiver" / "thumbnails"
     )
     thumbnail_cache = ThumbnailCache(thumbnail_root)
-    thumbnail_generator = PillowThumbnailGenerator(thumbnail_cache)
+    thumbnail_generator = PillowThumbnailGenerator(
+        thumbnail_cache,
+        # P2-002 fix: keep the decompression-bomb guard enabled for UI-side
+        # thumbnail rendering (replaces the previous global disable).
+        max_image_pixels=settings.max_image_pixels,
+    )
 
     _rebind_settings_service_to_qsettings(services.settings, settings)
 
