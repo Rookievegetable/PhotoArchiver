@@ -128,6 +128,18 @@ class ArchiveExecutor:
         """
         source = item.source_path
         target = Path(item.target_path.resolve())
+        # P2-005 fix: dry-run previews must flag link-based escapes too so the
+        # user sees the same failure the real run would produce.
+        containment_error = self._verify_target_containment(item, target)
+        if containment_error is not None:
+            logger.warning("Archive dry-run FAIL {}: {}", item.photo_id, containment_error)
+            record.mark_failed(containment_error)
+            return ArchiveOutcome(
+                photo_id=item.photo_id,
+                status=ArchiveStatus.FAILED,
+                target_path=item.target_path,
+                error=containment_error,
+            )
         if not source.exists():
             error = f"source missing: {source}"
             logger.warning("Archive dry-run FAIL {}: {}", item.photo_id, error)
@@ -161,22 +173,18 @@ class ArchiveExecutor:
         source = item.source_path
         target = Path(item.target_path.resolve())
 
-        # review M-3 fix: assert target stays under archive_root before any
-        # filesystem mutation. ArchivePath validates segments at construction
-        # but this is the filesystem boundary — fail loud here if a malformed
-        # target would escape the configured root.
-        archive_root_path = Path(item.target_path.archive_root).resolve(strict=False)
-        try:
-            target.relative_to(archive_root_path)
-        except ValueError:
-            error = f"target escapes archive_root: {target} not under {archive_root_path}"
-            logger.warning("Archive FAIL {} {}", item.photo_id, error)
-            record.mark_failed(error)
+        # P2-005 fix: containment is now verified at both the lexical level
+        # (review M-3, kept) and the filesystem level (symlink/junction
+        # resolution) before any mutation — see _verify_target_containment.
+        containment_error = self._verify_target_containment(item, target)
+        if containment_error is not None:
+            logger.warning("Archive FAIL {}: {}", item.photo_id, containment_error)
+            record.mark_failed(containment_error)
             return ArchiveOutcome(
                 photo_id=item.photo_id,
                 status=ArchiveStatus.FAILED,
                 target_path=item.target_path,
-                error=error,
+                error=containment_error,
             )
 
         try:
@@ -193,6 +201,19 @@ class ArchiveExecutor:
                     return ArchiveOutcome(item.photo_id, ArchiveStatus.OVERWRITTEN, item.target_path)
                 if conflict_strategy == "rename":
                     renamed_target = self._compute_renamed_target(target)
+                    # P2-005 fix: the chosen sibling could sit behind a symlinked
+                    # ancestor or land on a broken symlink — re-verify containment
+                    # before writing through it.
+                    sibling_error = self._verify_target_containment(item, renamed_target)
+                    if sibling_error is not None:
+                        logger.warning("Archive FAIL {}: {}", item.photo_id, sibling_error)
+                        record.mark_failed(sibling_error)
+                        return ArchiveOutcome(
+                            photo_id=item.photo_id,
+                            status=ArchiveStatus.FAILED,
+                            target_path=item.target_path,
+                            error=sibling_error,
+                        )
                     self._copy_file(source, renamed_target)
                     logger.info(
                         "Archive RENAME {}: {} -> {} (target existed)",
@@ -219,6 +240,40 @@ class ArchiveExecutor:
                 target_path=item.target_path,
                 error=error,
             )
+
+    @staticmethod
+    def _verify_target_containment(item: ArchivePlanItem, target: Path) -> str | None:
+        """Return an error string when ``target`` would escape archive_root, else None.
+
+        P2-005 fix — defence in depth at the filesystem boundary:
+
+        1. Lexical containment (review M-3, kept): segment validation already
+           blocks ``..``/separator names; this re-checks the composed target
+           against the configured root.
+        2. Filesystem-level containment: ``Path.resolve(strict=False)`` follows
+           symlinks and junctions, so a pre-existing symlinked directory
+           *inside* archive_root (local-attacker model) can no longer let
+           mkdir/copy2 write through it to a location outside the root.
+           ``ArchivePath.resolve`` is intentionally PurePath-lexical (Domain
+           stays filesystem-free), so this re-check belongs to the executor.
+        3. Explicit leaf-symlink rejection: never overwrite or write through a
+           symlinked target — including broken symlinks — even when the link
+           happens to point back inside the root.
+        """
+        archive_root_path = Path(item.target_path.archive_root).resolve(strict=False)
+        try:
+            target.relative_to(archive_root_path)
+        except ValueError:
+            return f"target escapes archive_root: {target} not under {archive_root_path}"
+        resolved_target = target.resolve(strict=False)
+        if not resolved_target.is_relative_to(archive_root_path):
+            return (
+                f"target escapes archive_root via filesystem links: {target} resolves "
+                f"to {resolved_target} outside {archive_root_path}"
+            )
+        if target.is_symlink():
+            return f"target is a symlink: {target} — refusing to write through it"
+        return None
 
     @staticmethod
     def _copy_file(source: Path, target: Path) -> None:
