@@ -41,7 +41,24 @@ jobs:
           key: models-buffalo_l-v1-${{ runner.os }}
 
       - name: Download AI models (idempotent, runs on cache miss)
-        run: python scripts/download_models.py
+        # P2-008 (Phase 3 audit): download_models.py now verifies the archive
+        # itself (SHA-256 pinning, fail-closed). Until the official digest is
+        # pinned in EXPECTED_SHA256 (scripts/download_models.py), CI must use
+        # the first-bootstrap escape hatch below. REMOVE --allow-unverified
+        # once the digest is pinned — CI then fails closed on any mismatch.
+        # 3 attempts ride out transient release/CDN failures so the single
+        # model source is not a hard CI single point of failure.
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            if python scripts/download_models.py --allow-unverified; then
+              exit 0
+            fi
+            echo "attempt $i failed, retrying in 10s"
+            sleep 10
+          done
+          echo "::error::model download failed after 3 attempts"
+          exit 1
 
       # R-4 遗漏修复：缓存静默失败时 download_models 幂等返回 0 但模型未真就绪，
       # 8 条 AI 集成测试会 skipped 而非 failed——此断言强制模型目录非空存在。
