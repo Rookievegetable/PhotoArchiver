@@ -34,8 +34,9 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 - 阶段 3（插件写能力 import_people，ADR-028）：✅ 完成（仅 import_people；export 经 ADR-030 裁决 YAGNI 正式关闭）。
 - 阶段 4（技术债轮：search_photos N+1 加固 ADR-029 + 轮次裁决 ADR-030）：✅ 完成（兼容路径移除原挂账 v2.0.0，已于 v2.0.0 轮兑现——见下表「v2.0.0 破坏性窗口」行；审批门续暂缓）。
 - 阶段 5（识别管线吞吐加固，ADR-032）：✅ 完成——线程并行 + `add_many` 单事务批下推 + 基准工具入库（全网格基线落档；线程扩展 1.28× 弱于建议阈值）。二轮证据链闭合：batch 批推理经 W1 尖刺证据性出局；W2-segment 尖刺段内分解定址两个死重模型（landmark 35.4ms + genderage 9.8ms，生产零消费）——phase7 执行轮完成（ADR-033，owner 三项全 A 拍板 2026-08-29）：landmark 双模型 + genderage 死重剔除（loader `allowed_modules=("detection","recognition")` 一行配置），全网格复测 2600 串行 656.94→332.02s（**1.98×**）、4-worker 5.06→**11.22** photos/s（**2.22×**），等价不变量全程保持（pytest 417），v2.2.0。
+- **Phase 4.2（FEATURE-001：Face Recognition / Matching 生产触发入口）**：✅ 完成并 Final Audit **CLOSED**（2026-08-30，HEAD `638ef30`）——原 P1「Face Recognition 无 UI/CLI 触发入口」闭环：四个 Commit（`2788d64` Worker Task → `ba9a413` Controller → `afc29e9` UI Action → `638ef30` Integration tests）。真实持久化链路（Task → Service → SQLite → PENDING → Review approve）由真实 SQLite integration 验证（AC-015/AC-016 PASS）；AC-001~016 逐条对账；`pytest 485 passed / 3 skipped`、`ruff`、`mypy 170 files`、`pip check` 全绿。两项设计/测试覆盖限制登记 `KNOWN_ISSUES.md`（LIMIT-001 真实缺模型 E2E 未入 CI；LIMIT-002 取消粒度为 batch-level）。
 
-当前无已登记的未解决问题；`KNOWN_ISSUES.md` 为空。
+当前无未解决的 O 级产品问题；`KNOWN_ISSUES.md` 登记 2 项设计/覆盖限制（Limit 表格）。
 
 ---
 
