@@ -34,6 +34,7 @@ from photo_archiver.domain import PhotoSearchCriteria
 from photo_archiver.presentation.controllers import (
     ArchiveController,
     ImportPeopleController,
+    MatchPersonsController,
     ScanController,
 )
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
@@ -43,7 +44,14 @@ from photo_archiver.presentation.views.photo_list_model import PHOTO_ID_ROLE, Ph
 from photo_archiver.presentation.views.review_dialog import ReviewDialog
 from photo_archiver.presentation.views.settings_dialog import SettingsDialog
 from photo_archiver.plugins import PluginRegistry
-from photo_archiver.workers.events import TaskCompleted, TaskFailed, TaskProgress, TaskStarted
+from photo_archiver.workers import QtWorkerRunnable
+from photo_archiver.workers.events import (
+    TaskCancelled,
+    TaskCompleted,
+    TaskFailed,
+    TaskProgress,
+    TaskStarted,
+)
 
 DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
@@ -75,7 +83,7 @@ class MainWindow(QMainWindow):
         self._load_plugins()
         self._build_central()
         self._build_status()
-        self._active_runnable = None  # tracks the currently running worker
+        self._active_runnable: QtWorkerRunnable | None = None  # tracks the currently running worker
 
     def _build_controllers(self) -> None:
         """Assemble the four controllers from context services + worker executor."""
@@ -94,6 +102,19 @@ class MainWindow(QMainWindow):
         self._archive_controller = ArchiveController(
             self._context.services.archive_photos,
             self._context.worker_executor,
+            parent=self,
+        )
+        # Phase 4.2 Commit 3: MatchPersonsController is worker-backed and needs
+        # the recognition repos + match service + worker executor, so it is
+        # built here like Scan/Import/Archive (view-site constructor injection).
+        # The model pack is optional at bootstrap — a missing pack surfaces as
+        # TaskFailed during execution, never blocking window construction.
+        self._match_controller = MatchPersonsController(
+            photos=self._context.repositories.photos,
+            people=self._context.repositories.people,
+            recognition=self._context.repositories.recognition,
+            use_case=self._context.services.match_persons,  # type: ignore[arg-type]  # MatchPersonsService satisfies the MatchPersonsUseCase protocol
+            executor=self._context.worker_executor,
             parent=self,
         )
         self._review_controller = self._context.review_controller  # set by bootstrap
@@ -120,6 +141,14 @@ class MainWindow(QMainWindow):
         archive_action = QAction("Archive", self)
         archive_action.triggered.connect(self._on_archive_clicked)
         toolbar.addAction(archive_action)
+
+        # Phase 4.2 Commit 3: face-recognition trigger. Disabled while a match
+        # task is in flight; re-enabled by every terminal signal (completed /
+        # failed / cancelled). The controller's _active_runnable remains the
+        # authoritative running state (AC-014), so no second UI busy flag.
+        self._match_action = QAction("Run Face Recognition", self)
+        self._match_action.triggered.connect(self._on_match_clicked)
+        toolbar.addAction(self._match_action)
 
         detect_duplicates_action = QAction("Detect Duplicates", self)
         detect_duplicates_action.triggered.connect(self._on_detect_duplicates_clicked)
@@ -430,3 +459,74 @@ class MainWindow(QMainWindow):
         不下沉 Worker——查重是 SQL 下推的快速查询。
         """
         self._context.detect_duplicates_controller.detect_and_show()
+
+    # ---- Face recognition (match persons) ----
+
+    def _on_match_clicked(self) -> None:
+        """Start the face-recognition (match persons) workflow on click.
+
+        Delegates to MatchPersonsController which owns the single-flight guard
+        (AC-014) — the window never re-implements running state. When the
+        controller refuses (already running / no persons / no photos / all
+        photos already matched) it returns ``None`` with a human-readable
+        ``last_refusal_reason`` surfaced in the status bar. A submitted
+        runnable disables this action until a terminal signal (completed /
+        failed / cancelled) re-enables it and releases the controller guard.
+        """
+        runnable = self._match_controller.start_match()
+        if runnable is None:
+            reason = self._match_controller.last_refusal_reason
+            self._status_label.setText(reason or "Face recognition unavailable.")
+            return
+        self._match_action.setEnabled(False)
+        self._active_runnable = runnable
+        self._cancel_action.setEnabled(True)
+        self._match_controller.connect_signals(
+            runnable,
+            self._on_started,  # type: ignore[arg-type]  # Qt Slot vs Callable variance, existing convention
+            self._on_progress,  # type: ignore[arg-type]
+            self._on_match_completed,  # type: ignore[arg-type]
+            self._on_match_failed,  # type: ignore[arg-type]
+            cancelled=self._on_match_cancelled,  # type: ignore[arg-type]
+        )
+
+    def _on_match_completed(self, event: TaskCompleted) -> None:
+        """Handle match completion: shared finish, re-enable, review refresh.
+
+        ``_on_completed`` resets progress/status and refreshes the photo list;
+        the match action is re-enabled and the pending-review queue re-queried
+        so freshly created PENDING results surface when the user opens Review.
+        """
+        self._on_completed(event)
+        self._match_action.setEnabled(True)
+        self._refresh_review_pending()
+
+    def _on_match_failed(self, event: TaskFailed) -> None:
+        """Handle match failure: shared error surface + re-enable the action.
+
+        The concrete error is already surfaced by ``_on_failed`` (status label +
+        QMessageBox); re-enabling lets the user retry after correcting the cause
+        (e.g. installing the model pack or importing persons).
+        """
+        self._on_failed(event)
+        self._match_action.setEnabled(True)
+
+    def _on_match_cancelled(self, event: TaskCancelled) -> None:
+        """Handle cooperative cancellation: reset progress and re-enable."""
+        self._cancel_action.setEnabled(False)
+        self._progress.setValue(0)
+        self._status_label.setText(f"{event.task_name} cancelled.")
+        self._match_action.setEnabled(True)
+
+    def _refresh_review_pending(self) -> None:
+        """Re-query recognition results so newly created PENDING entries surface.
+
+        Called after face recognition completes so the next ReviewDialog open
+        shows fresh pending results. Uses only the existing read API
+        (ReviewController.list_pending) and reflects the count in the status
+        bar as lightweight feedback — Review business rules are untouched.
+        """
+        pending = self._review_controller.list_pending()
+        self._status_label.setText(
+            f"{len(pending)} recognition result(s) awaiting review"
+        )
