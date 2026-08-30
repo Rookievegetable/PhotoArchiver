@@ -36,6 +36,26 @@ On Windows, `insightface` (now installed via `base.txt`) may need Microsoft
 C++ Build Tools if pip cannot find a compatible prebuilt wheel for your
 Python version.
 
+### Windows toolchain notes (P2-010, per Phase 3 audit)
+
+Reference environment: **Python 3.11 / x86_64 / Windows AMD64** (see
+`docs/health-check/AUDIT_BASELINE.md` §3).
+
+- `insightface==1.0.1` publishes **source distributions only** — there are no
+  prebuilt Windows wheels. `pip install insightface` therefore always compiles
+  locally and requires **Microsoft C++ Build Tools** (MSVC, C++17 workload)
+  plus Cython. Windows ARM64 is not a supported build target for insightface
+  1.0.1.
+- `onnxruntime==1.27.0` ships official Windows wheels (x86_64); verify ARM64
+  availability against the onnxruntime release matrix before targeting ARM64
+  devices.
+- `opencv-python==4.12.0.88` and `Pillow==11.3.0` ship prebuilt Windows
+  wheels — no toolchain needed.
+
+If the insightface build fails with linker/compiler errors, install the Build
+Tools and re-run `pip install -r requirements/base.txt` inside the activated
+venv.
+
 ---
 
 ## dev.txt
