@@ -1,0 +1,85 @@
+﻿# ==========================================
+# PhotoArchiver - Full Dependency Lock (P2-001)
+# ==========================================
+# Transitive-closure pin of the complete runtime environment.
+#
+#   Generated with:  pip freeze > requirements/lock.txt
+#   Refresh after:   any change to requirements/base.txt
+#
+# Layering (see requirements/README.md):
+#   base.txt  = direct runtime dependencies (curated, commented)
+#   lock.txt  = base.txt + every transitive dependency, fully pinned
+#
+# Reproducible install on a fresh environment:
+#   pip install -r requirements/lock.txt
+alembic==1.16.4
+annotated-types==0.7.0
+black==25.1.0
+certifi==2026.6.17
+cfgv==3.5.0
+charset-normalizer==3.4.9
+click==8.4.2
+colorama==0.4.6
+distlib==0.4.3
+et_xmlfile==2.0.0
+filelock==3.30.2
+flatbuffers==25.12.19
+greenlet==3.5.3
+identify==2.6.19
+idna==3.18
+ImageIO==2.37.3
+iniconfig==2.3.0
+insightface==1.0.1
+isort==6.0.1
+lazy-loader==0.5
+loguru==0.7.3
+Mako==1.3.12
+MarkupSafe==3.0.3
+ml_dtypes==0.5.4
+mypy==1.17.1
+mypy_extensions==1.1.0
+networkx==3.6.1
+nodeenv==1.10.0
+numpy==2.2.6
+onnx==1.22.0
+onnxruntime==1.27.0
+opencv-python==4.12.0.88
+openpyxl==3.1.5
+packaging==26.2
+pandas==2.3.1
+pathspec==1.1.1
+pillow==11.3.0
+platformdirs==4.10.0
+pluggy==1.6.0
+pre_commit==4.3.0
+protobuf==7.35.1
+pydantic==2.11.7
+pydantic-settings==2.10.1
+pydantic_core==2.33.2
+Pygments==2.20.0
+PySide6==6.11.1
+PySide6_Addons==6.11.1
+PySide6_Essentials==6.11.1
+pytest==8.4.1
+pytest-qt==4.5.0
+python-dateutil==2.9.0.post0
+python-discovery==1.4.4
+python-dotenv==1.2.2
+pytz==2026.2
+PyYAML==6.0.3
+requests==2.34.2
+ruff==0.12.7
+scikit-image==0.26.0
+scipy==1.17.1
+shiboken6==6.11.1
+six==1.17.0
+SQLAlchemy==2.0.43
+tifffile==2026.3.3
+tqdm==4.68.4
+typing-inspection==0.4.2
+typing_extensions==4.16.0
+tzdata==2026.2
+urllib3==2.7.0
+virtualenv==21.6.1
+watchdog==6.0.0
+win32_setctime==1.2.0

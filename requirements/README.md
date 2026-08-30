@@ -52,12 +52,22 @@ pip install -r requirements/dev.txt
 
 ---
 
-Future:
+## lock.txt
 
-lock.txt
-
-Generated automatically by:
+Full transitive-closure pin of the complete runtime environment (P2-001).
+Generated automatically from the current environment with:
 
 ```bash
 pip freeze > requirements/lock.txt
+```
+
+Refresh it after **any** change to `requirements/base.txt`. Layering:
+
+- `base.txt` — direct runtime dependencies (curated, commented)
+- `lock.txt` — `base.txt` + every transitive dependency, fully pinned
+
+Reproducible install on a fresh environment:
+
+```bash
+pip install -r requirements/lock.txt
 ```
