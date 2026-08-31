@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.7.1 · Last Updated: 2026-08-26 · Status: Live
+> Version: 1.7.2 · Last Updated: 2026-08-31 · Status: Live
 
 ---
 
@@ -35,6 +35,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 - 阶段 4（技术债轮：search_photos N+1 加固 ADR-029 + 轮次裁决 ADR-030）：✅ 完成（兼容路径移除原挂账 v2.0.0，已于 v2.0.0 轮兑现——见下表「v2.0.0 破坏性窗口」行；审批门续暂缓）。
 - 阶段 5（识别管线吞吐加固，ADR-032）：✅ 完成——线程并行 + `add_many` 单事务批下推 + 基准工具入库（全网格基线落档；线程扩展 1.28× 弱于建议阈值）。二轮证据链闭合：batch 批推理经 W1 尖刺证据性出局；W2-segment 尖刺段内分解定址两个死重模型（landmark 35.4ms + genderage 9.8ms，生产零消费）——phase7 执行轮完成（ADR-033，owner 三项全 A 拍板 2026-08-29）：landmark 双模型 + genderage 死重剔除（loader `allowed_modules=("detection","recognition")` 一行配置），全网格复测 2600 串行 656.94→332.02s（**1.98×**）、4-worker 5.06→**11.22** photos/s（**2.22×**），等价不变量全程保持（pytest 417），v2.2.0。
 - **Phase 4.2（FEATURE-001：Face Recognition / Matching 生产触发入口）**：✅ 完成并 Final Audit **CLOSED**（2026-08-30，HEAD `638ef30`）——原 P1「Face Recognition 无 UI/CLI 触发入口」闭环：四个 Commit（`2788d64` Worker Task → `ba9a413` Controller → `afc29e9` UI Action → `638ef30` Integration tests）。真实持久化链路（Task → Service → SQLite → PENDING → Review approve）由真实 SQLite integration 验证（AC-015/AC-016 PASS）；AC-001~016 逐条对账；`pytest 485 passed / 3 skipped`、`ruff`、`mypy 170 files`、`pip check` 全绿。两项设计/测试覆盖限制登记 `KNOWN_ISSUES.md`（LIMIT-001 真实缺模型 E2E 未入 CI；LIMIT-002 取消粒度为 batch-level）。
+- **Phase 5（FEATURE-002：Export 生产触发入口 / Export UI）**：✅ 完成并 Final Audit **PASS / CLOSED**（2026-08-31，HEAD `3db7074`）——原 P1「Export 无 UI/CLI 触发入口」闭环：两个 Feature Commit（`4f054b4` feat(ui) 增加 Export Data QAction + handler + 信号 wiring；`396b706` test(integration) UI→Controller→Task→Service→Exporter→SQLite→file 全真实链路集成测试）+ Final Audit Commit `3db7074`（docs(audit) AC 证据缺口闭合 + 审计报告 `docs/health-check/PHASE_5_FINAL_AUDIT.md`）。AC-001~015 全部 PASS（15/15，逐条证据见审计报告 §3）；`pytest 500 passed / 3 skipped`、`ruff`、`mypy 170 files`、`pip check` 全绿；生产代码变更仅 Commit 1 的 `main_window.py`（+69 行），Commit 2/3 生产代码 0。Finding 对账：F-001（ExportService scope stub，CURRENT_BATCH/FILTERED 未实现）保持既有 P3 登记（FEATURE-004 独立跟进，不重复入 KNOWN_ISSUES）；F-002（match 控制器真实线程池集成测试偶发时序 flake）保持 Phase 4.2 审计既有记录；F-003 已于 Final Audit 闭合（补测完成）。Phase 5 无新增开放问题，`KNOWN_ISSUES.md` 维持既有 2 项设计/测试覆盖限制（LIMIT-001/002）。
 
 当前无未解决的 O 级产品问题；`KNOWN_ISSUES.md` 登记 2 项设计/覆盖限制（Limit 表格）。
 
