@@ -20,6 +20,7 @@ from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.app import bootstrap_application  # noqa: F401
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.presentation.views import main_window as main_window_module
+from photo_archiver.presentation.views.export_dialog import ExportDialog
 from photo_archiver.presentation.views.main_window import MainWindow
 from photo_archiver.workers.events import (
     TaskCompleted,
@@ -281,3 +282,92 @@ def test_missing_output_path_guard_aborts_submission(qtbot, tmp_path, monkeypatc
 
     assert calls == []  # defensive guard: no controller call without a path
     assert window._export_action.isEnabled() is True
+
+
+# ── Final Audit evidence tests (Phase 5 Commit 3) ────────────────────────────
+# The baseline audit's §13 unit-test plan lists two behaviors Commit 1 did not
+# deliver tests for: the REAL dialog's control→property mapping + empty-path
+# refusal (AC-003/AC-010) and a second successful export after re-enable
+# (AC-014). Added during the Phase 5 Final Audit to close the evidence gap —
+# no production code is touched.
+
+
+def test_real_dialog_collects_scope_format_and_refuses_empty_path(qtbot, tmp_path, monkeypatch) -> None:
+    """AC-003/AC-010: the real ExportDialog maps controls to properties.
+
+    Defaults are ALL/xlsx/no-path; switching the radio + combo updates the
+    properties; OK without a path is refused (recorded QMessageBox.warning,
+    dialog not accepted); with a path the dialog accepts and exposes it.
+    """
+    from PySide6.QtWidgets import QMessageBox
+
+    window = _make_window(qtbot, tmp_path)
+    warnings: list[tuple[str, str]] = []
+
+    def _record_warning(parent, title: str, message: str) -> int:
+        warnings.append((title, message))
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(_record_warning))
+
+    dialog = ExportDialog(parent=window)
+    qtbot.addWidget(dialog)
+
+    # Defaults (AC-003): ALL scope, xlsx format, no path chosen yet.
+    assert dialog.scope is ExportScope.ALL
+    assert dialog.format_name == "xlsx"
+    assert dialog.output_path is None
+
+    # Control → property mapping on the REAL widget surface.
+    dialog._scope_radios[ExportScope.FILTERED].setChecked(True)
+    dialog._format_combo.setCurrentText("CSV (.csv)")
+    assert dialog.scope is ExportScope.FILTERED
+    assert dialog.format_name == "csv"
+
+    # AC-010: OK without a path is refused — warning recorded, no accept.
+    dialog._on_accept()
+    assert warnings and warnings[0][0] == "No output path"
+    assert "export file destination" in warnings[0][1]
+    assert dialog.result() != 1  # not QDialog.DialogCode.Accepted
+
+    # With a path the dialog accepts and exposes the chosen value.
+    chosen = tmp_path / "report.csv"
+    dialog._path_edit.setText(str(chosen))
+    dialog._on_accept()
+    assert dialog.result() == 1
+    assert dialog.output_path == chosen
+
+
+def test_reenabled_action_permits_second_export(qtbot, tmp_path, monkeypatch) -> None:
+    """AC-014: after completed re-enables the action, a second export submits.
+
+    Each submit gets its own runnable (fresh signal wiring, no reuse), the
+    first run's completed signal re-enables the action, and the second
+    trigger reaches the controller again.
+    """
+    window = _make_window(qtbot, tmp_path)
+    calls: list = []
+    runnables: list = []
+    dialog = _FakeExportDialog(output_path=tmp_path / "second.csv")
+    monkeypatch.setattr(main_window_module, "ExportDialog", lambda parent=None: dialog)
+    monkeypatch.setattr(
+        window._export_controller,
+        "export",
+        lambda output_path, scope, format_name: (
+            calls.append((output_path, scope, format_name))
+            or runnables.append(_make_runnable())
+            or runnables[-1]
+        ),
+    )
+
+    window._export_action.trigger()
+    assert len(calls) == 1
+    assert window._export_action.isEnabled() is False  # first run in flight
+
+    runnables[0].signals.completed.emit(TaskCompleted("export", "task_1"))
+    assert window._export_action.isEnabled() is True  # re-enabled for re-export
+
+    window._export_action.trigger()
+    assert len(calls) == 2  # second export actually dispatched
+    assert runnables[0] is not runnables[1]  # fresh runnable per submission
+

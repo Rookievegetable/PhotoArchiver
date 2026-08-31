@@ -119,12 +119,17 @@ def _seed_sqlite(repositories) -> dict:
     }
 
 
-def _make_window(qtbot, tmp_path: Path) -> MainWindow:
-    """Build a real MainWindow over a real tmp SQLite context (Commit 1 pattern)."""
+def _make_window(qtbot, tmp_path: Path, *, seed: bool = True) -> MainWindow:
+    """Build a real MainWindow over a real tmp SQLite context (Commit 1 pattern).
+
+    ``seed=True`` (default) populates the database through the real
+    repositories; ``seed=False`` leaves the database empty for empty-database
+    scenarios.
+    """
     settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'export_ui.db'}")
     settings.ensure_runtime_directories()
     context = bootstrap_application(settings)
-    seeded = _seed_sqlite(context.repositories)
+    seeded = _seed_sqlite(context.repositories) if seed else {}
     window = MainWindow(context)
     qtbot.addWidget(window)
     return window, context, seeded
@@ -334,5 +339,28 @@ def test_failed_export_surfaces_taskfailed_through_ui(qtbot, tmp_path, monkeypat
     assert dialogs, "QMessageBox.warning must surface the TaskFailed event"
     assert dialogs[0][0] == "Export Failed"
     assert dialogs[0][1] != ""
+
+
+def test_empty_database_export_produces_header_only_file(qtbot, tmp_path, monkeypatch) -> None:
+    """Empty-database closed loop (baseline Commit 2 plan): safe UI export.
+
+    An empty real SQLite database must still produce a valid header-only CSV
+    through the full UI chain — no crash, no spurious rows, terminal state
+    reached, action re-enabled.
+    """
+    window, _, _ = _make_window(qtbot, tmp_path, seed=False)  # empty database
+    output_path = tmp_path / "empty.csv"
+    _stub_dialog(monkeypatch, output_path, ExportScope.ALL, "csv")
+
+    window._export_action.trigger()
+    qtbot.waitUntil(lambda: window._export_action.isEnabled(), timeout=_WAIT_TERMINAL_MS)
+
+    assert window._status_label.text() == "export complete"
+    assert output_path.exists()
+    with open(output_path, encoding="utf-8-sig", newline="") as handle:
+        parsed = list(csv_reader(handle))
+    assert len(parsed) == 1  # header only, zero data rows
+    assert parsed[0][0] == "person_name" and parsed[0][11] == "archived_at"
+
 
 
