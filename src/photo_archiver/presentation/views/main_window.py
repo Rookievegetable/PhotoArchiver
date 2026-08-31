@@ -38,6 +38,7 @@ from photo_archiver.presentation.controllers import (
     ScanController,
 )
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
+from photo_archiver.presentation.views.export_dialog import ExportDialog
 from photo_archiver.presentation.views.filter_bar import FilterBar
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
 from photo_archiver.presentation.views.photo_list_model import PHOTO_ID_ROLE, PhotoListModel
@@ -120,6 +121,7 @@ class MainWindow(QMainWindow):
         self._review_controller = self._context.review_controller  # set by bootstrap
         self._photo_list_controller = self._context.photo_list_controller  # set by bootstrap
         self._settings_controller = self._context.settings_controller  # set by bootstrap (Step 13)
+        self._export_controller = self._context.export_controller  # already assembled in ui_assembly (ISSUE-016 fixed)
 
     def _build_toolbar(self) -> None:
         """Create the primary action toolbar covering the full闭环."""
@@ -149,6 +151,15 @@ class MainWindow(QMainWindow):
         self._match_action = QAction("Run Face Recognition", self)
         self._match_action.triggered.connect(self._on_match_clicked)
         toolbar.addAction(self._match_action)
+
+        # Phase 5 Commit 1: export trigger. Disabled while an export task runs;
+        # re-enabled by every terminal signal (completed / failed) — ExportController
+        # exposes 4 channels (no cancelled), matching the connect_signals contract.
+        # UI-side enablement is the only single-flight state for export: unlike
+        # the match controller, ExportController carries no guard of its own.
+        self._export_action = QAction("Export Data", self)
+        self._export_action.triggered.connect(self._on_export_clicked)
+        toolbar.addAction(self._export_action)
 
         detect_duplicates_action = QAction("Detect Duplicates", self)
         detect_duplicates_action.triggered.connect(self._on_detect_duplicates_clicked)
@@ -517,6 +528,64 @@ class MainWindow(QMainWindow):
         self._progress.setValue(0)
         self._status_label.setText(f"{event.task_name} cancelled.")
         self._match_action.setEnabled(True)
+
+    # ------------------------------------------------------------------
+    # Phase 5 Commit 1: Export UI wiring
+    # ------------------------------------------------------------------
+
+    def _on_export_clicked(self) -> None:
+        """Open the modal ExportDialog; on accept, dispatch the export task.
+
+        Mirrors the archive flow: the dialog collects scope / format / output
+        path, then the runnable is submitted through the worker-backed
+        ExportController (two-phase progress off the UI thread). The action is
+        disabled while a run is in flight and re-enabled by every terminal
+        signal (completed / failed). ``connect_signals`` exposes exactly four
+        channels — there is no cancelled signal on ExportController (Phase 5
+        baseline contract), so no cancellation slot is fabricated; the Cancel
+        toolbar action stays untouched for export runs.
+        """
+        dialog = ExportDialog(parent=self)
+        if not dialog.exec():
+            return
+        output_path = dialog.output_path
+        if output_path is None:
+            # Defensive: _on_accept validates a non-empty path before
+            # accepting, so this branch is unreachable in practice.
+            return
+        self._export_action.setEnabled(False)
+        self._progress.setValue(0)
+        self._status_label.setText("Exporting ...")
+        runnable = self._export_controller.export(
+            output_path,
+            scope=dialog.scope,
+            format_name=dialog.format_name,
+        )
+        self._export_controller.connect_signals(
+            runnable,
+            self._on_export_started,  # type: ignore[arg-type]  # Qt Slot vs Callable variance, existing convention
+            self._on_export_progress,  # type: ignore[arg-type]
+            self._on_export_completed,  # type: ignore[arg-type]
+            self._on_export_failed,  # type: ignore[arg-type]
+        )
+
+    def _on_export_started(self, event: TaskStarted) -> None:
+        """Reflect export start in the status bar (delegates to shared slot)."""
+        self._on_started(event)
+
+    def _on_export_progress(self, event: TaskProgress) -> None:
+        """Update the progress bar from the two-phase export progress events."""
+        self._on_progress(event)
+
+    def _on_export_completed(self, event: TaskCompleted) -> None:
+        """Reflect completion via the shared slot and re-enable the action."""
+        self._on_completed(event)
+        self._export_action.setEnabled(True)
+
+    def _on_export_failed(self, event: TaskFailed) -> None:
+        """Surface the failure via the shared slot and re-enable the action."""
+        self._on_failed(event)
+        self._export_action.setEnabled(True)
 
     def _refresh_review_pending(self) -> None:
         """Re-query recognition results so newly created PENDING entries surface.
