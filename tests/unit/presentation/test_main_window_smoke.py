@@ -53,6 +53,7 @@ def test_scan_controller_connect_signals_wires_slots(qtbot) -> None:
         progress = Signal(object)
         completed = Signal(object)
         failed = Signal(object)
+        cancelled = Signal(object)
 
     class FakeRunnable:
         def __init__(self) -> None:
@@ -61,7 +62,8 @@ def test_scan_controller_connect_signals_wires_slots(qtbot) -> None:
     runnable = FakeRunnable()
     called: list = []
 
-    ScanController.connect_signals(
+    controller = ScanController(use_case=None, executor=None)  # type: ignore[arg-type]
+    controller.connect_signals(
         runnable,
         started=lambda e: called.append("started"),
         progress=lambda e: called.append("progress"),

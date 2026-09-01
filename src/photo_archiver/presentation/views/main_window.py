@@ -143,6 +143,9 @@ class MainWindow(QMainWindow):
         scan_action = QAction("Scan Folder", self)
         scan_action.triggered.connect(self._on_scan_clicked)
         toolbar.addAction(scan_action)
+        # P0-4 single-flight: kept so the action can be disabled while a scan
+        # task is in flight and re-enabled by its terminal signals.
+        self._scan_action = scan_action
 
         review_action = QAction("Review Pending", self)
         review_action.triggered.connect(self._on_review_clicked)
@@ -397,14 +400,58 @@ class MainWindow(QMainWindow):
     # ---- Toolbar actions ----
 
     def _on_scan_clicked(self) -> None:
-        """Open a folder picker and start the scan workflow."""
+        """Open a folder picker and start the scan workflow.
+
+        P0-4 single-flight: the controller refuses a second submission while
+        a scan is in flight (``runnable is None``) — the refusal reason is
+        surfaced in the status bar and the running scan is left untouched.
+        """
         folder = QFileDialog.getExistingDirectory(self, "Select Photo Folder")
         if not folder:
             return
+        runnable = self._scan_controller.scan_folder(Path(folder))
+        if runnable is None:
+            reason = self._scan_controller.last_refusal_reason
+            self._status_label.setText(reason or "Scan unavailable.")
+            return
         self._progress.setValue(0)
         self._status_label.setText(f"Scanning {folder} ...")
-        runnable = self._scan_controller.scan_folder(Path(folder))
-        self._connect_task_signals(runnable)
+        self._connect_scan_signals(runnable)
+
+    def _connect_scan_signals(self, runnable) -> None:
+        """Wire a scan runnable's signals, including the P0-4 cancelled slot.
+
+        Also flips the UI into its single-flight state (Scan action disabled,
+        Cancel enabled) — any submission path through here is covered.
+        """
+        self._active_runnable = runnable
+        self._scan_action.setEnabled(False)
+        self._scan_controller.connect_signals(
+            runnable,
+            self._on_started,  # type: ignore[arg-type]  # Qt Slot vs Callable variance, existing convention
+            self._on_progress,  # type: ignore[arg-type]
+            self._on_scan_completed,  # type: ignore[arg-type]
+            self._on_scan_failed,  # type: ignore[arg-type]
+            cancelled=self._on_scan_cancelled,  # type: ignore[arg-type]
+        )
+        self._cancel_action.setEnabled(True)
+
+    def _on_scan_completed(self, event: TaskCompleted) -> None:
+        """Shared completion handling plus P0-4 single-flight re-enable."""
+        self._on_completed(event)
+        self._scan_action.setEnabled(True)
+
+    def _on_scan_failed(self, event: TaskFailed) -> None:
+        """Shared failure handling plus P0-4 single-flight re-enable."""
+        self._on_failed(event)
+        self._scan_action.setEnabled(True)
+
+    def _on_scan_cancelled(self, event: TaskCancelled) -> None:
+        """Reset UI after a cancelled scan (P0-4: previously stuck at 'Cancelling ...')."""
+        self._cancel_action.setEnabled(False)
+        self._progress.setValue(0)
+        self._status_label.setText(f"{event.task_name} cancelled.")
+        self._scan_action.setEnabled(True)
 
     def _on_import_clicked(self) -> None:
         """Open a file picker and start the people-import workflow."""
