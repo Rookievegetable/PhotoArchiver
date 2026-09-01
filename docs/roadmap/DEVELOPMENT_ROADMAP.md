@@ -4,7 +4,7 @@
 > **制定基线**：HEAD `3a2ef0a`（== origin/main，clean）
 > **排序原则**：按 User Value / Blocking Relationship / Architecture Impact / Risk / Effort / Release Impact 排序，**禁止按 Feature ID 顺序机械开发**
 > **工作量口径**：AI 工程工作量（XS < 0.5d ｜ S = 0.5–1d ｜ M = 1–3d ｜ L = 3–7d ｜ XL > 7d），非日历承诺
-> **状态**：**待 Owner 授权**——本计划不自动启动任何阶段
+> **状态**：Phase A 已获 Owner 授权执行（2026-09-02）——P0-10 已完成；P0-1 → P0-4 按序执行，每项独立提交并在完成后按停止规则等待指令；Phase B–E / P1 / P2 未授权，本计划不自动启动任何阶段
 
 ---
 
