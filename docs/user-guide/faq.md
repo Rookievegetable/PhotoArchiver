@@ -48,4 +48,4 @@ macOS 是官方目标平台之一，持续集成已在三操作系统矩阵上�
 
 **Q：插件功能怎么用？可以自己写吗？**
 
-插件能力（加载器与 PluginContext）已随项目交付，示例位于 `examples/plugins/`（统计报表、演示导入人员、问候）。**注意：当前版本主界面工具栏尚未展示插件动作入口——已知缺陷，修复中**；修复发布前，插件动作与插件报告暂无法从界面访问，不影响其余功能。开发自有插件请参阅 [`docs/development/plugin-guide.md`](../development/plugin-guide.md)。
+它们来自 `examples/plugins/` 的示例扩展（统计报表、演示导入人员、问候），以主界面工具栏动作呈现。加载失败的插件会被自动跳过，不影响主程序。开发自有插件请参阅 [`docs/development/plugin-guide.md`](../development/plugin-guide.md)。
