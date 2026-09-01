@@ -58,6 +58,7 @@ from photo_archiver.domain import (
     Person,
     Photo,
     PhotoPath,
+    PhotoSearchCriteria,
     RecognitionResult,
 )
 from photo_archiver.domain.entities.archive import ArchiveRecord
@@ -143,11 +144,20 @@ class _FakeExportDialog:
     modal boundary is replaced so the production handler flow stays real.
     """
 
-    def __init__(self, parent=None, *, output_path: Path, scope: ExportScope, format_name: str) -> None:
+    def __init__(
+        self,
+        parent=None,
+        *,
+        output_path: Path,
+        scope: ExportScope,
+        format_name: str,
+        active_criteria: PhotoSearchCriteria | None = None,
+    ) -> None:
         self.parent = parent
         self._output_path = output_path
         self._scope = scope
         self._format_name = format_name
+        self.active_criteria = active_criteria
 
     def exec(self) -> int:
         """Return Accepted immediately (the user confirmed the export)."""
@@ -173,9 +183,13 @@ def _stub_dialog(monkeypatch, output_path: Path, scope: ExportScope, format_name
     """Patch the modal boundary in the window module; capture created dialogs."""
     created: list[_FakeExportDialog] = []
 
-    def _factory(parent=None) -> _FakeExportDialog:
+    def _factory(parent=None, active_criteria=None) -> _FakeExportDialog:
         dialog = _FakeExportDialog(
-            parent=parent, output_path=output_path, scope=scope, format_name=format_name
+            parent=parent,
+            output_path=output_path,
+            scope=scope,
+            format_name=format_name,
+            active_criteria=active_criteria,
         )
         created.append(dialog)
         return dialog

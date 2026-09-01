@@ -23,12 +23,26 @@ from PySide6.QtWidgets import (
 )
 
 from photo_archiver.application.dtos.export import ExportScope
+from photo_archiver.domain import PhotoSearchCriteria
 
 _SCOPE_LABELS = {
     ExportScope.ALL: "All data (people, photos, matches, archive history)",
     ExportScope.CURRENT_BATCH: "Current batch (most recently processed)",
-    ExportScope.FILTERED: "Filtered results (current selection)",
+    ExportScope.FILTERED: "Filtered results (photos matching the active filter criteria)",
 }
+
+_SCOPE_TOOLTIPS = {
+    ExportScope.ALL: "Export the full catalog.",
+    ExportScope.CURRENT_BATCH: (
+        "Current batch export is not implemented yet (FEATURE-004 deferred)."
+    ),
+    ExportScope.FILTERED: (
+        "Export photos matching the active filter criteria. Requires a filter "
+        "to be set in the filter bar first."
+    ),
+}
+
+_NO_ACTIVE_CRITERIA_HINT = "Set a filter in the filter bar to enable this scope."
 
 _FORMAT_CHOICES = ("Excel (.xlsx)", "CSV (.csv)", "HTML (.html)")
 
@@ -46,6 +60,7 @@ class ExportDialog(QDialog):
         self,
         default_output_root: Path | None = None,
         parent: QWidget | None = None,
+        active_criteria: PhotoSearchCriteria | None = None,
     ) -> None:
         """Initialize the dialog with an optional default output root.
 
@@ -58,6 +73,7 @@ class ExportDialog(QDialog):
         self.setMinimumWidth(520)
         self._default_output_root = default_output_root or Path.cwd()
         self._output_path: Path | None = None
+        self._active_criteria = active_criteria
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -70,8 +86,21 @@ class ExportDialog(QDialog):
         self._scope_radios: dict[ExportScope, QRadioButton] = {}
         for scope, label in _SCOPE_LABELS.items():
             radio = QRadioButton(label, self)
+            radio.setToolTip(_SCOPE_TOOLTIPS[scope])
             if scope is ExportScope.ALL:
                 radio.setChecked(True)
+            elif scope is ExportScope.FILTERED:
+                # F3: only selectable when an active filter criteria exists. A
+                # criteria-less FILTERED export would silently behave as ALL —
+                # the UI disables it (first UX layer); the Service errors on
+                # FILTERED + None criteria (deeper invariant, Commit-2).
+                if self._active_criteria is None:
+                    radio.setEnabled(False)
+                    radio.setToolTip(_NO_ACTIVE_CRITERIA_HINT)
+            elif scope is ExportScope.CURRENT_BATCH:
+                # D3: DEFERRED — radio stays visible (product visibility) but
+                # is never selectable in Phase 7.
+                radio.setEnabled(False)
             self._scope_radios[scope] = radio
             self._scope_group.addWidget(radio)
         main_layout.addLayout(self._scope_group)

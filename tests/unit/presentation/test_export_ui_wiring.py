@@ -17,8 +17,11 @@ pytest.importorskip("PySide6")
 from pathlib import Path
 
 from photo_archiver.application.dtos.export import ExportScope
+from photo_archiver.application.services.export_service import ExportService
 from photo_archiver.app import bootstrap_application  # noqa: F401
+from photo_archiver.domain import MatchStatus, PhotoSearchCriteria
 from photo_archiver.infrastructure.config import AppSettings
+from photo_archiver.presentation.controllers.export_controller import ExportController
 from photo_archiver.presentation.views import main_window as main_window_module
 from photo_archiver.presentation.views.export_dialog import ExportDialog
 from photo_archiver.presentation.views.main_window import MainWindow
@@ -68,12 +71,14 @@ class _FakeExportDialog:
         output_path: Path | None = None,
         scope: ExportScope | None = None,
         format_name: str = "csv",
+        active_criteria: PhotoSearchCriteria | None = None,
     ) -> None:
         self.parent = parent
         self._accepted = accepted
         self._output_path = output_path
         self._scope = scope if scope is not None else ExportScope.FILTERED
         self._format_name = format_name
+        self.active_criteria = active_criteria
 
     def exec(self) -> int:
         """Return 1 (accepted) or 0 (rejected) like QDialog.DialogCode."""
@@ -113,6 +118,7 @@ def _stub_export(
     output_path: Path | None = Path("export.csv"),
     scope: ExportScope | None = None,
     format_name: str = "csv",
+    active_criteria: PhotoSearchCriteria | None = None,
 ):
     """Replace the dialog + controller.export with recorders; keep real wiring.
 
@@ -124,7 +130,7 @@ def _stub_export(
     runnable = _make_runnable()
     created: list[_FakeExportDialog] = []
 
-    def _dialog_factory(parent=None) -> _FakeExportDialog:
+    def _dialog_factory(parent=None, active_criteria=None) -> _FakeExportDialog:
         """Build the fake dialog at call time so the parent wiring is captured."""
         dialog = _FakeExportDialog(
             parent=parent,
@@ -132,6 +138,7 @@ def _stub_export(
             output_path=output_path,
             scope=scope,
             format_name=format_name,
+            active_criteria=active_criteria,
         )
         created.append(dialog)
         return dialog
@@ -140,8 +147,16 @@ def _stub_export(
     monkeypatch.setattr(
         window._export_controller,
         "export",
-        lambda output_path, scope=ExportScope.ALL, format_name=None: (
-            calls.append({"path": output_path, "scope": scope, "format": format_name}) or runnable
+        lambda output_path, scope=ExportScope.ALL, format_name=None, criteria=None: (
+            calls.append(
+                {
+                    "path": output_path,
+                    "scope": scope,
+                    "format": format_name,
+                    "criteria": criteria,
+                }
+            )
+            or runnable
         ),
     )
     return calls, runnable, created
@@ -179,6 +194,7 @@ def test_accepted_dialog_submits_scope_format_and_disables_action(qtbot, tmp_pat
             "path": dialog.output_path,
             "scope": ExportScope.FILTERED,
             "format": "csv",
+            "criteria": None,
         }
     ]
     assert dialog.parent is window  # dialog is parented to the MainWindow
@@ -264,7 +280,12 @@ def test_running_action_disabled_prevents_duplicate_submission(qtbot, tmp_path, 
     calls, _, _ = _stub_export(window, monkeypatch)
     window._export_action.trigger()
     assert calls == [
-        {"path": calls[0]["path"], "scope": ExportScope.FILTERED, "format": "csv"}
+        {
+            "path": calls[0]["path"],
+            "scope": ExportScope.FILTERED,
+            "format": "csv",
+            "criteria": None,
+        }
     ]
 
     assert window._export_action.isEnabled() is False  # no double-click surface
@@ -349,12 +370,15 @@ def test_reenabled_action_permits_second_export(qtbot, tmp_path, monkeypatch) ->
     calls: list = []
     runnables: list = []
     dialog = _FakeExportDialog(output_path=tmp_path / "second.csv")
-    monkeypatch.setattr(main_window_module, "ExportDialog", lambda parent=None: dialog)
+    monkeypatch.setattr(
+        main_window_module, "ExportDialog",
+        lambda parent=None, active_criteria=None: dialog,
+    )
     monkeypatch.setattr(
         window._export_controller,
         "export",
-        lambda output_path, scope, format_name: (
-            calls.append((output_path, scope, format_name))
+        lambda output_path, scope, format_name, criteria=None: (
+            calls.append((output_path, scope, format_name, criteria))
             or runnables.append(_make_runnable())
             or runnables[-1]
         ),
@@ -370,4 +394,149 @@ def test_reenabled_action_permits_second_export(qtbot, tmp_path, monkeypatch) ->
     window._export_action.trigger()
     assert len(calls) == 2  # second export actually dispatched
     assert runnables[0] is not runnables[1]  # fresh runnable per submission
+
+
+# ── Phase 7 Commit 3: scope selection wiring (FEATURE-004 F2/F3/D3/F5) ──
+
+
+def test_filter_criteria_is_held_updated_and_cleared(qtbot, tmp_path) -> None:
+    """F2: _current_criteria mirrors the FilterBar criteria — set/update/clear.
+
+    Holds ONLY the criteria snapshot, never a copied photo list: the list refresh
+    stays the existing ``_on_filter_changed`` path (unchanged protocol), and the
+    export re-queries via PhotoRepository.search at execution time.
+ A cleared
+    filter (None) empties the holding point so FILTERED becomes unselectable.
+.
+    """
+    window = _make_window(qtbot, tmp_path)
+    criteria_a = PhotoSearchCriteria(match_status=MatchStatus.PENDING)
+    window._on_filter_changed(criteria_a)
+    assert window._current_criteria is criteria_a
+
+    criteria_b = PhotoSearchCriteria(match_status=MatchStatus.APPROVED)
+    window._on_filter_changed(criteria_b)
+    assert window._current_criteria is criteria_b  # updated, not accumulated
+
+    window._on_filter_changed(None)
+    assert window._current_criteria is None  # cleared — no active filter
+
+
+def test_export_dialog_filtered_requires_active_criteria(qtbot, tmp_path) -> None:
+    """F3: real dialog — FILTERED radio enabled with a criteria, disabled without."""
+
+    window = _make_window(qtbot, tmp_path)
+    with_criteria = ExportDialog(parent=window, active_criteria=PhotoSearchCriteria(match_status=MatchStatus.PENDING))
+    qtbot.addWidget(with_criteria)
+    assert with_criteria._scope_radios[ExportScope.FILTERED].isEnabled() is True
+
+    without_criteria = ExportDialog(parent=window, active_criteria=None)
+    qtbot.addWidget(without_criteria)
+    assert without_criteria._scope_radios[ExportScope.FILTERED].isEnabled() is False
+    assert (
+        without_criteria._scope_radios[ExportScope.FILTERED].toolTip()
+        == "Set a filter in the filter bar to enable this scope."
+    )
+
+
+def test_export_dialog_current_batch_always_disabled_and_has_tooltip(qtbot, tmp_path) -> None:
+    """D3: real dialog — CURRENT_BATCH radio stays visible but never selectable."""
+
+    window = _make_window(qtbot, tmp_path)
+    dialog = ExportDialog(parent=window)
+    qtbot.addWidget(dialog)
+    radio = dialog._scope_radios[ExportScope.CURRENT_BATCH]
+    assert radio.isEnabled() is False
+    assert "not implemented" in radio.toolTip()
+
+
+def test_export_dialog_all_always_enabled(qtbot, tmp_path) -> None:
+    """ALL scope radio stays always enabled (unchanged behavior)."""
+
+    window = _make_window(qtbot, tmp_path)
+    dialog = ExportDialog(parent=window)
+    qtbot.addWidget(dialog)
+    assert dialog._scope_radios[ExportScope.ALL].isEnabled() is True
+    assert dialog.scope is ExportScope.ALL  # still the default
+
+
+def test_export_forwards_criteria_by_scope(qtbot, tmp_path, monkeypatch) -> None:
+    """F5: ALL → criteria=None; FILTERED → the held _current_criteria snapshot.â†©
+
+    The held criteria is forwarded verbatim into controller.export — proving the wiring
+    passes the criteria snapshot (not a copied photo list).
+    """
+    window = _make_window(qtbot, tmp_path)
+    held = PhotoSearchCriteria(match_status=MatchStatus.PENDING)
+    window._current_criteria = held
+
+    calls, _, _ = _stub_export(window, monkeypatch, scope=ExportScope.FILTERED)
+    window._export_action.trigger()
+    assert calls == [{
+        "path": Path("export.csv"),
+        "scope": ExportScope.FILTERED,
+        "format": "csv",
+        "criteria": held,
+    }]
+
+    calls2, _, _ = _stub_export(window, monkeypatch, scope=ExportScope.ALL)
+    window._export_action.setEnabled(True)  # re-enable between the two runs
+    window._export_action.trigger()
+    assert calls2 == [{
+        "path": Path("export.csv"),
+        "scope": ExportScope.ALL,
+        "format": "csv",
+        "criteria": None,
+    }]
+
+
+class _SentinelExporter:
+    """Sentinel Exporter — guard fires before any exporter interaction."""
+
+
+class _DummyRepo:
+    """Minimal repo that proves the dispatch guard fires before any repository call."""
+
+    def __getattr__(self, name) -> object:
+        raise AssertionError(f"FILTERED+None guard must reject before contacting {name}")
+
+
+class _RecordingExecutor:
+    """Fake QtWorkerExecutor — records the submitted task instead of running it."""
+
+    def __init__(self) -> None:
+        self.submitted: list[object] = []
+
+    def submit(self, task) -> object:
+        self.submitted.append(task)
+        return task
+
+
+def test_service_guard_still_rejects_filtered_without_criteria_through_real_chain(qtbot, tmp_path) -> None:
+    """Guard: bypassing the UI — controller→task→service still raises ValueError.
+
+	The UI disable is the first UX layer; the Commit-2 Service invariant is the
+	second: FILTERED + criteria=None is rejected even when a caller drives the
+	real ExportController → ExportTask → ExportService chain without a criteria.
+	"""
+    import pytest
+
+    service = ExportService(
+        person_repository=_DummyRepo(),
+        photo_repository=_DummyRepo(),
+        recognition_repository=_DummyRepo(),
+        archive_record_repository=_DummyRepo(),
+    )
+    controller = ExportController(
+        service=service,
+        exporter=_SentinelExporter(),  # type: ignore[arg-type]
+        executor=_RecordingExecutor(),  # type: ignore[arg-type]
+    )
+
+    runnable = controller.export(
+        Path("export.csv"), scope=ExportScope.FILTERED, criteria=None,
+    )
+
+    with pytest.raises(ValueError, match="FILTERED requires a PhotoSearchCriteria"):
+        runnable.run()
 

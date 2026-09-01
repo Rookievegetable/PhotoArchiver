@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from loguru import logger
 
 from photo_archiver.app.context import ApplicationContext
+from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.application.dtos.plugin_action_result import ActionResult
 from photo_archiver.domain import PhotoSearchCriteria
 from photo_archiver.presentation.controllers import (
@@ -85,6 +86,7 @@ class MainWindow(QMainWindow):
         self._build_central()
         self._build_status()
         self._active_runnable: QtWorkerRunnable | None = None  # tracks the currently running worker
+        self._current_criteria: PhotoSearchCriteria | None = None  # FEATURE-004 F2: sole UI holding point
 
     def _build_controllers(self) -> None:
         """Assemble the four controllers from context services + worker executor."""
@@ -283,6 +285,12 @@ class MainWindow(QMainWindow):
         ``criteria`` is typed ``object`` because Qt Signal carries it opaquely;
         the FilterBar only ever emits ``PhotoSearchCriteria | None``.
         """
+        # F2: mirror the criteria into the sole UI holding point (a conditions
+        # snapshot, not a result-set copy — the export re-queries via
+        # PhotoRepository.search at execution time).
+        self._current_criteria = (
+            criteria if isinstance(criteria, PhotoSearchCriteria) else None
+        )
         if not isinstance(criteria, PhotoSearchCriteria):
             # None or unexpected type → fall back to unfiltered list.
             self._refresh_photo_list()
@@ -545,7 +553,7 @@ class MainWindow(QMainWindow):
         baseline contract), so no cancellation slot is fabricated; the Cancel
         toolbar action stays untouched for export runs.
         """
-        dialog = ExportDialog(parent=self)
+        dialog = ExportDialog(parent=self, active_criteria=self._current_criteria)
         if not dialog.exec():
             return
         output_path = dialog.output_path
@@ -556,10 +564,16 @@ class MainWindow(QMainWindow):
         self._export_action.setEnabled(False)
         self._progress.setValue(0)
         self._status_label.setText("Exporting ...")
+        scope = dialog.scope
+        # F5: the criteria snapshot rides only the FILTERED scope; ALL ignores
+        # it. Still, UI-side disable is just the first UX layer — the Service
+        # independently rejects FILTERED + None (Commit-2 invariant).
+        criteria = self._current_criteria if scope is ExportScope.FILTERED else None
         runnable = self._export_controller.export(
             output_path,
-            scope=dialog.scope,
+            scope=scope,
             format_name=dialog.format_name,
+            criteria=criteria,
         )
         self._export_controller.connect_signals(
             runnable,
