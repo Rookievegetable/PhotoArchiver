@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.7.2 · Last Updated: 2026-08-31 · Status: Live
+> Version: 1.8.0 · Last Updated: 2026-09-02 · Status: Live
 
 ---
 
@@ -61,7 +61,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | Phase 7 死重剔除（v2.2.0） | ✅ | ADR-033 三项裁决全 A（W2-1 landmark 剔除 / W2-2 genderage 一并剔除，owner 确认近期无性别年龄功能规划 / W2-3 剩余非推理段本轮不改造）——loader `allowed_modules=("detection","recognition")` 落地，bbox/kps/embedding 逐字节不变；`tools/bench_recognition.py` 全网格复测落 docstring：2600×1 656.94→332.02s（**1.98×**）、2600×4 514.00→231.68s（**2.22×**）、600×4 2.45×，全部格子 100% 产出 / 全 PENDING 等价保持；门禁本地全绿（ruff 0 / mypy 168 ✓ / pytest **417** passed）；证据链 `tools/spike_segment_profile.py` v2（账目闭合）+ phase7 定稿（`docs/development/phase7-adr-draft.md`）。CI 实证已回填（owner push 后 API 实测 head `4fe8aa4` CI run completed/success 三平台全绿，2026-08-29）；发版链实证——tag `v2.1.0`@`bd52fbb` / tag `v2.2.0`@`f9fb8c5` 已由 owner 推送（ls-remote 实测远端指向正确），两 tag 触发 release workflow，owner 确认 CI 全绿，v2.1.0 / v2.2.0 已发布（2026-08-29）。 |
 | CI | ✅ | GitHub Actions 三 OS 矩阵、模型缓存与 AI/UI 断言已启用。 |
 
-当前 HEAD：`f9fb8c5`（phase7 CI 实证回填登记，tag `v2.2.0` 指向本提交）；本地 main 领先 origin/main（=`4fe8aa4`）1 笔——`f9fb8c5` 已随 v2.2.0 tag 推入远端对象库，分支引用未推，按 GIT-020 留待 owner `git push origin main` 对齐（非阻塞）。tag 全景（本地=远端 ls-remote 实测）：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`。CI 全绿 owner 确认（2026-08-29，含 v2.1.0 / v2.2.0 tag release workflow）；v2.1.0 / v2.2.0 两 Release 已发布。历史链：`4fe8aa4`（phase7 登记）、`9f0bede`（phase7 实现）、`ce3f49c`（phase7 草案登记）、`bd52fbb`（W1 尖刺证据）、`028675b`（phase6 登记）、`0871048`（phase6 实现，CI run 33237717725 三平台实证）。
+当前 HEAD：`5aad031`（docs(audit): close Phase 7 FEATURE-004——Phase 7 Closure 提交）；origin/main = `d762751`（Phase 6/7 发版链收口登记），本地 main 领先远端 22 笔（Phase 4.2 → Phase 7 全部实现/审计/收口提交，`git ls-remote` + `git merge-base` 实测远端无本地缺失提交），分支引用推送按 GIT-020 留待 owner `git push origin main` 对齐（非阻塞）。tag 全景（本地 `git tag` 实测）：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`；v2.1.0 / v2.2.0 两 Release 已发布（owner 推送 + CI 全绿确认，2026-08-29）。历史链：`d762751`（Phase 6/7 发版链收口）、`f9fb8c5`（phase7 CI 回填）、`4fe8aa4`（phase7 登记）、`9f0bede`（phase7 实现）。
 
 ---
 
@@ -87,26 +87,25 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-08-29（本地） |
-| 生成者 | Cline |
-| 会话范围 | Phase 6 吞吐加固执行轮全程实施（并行化 + 批持久化 + 基准实测 + 文档收官）＋ W1 batch-inference 尖刺（ADR-032 二轮证据采集，owner 指令启动）＋ W2-segment 段内分解尖刺与 phase7 前置门草案（owner 拍板 A 路线启动）。 |
-| 已完成 | ① 草案转定稿（2026-08-28 owner 五项全按默认推荐拍板）并登记 **ADR-032**；② 实施落地——`match_persons_service.py` 串行段改 ThreadPoolExecutor 并行（并行段限纯推理、持久化收敛主线程、`max_workers=1` 逐字节原路径）、Domain 协议扩 `add_many` + SQLite 单事务批量 INSERT、等价/失败隔离/进度/单事务测试新增（pytest **410→417**）；③ 基准工具 `tools/bench_recognition.py` 完成五处 SIG-PATCH 真实签名对齐（`load()`/构造参/实体形状/`list_all()` dict 返回）+ 6 处修正后冒烟通过；④ 全网格基线实测（37.4 min，exit 0）：2600 张串行 656.94s → 4 workers 514.00s（**1.28×**），session 跨线程共享实测安全，数字落 docstring 防回退；⑤ 主 diff 合规审查 **0 Critical / 0 Major / 0 Minor**；⑥ 门禁全绿：ruff ✓ / mypy 168 文件 ✓ / pytest **417 passed**；⑦ 文档收官——CHANGELOG `[2.1.0]` 段、phase6 §6 核销（4/6 勾销 + 性能目标与 CI 两项诚实注记）、版本链 bump 2.1.0（pyproject + .env.example）、ADR-032 登记、GIT-020 工作流规则入库（commit-only）。⑧ W1 尖刺执行与落档（`tools/spike_batch_inference.py`，ORT 1.27.0 CPU / Ryzen 7 5800H 8C16T）——三模型 IO 探测（rec/genderage 输入 batch 维动态、det 固定 1）；det 线程扫描 intra=8→57.0ms vs intra=1→249.6ms（≈串行端到端全额，线程配置为检测器生死线）；复合并发矩阵（det+rec 共享会话同生产）：1×8=9.05、4×8=13.73、4×4=13.55、8×1=13.21 photos/s——**线程超订阅假设证伪**（全区间 13.2–13.7）；瓶颈改址：端到端 5.06 vs 纯推理 ≈13.7 photos/s，2.7× 落差定址非推理 GIL 串行段（~143ms/张：imread/预处理/SCRFD 解码/对齐/DB，天花板 ≈7.0 photos/s）。⑨ rec/genderage 网格纯净复跑（stdout 直写文件取数）：**批推理在纯推理侧亦证伪**——同 intra 全格 ≤1.04×（intra≥4 区 0.82–0.98× 回退），动态 batch 维是红鲱鱼（能用但不增益）；intra 线程是推理侧唯一杠杆（rec B=1 118.84→27.34 ms/img，**4.3×**，生产默认 intra=8 已近膝点）；genderage 代价可忽略（~0.31ms/张）且批化回退。**W2-batch 证据性出局**，二轮题设收敛为「W2-segment 主攻非推理段 / 止于 v2.1.0」二选一。完整数据表落脚本 docstring。⑩ W2-segment 尖刺执行（`tools/spike_segment_profile.py` v1→v2）——v1 计量器污染 bug（分解行在并发阶段后计算，产出 886ms 混合垃圾值）当场诊断并修正为阶段边界快照法（v1 教训留档脚本 docstring）；v2 账目闭合（分解和 251.3 ≈ analysis.get 249.4 ≈ 端到端 254.4 ms/张）。⑪ 段内分解与 A/B 移除实验出数：**landmark 双模型（1k3d68+2d106det）35.4ms 纯死重**（生产仅消费 bbox+kps+embedding；Person 域无性别年龄字段，genderage 9.8ms 同为死重，src 全库 grep 零消费实证）——剔除实验 254.4→167.1（1.522×）→128.2（**1.985×**）ms/张；剔除落点锁定 `insightface_loader.py:75` 裸构造未传 `allowed_modules`；并发段 4 线程 5.66 photos/s（1.44×，ORT 累计 390% 墙钟，推理重叠良好）。**phase7 前置门草案产出**（`docs/development/phase7-adr-draft.md`：§1 证据链 F1-F8 + §2 三裁决点 W2-1/W2-2/W2-3 + §3 拟议变更 + §4 不变量 + §6 完成标准，预估端到端 1.8–2.2×），待 owner 拍板转定稿。⑫ **owner 三项全 A 拍板（2026-08-29：W2-1=A / W2-2=A 附前提确认「近期无性别/年龄功能规划」/ W2-3=A）→ phase7 转定稿执行轮**：loader `allowed_modules=("detection","recognition")` 落地（死重剔除，bbox/kps/embedding 逐字节不变）；`bench_recognition.py` 全网格复测落 docstring——2600×1 656.94→332.02s（**1.98×**）、2600×4 514.00→231.68s（**2.22×**）、600×4 2.45×，九格全 100% 产出 / 全 PENDING；门禁 ruff 0 / mypy 168 ✓ / pytest **417 passed**；CHANGELOG `[2.2.0]` 段 + ADR-033 登记 + 版本链 2.2.0 + phase7 §6 checkbox 五勾全清（CI 项已按 phase6 惯例回填，2026-08-29）。⑬ 发版收官（2026-08-29）——owner 完成全部手动动作：push main（origin/main=`4fe8aa4`）、tag `v2.1.0`@`bd52fbb` 与 tag `v2.2.0`@`f9fb8c5` 推送（ls-remote 实测远端两 tag 指向正确），两 tag 触发 release workflow，owner 确认 **CI 全绿**，v2.1.0 / v2.2.0 两 Release 已发布。本地 `f9fb8c5`（CI 回填登记）已随 v2.2.0 tag 进入远端对象库，但 main 分支引用停在 `4fe8aa4`（ahead 1，按 GIT-020 留待 owner 下次 `git push origin main` 对齐，非阻塞）。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 168 个源文件无问题；pytest 全量 **417 passed**（本地实测）。CI 三平台实证全绿（run 33237717725 @ `14cfe1b` 及 phase7 push 后 head `4fe8aa4` CI run，windows/macos/ubuntu 三 job completed/success，2026-08-29 API 实测）。 |
-| 工作区 | W2 轮已全部提交并随 tag 推送：实现提交 `9f0bede`（loader `allowed_modules` 一行配置 + bench 复测数字 docstring）、登记提交 `4fe8aa4`、CI 回填 `f9fb8c5`（tag `v2.2.0` 指向）；证据工具 `tools/spike_segment_profile.py` / `tools/spike_batch_inference.py` 已入库；本地无未提交改动（工作区干净）。远端对象库已含全部提交；仅 main 分支引用停在 `4fe8aa4`（=`f9fb8c5` 前 1 笔，待 owner push 对齐）。 |
-| Remaining | 无代码/文档阻塞项、无待裁决项。发版动作（GIT-020 归 owner）已全部完成：push main（`4fe8aa4`）、tag `v2.1.0`@`bd52fbb`、tag `v2.2.0`@`f9fb8c5` 均已推送（ls-remote 实证），owner 确认 CI 全绿。可选收尾（均非阻塞）：① `git push origin main` 将 main 分支引用对齐至 `f9fb8c5`（该提交已入远端对象库）；② 若 v2.1.0 / v2.2.0 Release body 尚未置顶粘贴对应 CHANGELOG 段摘要，可补（沿用已两次验证的粘贴流程）。 |
-| Next Step | v2.1.0 / v2.2.0 已发布（owner 推送 + CI 全绿确认，2026-08-29），吞吐线（phase6 并行化 + phase7 死重剔除：3.96 → **11.22** photos/s，生产 4-worker @2600 张）**正式收敛关闭**（W2-3=A：剩余非推理段 ~38ms/张 deliberate deferral，未来需 >2.2× 增益另起前置门）。项目回归条件触发休眠区，无排期事项。 |
+| 时间 | 2026-09-02（本地） |
+| 生成者 | ZCode (GLM-5.3-Flash) |
+| 会话范围 | Phase 7（FEATURE-004 Export Scope）Commit 4 集成收口 + Closure；Phase 8 Baseline Audit；Phase 8 Contract Revision（owner 提供执行规则后启动）。 |
+| 已完成 | ① **Phase 7 Commit 4**（`747ccab` test(export): scope integration closure）——新增 `tests/integration/export/test_export_scope_integration.py`（7 tests）：真实 SQLite 全链 FILTERED CSV（UI 链）+ XLSX（Task 链）逐项断言 + Photo A/B 泄漏矩阵零泄漏；CURRENT_BATCH / FILTERED+criteria=None 经真实 Task 链与真实 UI 链双重拒绝（契约文案逐字断言、无导出文件、无 fallback）；ALL 回归（同库 8 行 approved-only 语义不变）。`PHASE_7_FINAL_AUDIT.md`（§1–§11）落档：**AC 8/8 PASS**，F-001 CLOSED，F-002 单跑 ×2 稳定复判为同一已知 flake。② **Phase 7 Closure**（`5aad031` docs(audit): close Phase 7 FEATURE-004）——PROJECT_STATUS §2 追加 Phase 7 记录；KNOWN_ISSUES 对账不变（F-001/F-002 审计级登记先例）；`PHASE_7_CLOSURE.md` 落档，**Phase 7 CLOSED**。③ **Phase 8 Baseline Audit**（`docs/health-check/PHASE_8_BASELINE_AUDIT.md`，独立实测）——Git 基线/架构/schema/依赖/测试/质量门全绿，但 Phase 8 无正式 Feature 契约 → **BLOCKED**（登记 P3 文档漂移 Finding 2 项 + 新发现 1 项）。④ **Phase 8 Contract Revision**（owner 提供执行规则 `docs/health-check/PHASE 8 — CONTRACT REVISION EXECUTION RULES.md` 解锁；本会话执行）——Finding Ledger 建立 + 逐条复验：F8-001 PROJECT_STATUS 当前状态漂移 / F8-002 KNOWN_ISSUES 版本头漂移 / F8-003 AI_ONBOARDING 自测答案漂移（三项均 F1 Documentation Drift，文档修订）；Worker/Qt 依赖契约（DEP-040/WRK-002/ADR-007/`qt_executor.py`）与 Schema/Configuration 契约复验一致（F0 无 Finding）；修订、验证、提交与 Post-Revision Audit 见 `docs/health-check/PHASE_8_CONTRACT_REVISION.md`。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 170 个源文件无问题；pytest 全量 **534 passed / 3 skipped**（F-002 已知 flake 偶发时单跑 ×2 稳定——Phase 4.2/5/6/7 历史记录一致）；`pip check` 无损坏依赖。 |
+| 工作区 | Phase 7 全链（`d339904`→`747ccab`→`5aad031`）已提交，工作区 tracked 零改动；origin/main = `d762751`，本地领先 22 笔按 GIT-020 留待 owner push（非阻塞）。Phase 8 交付物（Baseline Audit / Contract Revision / Post-Revision Audit 报告）随后续提交入库。 |
+| Remaining | 无代码/文档阻塞项。Phase 8 Contract Revision Finding 全部闭环（VERIFIED / F0）；F-002 维持 Known limitation（禁止修复）；LIMIT-001/002 维持。发版动作（GIT-020 归 owner）：`git push origin main` 将分支引用从 `d762751` 对齐至最新 HEAD（非阻塞）。 |
+| Next Step | Phase 8（Contract Revision）完成后项目回归**条件触发等待区**：无排期事项、无已授权 Feature。后续任何新 Feature（含 CURRENT_BATCH 批次持久化等 Candidate 池条目）均须 owner 另立前置门 + Feature 契约授权，AI 不得自行选定。 |
 
 ---
 
 ## 6. Next Step（下一步开发计划）
 
-Phase 7 死重剔除执行轮（ADR-033）与吞吐线已全部收官——**v2.1.0**（phase6 并行化 + W1 证据，@`bd52fbb`）与 **v2.2.0**（死重剔除 ~2×，@`f9fb8c5`）已由 owner tag 发布（ls-remote 实测远端指向正确，owner 确认 CI 全绿，2026-08-29）。原 owner 发版动作清单回顾：
+**Phase 8（Contract Revision）执行状态**：owner 以 `docs/health-check/PHASE 8 — CONTRACT REVISION EXECUTION RULES.md` 授权本阶段——将 Baseline Audit 已确认的 Contract 偏差转为经验证、最小范围、可追溯的 Contract Revision。
 
-1. ~~**push main**~~ ✅ 已完成（2026-08-29，origin/main = `4fe8aa4`，CI run API 实测 completed/success 三平台全绿；phase7 §6 CI checkbox 与本文件均已回填）。
-2. ~~**tag `v2.1.0` @ `bd52fbb` 推送发版**~~ ✅ 已完成（2026-08-29，远端 ls-remote 实测指向 `bd52fbb445`；Release body 摘要粘贴按既定流程可选补充）。
-3. ~~**tag `v2.2.0` @ 登记链最终 HEAD 推送发版**~~ ✅ 已完成（2026-08-29，远端 ls-remote 实测指向 `f9fb8c5`；Release body 摘要粘贴按既定流程可选补充）。
+1. ~~Phase 8 Baseline Audit~~ ✅ 已完成（2026-09-02，`PHASE_8_BASELINE_AUDIT.md`：基线健康 + BLOCKED 登记 3 项 F1 文档漂移 Finding）。
+2. ~~Phase 8 Contract Revision~~ ✅ 已完成（Finding Ledger 全闭环：F8-001/002/003 F1 文档修订 VERIFIED；Worker/Qt 依赖契约与 Schema/Configuration 契约 F0 无 Finding；报告 `PHASE_8_CONTRACT_REVISION.md` + `PHASE_8_POST_REVISION_AUDIT.md`）。
 
-吞吐线状态：**正式收敛关闭**——batch 批推理经 W1 证据出局（ADR-032/phase6 注记）；剩余非推理段 ~38ms/张经 W2-3=A 本轮不改造，如未来需要 >2.2× 增益须另起前置门附页带新证据裁决。其余条件触发行不变：真实高危插件写用例→审批门复审（ADR-028 裁决点 2=B/C）；非技术用户分发需求→phase5 定稿方案 B 另起前置门；UI 识别触发点→功能轮另立（A-5=B）。
+吞吐线与历史阶段状态不变：Phase 4.2 / 5 / 6 / 7 全部 CLOSED（详见 §2）；v2.1.0 / v2.2.0 已发布；剩余非推理段改造（W2-3=A）、插件审批门、分发方案 B、CURRENT_BATCH 批次持久化等均为**条件触发型 Deferred/Candidate**——触发前不排期、不自动选定。发版收尾（非阻塞，GIT-020 归 owner）：`git push origin main` 对齐分支引用（本地领先 origin/main `d762751` 22 笔）。
 
 ## 7. Key Files（关键文件索引）
 
