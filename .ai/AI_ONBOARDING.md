@@ -379,7 +379,7 @@ Step 0.5-15 全部完成（Walking Skeleton / Logging / Configuration / Database
 <details>
 <summary>参考答案</summary>
 
-当前**无未决 O 级问题**——历史风险均已解决（ISSUE-007 质量飘带已清零；ISSUE-012~015 文档体系漂移已治理，占位文档已删除）。现存仅两项设计/测试覆盖限制（`KNOWN_ISSUES.md` Limit 表）：LIMIT-001（真实缺模型 E2E 未纳入 CI）与 LIMIT-002（识别取消粒度为 batch-level）；另有审计级已知 flake F-002（match 控制器线程池时序，全量偶发、单跑稳定，历轮 Final Audit 记录一致）。质量门基线：ruff 0 / mypy 170 files 0 / pytest 534 passed。
+当前**无未决 O 级问题**——历史风险均已解决（ISSUE-007 质量飘带已清零；ISSUE-012~015 文档体系漂移已治理，占位文档已删除）。现存四项设计/测试覆盖限制（`KNOWN_ISSUES.md` Limit 表）：LIMIT-001（真实缺模型 E2E 未纳入 CI）、LIMIT-002（识别取消粒度为 batch-level）、LIMIT-003（F-002 状态恶化——match 控制器线程池时序 flake，2026-09-02 实测全量 1 failed 且**单跑 ×2 均失败**，历史"单跑稳定"口径失效；属测试时序问题非生产缺陷，处置属 Phase C）与 LIMIT-004（Qt 子集顺序原生崩溃）。质量门基线：ruff 0 / mypy 171 files 0 / pytest 570 passed / 3 skipped / 1 failed（唯一 failed = F-002，见 LIMIT-003）。
 </details>
 
 ### Q5. 有哪些架构约束？
