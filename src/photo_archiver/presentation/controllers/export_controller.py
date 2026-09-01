@@ -16,6 +16,7 @@ from PySide6.QtCore import QObject, Slot
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.application.services.export_service import ExportService
 from photo_archiver.application.ports.exporter import Exporter
+from photo_archiver.domain import PhotoSearchCriteria
 from photo_archiver.workers import ExportTask, QtWorkerExecutor
 
 
@@ -61,6 +62,7 @@ class ExportController(QObject):
         output_path: Path,
         scope: ExportScope = ExportScope.ALL,
         format_name: str | None = None,
+        criteria: PhotoSearchCriteria | None = None,
     ):
         """Start an export task and return its runnable handle.
 
@@ -68,6 +70,9 @@ class ExportController(QObject):
             format_name: ``"xlsx"`` / ``"csv"`` / ``"html"`` for exporter lookup.
                 When None, falls back to the default exporter injected at construction
                 (backward compat for legacy callers that don't pass format).
+            criteria: ``PhotoSearchCriteria`` snapshot forwarded into the
+                ``ExportTask`` verbatim; consumed only by the ``FILTERED``
+                scope (see docs/health-check/PHASE_7_SCOPE_CONTRACT_REVISION.md §3/F5).
 
         The returned runnable exposes a ``signals`` attribute the caller uses
         to connect UI slots via :meth:`connect_signals`.
@@ -78,6 +83,7 @@ class ExportController(QObject):
             exporter=exporter,
             output_path=str(output_path),
             scope=scope,
+            criteria=criteria,
         )
         return self._executor.submit(task)  # type: ignore[arg-type]  # generics variance
 

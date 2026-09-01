@@ -22,6 +22,7 @@ from photo_archiver.application.dtos.export import (
     ExportPhotoRow,
     ExportScope,
 )
+from photo_archiver.domain import PhotoSearchCriteria
 from photo_archiver.domain.repositories import (
     ArchiveRecordRepository,
     PersonRepository,
@@ -57,6 +58,7 @@ class ExportService:
         exporter: Exporter,
         output_path: str,
         scope: ExportScope = ExportScope.ALL,
+        criteria: PhotoSearchCriteria | None = None,
     ) -> str:
         """Gather data, flatten to rows, and delegate to the given exporter.
 
@@ -64,11 +66,15 @@ class ExportService:
             exporter: A concrete ``Exporter`` (Excel / CSV / …).
             output_path: Where the exporter should write the output file.
             scope: Which subset of data to export (default: everything).
+            criteria: ``PhotoSearchCriteria`` snapshot reserved for the
+                ``FILTERED`` scope. Threaded through to ``_gather_data``
+                verbatim; ``ALL`` ignores it. Contract:
+                ``docs/health-check/PHASE_7_SCOPE_CONTRACT_REVISION.md`` §3/F5.
 
         Returns:
             The summary message returned by the exporter.
         """
-        data = self._gather_data(scope)
+        data = self._gather_data(scope, criteria)
         rows = self._flatten(data)
         logger.info(
             "ExportService: scope={} people={} photos={} matches={} archive_records={} rows={}",
@@ -81,11 +87,18 @@ class ExportService:
         )
         return exporter.export(rows, output_path)
 
-    def _gather_data(self, scope: ExportScope) -> ExportData:
+    def _gather_data(
+        self,
+        scope: ExportScope,
+        criteria: PhotoSearchCriteria | None = None,
+    ) -> ExportData:
         """Gather export data from repositories according to the chosen scope.
 
         ``CURRENT_BATCH`` and ``FILTERED`` scopes are stubbed for now; only
-        ``ALL`` is fully implemented.
+        ``ALL`` is fully implemented. ``criteria`` is accepted for the
+        ``FILTERED`` contract (criteria snapshot re-query) and is not consumed
+        until the per-scope dispatch lands — ``ALL`` output is identical
+        whether or not a criteria is supplied.
         """
         people = self._person_repo.list_all()
         photos = self._photo_repo.list_all()

@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.application.services.export_service import ExportService
+from photo_archiver.domain import PhotoSearchCriteria
 from photo_archiver.domain.entities import ArchiveRecord, ArchiveStatus, MatchStatus, Person, Photo, RecognitionResult
 from photo_archiver.domain.repositories import (
     ArchiveRecordRepository,
@@ -266,3 +267,65 @@ class TestExportCsv:
             )
             assert output.exists()
             assert "Exported 0 rows" in result
+
+
+class TestScopeContractCompat:
+    """Phase 7 Commit 1 — ALL-scope invariance under the criteria signature.
+
+    Contract: docs/health-check/PHASE_7_SCOPE_CONTRACT_REVISION.md §6 Commit 1
+    threads an optional ``criteria`` through ``ExportService.export`` with ZERO
+    behavior change: ``ALL`` must produce identical output whether or not a
+    criteria snapshot is supplied (criteria is only ever consumed by the
+    ``FILTERED`` scope, delivered by a later FEATURE-004 commit).
+    """
+
+    def test_all_export_identical_with_and_without_criteria(self) -> None:
+        """ALL export output is byte-identical with criteria=None vs supplied."""
+        person_id = uuid4()
+        photo_id = uuid4()
+        person_repo = _InMemoryPersonRepository()
+        person_repo.add(Person(name="Carol", id=person_id))
+        photo_repo = _InMemoryPhotoRepository()
+        photo_repo.add(Photo(path=PhotoPath("photos/carol_party.jpg"), id=photo_id))
+        archive_repo = _InMemoryArchiveRecordRepository()
+        archive_repo.add(
+            ArchiveRecord(
+                photo_id=photo_id,
+                target_archive_root="Z:/Archive",
+                target_person_name="Carol",
+                target_event_or_date="2026-08-30",
+                target_original_name="carol_party.jpg",
+                status=ArchiveStatus.ARCHIVED,
+            )
+        )
+        service = ExportService(
+            person_repository=person_repo,
+            photo_repository=photo_repo,
+            recognition_repository=_InMemoryRecognitionRepository(),
+            archive_record_repository=archive_repo,
+        )
+
+        with TemporaryDirectory() as tmp:
+            plain = Path(tmp) / "plain.csv"
+            with_criteria = Path(tmp) / "with_criteria.csv"
+            result_plain = service.export(
+                exporter=CsvExporter(),
+                output_path=str(plain),
+                scope=ExportScope.ALL,
+            )
+            result_with_criteria = service.export(
+                exporter=CsvExporter(),
+                output_path=str(with_criteria),
+                scope=ExportScope.ALL,
+                criteria=PhotoSearchCriteria(match_status=MatchStatus.APPROVED),
+            )
+
+            # The exporter summary embeds the output file path — compare only
+            # the "Exported N rows" prefix; the real invariant is identical
+            # FILE CONTENT between the two runs.
+            assert result_plain.split()[:3] == result_with_criteria.split()[:3]
+            assert (
+                plain.read_text(encoding="utf-8-sig")
+                == with_criteria.read_text(encoding="utf-8-sig")
+            )
+            assert "Carol" in plain.read_text(encoding="utf-8-sig")

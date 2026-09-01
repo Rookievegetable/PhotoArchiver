@@ -14,11 +14,14 @@ class ExportScope(str, Enum):
     Inheriting from ``str`` keeps the enum serializable for CLI / configuration
     without extra adapters, following the convention from ``MatchStatus`` and
     ``ArchiveStatus``.
+
+    Scope contract (FEATURE-004): see
+    ``docs/health-check/PHASE_7_SCOPE_CONTRACT_REVISION.md``.
     """
 
-    ALL = "all"                     # All photos, people, results, archive records
-    CURRENT_BATCH = "current_batch" # The most recently processed batch
-    FILTERED = "filtered"           # A subset filtered by the caller
+    ALL = "all"                     # Full catalog: people, photos, matches, archive records
+    CURRENT_BATCH = "current_batch" # DEFERRED — needs batch persistence (contract §2)
+    FILTERED = "filtered"           # Criteria snapshot re-query (contract §3)
 
 
 @dataclass(frozen=True, slots=True)
