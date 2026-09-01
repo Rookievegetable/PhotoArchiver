@@ -271,10 +271,6 @@ class MainWindow(QMainWindow):
     def _build_central(self) -> None:
         """Create the central photo list view with a filter bar above it."""
         central = QWidget(self)
-        # P0-3 manual-smoke finding: same rationale as FilterBar's
-        # autoFillBackground — without it, regions exposed by filter-bar
-        # reflows or closed popups keep stale pixels (ghost widgets).
-        central.setAutoFillBackground(True)
         layout = QVBoxLayout(central)
 
         # B2 搜索/筛选：FilterBar 在列表上方，发 criteria_changed → 刷新列表。

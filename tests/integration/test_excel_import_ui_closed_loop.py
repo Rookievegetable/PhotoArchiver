@@ -97,6 +97,3 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
     )
     assert person_combo.itemText(0) == "All persons"
     assert person_combo.count() == 3
-    # The central surface must paint its background: without it, the reflow
-    # triggered by this very import leaves ghost pixels on the real desktop.
-    assert window.centralWidget().autoFillBackground() is True

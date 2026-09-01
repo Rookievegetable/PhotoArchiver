@@ -55,11 +55,6 @@ class FilterBar(QWidget):
 
     def _build_ui(self) -> None:
         """Lay out the filter controls horizontally."""
-        # P0-3 manual-smoke finding: a plain QWidget paints no background, so
-        # regions exposed by child reflows (person-combo refill after an
-        # import) or closed popups kept stale pixels that looked like
-        # misplaced ghost widgets on the real desktop. Fill the bar's rect.
-        self.setAutoFillBackground(True)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
 
@@ -99,6 +94,11 @@ class FilterBar(QWidget):
         self._to_edit.setEnabled(False)
         self._to_edit.setToolTip("Match photos captured on or before this date.")
         self._to_edit.setDateTime(QDateTime.currentDateTime())
+        # P0-3: the To edit MUST join the layout — without addWidget it sat as
+        # an unmanaged child at (0,0,100,30), overlapping and blocking the
+        # Person axis (found via manual desktop smoke; Phase 9 FEAT-P9-1 gap).
+        layout.addWidget(self._to_edit)
+
         layout.addStretch(1)
 
         self._clear_button = QPushButton("Clear", self)
