@@ -6,7 +6,7 @@
 >
 > 动态维护，实时更新。问题解决后**立即删除**，不保留历史记录。
 >
-> Version: 1.6.0 ｜ Last Updated: 2026-08-26 ｜ Status: Live
+> Version: 1.7.0 ｜ Last Updated: 2026-09-02 ｜ Status: Live
 
 ---
 
