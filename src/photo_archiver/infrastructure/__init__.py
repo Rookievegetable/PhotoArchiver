@@ -24,7 +24,11 @@ from photo_archiver.infrastructure.image import (
     PillowThumbnailGenerator,
     ThumbnailCache,
 )
-from photo_archiver.infrastructure.importers import ExcelPersonImportReader, TxtPersonImportReader
+from photo_archiver.infrastructure.importers import (
+    DispatchingPersonImportReader,
+    ExcelPersonImportReader,
+    TxtPersonImportReader,
+)
 from photo_archiver.infrastructure.persistence import (
     InMemoryUserSettingsStore,
 )
@@ -37,6 +41,7 @@ from photo_archiver.infrastructure.repositories import (
 __all__ = [
     "ContentHashCalculator",
     "CsvExporter",
+    "DispatchingPersonImportReader",
     "ExcelExporter",
     "ExcelPersonImportReader",
     "InMemoryFolderRepository",

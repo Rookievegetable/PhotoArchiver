@@ -55,6 +55,11 @@ class FilterBar(QWidget):
 
     def _build_ui(self) -> None:
         """Lay out the filter controls horizontally."""
+        # P0-3 manual-smoke finding: a plain QWidget paints no background, so
+        # regions exposed by child reflows (person-combo refill after an
+        # import) or closed popups kept stale pixels that looked like
+        # misplaced ghost widgets on the real desktop. Fill the bar's rect.
+        self.setAutoFillBackground(True)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
 

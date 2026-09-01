@@ -22,6 +22,8 @@ from photo_archiver.application import (
     SettingsService,
 )
 from photo_archiver.infrastructure import (
+    DispatchingPersonImportReader,
+    ExcelPersonImportReader,
     InMemoryUserSettingsStore,
     LocalPhotoFileScanner,
     PillowPhotoMetadataReader,
@@ -137,7 +139,16 @@ def build_application_services(
     list_persons_service = ListPersonsService(repositories.people)
 
     return ApplicationServices(
-        import_people=ImportPeopleService(TxtPersonImportReader(), repositories.people),
+        # P0-3: extension dispatch routes .xlsx/.xlsm to the openpyxl reader —
+        # before this wiring only the TXT reader was injected and the import
+        # UI's Excel option fed binary workbooks to the csv parser.
+        import_people=ImportPeopleService(
+            DispatchingPersonImportReader(
+                excel_reader=ExcelPersonImportReader(),
+                text_reader=TxtPersonImportReader(),
+            ),
+            repositories.people,
+        ),
         register_photo=RegisterPhotoService(repositories.photos, metadata_reader),
         scan_photo_folder=ScanPhotoFolderService(scanner),
         scan_and_register_photos=ScanAndRegisterPhotosService(
