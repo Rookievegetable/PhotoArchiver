@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
+from uuid import UUID
 
 from PySide6.QtCore import QDateTime, Signal
 from PySide6.QtWidgets import (
@@ -125,6 +126,11 @@ class FilterBar(QWidget):
         spurious criteria; a single ``_emit_criteria`` runs afterwards. The
         previously selected person is preserved when still present, otherwise
         the selection resets to "All persons".
+
+        The combo's userData carries the person id in **string** form:
+        QVariant compares wrapped Python objects by identity, so findData /
+        currentData round-trips would silently miss equal-valued but distinct
+        UUID instances. ``_emit_criteria`` converts back to UUID.
         """
         selected_id = self._person_combo.currentData()
         self._person_combo.blockSignals(True)
@@ -133,7 +139,7 @@ class FilterBar(QWidget):
             self._person_combo.addItem("All persons", None)
             for person in persons:
                 if person.id is not None:
-                    self._person_combo.addItem(person.name, person.id)
+                    self._person_combo.addItem(person.name, str(person.id))
         finally:
             self._person_combo.blockSignals(False)
         restore_index = self._person_combo.findData(selected_id)
@@ -147,7 +153,10 @@ class FilterBar(QWidget):
         ``None`` so the controller falls back to ``list_all`` rather than
         forcing a trivially-true search.
         """
-        person_id = self._person_combo.currentData()
+        # Person ids travel the combo as strings (see set_persons); convert
+        # back to the UUID the criteria VO expects.
+        person_data = self._person_combo.currentData()
+        person_id = UUID(person_data) if person_data else None
         status_value = self._status_combo.currentData()
         # A gated-off date edit carries no constraint even though QDateTimeEdit
         # always holds a value (the checkbox is the explicit "unset" state).

@@ -207,7 +207,10 @@ def test_set_persons_populates_combo_and_selection_filters(qtbot) -> None:
 
     assert bar._person_combo.count() == 3  # All persons + two entries
     assert bar._person_combo.itemText(1) == "Alice"
-    assert bar._person_combo.itemData(1) is alice.id
+    # userData carries the id in string form (QVariant identity pitfall).
+    from uuid import UUID
+
+    assert UUID(str(bar._person_combo.itemData(1))) == alice.id
     bar._person_combo.setCurrentIndex(1)
     assert recorder.last.person_id == alice.id
     assert recorder.last.match_status is None  # other axes unaffected
@@ -251,7 +254,7 @@ def test_set_persons_preserves_current_selection(qtbot) -> None:
 
     bar.set_persons([_make_person("Carol"), bob])  # Bob still present
 
-    assert bar._person_combo.currentData() == bob.id
+    assert bar._person_combo.currentData() == str(bob.id)
     # findData-set triggers currentIndexChanged → one re-emit, still Bob.
     assert recorder.last.person_id == bob.id
 
