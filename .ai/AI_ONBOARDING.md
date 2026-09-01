@@ -6,7 +6,7 @@
 >
 > 本文件回答的唯一问题：**"为了开始开发，我应该先了解什么？"**
 >
-> Version: 1.1.0 ｜ Status: Stable ｜ Last Updated: 2026-07-26 ｜ 适用范围: 任何 AI 编码助手（Codex / Claude / Gemini / Cursor / Windsurf / Roo Code / Cline / AtomCode 及未来 AI）
+> Version: 1.1.1 ｜ Status: Stable ｜ Last Updated: 2026-09-02 ｜ 适用范围: 任何 AI 编码助手（Codex / Claude / Gemini / Cursor / Windsurf / Roo Code / Cline / AtomCode 及未来 AI）
 
 ---
 
@@ -78,7 +78,7 @@ flowchart TD
 | 架构总览 | `docs/architecture/overview.md` | 需理解模块职责 |
 | 目录结构 | `docs/deployment/project-structure.md` | 新建文件、定位归属 |
 | 配置项 | `docs/development/configuration.md` + `.env.example` | 改配置、加 Settings 字段 |
-| 开发路线图 | `.ai/business/roadmap.md`（15 步） | 推进 Step、判断下一步 |
+| 开发路线图 | `docs/roadmap/DEVELOPMENT_ROADMAP.md` | 判断当前 Phase / P0 / P1 / P2 任务及下一步 |
 | 源码 | `src/photo_archiver/`（分层骨架见 §4） | 实现具体任务 |
 | 测试 | `tests/unit/` + `tests/integration/` | 写或跑测试 |
 
@@ -267,7 +267,7 @@ flowchart TD
 
 - [ ] Rules 已遵守（ai/coding/architecture/dependency/ui/worker/git/review）
 - [ ] Architecture 分层正确，无 forbidden import
-- [ ] Ruff / MyPy / pytest 通过
+- [ ] Ruff / MyPy / pytest：按任务范围执行，并与当前质量基线及 `KNOWN_ISSUES.md` 已登记限制对照——pytest 当前非全绿（570 passed / 3 skipped / 1 failed，唯一 failed = F-002 / LIMIT-003），不得因此擅自修复
 - [ ] 无 TODO/FIXME/`print()`/Magic Number/bare except
 - [ ] 类型提示与 docstring 完整（公共 API）
 - [ ] 文档同步（`PROJECT_STATUS.md` 必更；ADR/Issues 按需）
@@ -280,7 +280,7 @@ flowchart TD
 
 ### 12.1 复审节奏（防漂移机制）
 
-每完成 2-3 个 Step 做一次轻量一致性检查，沿用 `.ai/rules/audit-methodology.md` 方法论（证据采集 + 五维比对）。检查范围：本次所涉 Step 触碰过的全部权威文档（§13.1）。产出：新发现的矛盾追加到 `KNOWN_ISSUES.md`，已解决的整条删除，无需另起审计报告文档。
+每完成 2-3 个开发任务，或发生明显架构/状态变化时，进行一次轻量一致性检查（不是重新进行全项目 Health Check / Audit），沿用 `.ai/rules/audit-methodology.md` 方法论（证据采集 + 五维比对）。检查范围：本次所涉任务触碰过的全部权威文档（§13.1）。产出：新发现的矛盾追加到 `KNOWN_ISSUES.md`，已解决的整条删除，无需另起审计报告文档。
 
 ---
 
@@ -303,7 +303,7 @@ flowchart TD
 | `.ai/DOCUMENT_INDEX.md` | 文档体系导航索引（30 秒理解全体系） |
 | `.ai/rules/CONTEXT_HANDOFF_RULES.md` | AI 接力交接元规则 |
 | `.ai/rules/*.md`（11 文件） | 工程规则权威（ai/coding/architecture/dependency/ui/worker/git/review/audit-methodology + README + CONTEXT_HANDOFF_RULES） |
-| `.ai/business/roadmap.md` | 15 步路线图 |
+| `docs/roadmap/DEVELOPMENT_ROADMAP.md` | 当前开发路线 / Phase / P0-P2 任务顺序权威（15 步历史路线图：`.ai/business/roadmap.md`） |
 | `README.md` | 项目概览（人类入口） |
 | `docs/architecture/overview.md` | 架构详解 |
 | `docs/deployment/project-structure.md` | 目录结构详解 |
@@ -355,7 +355,7 @@ flowchart TD
 <details>
 <summary>参考答案</summary>
 
-基于 DDD + Clean Architecture 的企业级桌面照片归档系统，面向学校/政府/企业/档案馆/摄影工作室等管理大量历史照片，自动化导入/扫描/识别/匹配/归档/导出流程。**项目开发已全面收官**（全部 15 Step 完成，飘带清零，Alembic 迁移体系已激活）。
+基于 DDD + Clean Architecture 的企业级桌面照片归档系统，面向学校/政府/企业/档案馆/摄影工作室等管理大量历史照片，自动化导入/扫描/识别/匹配/归档/导出流程。基础能力已形成（全部 15 Step 完成，飘带清零，Alembic 迁移体系已激活），**但项目并非开发全面收官**——当前正处于 v1.0 收口阶段（Runtime Correctness / 数据安全等修复轮，见 `docs/roadmap/DEVELOPMENT_ROADMAP.md`）。
 </details>
 
 ### Q2. 目前完成到哪里？
@@ -363,7 +363,7 @@ flowchart TD
 <details>
 <summary>参考答案</summary>
 
-Step 0.5-15 全部完成（Walking Skeleton / Logging / Configuration / Database / Domain / Excel Import / Folder Scanner / Thumbnail / Face Detection / Face Recognition / Matching Engine / Archive Generator / Main UI / Settings / Export / Plugin System）。Schema 由 Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，后者为 Schema DDL 唯一权威，ADR-027）。飘带已清零（ruff 0 + mypy 0）。
+基础能力：Step 0.5-15 全部完成（Walking Skeleton / Logging / Configuration / Database / Domain / Excel Import / Folder Scanner / Thumbnail / Face Detection / Face Recognition / Matching Engine / Archive Generator / Main UI / Settings / Export / Plugin System），Schema 由 Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，后者为 Schema DDL 唯一权威，ADR-027）。当前阶段：**Phase A — Runtime Correctness**（全项目体检后的 P0 修复轮）——P0-10（Documentation Closure）已完成；P0-1（Plugin UI Loading）/ P0-2（Thumbnail Rendering）/ P0-3（Excel Import Wiring）/ P0-4（Cancellation + Scan Single-flight）按序待执行，任务顺序以 `docs/roadmap/DEVELOPMENT_ROADMAP.md` 为权威。质量门现状：ruff 0 / mypy 171 files 0 / pytest 570 passed / 3 skipped / 1 failed（唯一 failed = F-002，见 LIMIT-003）。
 </details>
 
 ### Q3. 下一阶段是什么？
@@ -371,7 +371,7 @@ Step 0.5-15 全部完成（Walking Skeleton / Logging / Configuration / Database
 <details>
 <summary>参考答案</summary>
 
-项目开发已全面收官。后续按需增强 CI 流水线、更多导出格式、插件生态。详见 `.ai/PROJECT_STATUS.md`。
+当前 Phase：**Phase A — Runtime Correctness**（v1.0 收口修复轮）。已完成：P0-10（文档收口）。下一任务：**P0-1 — Plugin UI Loading**；之后 P0-2（Thumbnail Rendering）→ P0-3（Excel Import Wiring）→ P0-4（Cancellation + Scan Single-flight）。完整路线见 `docs/roadmap/DEVELOPMENT_ROADMAP.md`，实时状态见 `.ai/PROJECT_STATUS.md`。
 </details>
 
 ### Q4. 当前最大风险是什么？
