@@ -4,9 +4,11 @@
 PhotoSearchCriteria 或 None）由 PhotoListController 接收调 SearchPhotosService。
 控件含人员下拉 + 状态下拉 + 日期区间（from/to）+ 清除按钮。
 
+状态下拉走 MatchStatus 三值 + "全部"占位。日期区间用 QDateTimeEdit 双控件，
+各自由 "From"/"To" 复选框门控（Phase 9 FEAT-P9-1）：未勾选 = 该轴不设约束
+（QDateTimeEdit 恒有值，必须显式表达"未设置"），勾选后取控件当前值。
 人员下拉首版留空（无 Application 端"list persons"用例暴露给 Presentation——
-B5 PluginContext 落地后或新裁决再补；当前人员维度靠 CLI/后续轮补）。状态下拉
-走 MatchStatus 三值 + "全部"占位。日期区间用 QDateTimeEdit 双控件。
+后续轮补；当前人员维度保持禁用占位）。
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QDateTime, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDateTimeEdit,
     QHBoxLayout,
@@ -33,18 +36,18 @@ class FilterBar(QWidget):
     decides whether to call ``SearchPhotosService`` synchronously (fast repo
     query per B2-a decision) or debounce. Empty criteria (all axes unset) is
     emitted as ``None`` so the controller falls back to ``list_all``.
+
+    Date axes are gated by their "From"/"To" checkboxes: an unchecked box
+    means the axis carries no constraint, regardless of the edit's value
+    (QDateTimeEdit always holds a datetime, so the gate is the explicit
+    "unset" representation). ``from > to`` is passed through verbatim — the
+    repository range semantics simply match nothing (an honest empty result).
     """
 
     criteria_changed = Signal(object)  # PhotoSearchCriteria | None
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Build the filter bar with status combo + date range + clear button.
-
-        Person combo is created but left empty in this version — populating it
-        requires an Application "list persons" use case not yet exposed to
-        Presentation. A follow-up round (post-B5 PluginContext or new裁决)
-        will wire it; until then it stays disabled to avoid misleading users.
-        """
+        """Build the filter bar with person/status combos + gated date range."""
         super().__init__(parent)
         self._build_ui()
         self._wire_signals()
@@ -54,12 +57,13 @@ class FilterBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
 
-        # Person axis — disabled placeholder (see __init__ docstring).
+        # Person axis — disabled placeholder (FEAT-P9-2 wires it in a follow-up
+        # commit of this phase).
         layout.addWidget(QLabel("Person:"))
         self._person_combo = QComboBox(self)
         self._person_combo.setEnabled(False)
         self._person_combo.setToolTip(
-            "Person filter is reserved for a follow-up round; disabled in this version.",
+            "Person filter is reserved for the person-axis round; disabled in this version.",
         )
         layout.addWidget(self._person_combo)
 
@@ -72,25 +76,24 @@ class FilterBar(QWidget):
         self._status_combo.addItem("Rejected", "rejected")
         layout.addWidget(self._status_combo)
 
-        # Date range axis — disabled placeholder (首版仅 status 轴生效，
-        # 见 __init__ docstring � erbar 项裁决；启用需可勾选开关 + 默认值语义，留后续轮)。
-        layout.addWidget(QLabel("From:"))
+        # Date range axis — each edit gated by a checkbox (FEAT-P9-1): an
+        # unchecked box = axis unset (no constraint), checked = use the edit's
+        # current value. ``from > to`` is allowed and matches nothing.
+        self._from_check = QCheckBox("From", self)
+        layout.addWidget(self._from_check)
         self._from_edit = QDateTimeEdit(self)
         self._from_edit.setCalendarPopup(True)
         self._from_edit.setEnabled(False)
-        self._from_edit.setToolTip(
-            "Date range filter is reserved for a follow-up round; disabled in this version.",
-        )
+        self._from_edit.setToolTip("Match photos captured on or after this date.")
         self._from_edit.setDateTime(QDateTime.currentDateTime().addYears(-1))
         layout.addWidget(self._from_edit)
 
-        layout.addWidget(QLabel("To:"))
+        self._to_check = QCheckBox("To", self)
+        layout.addWidget(self._to_check)
         self._to_edit = QDateTimeEdit(self)
         self._to_edit.setCalendarPopup(True)
         self._to_edit.setEnabled(False)
-        self._to_edit.setToolTip(
-            "Date range filter is reserved for a follow-up round; disabled in this version.",
-        )
+        self._to_edit.setToolTip("Match photos captured on or before this date.")
         self._to_edit.setDateTime(QDateTime.currentDateTime())
         layout.addStretch(1)
 
@@ -100,32 +103,49 @@ class FilterBar(QWidget):
     def _wire_signals(self) -> None:
         """Connect control changes to emit criteria_changed."""
         self._status_combo.currentIndexChanged.connect(self._emit_criteria)
+        self._from_check.toggled.connect(self._on_from_gate_toggled)
+        self._to_check.toggled.connect(self._on_to_gate_toggled)
         self._from_edit.dateTimeChanged.connect(self._emit_criteria)
         self._to_edit.dateTimeChanged.connect(self._emit_criteria)
         self._clear_button.clicked.connect(self.clear)
 
+    def _on_from_gate_toggled(self, checked: bool) -> None:
+        """Gate the From edit on its checkbox and re-emit criteria."""
+        self._from_edit.setEnabled(checked)
+        self._emit_criteria()
+
+    def _on_to_gate_toggled(self, checked: bool) -> None:
+        """Gate the To edit on its checkbox and re-emit criteria."""
+        self._to_edit.setEnabled(checked)
+        self._emit_criteria()
+
     def _emit_criteria(self) -> None:
         """Build PhotoSearchCriteria from current control state and emit.
 
-        Empty criteria (all axes unset / "All" status) is emitted as ``None``
-        so the controller falls back to ``list_all`` rather than forcing a
-        trivially-true search.
+        Empty criteria (all axes unset / "All" placeholders) is emitted as
+        ``None`` so the controller falls back to ``list_all`` rather than
+        forcing a trivially-true search.
         """
+        person_id = None  # Person axis stays a disabled placeholder this commit.
         status_value = self._status_combo.currentData()
-        # Person combo disabled → always None; captured here for future wiring.
-        person_id = None
-        # toPython() returns object; cast to datetime | None for PhotoSearchCriteria typing.
+        # A gated-off date edit carries no constraint even though QDateTimeEdit
+        # always holds a value (the checkbox is the explicit "unset" state).
         captured_from: datetime | None = (
             self._from_edit.dateTime().toPython()  # type: ignore[assignment]  # Qt opaquely returns object
-            if self._from_edit.isEnabled()
+            if self._from_check.isChecked()
             else None
         )
         captured_to: datetime | None = (
             self._to_edit.dateTime().toPython()  # type: ignore[assignment]  # Qt opaquely returns object
-            if self._to_edit.isEnabled()
+            if self._to_check.isChecked()
             else None
         )
-        if status_value is None and person_id is None and captured_from is None and captured_to is None:
+        if (
+            person_id is None
+            and status_value is None
+            and captured_from is None
+            and captured_to is None
+        ):
             self.criteria_changed.emit(None)
             return
         match_status = None
@@ -142,11 +162,13 @@ class FilterBar(QWidget):
     def clear(self) -> None:
         """Reset all axes to unset and emit criteria via the single _emit_criteria path.
 
-        与 _emit_criteria 逻辑单源：禁用态下 _emit_criteria 的 isEnabled() 判会
-        返 None 分支，故 clear() 调 _emit_criteria() 即可——避免 emit None 与
-        _emit_criteria 的判 None 逻辑二处维护。
+        与 _emit_criteria 逻辑单源：未勾选的日期轴在 _emit_criteria 判 None 分支
+        返 None，故 clear() 复位控件后调 _emit_criteria() 即可——避免 emit None
+        与 _emit_criteria 的判 None 逻辑二处维护。
         """
         self._status_combo.setCurrentIndex(0)
+        self._from_check.setChecked(False)
+        self._to_check.setChecked(False)
         self._from_edit.setDateTime(QDateTime.currentDateTime().addYears(-1))
         self._to_edit.setDateTime(QDateTime.currentDateTime())
         self._emit_criteria()
