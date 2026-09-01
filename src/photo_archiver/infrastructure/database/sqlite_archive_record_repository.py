@@ -1,5 +1,7 @@
 """SQLite implementation of the archive record repository interface."""
 
+from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID
 
 from photo_archiver.domain import ArchiveRecord, ArchiveRecordRepository
@@ -9,6 +11,11 @@ from photo_archiver.infrastructure.database.sqlite_mappers import (
     archive_record_from_row,
     datetime_to_text,
 )
+
+# Bound parameters per IN-clause chunk — stays well under SQLite's compiled
+# SQLITE_MAX_VARIABLE_NUMBER on every supported build (COD-023 named constant;
+# same value as sqlite_recognition_repository._SQLITE_PARAMETER_CHUNK).
+_SQLITE_PARAMETER_CHUNK = 500
 
 
 class SQLiteArchiveRecordRepository(ArchiveRecordRepository):
@@ -112,3 +119,45 @@ class SQLiteArchiveRecordRepository(ArchiveRecordRepository):
                 "SELECT * FROM archive_records ORDER BY archived_at DESC, id DESC"
             ).fetchall()
         return [archive_record_from_row(row) for row in rows]
+
+    def list_by_photo_ids(
+        self, photo_ids: Sequence[UUID],
+    ) -> list[ArchiveRecord]:
+        """Return all archive records for the supplied photos in one round trip.
+
+        FILTERED-export query (FEATURE-004 contract §3/F4): every record — any
+        status — whose ``photo_id`` is in ``photo_ids`` (unlike
+        ``find_by_photo``, which returns only the latest success for one
+        photo). Ordering matches ``list_all`` (``archived_at DESC, id DESC``;
+        NULL ``archived_at`` — PLANNED — sorts last under DESC). Empty input
+        returns ``[]`` without opening a connection.
+        """
+        if not photo_ids:
+            return []
+        records: list[ArchiveRecord] = []
+        with self._connection_provider.connect() as connection:
+            for chunk_start in range(0, len(photo_ids), _SQLITE_PARAMETER_CHUNK):
+                chunk = [
+                    str(pid)
+                    for pid in photo_ids[chunk_start : chunk_start + _SQLITE_PARAMETER_CHUNK]
+                ]
+                placeholders = ", ".join("?" for _ in chunk)
+                rows = connection.execute(
+                    f"SELECT * FROM archive_records "
+                    f"WHERE photo_id IN ({placeholders}) "
+                    f"ORDER BY archived_at DESC, id DESC",
+                    chunk,
+                ).fetchall()
+                records.extend(archive_record_from_row(row) for row in rows)
+        # Chunked IN queries each order within their chunk; re-sort the combined
+        # result so the global order matches list_all (archived_at DESC, id DESC,
+        # PLANNED/NULL archived_at last) and the Protocol default implementation.
+        records.sort(
+            key=lambda record: (
+                record.archived_at is not None,
+                record.archived_at if record.archived_at is not None else datetime.min,
+                record.id,
+            ),
+            reverse=True,
+        )
+        return records

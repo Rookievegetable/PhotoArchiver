@@ -1,6 +1,7 @@
 """Recognition result repository interface."""
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -39,6 +40,42 @@ class RecognitionRepository(Protocol):
         pairing photos with review status avoid N+1 per-photo lookups.
         Photo ids without any recognition result are absent from the mapping.
         """
+
+    def list_by_photo_ids(
+        self, photo_ids: Sequence[UUID],
+    ) -> list[RecognitionResult]:
+        """Return ALL recognition results for the supplied photos, in one batch.
+
+        FILTERED-export query (FEATURE-004 contract
+        ``docs/health-check/PHASE_7_SCOPE_CONTRACT_REVISION.md`` §3/F4): every
+        result — any ``MatchStatus`` — whose ``photo_id`` is in ``photo_ids``.
+        Unlike ``list_first_by_photo_ids`` (earliest per photo) and
+        ``list_by_photo`` (single photo). Results are ordered by ``created_at``
+        then ``id``; ``created_at`` is always populated by
+        ``RecognitionResult.__post_init__`` so the ordering key is total.
+
+        Default implementation loops ``list_by_photo`` (deduplicating inputs —
+        duplicate photo ids must not duplicate rows, matching IN-clause
+        semantics) and re-sorts globally, so minimal implementations (e.g.
+        test fakes) keep working unchanged — the ``add_many`` default-
+        implementation precedent. SQL-backed repositories SHOULD override with
+        a single-trip IN-clause push-down (see
+        ``SQLiteRecognitionRepository.list_by_photo_ids``).
+        """
+        collected: list[RecognitionResult] = []
+        seen_photo_ids: set[UUID] = set()
+        for photo_id in photo_ids:
+            if photo_id in seen_photo_ids:
+                continue
+            seen_photo_ids.add(photo_id)
+            collected.extend(self.list_by_photo(photo_id))
+        collected.sort(
+            key=lambda result: (
+                result.created_at if result.created_at is not None else datetime.min,
+                result.id,
+            ),
+        )
+        return collected
 
     def list_pending(self) -> list[RecognitionResult]:
         """Return all recognition results awaiting user review."""

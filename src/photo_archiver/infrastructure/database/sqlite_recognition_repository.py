@@ -133,6 +133,46 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                     results.setdefault(result.photo_id, result)
         return results
 
+    def list_by_photo_ids(
+        self, photo_ids: Sequence[UUID],
+    ) -> list[RecognitionResult]:
+        """Return ALL recognition results for the supplied photos in one round trip.
+
+        FILTERED-export query (FEATURE-004 contract §3/F4): every result — any
+        status — whose ``photo_id`` is in ``photo_ids`` (unlike the
+        earliest-per-photo ``list_first_by_photo_ids``). Ordered by
+        ``created_at`` then ``id``, mirroring ``list_by_photo``. Empty input
+        returns ``[]`` without opening a connection.
+        """
+        if not photo_ids:
+            return []
+        results: list[RecognitionResult] = []
+        with self._connection_provider.connect() as connection:
+            for chunk_start in range(0, len(photo_ids), _SQLITE_PARAMETER_CHUNK):
+                chunk = [
+                    str(pid)
+                    for pid in photo_ids[chunk_start : chunk_start + _SQLITE_PARAMETER_CHUNK]
+                ]
+                placeholders = ", ".join("?" for _ in chunk)
+                rows = connection.execute(
+                    f"SELECT * FROM recognition_results "
+                    f"WHERE photo_id IN ({placeholders}) "
+                    f"ORDER BY created_at, id",
+                    chunk,
+                ).fetchall()
+                results.extend(recognition_result_from_row(row) for row in rows)
+        # Chunked IN queries each order by created_at, id; re-sort the combined
+        # result so the global order matches the documented contract (and the
+        # Protocol default implementation) regardless of how photo_ids spans
+        # chunk boundaries.
+        results.sort(
+            key=lambda result: (
+                result.created_at if result.created_at is not None else datetime.min,
+                result.id,
+            ),
+        )
+        return results
+
     def list_pending(self) -> list[RecognitionResult]:
         """Return all recognition results awaiting user review."""
         with self._connection_provider.connect() as connection:
