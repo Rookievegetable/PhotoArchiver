@@ -1,9 +1,10 @@
 """Photo list model for the main window's central QListView.
 
 Holds a list of Photo aggregates surfaced by PhotoListController and exposes
-per-row data (thumbnail path, original name, person match, status) to the
-QListView delegate. Thumbnails are loaded lazily by the controller and pushed
-into the model via set_thumbnail so the model never does IO itself.
+per-row data (thumbnail path, original name, photo id) to
+PhotoThumbnailDelegate, which paints the cached thumbnail with the name.
+Thumbnails are loaded lazily by the controller and pushed into the model via
+set_thumbnail so the model never does IO itself.
 """
 
 from pathlib import Path

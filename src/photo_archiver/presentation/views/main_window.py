@@ -41,6 +41,7 @@ from photo_archiver.presentation.controllers import (
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
 from photo_archiver.presentation.views.export_dialog import ExportDialog
 from photo_archiver.presentation.views.filter_bar import FilterBar
+from photo_archiver.presentation.views.photo_list_delegate import PhotoThumbnailDelegate
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
 from photo_archiver.presentation.views.photo_list_model import PHOTO_ID_ROLE, PhotoListModel
 from photo_archiver.presentation.views.review_dialog import ReviewDialog
@@ -282,6 +283,10 @@ class MainWindow(QMainWindow):
         self._photo_list = QListView(self)
         self._photo_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._photo_list.setModel(self._photo_list_model)
+        # P0-2: install the thumbnail delegate — the THUMBNAIL_ROLE consumer.
+        # Without it the default delegate renders filenames only, leaving the
+        # entire thumbnail pipeline invisible to the user.
+        self._photo_list.setItemDelegate(PhotoThumbnailDelegate(self._photo_list))
         layout.addWidget(self._photo_list)
 
         self.setCentralWidget(central)
