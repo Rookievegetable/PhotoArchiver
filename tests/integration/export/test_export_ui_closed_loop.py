@@ -32,14 +32,14 @@ The ONLY replaced boundaries are two non-deterministic modal UI surfaces:
     What remains real:    the full failure chain TaskFailed → shared error
                           surface → action re-enable
 
-Data design (business-level included/excluded semantics, since
-``ExportService._gather_data`` treats every scope as ALL — CURRENT_BATCH and
-FILTERED are documented stubs, FEATURE-004):
+Data design (ALL-scope approved-only semantics — these Phase 5 tests pin the
+ALL path, which FEATURE-004 keeps byte-identical; the scope dispatch itself is
+integration-covered in ``test_export_scope_integration.py``):
 
     included: 2 people, 2 photos, 1 APPROVED match, 1 ARCHIVED record = 6 rows
     excluded: the PENDING match (Bob↔bob_candid.jpg) and the REJECTED match
               (bob_candid.jpg↔Alice) never enter the matches section, because
-              only ``list_approved_by_person`` rows are gathered.
+              the ALL scope gathers only ``list_approved_by_person`` rows.
 """
 
 import pytest
