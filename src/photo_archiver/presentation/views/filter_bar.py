@@ -6,13 +6,13 @@ PhotoSearchCriteria 或 None）由 PhotoListController 接收调 SearchPhotosSer
 
 状态下拉走 MatchStatus 三值 + "全部"占位。日期区间用 QDateTimeEdit 双控件，
 各自由 "From"/"To" 复选框门控（Phase 9 FEAT-P9-1）：未勾选 = 该轴不设约束
-（QDateTimeEdit 恒有值，必须显式表达"未设置"），勾选后取控件当前值。
-人员下拉首版留空（无 Application 端"list persons"用例暴露给 Presentation——
-后续轮补；当前人员维度保持禁用占位）。
+（QDateTimeEdit 恒有值，必须显式表达"未设置"），勾选后取控件当前值。人员轴
+经 ``set_persons`` 供给（FEAT-P9-2，数据来自 Application 层 ListPersonsService）。
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from PySide6.QtCore import QDateTime, Signal
@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from photo_archiver.domain import MatchStatus, PhotoSearchCriteria
+from photo_archiver.domain import MatchStatus, Person, PhotoSearchCriteria
 
 
 class FilterBar(QWidget):
@@ -57,14 +57,12 @@ class FilterBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
 
-        # Person axis — disabled placeholder (FEAT-P9-2 wires it in a follow-up
-        # commit of this phase).
+        # Person axis — populated via set_persons(); "All persons" (userData
+        # None) is the no-constraint entry.
         layout.addWidget(QLabel("Person:"))
         self._person_combo = QComboBox(self)
-        self._person_combo.setEnabled(False)
-        self._person_combo.setToolTip(
-            "Person filter is reserved for the person-axis round; disabled in this version.",
-        )
+        self._person_combo.addItem("All persons", None)
+        self._person_combo.setToolTip("Filter photos by matched person.")
         layout.addWidget(self._person_combo)
 
         # Status axis — MatchStatus three values + "All" placeholder.
@@ -102,6 +100,7 @@ class FilterBar(QWidget):
 
     def _wire_signals(self) -> None:
         """Connect control changes to emit criteria_changed."""
+        self._person_combo.currentIndexChanged.connect(self._emit_criteria)
         self._status_combo.currentIndexChanged.connect(self._emit_criteria)
         self._from_check.toggled.connect(self._on_from_gate_toggled)
         self._to_check.toggled.connect(self._on_to_gate_toggled)
@@ -119,6 +118,28 @@ class FilterBar(QWidget):
         self._to_edit.setEnabled(checked)
         self._emit_criteria()
 
+    def set_persons(self, persons: Sequence[Person]) -> None:
+        """Populate the person combo from the Application layer (FEAT-P9-2).
+
+        Repopulation blocks the combo's signals so loading never emits
+        spurious criteria; a single ``_emit_criteria`` runs afterwards. The
+        previously selected person is preserved when still present, otherwise
+        the selection resets to "All persons".
+        """
+        selected_id = self._person_combo.currentData()
+        self._person_combo.blockSignals(True)
+        try:
+            self._person_combo.clear()
+            self._person_combo.addItem("All persons", None)
+            for person in persons:
+                if person.id is not None:
+                    self._person_combo.addItem(person.name, person.id)
+        finally:
+            self._person_combo.blockSignals(False)
+        restore_index = self._person_combo.findData(selected_id)
+        self._person_combo.setCurrentIndex(restore_index if restore_index >= 0 else 0)
+        self._emit_criteria()
+
     def _emit_criteria(self) -> None:
         """Build PhotoSearchCriteria from current control state and emit.
 
@@ -126,7 +147,7 @@ class FilterBar(QWidget):
         ``None`` so the controller falls back to ``list_all`` rather than
         forcing a trivially-true search.
         """
-        person_id = None  # Person axis stays a disabled placeholder this commit.
+        person_id = self._person_combo.currentData()
         status_value = self._status_combo.currentData()
         # A gated-off date edit carries no constraint even though QDateTimeEdit
         # always holds a value (the checkbox is the explicit "unset" state).
@@ -166,6 +187,7 @@ class FilterBar(QWidget):
         返 None，故 clear() 复位控件后调 _emit_criteria() 即可——避免 emit None
         与 _emit_criteria 的判 None 逻辑二处维护。
         """
+        self._person_combo.setCurrentIndex(0)
         self._status_combo.setCurrentIndex(0)
         self._from_check.setChecked(False)
         self._to_check.setChecked(False)

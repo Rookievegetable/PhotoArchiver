@@ -12,6 +12,7 @@ from photo_archiver.application import (
     DetectDuplicatesService,
     ExportService,
     ImportPeopleService,
+    ListPersonsService,
     MatchPersonsService,
     RegisterPhotoService,
     ReviewRecognitionService,
@@ -47,6 +48,7 @@ class ApplicationServices:
     detect_duplicates: DetectDuplicatesService
     backfill_content_hash: BackfillContentHashService
     search_photos: SearchPhotosService
+    list_persons: ListPersonsService
 
 
 def build_application_services(
@@ -130,6 +132,9 @@ def build_application_services(
         metadata_reader,
     )
     search_photos_service = SearchPhotosService(repositories.photos)
+    # Phase 9 FEAT-P9-2: read-only person catalog for the FilterBar person axis
+    # (Presentation never touches the repository directly — DEP-003/DEP-004).
+    list_persons_service = ListPersonsService(repositories.people)
 
     return ApplicationServices(
         import_people=ImportPeopleService(TxtPersonImportReader(), repositories.people),
@@ -150,6 +155,7 @@ def build_application_services(
         detect_duplicates=detect_duplicates_service,
         backfill_content_hash=backfill_content_hash_service,
         search_photos=search_photos_service,
+        list_persons=list_persons_service,
     )
 
 

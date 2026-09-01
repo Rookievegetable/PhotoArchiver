@@ -8,6 +8,7 @@ from photo_archiver.application.services.backfill_content_hash_service import Ba
 from photo_archiver.application.services.detect_duplicates_service import DetectDuplicatesService
 from photo_archiver.application.services.export_service import ExportService
 from photo_archiver.application.services.import_people_service import ImportPeopleService
+from photo_archiver.application.services.list_persons_service import ListPersonsService
 from photo_archiver.application.services.match_persons_service import MatchPersonsService
 from photo_archiver.application.services.plugin_context_service import PluginContextService
 from photo_archiver.application.services.register_photo_service import RegisterPhotoService
@@ -26,6 +27,7 @@ __all__ = [
     "DetectDuplicatesService",
     "ExportService",
     "ImportPeopleService",
+    "ListPersonsService",
     "MatchPersonsService",
     "PluginContextService",
     "RegisterPhotoService",

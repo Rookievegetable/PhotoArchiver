@@ -276,6 +276,11 @@ class MainWindow(QMainWindow):
         self._photo_list_controller.thumbnail_loaded.connect(
             self._photo_list_model.set_thumbnail,
         )
+        # Phase 9 FEAT-P9-2: feed the person axis from the Application layer.
+        # Deliberately last: set_persons re-emits criteria, and the photo-list
+        # refresh it triggers requires _photo_list_model to exist. Re-populated
+        # after each people import completes (see _on_completed).
+        self._refresh_filter_persons()
 
     def _on_filter_changed(self, criteria: object) -> None:
         """Reload photos filtered by the supplied criteria, or all when None.
@@ -342,6 +347,19 @@ class MainWindow(QMainWindow):
         self._progress.setValue(_PROGRESS_RESOLUTION)
         self._status_label.setText(f"{event.task_name} complete")
         self._refresh_photo_list()
+        if event.task_name == "import_people":
+            # Phase 9 FEAT-P9-2: a people import changes the person catalog,
+            # so the FilterBar person axis must offer the fresh entries.
+            self._refresh_filter_persons()
+
+    def _refresh_filter_persons(self) -> None:
+        """Load the FilterBar person axis through the Application layer.
+
+        Thin read-only use case (``ListPersonsService`` over
+        ``PersonRepository.list_all``) — Presentation never touches the
+        repository directly (DEP-003/DEP-004).
+        """
+        self._filter_bar.set_persons(self._context.services.list_persons.execute())
 
     def _on_failed(self, event: TaskFailed) -> None:
         """Surface task failure with the concrete error message and reset progress."""

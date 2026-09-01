@@ -170,3 +170,137 @@ def test_changing_date_value_while_gated_reemits(qtbot) -> None:
     _set(bar._from_edit, 2023, 6, 1)
 
     assert recorder.last.captured_from == datetime(2023, 6, 1, 12, 0, 0)
+
+
+# ── Person axis (Phase 9, FEAT-P9-2) ─────────────────────────────────────────
+
+
+def _make_person(name: str):
+    from photo_archiver.domain import Person
+
+    return Person(name=name)
+
+
+def test_person_axis_starts_on_all_persons(qtbot) -> None:
+    """Before set_persons the combo offers only the no-constraint entry."""
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+
+    assert bar._person_combo.count() == 1
+    assert bar._person_combo.itemData(0) is None
+    assert bar._person_combo.currentData() is None
+    # Emitting through another axis must still carry person_id=None.
+    bar._status_combo.setCurrentIndex(1)
+    assert recorder.last.person_id is None
+    assert recorder.last is not None and recorder.last.match_status is MatchStatus.PENDING
+
+
+def test_set_persons_populates_combo_and_selection_filters(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+    alice = _make_person("Alice")
+    bob = _make_person("Bob")
+
+    bar.set_persons([alice, bob])
+
+    assert bar._person_combo.count() == 3  # All persons + two entries
+    assert bar._person_combo.itemText(1) == "Alice"
+    assert bar._person_combo.itemData(1) is alice.id
+    bar._person_combo.setCurrentIndex(1)
+    assert recorder.last.person_id == alice.id
+    assert recorder.last.match_status is None  # other axes unaffected
+
+
+def test_set_persons_empty_keeps_only_all_persons(qtbot) -> None:
+    """Empty person catalog is honestly represented: single entry, no filter."""
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+
+    bar.set_persons([])
+
+    assert bar._person_combo.count() == 1
+    bar._person_combo.setCurrentIndex(0)
+    assert recorder.last is None
+
+
+def test_set_persons_emits_exactly_once(qtbot) -> None:
+    """Repopulation never emits spurious per-item criteria (signals blocked)."""
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+
+    bar.set_persons([_make_person("Alice"), _make_person("Bob"), _make_person("Carol")])
+
+    assert len(recorder.emissions) == 1  # one final emit, nothing per item
+    assert recorder.last is None  # selection preserved as "All persons"
+
+
+def test_set_persons_preserves_current_selection(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+    alice = _make_person("Alice")
+    bob = _make_person("Bob")
+
+    bar.set_persons([alice, bob])
+    bar._person_combo.setCurrentIndex(2)  # Bob
+    recorder.emissions.clear()
+
+    bar.set_persons([_make_person("Carol"), bob])  # Bob still present
+
+    assert bar._person_combo.currentData() == bob.id
+    # findData-set triggers currentIndexChanged → one re-emit, still Bob.
+    assert recorder.last.person_id == bob.id
+
+
+def test_set_persons_resets_selection_when_person_gone(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+    alice = _make_person("Alice")
+
+    bar.set_persons([alice])
+    bar._person_combo.setCurrentIndex(1)
+    recorder.emissions.clear()
+
+    bar.set_persons([_make_person("Bob")])  # Alice no longer exists
+
+    assert bar._person_combo.currentIndex() == 0
+    assert recorder.last is None
+
+
+def test_person_axis_combines_with_status_and_date(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+    alice = _make_person("Alice")
+
+    bar.set_persons([alice])
+    bar._person_combo.setCurrentIndex(1)
+    bar._status_combo.setCurrentIndex(2)  # Approved
+    bar._to_check.setChecked(True)
+    _set(bar._to_edit, 2024, 12, 31)
+
+    criteria = recorder.last
+    assert criteria.person_id == alice.id
+    assert criteria.match_status is MatchStatus.APPROVED
+    assert criteria.captured_to == datetime(2024, 12, 31, 12, 0, 0)
+    assert criteria.captured_from is None
+
+
+def test_clear_resets_person_axis_too(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+    alice = _make_person("Alice")
+
+    bar.set_persons([alice])
+    bar._person_combo.setCurrentIndex(1)
+    bar._status_combo.setCurrentIndex(1)
+    bar.clear()
+
+    assert recorder.last is None
+    assert bar._person_combo.currentIndex() == 0
