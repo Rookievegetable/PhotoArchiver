@@ -128,6 +128,11 @@ class MainWindow(QMainWindow):
     def _build_toolbar(self) -> None:
         """Create the primary action toolbar covering the full闭环."""
         toolbar = QToolBar("Main", self)
+        # P0-1: the constructor string above is the toolbar's windowTitle, not
+        # its objectName — _add_plugin_actions' findChild(QToolBar, "Main")
+        # contract only resolves with an explicit objectName. Without this,
+        # plugin actions were silently dropped even once discovery worked.
+        toolbar.setObjectName("Main")
         self.addToolBar(toolbar)
 
         import_action = QAction("Import People", self)
@@ -188,11 +193,19 @@ class MainWindow(QMainWindow):
         Malformed plugins never crash the window — the loader logs and skips.
         """
         self._plugin_registry = PluginRegistry(self._context.plugin_context)
-        examples_plugins = Path(__file__).resolve().parent.parent.parent.parent / "examples" / "plugins"
+        # parents[4] anchors at the repository root (…/views → presentation →
+        # photo_archiver → src → repo root) — the source/clone layout is the
+        # only supported runtime form (ADR-031). P0-1 fix: the former 4-parent
+        # anchor resolved to <repo>/src/examples/plugins (nonexistent), which
+        # silently skipped the entire plugin UI chain.
+        examples_plugins = Path(__file__).resolve().parents[4] / "examples" / "plugins"
         if examples_plugins.is_dir():
             self._plugin_registry.load_from_path(examples_plugins)
             self._plugin_registry.enable_all()
             self._add_plugin_actions()
+        else:
+            # Never skip silently again — the P0-1 defect hid precisely here.
+            logger.debug("Plugin directory not present, skipping plugin UI: {}", examples_plugins)
 
     def _add_plugin_actions(self) -> None:
         """Add one QAction per plugin action item to the main toolbar."""
