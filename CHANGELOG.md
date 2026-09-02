@@ -6,6 +6,64 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [2.3.0] - 2026-09-02
+
+Data-safety floor, runtime correctness, and flake elimination
+(health-check-derived phases A/B/C + release engineering form-1; owner
+authorized per phase, decisions D-B1~D-B8 and D-0 recorded in
+`.ai/PROJECT_STATUS.md`).
+
+### Added
+
+- **Data-safety floor (Phase B)**: WAL journal mode + 5 s busy_timeout on
+  every connection (a long scan no longer blocks concurrent review writes);
+  startup integrity gate — a corrupted database fails fast with Chinese
+  recovery guidance instead of a traceback (never rebuilt or swapped);
+  `VACUUM INTO` snapshot backup on every GUI start (3 rolling copies in
+  `data/backups/`); people import is batch-atomic (500 rows/batch — a crash
+  leaves only fully committed batches) with identity-less rows deduplicated
+  by name + department.
+- **Model supply-chain pinning (P0-8)**: the buffalo_l release zip SHA-256 is
+  pinned (`EXPECTED_SHA256`); CI dropped `--allow-unverified` and now fails
+  closed on any mismatch.
+- **Launch path warnings (P0-9)**: relative configured paths (database /
+  models / outputs / logs) log a warning with the resolved absolute location
+  at startup — launching from a different directory no longer silently
+  switches databases unnoticed.
+- **Thumbnails in the photo list**: a delegate now renders the cached
+  thumbnail per row (previously generated but never displayed).
+- **Plugin actions in the toolbar**: the example plugins' actions actually
+  load and appear (a path bug had silently skipped them).
+- **Excel people import**: `.xlsx` workbooks are routed to the openpyxl
+  reader (previously parsed as text); the picker no longer advertises the
+  unsupported legacy `.xls`.
+- **Atomic exports**: CSV/XLSX/HTML exports write via a temp file and
+  atomic swap — an interrupted export leaves the previous file intact.
+
+### Fixed
+
+- **Scan cancellation**: cancelling a scan now resets the UI to the
+  cancelled state (previously stuck at "Cancelling ..."), and a second scan
+  cannot start while one is running (single-flight guard on controller and
+  UI levels).
+- **Plugin loading**: the toolbar plugin directory anchor pointed at a
+  nonexistent path, silently skipping the whole plugin UI chain.
+- **To date-picker placement**: the filter bar's To edit was never added to
+  the layout and floated over the Person axis, blocking its clicks.
+- **Person filter order**: the people dropdown ordered same-batch imports
+  randomly (UUID tiebreak); ordering is now deterministic (creation time,
+  then name).
+- **Scan single-flight race**: the in-flight guard now reads the worker's
+  authoritative finished state instead of racing cross-thread signal
+  delivery (also fixes the F-002/LIMIT-003 test flake family — two
+  consecutive full-suite runs fully green).
+
+### Changed
+
+- Export file picker no longer advertises legacy `.xls` (openpyxl cannot
+  read it); tests and CI run the model download with pinned-digest
+  verification (no escape hatch).
+
 ## [2.2.0] - 2026-08-29
 
 Dead-weight model removal in the recognition pipeline (phase7 / ADR-033;
