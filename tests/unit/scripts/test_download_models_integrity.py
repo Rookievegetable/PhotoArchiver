@@ -6,6 +6,7 @@ tested — no network access, no archive extraction.
 """
 
 import importlib.util
+import re
 from pathlib import Path
 
 SCRIPT_PATH = (
@@ -136,3 +137,76 @@ def test_verify_integrity_rejects_archive_not_matching_production_pin(
     f.write_bytes(b"payload that differs from the official release zip")
 
     assert not dm.verify_integrity(f, "buffalo_l", None, allow_unverified=False)
+
+
+def test_download_uses_verified_certifi_ssl_context(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """P0-8 release blocker: download() must pass a verifying SSL context
+    anchored to certifi's CA bundle (clean-Windows CA failure fix)."""
+    import ssl
+
+    dm = _load_script()
+    captured: dict[str, object] = {}
+    where_calls: list[str] = []
+    real_where = dm.certifi.where
+
+    def fake_where() -> str:
+        where_calls.append("called")
+        return real_where()
+
+    def fake_urlopen(url, **kwargs):
+        captured["url"] = url
+        captured["context"] = kwargs.get("context")
+        raise OSError("offline test — no network access intended")
+
+    monkeypatch.setattr(dm.certifi, "where", fake_where)
+    monkeypatch.setattr(dm.urllib.request, "urlopen", fake_urlopen)
+
+    import pytest as _pytest
+
+    with _pytest.raises(OSError):
+        dm.download("https://example.invalid/pack.zip", tmp_path / "pack.zip")
+
+    context = captured["context"]
+    assert captured["url"] == "https://example.invalid/pack.zip"
+    assert isinstance(context, ssl.SSLContext)
+    assert context.verify_mode == ssl.CERT_REQUIRED  # certificate verification ENABLED
+    assert context.check_hostname is True  # hostname verification ENABLED
+    assert len(context.get_ca_certs()) > 0  # certifi CA bundle actually loaded
+    assert where_calls  # CA source came from certifi.where()
+
+
+def test_download_script_contains_no_ssl_bypass() -> None:
+    """P0-8 release blocker: the downloader source must never disable TLS.
+
+    Source scan pins the security contract (mirrors the plugin static
+    dependency check pattern).
+    """
+    dm = _load_script()
+    source = Path(dm.__file__).read_text(encoding="utf-8")
+
+    for forbidden in (
+        "CERT_NONE",
+        "_create_unverified_context",
+        "check_hostname = False",
+        "check_hostname=False",
+        "SSL_CERT_FILE",
+    ):
+        assert forbidden not in source, f"SSL bypass marker found: {forbidden}"
+
+
+def test_certifi_is_declared_runtime_dependency() -> None:
+    """P0-8 release blocker: certifi must be a declared runtime dependency.
+
+    A clean machine installing only requirements/base.txt must receive the
+    CA bundle — a transitive-only presence does not satisfy the release
+    contract.
+    """
+    base = (
+        Path(__file__).resolve().parents[3] / "requirements" / "base.txt"
+    ).read_text(encoding="utf-8")
+
+    pinned = [line.strip() for line in base.splitlines() if line.strip().startswith("certifi==")]
+    assert pinned, "certifi is not declared in requirements/base.txt"
+    assert re.fullmatch(r"certifi==\d{4}\.\d+\.\d+", pinned[0])

@@ -25,11 +25,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import shutil
+import ssl
 import sys
 import tempfile
 import urllib.request
 from pathlib import Path
 
+import certifi
 from loguru import logger
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -60,10 +62,17 @@ EXPECTED_SHA256: dict[str, str] = {
 
 
 def download(url: str, target: Path) -> None:
-    """Stream ``url`` to ``target`` with a progress log."""
+    """Stream ``url`` to ``target`` with a progress log.
+
+    P0-8 release blocker: the TLS context is explicitly anchored to
+    certifi's CA bundle — CPython's default CA loading failed on a clean
+    Windows VM (no issuer for the github.com chain in the Windows store).
+    Certificate and hostname verification stay fully enabled.
+    """
     logger.info("Downloading model pack from {}", url)
     target.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(url) as response, open(target, "wb") as out_file:
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(url, context=ssl_context) as response, open(target, "wb") as out_file:
         shutil.copyfileobj(response, out_file)
     logger.info("Saved model pack to {} ({} bytes)", target, target.stat().st_size)
 

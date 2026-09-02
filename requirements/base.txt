@@ -34,6 +34,14 @@ alembic==1.16.4
 pydantic==2.11.7
 pydantic-settings==2.10.1
 
+# ---------- Networking ----------
+# certifi: CA bundle for the model downloader's TLS (P0-8 release blocker).
+# CPython's default CA loading failed on a clean Windows VM (no issuer for
+# the github.com chain); certifi's bundle verified. Already present
+# transitively — promoted to a declared runtime dependency so a clean
+# machine always has the CA bundle.
+certifi==2026.6.17
+
 # ---------- Logging ----------
 loguru==0.7.3
 
