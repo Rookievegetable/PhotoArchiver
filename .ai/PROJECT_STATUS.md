@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.10.0 · Last Updated: 2026-09-02 · Status: Live
+> Version: 1.11.0 · Last Updated: 2026-09-02 · Status: Live
 
 ---
 
@@ -26,7 +26,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 ## 2. Current Step（当前开发阶段）
 
-项目主路线图已完成；经 2026-09-02 全项目体检后，当前处于 **Phase A（Runtime Correctness）P0 修复轮**——修复体检确认的用户可见功能断点。
+项目主路线图已完成；经 2026-09-02 全项目体检后，Phase A（Runtime Correctness）已完成，当前处于 **Phase B（数据安全底线）执行轮**（Owner 已授权按建议方案逐项执行，决策批复 D-B1~D-B8 记录于 §2）。
 
 - 阶段 0（质量基线与文档收口）：✅ 完成。
 - 阶段 1（PluginContext 公共边界加固，ADR-026）：✅ 完成。
@@ -97,8 +97,8 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 已完成 | ① **交接基线校验**：按序读取 `.ai/` 四文档 + roadmap；Git 基线逐项核对（HEAD `f868b2d` / origin `3a2ef0a` / 领先 17 笔 / tree CLEAN，全部匹配）。② **Phase B 计划草案与批复**：P0-5~P0-9 逐项现状取证（WAL/busy_timeout 缺位、bootstrap 裸 raise、import 逐行独立事务 + 无 identity 跳过查重、EXPECTED_SHA256 双空 + CI `--allow-unverified`、DEFAULT_DATABASE_URL CWD 相对）+ D-B1~D-B8 决策点交付；Owner 批复按建议方案执行（D-B1 按批原子 / D-B2 name+department 查重 / D-B3 VACUUM INTO+每启动+3 份 / D-B4 报错退出 / D-B5 完整锚定降 P1 本轮仅警告 / D-B7 默认值 / D-B8 逐项授权）。③ **P0-5 SQLite WAL + busy_timeout**（`22305dd`）——`sqlite_connection.py` 两条连接路径（`connect()` / `transaction()`）统一经 `_configure_connection`：`busy_timeout=5000`（先于 journal 设置）+ `journal_mode=WAL`（`:memory:` 跳过；持久属性，既有库幂等升级）。+6 真实链路测试（`tests/unit/infrastructure/test_sqlite_connection_pragmas.py`：双路径 PRAGMA / `:memory:` 边界 / 既有契约回归 / 双连接真实锁场景——写者 B 在 busy_timeout 内等待写者 A 提交后成功，镜像 G-05 用户可见失败形态）。Runtime Smoke PASS（offscreen 真实 `bootstrap_application` + 隔离库 `%TEMP%\p0p5_smoke`：journal_mode=wal / busy_timeout=5000 实测，Alembic 迁移链真实跑通）。质量门：ruff / mypy 173 files / pip check 全绿；pytest **601 passed / 3 skipped / 0 failed**（F-002 本轮未复现——LIMIT-003 定性不变，不因单次全绿宣布处置）。 |
 | 当前质量门 | `ruff check .` 通过；`mypy src` 173 个源文件无问题；pytest 全量 **601 passed / 3 skipped / 0 failed**（F-002 本轮未复现——历史恶化记录见 KNOWN_ISSUES LIMIT-003，处置属 Phase C，不因单次全绿宣布处置）；`pip check` 无损坏依赖。 |
 | 工作区 | Phase B P0-5 提交（`22305dd`）后 tracked 零改动；HEAD/origin 状态见 §3。 |
-| Remaining | **Phase B P0-5 完成**；P0-4 真桌面人工复验清单保留待 owner 补验（三场景：扫描运行中第二次扫描被拒 / Cancel→cancelled 终态 + UI 复位 / 取消后重启扫描完成；headless 真实入口已全 PASS）。P0-6 为下一项待 Owner 启动指令；P0-7 / P0-8 / P0-9(仅警告) 排后。发版动作（GIT-020 归 owner）：`git push origin main` 对齐分支引用（领先 18 笔，非阻塞）。 |
-| Next Step | **P0-5 完工报告已在会话交付，STOP 等待 Owner 指令**；下一项 P0-6（损坏库友好失败 + 最小备份）凭 Owner 启动指令开工，AI 不得自动开始。 |
+| Remaining | **Phase B P0-5 + P0-6 完成**（P0-6：损坏库友好失败 + 启动备份，commits `ab92d5c` / `0295f62` / `9752af3`；Runtime Smoke A/B/C 全 PASS）。P0-4 真桌面人工复验清单保留待 owner 补验（三场景：扫描运行中第二次扫描被拒 / Cancel→cancelled 终态 + UI 复位 / 取消后重启扫描完成；headless 真实入口已全 PASS）。P0-6 用户可见真桌面双场景待 owner 补验：① 注坏库启动 GUI → 中文指引对话框；② 正常启动后核对数据目录 `backups/` 产物。下一项 P0-7 待 Owner 启动指令；P0-8 / P0-9(仅警告) 排后。发版动作（GIT-020 归 owner）：`git push origin main` 对齐分支引用（领先 23 笔，非阻塞）。 |
+| Next Step | **P0-6 完工报告已在会话交付，STOP 等待 Owner 指令**；下一项 P0-7（导入事务化 + 无 identity 查重）凭 Owner 启动指令开工，AI 不得自动开始。 |
 
 ---
 
@@ -107,12 +107,12 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 **Phase B（数据安全底线）执行状态**：Owner 已授权（2026-09-02）按 AI 计划草案建议方案执行（决策批复 D-B1~D-B8 见 §2）；每项以 静态契约 + 单测 + 集成测试 + Runtime Smoke + 用户视角验证 五层达标方为 COMPLETE，独立提交，完成后 STOP 待 Owner 逐项指令。
 
 1. ~~P0-5 SQLite WAL + busy_timeout~~ ✅ 已完成（`22305dd`）：`sqlite_connection.py` 两条连接路径（`connect()` / `transaction()`）统一经 `_configure_connection` 施加 PRAGMA——`busy_timeout=5000`（先于 journal 设置，写锁争用时等待而非报错）+ `journal_mode=WAL`（`:memory:` 跳过；WAL 为库文件持久属性，既有库幂等升级）。+6 真实链路测试（`tests/unit/infrastructure/test_sqlite_connection_pragmas.py`：双路径 PRAGMA 断言 / `:memory:` 边界 / 既有契约回归 / 双连接真实锁场景——写者 B 在 busy_timeout 内等待写者 A 提交后成功）；`docs/development/configuration.md` v1.2 增补 PRAGMA 说明 + WAL 网络盘限制注记。Runtime Smoke PASS（offscreen 真实 `bootstrap_application` + 隔离库 `%TEMP%\p0p5_smoke`：journal_mode=wal / busy_timeout=5000 实测，Alembic 迁移链真实跑通）。质量门：pytest **601 passed / 3 skipped / 0 failed**（F-002 本轮未复现——LIMIT-003 定性不变，不因单次全绿宣布处置）、ruff / mypy 173 files / pip check 全绿。
-2. **P0-6 损坏库友好失败 + 最小备份**：下一项，**待 Owner 启动指令**（方案已批：`PRAGMA quick_check` + 迁移失败分类 + GUI QMessageBox 中文指引/CLI stderr + `VACUUM INTO` 每启动备份 3 份滚动；报错退出，不重建不换库）。
-3. **P0-7 导入事务化 + 无 identity 查重**：待指令（已批：按批原子 500 行/批 + name+department 查重；遵循 roadmap「避免把弹性导入变成全有全无」注记，逐行错误隔离保留）。
+2. ~~P0-6 损坏库友好失败 + 最小备份~~ ✅ 已完成（`ab92d5c` + `0295f62` + `9752af3`）：①完整性门 `infrastructure/database/integrity.py`——`verify_database_integrity` 以 URI mode=ro 只读跑 `PRAGMA quick_check`（缺文件/`:memory:` 跳过，绝不写坏文件/绝不创建文件），`CorruptedDatabaseError(path, issues)` 承载具体 issues；bootstrap 在 repos/migrations 前置该门，`sqlite3.DatabaseError` 兜底归一同类（防御纵深）。②友好失败 `presentation/startup_failure.py`——中文恢复指引（数据库位置/备份目录/复制恢复步骤/技术细节），GUI 自备 QApplication 弹 QMessageBox（QApplication 默认 quitOnLastWindowClosed=True，进程随返回码 2 退出），CLI stderr 同文案；main.py 四入口分流（CLI stderr+exit 2 / GUI dialog+exit 2），presentation 仅收 Path/str 原语零 infrastructure 依赖。③启动备份 `infrastructure/database/backup.py`（D-B3）——GUI 启动成功后 `VACUUM INTO` 快照至库同目录 `backups/`，3 份滚动保留，同秒冲突 _N 后缀，备份失败仅 WARNING 不阻塞启动、半成品清理，CLI 不备份；配置说明 v1.3 注记。Runtime Smoke A/B/C 全 PASS（A 注坏库 GUI 弹框 offscreen 截图核对中文文案；B 正常启动备份生成 + roundtrip 可读；C CLI 注坏库 exit 2 + stderr 指引 + 零备份泄漏 + 零 WAL 残留）。质量门：pytest **620 passed / 3 skipped / 0 failed**（+19：integrity 5 / startup_failure 4 / CLI 失败路径 4 / backup 5 / UoW 错误归类 1；F-002 连续三轮未复现——LIMIT-003 定性不变，处置仍归 Phase C）、ruff / mypy 176 files / pip check 全绿。
+3. **P0-7 导入事务化 + 无 identity 查重**：下一项，**待 Owner 启动指令**（已批：按批原子 500 行/批 + name+department 查重；遵循 roadmap「避免把弹性导入变成全有全无」注记，逐行错误隔离保留）。
 4. **P0-8 模型 SHA-256 固定**：待指令（pin buffalo_l 官方包 digest + CI 移除 `--allow-unverified`；CI 三平台验证依赖 owner push，D-B6 知会项）。
 5. **P0-9 路径锚定**：本轮仅做启动警告（D-B5 批复：Windows 源码形态下完整锚定降 P1）；待指令。
 
-吞吐线与历史阶段状态不变：Phase 4.2 / 5 / 6 / 7 / 8 / 9 全部 CLOSED（详见 §2）；v1.0.0 / v2.0.0 / v2.1.0 / v2.2.0 已发布。Phase B 内未启动项（P0-6~P0-9）按 §6 清单逐项待指令；Phase C（含 F-002/LIMIT-003 处置，需 Owner 先解除禁修定性）/ Phase D（D-0 分发形态裁决门）/ Phase E（删除语义 ADR 门）均未授权——触发前不排期、不自动选定、发现时只记录不修复。发版收尾（非阻塞，GIT-020 归 owner）：`git push origin main` 对齐分支引用（本地领先 18 笔，含 Phase B P0-5）。
+吞吐线与历史阶段状态不变：Phase 4.2 / 5 / 6 / 7 / 8 / 9 全部 CLOSED（详见 §2）；v1.0.0 / v2.0.0 / v2.1.0 / v2.2.0 已发布。Phase B 内未启动项（P0-7~P0-9）按 §6 清单逐项待指令；Phase C（含 F-002/LIMIT-003 处置，需 Owner 先解除禁修定性）/ Phase D（D-0 分发形态裁决门）/ Phase E（删除语义 ADR 门）均未授权——触发前不排期、不自动选定、发现时只记录不修复。发版收尾（非阻塞，GIT-020 归 owner）：`git push origin main` 对齐分支引用（本地领先 23 笔，含 Phase B P0-5/P0-6）。
 
 ## 7. Key Files（关键文件索引）
 
