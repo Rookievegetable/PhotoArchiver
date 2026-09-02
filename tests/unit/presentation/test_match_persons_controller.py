@@ -154,31 +154,6 @@ def test_single_flight_guard_blocks_second_start() -> None:
     assert executor.last_runnable is first
 
 
-def test_guard_releases_when_runnable_finishes_without_signal_delivery() -> None:
-    """Phase C (F-002): the runnable's finished state alone releases the guard.
-
-    Runs the real QtWorkerRunnable synchronously on the test thread — no
-    signal delivery involved at all. This pins the deterministic release path
-    that removes the LIMIT-003 family race (queued terminal delivery vs a
-    main-thread ``is_running`` read).
-    """
-    controller, executor = _make_controller(
-        people=[Person(name="Alice", id=uuid4())],
-        photos=[_photo("a.jpg", uuid4())],
-    )
-    runnable = controller.start_match()
-    assert runnable is not None
-    controller.connect_signals(runnable, *(lambda _e: None,) * 4, cancelled=lambda _e: None)
-    assert controller.is_running
-
-    assert not runnable.is_finished
-    runnable.run()  # synchronous execution; the stub use case fails the task
-
-    assert runnable.is_finished
-    assert not controller.is_running
-
-    # And a follow-up submission is possible again (no permanent lockout).
-    assert controller.start_match() is not None
 def test_guard_released_on_completed_allows_next_batch() -> None:
     controller, _ = _make_controller(
         people=[Person(name="Alice", id=uuid4())],

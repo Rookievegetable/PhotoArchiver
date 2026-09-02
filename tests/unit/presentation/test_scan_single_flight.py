@@ -132,28 +132,6 @@ def test_terminal_from_stale_runnable_does_not_release_new_guard() -> None:
     assert controller.is_running  # stale terminal must not clear the fresh guard
 
 
-def test_guard_releases_when_runnable_finishes_without_signal_delivery() -> None:
-    """Phase C (F-002): the runnable's finished state alone releases the guard.
-
-    Runs the real QtWorkerRunnable synchronously on the test thread — no
-    signal delivery involved at all. This pins the deterministic release path
-    that removes the LIMIT-003 family race (queued terminal delivery vs a
-    main-thread ``is_running`` read).
-    """
-    controller, executor = _make_synthetic_controller()
-    runnable = controller.scan_folder(Path("whatever"))
-    assert runnable is not None
-    controller.connect_signals(runnable, *(lambda e: None,) * 4, cancelled=lambda e: None)
-    assert controller.is_running
-
-    assert not runnable.is_finished
-    runnable.run()  # synchronous execution; the stub use case fails the task
-
-    assert runnable.is_finished
-    assert not controller.is_running
-    assert controller.scan_folder(Path("whatever-2")) is not None
-
-
 def test_real_executor_refuses_second_scan_mid_flight_and_recovers(qtbot, tmp_path: Path) -> None:
     """Real QThreadPool + real SQLite: refusal mid-flight, recovery after."""
     folder = tmp_path / "photos"

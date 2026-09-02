@@ -50,14 +50,8 @@ class MatchPersonsController(QObject):
 
     @property
     def is_running(self) -> bool:
-        """Whether a match task is currently in flight.
-
-        Phase C (F-002): a finished runnable releases the guard even if its
-        terminal signal has not been delivered yet — the queued terminal slot
-        and this read race across threads, so the runnable's own finished
-        state is the authoritative source.
-        """
-        return self._active_runnable is not None and not self._active_runnable.is_finished
+        """Whether a match task is currently in flight."""
+        return self._active_runnable is not None
 
     def start_match(self) -> QtWorkerRunnable | None:
         """Start a match-persons task and return its runnable handle.
@@ -69,7 +63,7 @@ class MatchPersonsController(QObject):
         of duplicating PENDING results.
         """
         self.last_refusal_reason = None
-        if self.is_running:
+        if self._active_runnable is not None:
             self.last_refusal_reason = "A recognition task is already running."
             return None
         if not self._people.list_all():

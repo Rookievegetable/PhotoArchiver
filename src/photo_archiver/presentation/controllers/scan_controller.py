@@ -39,14 +39,8 @@ class ScanController(QObject):
 
     @property
     def is_running(self) -> bool:
-        """Whether a scan task is currently in flight.
-
-        Phase C (F-002): a finished runnable releases the guard even if its
-        terminal signal has not been delivered yet — the queued terminal slot
-        and this read race across threads, so the runnable's own finished
-        state is the authoritative source.
-        """
-        return self._active_runnable is not None and not self._active_runnable.is_finished
+        """Whether a scan task is currently in flight."""
+        return self._active_runnable is not None
 
     def scan_folder(self, folder_path: Path, recursive: bool = True, display_name: str | None = None):
         """Start a scan-and-register task and return its runnable handle.
@@ -55,7 +49,7 @@ class ScanController(QObject):
         when a scan task is already running (P0-4 single-flight).
         """
         self.last_refusal_reason = None
-        if self.is_running:
+        if self._active_runnable is not None:
             self.last_refusal_reason = "A scan task is already running."
             return None
         command = ScanAndRegisterPhotosCommand(

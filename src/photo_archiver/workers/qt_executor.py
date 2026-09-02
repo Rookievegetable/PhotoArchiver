@@ -33,19 +33,7 @@ class QtWorkerRunnable(QRunnable):
         super().__init__()
         self.task = task
         self.signals = QtWorkerSignals()
-        self._finished = False
         self.task.subscribe(self._emit_task_event)
-
-    @property
-    def is_finished(self) -> bool:
-        """Whether the wrapped task has finished executing (any terminal state).
-
-        Phase C (F-002): written by the worker thread when ``run()`` returns
-        and read from the caller's thread — the authoritative completion
-        state for single-flight guards, immune to cross-thread signal
-        delivery ordering (the class of race behind LIMIT-003/LIMIT-005).
-        """
-        return self._finished
 
     def cancel(self, reason: str = "") -> None:
         """Request cooperative cancellation for the wrapped task."""
@@ -75,11 +63,6 @@ class QtWorkerRunnable(QRunnable):
                     exc,
                 )
             return
-        finally:
-            # Phase C (F-002): authoritative terminal state, set on the worker
-            # thread the moment execution ends — independent of when (or
-            # whether) the queued terminal signal is delivered.
-            self._finished = True
 
     def _emit_task_event(self, event: TaskEvent) -> None:
         self.signals.event.emit(event)
