@@ -7,12 +7,9 @@ SOURCE_ROOT = PROJECT_ROOT / "src"
 if SOURCE_ROOT.is_dir():
     sys.path.insert(0, str(SOURCE_ROOT))
 
-from photo_archiver.app import (
-    ApplicationContext,
-    PhotoArchiverApplication,
-    bootstrap_application,
-)  # noqa: E402  # sys.path injection above is required before app imports
+from photo_archiver.app import ApplicationContext, PhotoArchiverApplication, bootstrap_application  # noqa: E402  # sys.path injection above is required before app imports
 from photo_archiver.application import ArchivePhotosCommand, ScanAndRegisterPhotosCommand  # noqa: E402  # sys.path injection above is required before app imports
+from photo_archiver.infrastructure.database.backup import backup_database  # noqa: E402
 from photo_archiver.infrastructure.database.integrity import (  # noqa: E402
     BACKUP_DIRECTORY_NAME,
     CorruptedDatabaseError,
@@ -185,6 +182,8 @@ def main(arguments: list[str] | None = None) -> int:
     except CorruptedDatabaseError as error:
         show_corrupted_database_dialog(_corrupted_database_message(error))
         return 2
+    # P0-6（D-B3）：GUI 启动成功即做一致性快照备份；失败仅告警不阻断启动。
+    backup_database(context.settings.database_path)
     application = PhotoArchiverApplication(sys.argv, context=context)
     return application.run()
 

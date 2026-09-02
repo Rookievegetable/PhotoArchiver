@@ -95,6 +95,8 @@ DATABASE_URL=sqlite:///
 - `journal_mode=WAL`：读写解耦，扫描长事务期间的并发写（审核/导入）不再报 `database is locked`。WAL 是数据库文件的持久属性，对既有库自动升级生效。**WAL 依赖本地盘共享内存语义，网络盘/挂载盘（SMB/NFS 等）不受支持——受支持运行形态为本地盘**（ADR-031 源码/clone 形态）。
 - `busy_timeout=5000`：写锁争用时最多等待 5000 毫秒再报 `database is locked`。当前为连接层常量（`sqlite_connection.BUSY_TIMEOUT_MS`），未开放为配置项。
 
+启动备份（Phase B P0-6，D-B3）：GUI 启动成功完成初始化后，自动用 `VACUUM INTO` 生成数据库一致性快照，写入数据库同目录的 `backups/` 子目录（文件名 `photo_archiver_YYYYMMDD_HHMMSS.db`），滚动保留最近 3 份；备份失败不阻断启动（记录 WARNING 日志）。数据库损坏时的启动失败指引会指向该备份目录。CLI 子命令（scan / archive / backfill-content-hash）不生成启动备份。
+
 ## 5. 模型目录
 
 `MODEL_PATH` 用于存放 AI 模型文件。
