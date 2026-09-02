@@ -73,3 +73,28 @@ def test_corrupted_database_fails_quick_check(tmp_path: Path) -> None:
         verify_database_integrity(path)
     assert exc_info.value.database_path == path
     assert exc_info.value.issues
+
+
+def test_hot_wal_sidecar_defers_the_integrity_gate(tmp_path: Path) -> None:
+    """P0-8 round (F-2): a hot -wal sidecar defers the read-only gate.
+
+    A crash can leave a -wal pending recovery; a mode=ro quick_check is
+    unreliable in that state and could misreport recoverable data as
+    corruption. The gate must defer to the recovery-capable read-write open
+    instead (whose sqlite3.DatabaseError is normalized by the bootstrap).
+    """
+    path = tmp_path / "pending-recovery.db"
+    path.write_bytes(b"whatever the pending wal still guards")
+    (tmp_path / "pending-recovery.db-wal").write_bytes(b"hot wal frames")
+
+    verify_database_integrity(path)  # must NOT raise
+    assert (tmp_path / "pending-recovery.db-wal").exists()  # gate never mutates
+
+
+def test_corruption_without_wal_sidecar_is_still_reported(tmp_path: Path) -> None:
+    """The deferral must not swallow real corruption when no -wal is present."""
+    path = tmp_path / "plain-garbage.db"
+    path.write_bytes(b"definitely not a sqlite database" * 4)
+
+    with pytest.raises(CorruptedDatabaseError):
+        verify_database_integrity(path)

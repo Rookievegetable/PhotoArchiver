@@ -10,6 +10,8 @@ from collections.abc import Sequence
 from pathlib import Path
 import sqlite3
 
+from loguru import logger
+
 # P0-6（D-B3）：启动备份目录名。integrity 门先落（提交 A），backup.py（提交 B）
 # 复用此常量；entry 层用它拼接恢复指引中的备份目录路径。
 BACKUP_DIRECTORY_NAME = "backups"
@@ -50,6 +52,18 @@ def verify_database_integrity(database_path: Path) -> None:
             readable as a SQLite database at all (e.g. garbage bytes).
     """
     if str(database_path) == IN_MEMORY_DATABASE or not database_path.exists():
+        return
+    # P0-8 轮（审查 F-2）：热 -wal 残留（如上次运行崩溃）时，mode=ro 的
+    # quick_check 不可靠——可能把"等待恢复"的正常状态误报为损坏。跳过只读
+    # 门，交由 bootstrap 紧随其后的读写打开恢复 WAL；真损坏由该路径的
+    # sqlite3.DatabaseError 兜底（bootstrap 已归一为 CorruptedDatabaseError），
+    # 防御纵深不损失。
+    if database_path.with_name(database_path.name + "-wal").exists():
+        logger.info(
+            "WAL sidecar present for {} — deferring integrity check to the "
+            "recovery-capable open",
+            database_path,
+        )
         return
     try:
         connection = _open_read_only(database_path)
