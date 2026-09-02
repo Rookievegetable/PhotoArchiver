@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.9.0 · Last Updated: 2026-09-02 · Status: Live
+> Version: 1.10.0 · Last Updated: 2026-09-02 · Status: Live
 
 ---
 
@@ -41,6 +41,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 - **Phase 9 P0（FEAT-P9-1/2/3：Filter Completeness）**：✅ 完成（2026-09-02，HEAD `3a2ef0a`）——日期范围筛选（From/To checkbox 门控）、人员筛选（新增薄读取用例 `ListPersonsService`）、三轴联合 AND 语义矩阵 + FILTERED 导出真实链路联测（泄漏矩阵零泄漏）。DoD 23/23；`pytest 570 passed / 3 skipped`；联测暴露并修复 QVariant userData 缺陷（userData 改存字符串 id）。实施报告：`docs/development/PHASE_9_FILTER_COMPLETENESS_REPORT.md`；规划：`docs/roadmap/NEXT_PHASE_FEATURE_DEVELOPMENT_PLAN.md`。
 - **Phase A（Runtime Correctness——全项目体检 P0 修复轮）**：🚧 Owner 已授权执行（2026-09-02）——范围 P0-10（文档收口）/ P0-1（插件 UI 加载）/ P0-2（缩略图 UI 渲染）/ P0-3（Excel 导入接线）/ P0-4（取消信号 + 扫描单飞），按序独立提交；每项完成后 STOP 待指令。体检基线报告：`docs/health-check/PROJECT_HEALTH_CHECK.md`（3 项用户可见功能失效 + 数据安全底线缺位 + F-002 恶化等 18 项 Finding）；开发路线图：`docs/roadmap/DEVELOPMENT_ROADMAP.md`。**Phase A 全部 5 项 P0 已完成（P0-10/1/2/3/4）**（见 §5/§6）。
+- **Phase B（数据安全底线）**：🚧 Owner 已授权（2026-09-02）按 AI 计划草案的建议方案执行——决策批复：D-B1 导入按批原子（500 行/批）/ D-B2 无 identity 行按 name+department 查重 / D-B3 备份 VACUUM INTO + 每启动 + 3 份滚动 / D-B4 损坏库报错退出（不重建/不换库）/ D-B5 Windows 源码形态下 P0-9 完整锚定降 P1、本轮仅做启动警告 / D-B7 常量默认值（busy_timeout=5000、批 500 行、backups 同目录）/ D-B8 逐项授权。范围 P0-5→P0-6→P0-7→P0-8→P0-9(警告) 按序独立提交，每项完成后 STOP 待指令。**P0-5 SQLite WAL + busy_timeout 已完成（`22305dd`）**（见 §5/§6）。
 
 当前无未解决的 O 级产品缺陷登记于 KNOWN_ISSUES（P0-1~3 修复中的缺陷见体检报告 §4.2/§15，落地即销，不重复登记）；`KNOWN_ISSUES.md` Limit 表格登记 4 项设计/测试覆盖限制（LIMIT-001/002 + LIMIT-003 F-002 恶化 + LIMIT-004 Qt 子集顺序崩溃）。
 
@@ -64,7 +65,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | Phase 7 死重剔除（v2.2.0） | ✅ | ADR-033 三项裁决全 A（W2-1 landmark 剔除 / W2-2 genderage 一并剔除，owner 确认近期无性别年龄功能规划 / W2-3 剩余非推理段本轮不改造）——loader `allowed_modules=("detection","recognition")` 落地，bbox/kps/embedding 逐字节不变；`tools/bench_recognition.py` 全网格复测落 docstring：2600×1 656.94→332.02s（**1.98×**）、2600×4 514.00→231.68s（**2.22×**）、600×4 2.45×，全部格子 100% 产出 / 全 PENDING 等价保持；门禁本地全绿（ruff 0 / mypy 168 ✓ / pytest **417** passed）；证据链 `tools/spike_segment_profile.py` v2（账目闭合）+ phase7 定稿（`docs/development/phase7-adr-draft.md`）。CI 实证已回填（owner push 后 API 实测 head `4fe8aa4` CI run completed/success 三平台全绿，2026-08-29）；发版链实证——tag `v2.1.0`@`bd52fbb` / tag `v2.2.0`@`f9fb8c5` 已由 owner 推送（ls-remote 实测远端指向正确），两 tag 触发 release workflow，owner 确认 CI 全绿，v2.1.0 / v2.2.0 已发布（2026-08-29）。 |
 | CI | ✅ | GitHub Actions 三 OS 矩阵、模型缓存与 AI/UI 断言已启用。 |
 
-当前 HEAD：`99a8894`（fix(scan): complete cancellation wiring and single-flight——Phase A P0-4）；origin/main = `3a2ef0a`（Phase 9 P0 Filter Completeness），本地 main 领先 10 笔（体检报告 + 路线图 + P0-10 + onboarding 同步/清理 + P0-1 + P0-2 + P0-3 ×2 + P0-4），分支引用推送按 GIT-020 留待 owner `git push origin main` 对齐（非阻塞）。tag 全景（本地 `git for-each-ref` 实测）：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`；四个 Release 均已发布（GitHub Release 实证，2026-08-29）。历史重写注记：Git History Cleanup 后 main 现行历史不含 Phase 4.2–8 期间的 `docs/health-check/PHASE_*.md` 审计报告文件，其 AC 结论保留于本节文字；全项目当前状态以 `docs/health-check/PROJECT_HEALTH_CHECK.md` 为准。
+当前 HEAD：`22305dd`（fix(db): enable WAL journal mode and explicit busy_timeout——Phase B P0-5）；origin/main = `3a2ef0a`（Phase 9 P0 Filter Completeness），本地 main 领先 18 笔（体检报告 + 路线图 + Phase A 全部工作 P0-10/1/2/3/4 + Phase B P0-5），分支引用推送按 GIT-020 留待 owner `git push origin main` 对齐（非阻塞）。tag 全景（本地 `git for-each-ref` 实测）：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`；四个 Release 均已发布（GitHub Release 实证，2026-08-29）。历史重写注记：Git History Cleanup 后 main 现行历史不含 Phase 4.2–8 期间的 `docs/health-check/PHASE_*.md` 审计报告文件，其 AC 结论保留于本节文字；全项目当前状态以 `docs/health-check/PROJECT_HEALTH_CHECK.md` 为准。
 
 ---
 
@@ -91,28 +92,27 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 项目 | 值 |
 |---|---|
 | 时间 | 2026-09-02（本地） |
-| 生成者 | ZCode (GLM-5.3-Flash) |
-| 会话范围 | 全项目体检（READ ONLY，HEAD `3a2ef0a` 基线）→ Owner 授权 Phase A（Runtime Correctness）→ Phase A **P0-10/1/2/3/4 全部执行完毕**（截至本提交，P0-4 待 owner 真桌面复验）。 |
-| 已完成 | ① **全项目体检**（12 维度证据化核查，READ ONLY）：确认 3 项用户可见功能失效（插件 UI 死路径 `main_window.py:191` / 缩略图不渲染 / Excel 导入断线 `app/services.py:140`）+ 数据安全底线缺位（无 WAL/busy_timeout、零备份、CWD 相对库位置）+ F-002 恶化等 18 项 Finding，Gap Matrix + 成熟度评分 + Minimum Path to v1.0 产出；交付 `5cac1a4`（health check）+ `483cb18`（roadmap）。② **Phase A 授权与 P0-10 执行**（本提交）：PROJECT_STATUS 对齐当前 HEAD / Phase 9 / Phase A；§2/§3/§5/§6 过期状态（HEAD `5aad031`、origin `d762751`、领先 22 笔等历史重写前信息）全部清理；`docs/health-check/PHASE_*.md` 悬空引用改为"已随 Git 历史清理移除"注记；KNOWN_ISSUES 登记 LIMIT-003（F-002 恶化）/ LIMIT-004（Qt 子集顺序崩溃）；FAQ 插件条目与当前实际对齐（P0-1 落地后恢复）；roadmap 状态行更新。③ **P0-1 Plugin UI Loading**（`d30a4de`）——修复两处链路断点：`main_window.py` 插件目录 anchor（4×parent → `parents[4]`，原指向不存在的 `src/examples/plugins` 整链静默跳过）+ toolbar `setObjectName("Main")`（`QToolBar("Main", …)` 构造串是 windowTitle 非 objectName，`_add_plugin_actions` 的 `findChild` 契约失效——路径修复后由新增测试暴露的第二个断点）；新增 `test_plugin_ui_loading.py`（3 tests）证明真实链路：加载→启用→QAction 注册→isEnabled/isVisible→触发→真实 execute_action→渲染；offscreen 真实入口 Runtime Smoke PASS（3 插件动作出现在工具栏且全部可见）；FAQ 插件条目恢复可用表述。④ **P0-2 Thumbnail Rendering**（`cbc2718`）——新增 `PhotoThumbnailDelegate(QStyledItemDelegate)`（`photo_list_delegate.py`）消费 `THUMBNAIL_ROLE`：Path→QPixmap 经 QPixmapCache 托管，顶部缩略图 + 底部文件名，选中样式走 style 原语；`_build_central` 一行 `setItemDelegate` 接线；模型 docstring 真实化。新增 `test_photo_thumbnail_rendering.py`（2 tests）：真实生成/缓存（含二次命中 mtime 不变）+ 真实 MainWindow 管线（真实 photos.add → 真实异步加载 → waitUntil → THUMBNAIL_ROLE 路径 → **delegate paint 像素 == 源色** → view.grab() 全 widget 渲染含缩略图）。Runtime Smoke 双层：Layer A offscreen（真实 CLI `main.py scan` 隔离库 → 真实入口 → 像素断言 PASS）；Layer B 真桌面（`main.py` 真实窗口截图，缩略图 + 文件名肉眼可见）。⑤ **P0-3 Excel Import Wiring**（`39c6298` + `46c2dca`）——断点修复：①装配行只接 TXT reader → 新增 `DispatchingPersonImportReader`（.xlsx/.xlsm→openpyxl 读取器，其余→TXT）；②导入文件过滤器广告 `*.xls` 但 openpyxl 不支持 → 收敛为 `*.txt *.csv *.xlsx`；③owner 真桌面手动烟测发现 FilterBar 上"错位组件" → 进程内 widget 转储 + 二分隐藏定位真因：**Phase 9 FEAT-P9-1 遗留——`_to_edit` 漏加布局**，以默认几何 (0,0,100,30) 悬在左上角盖住 Person 轴（`46c2dca` 一行修复并回退中间错误理论改动）。测试 +10（调度路由 6 / 真实 UI 闭环 1 / person 轴几何钉扎 3）。**owner 视觉复验确认**：错位组件消失、To 编辑框归位、下拉可交互。⑥ **P0-4 Cancellation + Scan Single-flight**（`99a8894`）——A（取消）：scan 的 cancelled 终态信号从未接线（共享接线早于该信号）→ UI 卡死 "Cancelling ..."；ScanController 镜像 MatchPersonsController（实例 connect_signals + cancelled 槽 + 终态释放守卫）+ `_on_scan_cancelled` 复位槽。取消粒度保持任务边界（LIMIT-002 设计同型）。B（单飞）：scan 零防护（并发扫描交错共享 reporter + 写锁竞争）→ 同款 in-flight 守卫（拒绝 + last_refusal_reason + 终态自动释放）+ Scan 动作运行期禁用（禁用置于 `_connect_scan_signals` 覆盖全部提交路径）。测试 +9（合成守卫语义 6 镜像 match 既有模式 / 实执行器拒绝+取消+重启 3，轮询同步规避 waitSignal 竞态）。Runtime Smoke：Layer A offscreen PASS（真实 xlsx→真实 QAction→SQLite→combo 刷新）；Layer B owner 手动测试确认步骤 1-4（导入完成、`import_people complete`、Alice/Bob 落库由只读 SQL 核验）。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 173 个源文件无问题；pytest 全量 **594 passed / 3 skipped / 1 failed**——唯一 failed = F-002，**状态恶化：单跑 ×2 亦失败**（失败点 `controller.is_running` 单飞守卫断言，持久化断言通过；已登记 KNOWN_ISSUES LIMIT-003，处置属 Phase C）；`pip check` 无损坏依赖。 |
-| 工作区 | P0-10 文档收口提交后 tracked 零改动；HEAD/origin 状态见 §3。 |
-| Remaining | **Phase A 全部 5 项 P0 完成**（P0-10/1/2/3/4 ✅；P0-4 真桌面人工复验本轮未执行——headless 真实入口 A/B/C 三场景已验证，人工清单保留可随时补验）。后续：P0-5~P0-9（数据安全底线）、P1/P2、Phase B–E 均未授权，禁止自动实施。发版动作（GIT-020 归 owner）：`git push origin main` 对齐分支引用（非阻塞）。 |
-| Next Step | **Phase A 完工报告已交付，等待 Owner 验收**；Phase B（P0-5 WAL + busy_timeout 等）须 Owner 另行授权，AI 不得自动开始。 |
+| 生成者 | Cline |
+| 会话范围 | 交接基线校验（.ai 五文档 + roadmap 按序读取 + Git 基线核对）→ Phase B 开发计划草案交付 Owner 审核 → Owner 批复按建议方案执行（D-B1~D-B8 全 A，逐项授权）→ **Phase B P0-5 执行完毕**（`22305dd`，截至本提交）。 |
+| 已完成 | ① **交接基线校验**：按序读取 `.ai/` 四文档 + roadmap；Git 基线逐项核对（HEAD `f868b2d` / origin `3a2ef0a` / 领先 17 笔 / tree CLEAN，全部匹配）。② **Phase B 计划草案与批复**：P0-5~P0-9 逐项现状取证（WAL/busy_timeout 缺位、bootstrap 裸 raise、import 逐行独立事务 + 无 identity 跳过查重、EXPECTED_SHA256 双空 + CI `--allow-unverified`、DEFAULT_DATABASE_URL CWD 相对）+ D-B1~D-B8 决策点交付；Owner 批复按建议方案执行（D-B1 按批原子 / D-B2 name+department 查重 / D-B3 VACUUM INTO+每启动+3 份 / D-B4 报错退出 / D-B5 完整锚定降 P1 本轮仅警告 / D-B7 默认值 / D-B8 逐项授权）。③ **P0-5 SQLite WAL + busy_timeout**（`22305dd`）——`sqlite_connection.py` 两条连接路径（`connect()` / `transaction()`）统一经 `_configure_connection`：`busy_timeout=5000`（先于 journal 设置）+ `journal_mode=WAL`（`:memory:` 跳过；持久属性，既有库幂等升级）。+6 真实链路测试（`tests/unit/infrastructure/test_sqlite_connection_pragmas.py`：双路径 PRAGMA / `:memory:` 边界 / 既有契约回归 / 双连接真实锁场景——写者 B 在 busy_timeout 内等待写者 A 提交后成功，镜像 G-05 用户可见失败形态）。Runtime Smoke PASS（offscreen 真实 `bootstrap_application` + 隔离库 `%TEMP%\p0p5_smoke`：journal_mode=wal / busy_timeout=5000 实测，Alembic 迁移链真实跑通）。质量门：ruff / mypy 173 files / pip check 全绿；pytest **601 passed / 3 skipped / 0 failed**（F-002 本轮未复现——LIMIT-003 定性不变，不因单次全绿宣布处置）。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 173 个源文件无问题；pytest 全量 **601 passed / 3 skipped / 0 failed**（F-002 本轮未复现——历史恶化记录见 KNOWN_ISSUES LIMIT-003，处置属 Phase C，不因单次全绿宣布处置）；`pip check` 无损坏依赖。 |
+| 工作区 | Phase B P0-5 提交（`22305dd`）后 tracked 零改动；HEAD/origin 状态见 §3。 |
+| Remaining | **Phase B P0-5 完成**；P0-4 真桌面人工复验清单保留待 owner 补验（三场景：扫描运行中第二次扫描被拒 / Cancel→cancelled 终态 + UI 复位 / 取消后重启扫描完成；headless 真实入口已全 PASS）。P0-6 为下一项待 Owner 启动指令；P0-7 / P0-8 / P0-9(仅警告) 排后。发版动作（GIT-020 归 owner）：`git push origin main` 对齐分支引用（领先 18 笔，非阻塞）。 |
+| Next Step | **P0-5 完工报告已在会话交付，STOP 等待 Owner 指令**；下一项 P0-6（损坏库友好失败 + 最小备份）凭 Owner 启动指令开工，AI 不得自动开始。 |
 
 ---
 
 ## 6. Next Step（下一步开发计划）
 
-**Phase A（Runtime Correctness）执行状态**：Owner 以 Phase A 启动指令授权本阶段——修复体检确认的用户可见功能断点；每项 P0 以 静态契约 + 单测 + 集成测试 + Runtime Smoke + 用户视角验证 五层达标方为 COMPLETE，独立提交，完成后 STOP。
+**Phase B（数据安全底线）执行状态**：Owner 已授权（2026-09-02）按 AI 计划草案建议方案执行（决策批复 D-B1~D-B8 见 §2）；每项以 静态契约 + 单测 + 集成测试 + Runtime Smoke + 用户视角验证 五层达标方为 COMPLETE，独立提交，完成后 STOP 待 Owner 逐项指令。
 
-1. ~~P0-10 文档收口~~ ✅ 已完成（2026-09-02，本提交）：PROJECT_STATUS 对齐当前 HEAD / Phase 9 / Phase A；`docs/health-check/PHASE_*.md` 悬空引用清理（注记"已随 Git 历史清理移除"）；KNOWN_ISSUES 登记 LIMIT-003（F-002 恶化）/ LIMIT-004（Qt 子集顺序崩溃）——两项均属不修项，如实登记；FAQ 插件条目与当前实际对齐（P0-1 落地后恢复表述）。
-2. ~~P0-1 插件 UI 加载修复~~ ✅ 已完成（`d30a4de`）：两处断点修复（目录 anchor 4×parent → `parents[4]`；toolbar objectName 补齐使 `_add_plugin_actions` 的 `findChild` 契约成立——路径修复后由新增测试暴露的第二个断点）+ `test_plugin_ui_loading.py`（3 tests）真实链路测试 + offscreen 真实入口 Runtime Smoke PASS（3 插件动作真实出现且可见）。存量观察：子集顺序 Qt 原生崩溃维持 LIMIT-004 登记（stash 基线复证实为先于 P0-1 存在，全量顺序不受影响）。
-3. ~~P0-2 缩略图 UI 渲染~~ ✅ 已完成（`cbc2718`）：新增 `PhotoThumbnailDelegate` 消费 `THUMBNAIL_ROLE`（Path→QPixmap QPixmapCache 托管；style 原语保选中高亮）+ `_build_central` 接线 + `test_photo_thumbnail_rendering.py`（2 tests，管线含缓存命中 + delegate paint 像素 == 源色 + view.grab() 渲染证据）+ Runtime Smoke 双层 PASS（offscreen 真实 CLI scan→真实入口像素断言；真桌面窗口截图肉眼可见）。断点单一：模型对 DecorationRole 返 None 且 THUMBNAIL_ROLE 无消费者（体检 P-2 判定证实）。
-4. ~~P0-3 Excel Import Wiring~~ ✅ 已完成（`39c6298` + `46c2dca`）：三断点修复（装配单 reader → DispatchingPersonImportReader；过滤器撤下不受支持的 .xls；**Phase 9 遗留 `_to_edit` 漏加布局**——以 (0,0,100,30) 悬于左上角盖住 Person 轴，owner 手动烟测暴露，进程内 widget 转储 + 二分隐藏定位，`46c2dca` 一行修复并回退中间错误理论改动）+ 测试 +10。数据面证据：owner 手动导入后只读 SQL 核验 Alice/Bob 落库字段正确。
-5. ~~P0-4 Cancellation + Scan Single-flight~~ ✅ 已完成（`99a8894`）：A（取消）——scan cancelled 终态接线（此前 UI 卡死 "Cancelling ..."）+ `_on_scan_cancelled` 复位槽，粒度保持任务边界（LIMIT-002 设计同型）；B（单飞）——ScanController 镜像 match in-flight 守卫 + Scan 动作运行期禁用（禁用置于 `_connect_scan_signals` 覆盖全部提交路径）。测试 +9（合成守卫 6 + 实执行器 3，轮询同步）。Headless Smoke A/B/C 三场景 PASS（真实入口：运行中拒绝第二扫描 / 真实 Cancel 动作 → cancelled 终态 + UI 复位 / 取消后重启扫描完成）。真桌面人工复验本轮未执行（owner 指示继续），人工清单保留。
-6. **Phase A 收口**：完工报告已交付；Phase B 须另行授权。
+1. ~~P0-5 SQLite WAL + busy_timeout~~ ✅ 已完成（`22305dd`）：`sqlite_connection.py` 两条连接路径（`connect()` / `transaction()`）统一经 `_configure_connection` 施加 PRAGMA——`busy_timeout=5000`（先于 journal 设置，写锁争用时等待而非报错）+ `journal_mode=WAL`（`:memory:` 跳过；WAL 为库文件持久属性，既有库幂等升级）。+6 真实链路测试（`tests/unit/infrastructure/test_sqlite_connection_pragmas.py`：双路径 PRAGMA 断言 / `:memory:` 边界 / 既有契约回归 / 双连接真实锁场景——写者 B 在 busy_timeout 内等待写者 A 提交后成功）；`docs/development/configuration.md` v1.2 增补 PRAGMA 说明 + WAL 网络盘限制注记。Runtime Smoke PASS（offscreen 真实 `bootstrap_application` + 隔离库 `%TEMP%\p0p5_smoke`：journal_mode=wal / busy_timeout=5000 实测，Alembic 迁移链真实跑通）。质量门：pytest **601 passed / 3 skipped / 0 failed**（F-002 本轮未复现——LIMIT-003 定性不变，不因单次全绿宣布处置）、ruff / mypy 173 files / pip check 全绿。
+2. **P0-6 损坏库友好失败 + 最小备份**：下一项，**待 Owner 启动指令**（方案已批：`PRAGMA quick_check` + 迁移失败分类 + GUI QMessageBox 中文指引/CLI stderr + `VACUUM INTO` 每启动备份 3 份滚动；报错退出，不重建不换库）。
+3. **P0-7 导入事务化 + 无 identity 查重**：待指令（已批：按批原子 500 行/批 + name+department 查重；遵循 roadmap「避免把弹性导入变成全有全无」注记，逐行错误隔离保留）。
+4. **P0-8 模型 SHA-256 固定**：待指令（pin buffalo_l 官方包 digest + CI 移除 `--allow-unverified`；CI 三平台验证依赖 owner push，D-B6 知会项）。
+5. **P0-9 路径锚定**：本轮仅做启动警告（D-B5 批复：Windows 源码形态下完整锚定降 P1）；待指令。
 
-吞吐线与历史阶段状态不变：Phase 4.2 / 5 / 6 / 7 / 8 / 9 全部 CLOSED（详见 §2）；v1.0.0 / v2.0.0 / v2.1.0 / v2.2.0 已发布。P0-5~P0-9（数据安全底线）、P1/P2、Phase B–E、分发方案 B、CURRENT_BATCH 批次持久化等均为**未授权项**——触发前不排期、不自动选定、发现时只记录不修复（Phase A scope lock）。发版收尾（非阻塞，GIT-020 归 owner）：`git push origin main` 对齐分支引用（本地领先 2 笔 docs 提交）。
+吞吐线与历史阶段状态不变：Phase 4.2 / 5 / 6 / 7 / 8 / 9 全部 CLOSED（详见 §2）；v1.0.0 / v2.0.0 / v2.1.0 / v2.2.0 已发布。Phase B 内未启动项（P0-6~P0-9）按 §6 清单逐项待指令；Phase C（含 F-002/LIMIT-003 处置，需 Owner 先解除禁修定性）/ Phase D（D-0 分发形态裁决门）/ Phase E（删除语义 ADR 门）均未授权——触发前不排期、不自动选定、发现时只记录不修复。发版收尾（非阻塞，GIT-020 归 owner）：`git push origin main` 对齐分支引用（本地领先 18 笔，含 Phase B P0-5）。
 
 ## 7. Key Files（关键文件索引）
 
