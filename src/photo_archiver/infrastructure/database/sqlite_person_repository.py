@@ -64,7 +64,16 @@ class SQLitePersonRepository(PersonRepository):
         return person_from_row(row) if row is not None else None
 
     def list_all(self) -> list[Person]:
-        """Return all known people."""
+        """Return all known people in a stable order.
+
+        Phase C (LIMIT-005): ``datetime.now()`` granularity on Windows makes
+        same-batch imports share a ``created_at`` — the old UUID tiebreak then
+        ordered the person axis randomly per launch (the "misplaced" filter
+        entries behind the Excel closed-loop flake). Names break ties
+        deterministically and survive VACUUM rewrites.
+        """
         with self._connection_provider.connect() as connection:
-            rows = connection.execute("SELECT * FROM people ORDER BY created_at, id").fetchall()
+            rows = connection.execute(
+                "SELECT * FROM people ORDER BY created_at, name, id"
+            ).fetchall()
         return [person_from_row(row) for row in rows]

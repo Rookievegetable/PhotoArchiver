@@ -51,6 +51,20 @@ def test_sqlite_person_repository_round_trips_people(tmp_path: Path) -> None:
     assert repository.list_all() == [person]
 
 
+def test_sqlite_person_repository_orders_same_tick_imports_by_name(tmp_path: Path) -> None:
+    """Phase C (LIMIT-005): identical created_at ties break by name, not UUID.
+
+    Windows ``datetime.now()`` granularity makes same-batch imports share a
+    created_at; the old `created_at, id` tiebreak then ordered the person axis
+    randomly per launch (the Excel closed-loop flake).
+    """
+    repository = SQLitePersonRepository(create_provider(tmp_path))
+    same_tick = datetime(2026, 9, 2, 12, 0, 0)
+    repository.add(Person(name="Bob", identity=PersonIdentity("B002"), created_at=same_tick))
+    repository.add(Person(name="Alice", identity=PersonIdentity("A001"), created_at=same_tick))
+    repository.add(Person(name="Carol", identity=PersonIdentity("C003"), created_at=same_tick))
+
+    assert [person.name for person in repository.list_all()] == ["Alice", "Bob", "Carol"]
 def test_sqlite_schema_sets_user_version(tmp_path: Path) -> None:
     """Initialize SQLite schema with a version marker for future migrations."""
     provider = create_provider(tmp_path)
