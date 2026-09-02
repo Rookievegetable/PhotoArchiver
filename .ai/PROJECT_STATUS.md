@@ -95,10 +95,10 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 |---|---|
 | 时间 | 2026-09-02（本地） |
 | 生成者 | Cline |
-| 会话范围 | 交接基线校验 → Phase B 计划草案与 D-B1~D-B8 批复 → **P0-5/6/7 顺序执行**（Cline 会话）→ **P0-8 + 审查 F-1/F-2 并入 → P0-9 启动警告**（ZCode 会话，Phase B 全部完成）→ **Phase C 时序 flake 专项** → **Phase D 形态一 P2-5 导出原子写**（ZCode 会话，D-0 裁决：源码形态 v1.0）。 |
+| 会话范围 | 交接基线校验 → Phase B 计划草案与 D-B1~D-B8 批复 → **P0-5/6/7 顺序执行**（Cline 会话）→ **P0-8 + 审查 F-1/F-2 并入 → P0-9 启动警告**（ZCode 会话）→ **Phase C 时序 flake 专项** → **Phase D 形态一 P2-5 导出原子写 + v2.3.0 发布准备**（ZCode 会话，D-0 裁决：源码形态 v1.0）。 |
 | 已完成 | ① **交接基线校验**：按序读取 `.ai/` 四文档 + roadmap；Git 基线逐项核对（HEAD `f868b2d` / origin `3a2ef0a` / 领先 17 笔 / tree CLEAN，全部匹配）。② **Phase B 计划草案与批复**：P0-5~P0-9 逐项现状取证 + D-B1~D-B8 决策点交付；Owner 批复按建议方案执行。③ **P0-5 SQLite WAL + busy_timeout**（`22305dd`）+ **P0-6 损坏库友好失败 + VACUUM INTO 备份**（`ab92d5c`/`0295f62`/`9752af3`）+ **P0-7 导入批量事务化 + 无 identity 查重**（`169abb3b`，LIMIT-005 登记于 `9359dfb`）——详见 §6 条目 1-3。④ **P0-8 模型 SHA-256 固定 + 审查 F-1/F-2 并入**（ZCode 会话，`548d7fc`/`c46062f`/`4e91ee4`）——digest 三重验证后 pin `80ffe37d…ca2f`；CI 移除 `--allow-unverified`（每次下载 fail-closed）；审查 F-1：GUI 启动备份失败由裸调用崩溃改为 warning 不阻断；审查 F-2：热 `-wal` 残留时完整性门延迟至读写打开（真损坏仍由 bootstrap DatabaseError 兜底）。测试 +5。E2E 双路径实测：干净 zip verified→extract ✓ / 篡改 1 字节 → mismatch → Archive rejected → exit 1 ✓。⑦ **P0-9 路径锚定（本轮仅启动警告，D-B5）**（`37fb675`）——`bootstrap.py` 增纯函数 `cwd_dependent_path_warnings`：枚举全部 CWD 相对配置路径（数据库/模型/输出/照片根/归档根/日志），`bootstrap_application` 逐条 `logger.warning`（含本次解析绝对路径 + "换目录启动将使用另一个数据库" + .env 绝对路径建议）；`:memory:` 与绝对路径静默，未配置可选根跳过。测试 +5（纯函数矩阵 + 真实 bootstrap 经真实日志文件断言，tmp chdir 隔离）。真实入口冒烟：相对库启动日志 3 条警告 ✓ / 绝对库启动仅剩模型目录 1 条（设计预期）✓。⑧ **Phase D（形态一）P2-5 导出原子写**（`c33bbdd`）——新增 `_atomic_write.py`（`.part` 同卷兄弟临时文件 + `os.replace` 原子换入 + 失败清理），CSV/XLSX/HTML 三导出器全部路由（payload 抽取为 `_write_*` 私有方法，导出契约不变）；测试 +3（换入成功 / 失败保留旧导出且无 `.part` 残留 / 重复导出替换）。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 177 个源文件无问题；pytest 全量 **643 passed / 3 skipped / 0 failed**（含 Phase D 原子写 +3；时序 flake 家族连续六轮零复现）；`pip check` 无损坏依赖。 |
-| 工作区 | Phase D P2-5 提交（`c33bbdd`）+ 状态文档提交后 tracked 零改动；HEAD/origin 状态见 §3。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 177 个源文件无问题；pytest 全量 **643 passed / 3 skipped / 0 failed**（含 P2-5 原子写 +3；时序 flake 家族连续六轮零复现）；`pip check` 无损坏依赖。 |
+| 工作区 | v2.3.0 发布准备提交（`24c7a86`）+ 状态文档提交后 tracked 零改动；HEAD/origin 状态见 §3。 |
 | Remaining | **Phase D（形态一）owner 侧发布动作待执行**：① `git push origin main`（38 笔，**P0-8 CI 强校验首跑**）→ ② tag `v2.3.0` → ③ 手动验收清单（Phase D 报告 §3）→ ④ GitHub Release v2.3.0 + 粘贴说明素材（Phase D 报告 §4）。真桌面复验清单保留待 owner 补验（P0-4/6/7/9）。Phase E（删除语义 ADR 门）未授权。 |
 | Next Step | **v2.3.0 发布准备就绪，STOP 等待 Owner 执行发布链**（push → tag → 验收 → Release）；Release 后可选：Phase E 须另行授权；P0-9 完整锚定（P1）凭需求信号。 |
 
