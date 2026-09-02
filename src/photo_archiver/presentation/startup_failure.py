@@ -42,6 +42,6 @@ def corrupted_database_guidance(
 
 def show_corrupted_database_dialog(message: str) -> None:
     """Show the corruption dialog, creating a QApplication if none exists yet."""
-    application = QApplication.instance() or QApplication(list(sys.argv))
-    application.setQuitOnLastWindowClosed(True)
+    if QApplication.instance() is None:
+        QApplication(list(sys.argv))
     QMessageBox.critical(None, CORRUPTED_DATABASE_TITLE, message)
