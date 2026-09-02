@@ -99,8 +99,8 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 已完成 | ① **交接基线校验**：按序读取 `.ai/` 四文档 + roadmap；Git 基线逐项核对（HEAD `f868b2d` / origin `3a2ef0a` / 领先 17 笔 / tree CLEAN，全部匹配）。② **Phase B 计划草案与批复**：P0-5~P0-9 逐项现状取证 + D-B1~D-B8 决策点交付；Owner 批复按建议方案执行。③ **P0-5 SQLite WAL + busy_timeout**（`22305dd`）+ **P0-6 损坏库友好失败 + VACUUM INTO 备份**（`ab92d5c`/`0295f62`/`9752af3`）+ **P0-7 导入批量事务化 + 无 identity 查重**（`169abb3b`，LIMIT-005 登记于 `9359dfb`）——详见 §6 条目 1-3。④ **P0-8 模型 SHA-256 固定 + 审查 F-1/F-2 并入**（ZCode 会话，`548d7fc`/`c46062f`/`4e91ee4`）——digest 三重验证后 pin `80ffe37d…ca2f`；CI 移除 `--allow-unverified`（每次下载 fail-closed）；审查 F-1：GUI 启动备份失败由裸调用崩溃改为 warning 不阻断；审查 F-2：热 `-wal` 残留时完整性门延迟至读写打开（真损坏仍由 bootstrap DatabaseError 兜底）。测试 +5。E2E 双路径实测：干净 zip verified→extract ✓ / 篡改 1 字节 → mismatch → Archive rejected → exit 1 ✓。⑦ **P0-9 路径锚定（本轮仅启动警告，D-B5）**（`37fb675`）——`bootstrap.py` 增纯函数 `cwd_dependent_path_warnings`：枚举全部 CWD 相对配置路径（数据库/模型/输出/照片根/归档根/日志），`bootstrap_application` 逐条 `logger.warning`（含本次解析绝对路径 + "换目录启动将使用另一个数据库" + .env 绝对路径建议）；`:memory:` 与绝对路径静默，未配置可选根跳过。测试 +5（纯函数矩阵 + 真实 bootstrap 经真实日志文件断言，tmp chdir 隔离）。真实入口冒烟：相对库启动日志 3 条警告 ✓ / 绝对库启动仅剩模型目录 1 条（设计预期）✓。⑧ **Phase D（形态一）P2-5 导出原子写**（`c33bbdd`）——新增 `_atomic_write.py`（`.part` 同卷兄弟临时文件 + `os.replace` 原子换入 + 失败清理），CSV/XLSX/HTML 三导出器全部路由（payload 抽取为 `_write_*` 私有方法，导出契约不变）；测试 +3（换入成功 / 失败保留旧导出且无 `.part` 残留 / 重复导出替换）。 |
 | 当前质量门 | `ruff check .` 通过；`mypy src` 177 个源文件无问题；pytest 全量 **641 passed / 3 skipped / 0 failed 连续两轮**（Phase C 回退收尾后；时序 flake 测试侧已加固——两 match e2e 断言改 waitUntil 轮询）；`pip check` 无损坏依赖。 |
 | 工作区 | Phase C 回退收尾提交（e2e 轮询加固）+ 状态文档提交后 tracked 零改动；HEAD/origin 状态见 §3。 |
-| Remaining | **Phase B 全部 5 项 + Phase C（含回退收尾）完成**；Phase D（形态一）owner 侧发布动作待执行：① `git push origin main`（39 笔）→ ② tag `v2.3.0`（**P0-8 CI 强校验首跑**）→ ③ 手动验收清单（Phase D 报告 §3）→ ④ Release v2.3.0 + 粘贴说明素材（Phase D 报告 §4）。真桌面复验清单保留待 owner 补验（P0-4/6/7/9）。Phase E（删除语义 ADR 门）未授权。 |
-| Next Step | **v2.3.0 发布链全部就绪，STOP 等待 Owner 执行**（push → tag → 验收 → Release）；Release 后可选：Phase E 须另行授权；P0-9 完整锚定（P1）凭需求信号。 |
+| Remaining | **Phase B 全部 5 项完成（P0-5/6/7/8/9 ✅）+ Phase C 时序 flake 专项完成（F-002/LIMIT-003 测试侧加固；is_finished 方案因 CI 原生崩溃回退，根因待查）；LIMIT-005 排序修复经 mac CI 实证保留**。剩余收口：P0-4/P0-6/P0-7/P0-9 用户可见真桌面复验清单保留待 owner 补验（P0-9 复验=换目录启动核对日志警告）。**Phase D（形态一）进行中：P2-5 原子写 ✅，剩余=发布验收清单执行（owner 手动）+ 发布说明素材（已交付会话）+ tag `v2.3.0` + Release**。Phase E（删除语义 ADR 门）未授权。发版动作（GIT-020 归 owner）：`git push origin main`（回退收尾 2 笔；**P0-8 CI 强校验随推送重跑**）。 |
+| Next Step | **Owner 动作：push 回退修复（2 笔）→ CI 重跑确认稳定 → tag `v2.3.0` → 手动验收清单 → Release v2.3.0（粘贴说明素材）**。AI 侧待命；Phase E 须另行授权。 |
 
 ---
 
@@ -117,7 +117,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 7. ~~Phase C 时序 flake 专项~~ ✅ 已完成——**含一次回退（如实记录）**：①F-002/LIMIT-003 首版方案（`9616c3e`：`QtWorkerRunnable.is_finished` 权威终态 + 控制器 `is_running` 语义升级）推送后 **CI win/mac 双平台出现新故障签名**（pytest-qt 内部 AttributeError + Windows access violation 崩溃，历史未见）→ 疑点指向 main 线程读取已被 autoDelete 的 QRunnable 包装器属性 → **整体 revert（`7834c8b`）**，根因待查（is_finished 思路需改用非包装器机制重试）。②测试侧加固替代方案已落地：两 match e2e 的守卫断言改 `qtbot.waitUntil` 轮询（对投递时序鲁棒，不触生产）。③LIMIT-005 修复（`a6b70db` 人员轴排序确定性）经 mac CI 实证有效、保留。验证：回退收尾后连续两轮全量全绿 641/3/0。
 8. **Phase B/C 收口**：Phase B（P0-5~P0-9）+ Phase C（时序 flake 专项）全部完工；Phase D/E 须另行授权。
 
-吞吐线与历史阶段状态不变：Phase 4.2 / 5 / 6 / 7 / 8 / 9 全部 CLOSED（详见 §2）；v1.0.0 / v2.0.0 / v2.1.0 / v2.2.0 已发布。Phase D（形态一）AI 侧工作全部完成，剩余为 owner 侧发布动作（push → tag v2.3.0 → 验收 → Release）。Phase E（删除语义 ADR 门）未授权——触发前不排期、不自动选定、发现时只记录不修复。发版收尾（非阻塞，GIT-020 归 owner）：`git push origin main` 对齐分支引用（本地领先 39 笔，含 Phase A/B/C/D 全部）。
+吞吐线与历史阶段状态不变：Phase 4.2 / 5 / 6 / 7 / 8 / 9 全部 CLOSED（详见 §2）；v1.0.0 / v2.0.0 / v2.1.0 / v2.2.0 已发布。Phase D（形态一）AI 侧工作全部完成，剩余为 owner 侧发布动作（push 回退修复 → tag v2.3.0 → 验收 → Release）。Phase E（删除语义 ADR 门）未授权——触发前不排期、不自动选定、发现时只记录不修复。发版收尾（非阻塞，GIT-020 归 owner）：`git push origin main`（领先 2 笔——Phase C 回退 + e2e 轮询加固；**推送后 CI 重跑即验证回退有效性**）。
 
 ## 7. Key Files（关键文件索引）
 
