@@ -7,8 +7,43 @@ SOURCE_ROOT = PROJECT_ROOT / "src"
 if SOURCE_ROOT.is_dir():
     sys.path.insert(0, str(SOURCE_ROOT))
 
-from photo_archiver.app import PhotoArchiverApplication, bootstrap_application  # noqa: E402  # sys.path injection above is required before app imports
+from photo_archiver.app import (
+    ApplicationContext,
+    PhotoArchiverApplication,
+    bootstrap_application,
+)  # noqa: E402  # sys.path injection above is required before app imports
 from photo_archiver.application import ArchivePhotosCommand, ScanAndRegisterPhotosCommand  # noqa: E402  # sys.path injection above is required before app imports
+from photo_archiver.infrastructure.database.integrity import (  # noqa: E402
+    BACKUP_DIRECTORY_NAME,
+    CorruptedDatabaseError,
+)
+from photo_archiver.presentation.startup_failure import (  # noqa: E402
+    corrupted_database_guidance,
+    show_corrupted_database_dialog,
+)
+
+
+def _corrupted_database_message(error: CorruptedDatabaseError) -> str:
+    """Build the user-facing Chinese guidance for a corrupted database file."""
+    return corrupted_database_guidance(
+        database_path=error.database_path,
+        backup_directory=error.database_path.parent / BACKUP_DIRECTORY_NAME,
+        issues=error.issues,
+    )
+
+
+def _bootstrap_for_cli() -> ApplicationContext | None:
+    """Bootstrap for CLI commands; on corruption report guidance and give up.
+
+    Returns:
+        The application context, or ``None`` when the database is corrupted
+        (guidance has been written to stderr by then).
+    """
+    try:
+        return bootstrap_application()
+    except CorruptedDatabaseError as error:
+        sys.stderr.write(_corrupted_database_message(error) + "\n")
+        return None
 
 
 def build_argument_parser() -> ArgumentParser:
@@ -56,7 +91,9 @@ def build_argument_parser() -> ArgumentParser:
 
 def run_scan_command(arguments: Namespace) -> int:
     """Run the scan-and-register workflow from CLI arguments."""
-    context = bootstrap_application()
+    context = _bootstrap_for_cli()
+    if context is None:
+        return 2
     result = context.services.scan_and_register_photos.execute(
         ScanAndRegisterPhotosCommand(
             folder_path=arguments.folder,
@@ -78,7 +115,9 @@ def run_scan_command(arguments: Namespace) -> int:
 
 def run_archive_command(arguments: Namespace) -> int:
     """Run the archive workflow from CLI arguments."""
-    context = bootstrap_application()
+    context = _bootstrap_for_cli()
+    if context is None:
+        return 2
     archive_root = arguments.archive_root or context.settings.archive_root
     if archive_root is None:
         sys.stderr.write(
@@ -112,7 +151,9 @@ def run_backfill_content_hash_command(arguments: Namespace) -> int:
     B1-a 裁决已拍板：历史 NULL 哈希照片走显式 CLI 子命令而非启动时惰性补齐——
     显式、可测、不拖慢启动。Idempotent：对已全回填的数据库再调用是 no-op。
     """
-    context = bootstrap_application()
+    context = _bootstrap_for_cli()
+    if context is None:
+        return 2
     result = context.services.backfill_content_hash.execute()
     sys.stdout.write(
         "Backfill complete: "
@@ -139,7 +180,11 @@ def main(arguments: list[str] | None = None) -> int:
     if parsed_arguments.command == "backfill-content-hash":
         return run_backfill_content_hash_command(parsed_arguments)
 
-    context = bootstrap_application()
+    try:
+        context = bootstrap_application()
+    except CorruptedDatabaseError as error:
+        show_corrupted_database_dialog(_corrupted_database_message(error))
+        return 2
     application = PhotoArchiverApplication(sys.argv, context=context)
     return application.run()
 

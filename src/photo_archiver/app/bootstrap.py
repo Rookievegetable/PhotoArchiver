@@ -1,6 +1,7 @@
 """Application startup and dependency assembly."""
 
 from importlib.metadata import PackageNotFoundError, version
+import sqlite3
 
 from loguru import logger
 
@@ -12,6 +13,10 @@ from photo_archiver.application.ports import PluginContext
 from photo_archiver.application.services import PluginContextService
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.infrastructure.database.alembic_runner import run_alembic_migrations
+from photo_archiver.infrastructure.database.integrity import (
+    CorruptedDatabaseError,
+    verify_database_integrity,
+)
 from photo_archiver.infrastructure.logging import configure_logging, log_application_startup
 from photo_archiver.workers import QtWorkerExecutor
 
@@ -52,9 +57,22 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
         environment=resolved_settings.env,
     )
     try:
+        # P0-6（D-B4）：损坏库在任何写入/迁移路径之前快速失败——只读
+        # quick_check，绝不重建/换库；分类见 infrastructure.database.integrity。
+        verify_database_integrity(resolved_settings.database_path)
         repositories = build_sqlite_repositories(resolved_settings.database_path)
         run_alembic_migrations(resolved_settings.database_path)
         services = build_application_services(repositories, resolved_settings)
+    except sqlite3.DatabaseError as error:
+        # 防御纵深：quick_check 漏过的 SQLite 层失败（user_version PRAGMA /
+        # 迁移中的 file is not a database 等）归一为同一友好失败类型。
+        logger.exception(
+            "Database access failed during startup at {}",
+            resolved_settings.database_path,
+        )
+        raise CorruptedDatabaseError(
+            resolved_settings.database_path, [str(error)]
+        ) from error
     except Exception:
         logger.exception(
             "Failed to initialize application dependencies at {}",
