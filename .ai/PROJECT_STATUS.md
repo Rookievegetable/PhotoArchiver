@@ -26,7 +26,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 ## 2. Current Step（当前开发阶段）
 
-项目主路线图已完成；经 2026-09-02 全项目体检后，**Phase A/B/C 均已完成，当前处于 Phase D（发布工程·形态一）执行轮**（Owner 授权、决策批复 D-B1~D-B8 记录于 §2）；当前处于条件触发等待区（Phase C/D/E 与 Phase B 内 P0-9 完整锚定 P1 均须 Owner 另行授权）。
+项目主路线图已完成；经 2026-09-02 全项目体检后，**Phase A/B/C 均已完成，当前处于 Phase D（发布工程·形态一）执行轮**（D-0 裁决：源码形态 v1.0，维持 ADR-031；决策批复 D-B1~D-B8 记录于 §2）。
 
 - 阶段 0（质量基线与文档收口）：✅ 完成。
 - 阶段 1（PluginContext 公共边界加固，ADR-026）：✅ 完成。
@@ -96,11 +96,11 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 时间 | 2026-09-02（本地） |
 | 生成者 | Cline |
 | 会话范围 | 交接基线校验 → Phase B 计划草案与 D-B1~D-B8 批复 → **P0-5/6/7 顺序执行**（Cline 会话）→ **P0-8 + 审查 F-1/F-2 并入 → P0-9 启动警告**（ZCode 会话）→ **Phase C 时序 flake 专项** → **Phase D 形态一 P2-5 导出原子写 + v2.3.0 发布准备**（ZCode 会话，D-0 裁决：源码形态 v1.0）。 |
-| 已完成 | ① **交接基线校验**：按序读取 `.ai/` 四文档 + roadmap；Git 基线逐项核对（HEAD `f868b2d` / origin `3a2ef0a` / 领先 17 笔 / tree CLEAN，全部匹配）。② **Phase B 计划草案与批复**：P0-5~P0-9 逐项现状取证 + D-B1~D-B8 决策点交付；Owner 批复按建议方案执行。③ **P0-5 SQLite WAL + busy_timeout**（`22305dd`）+ **P0-6 损坏库友好失败 + VACUUM INTO 备份**（`ab92d5c`/`0295f62`/`9752af3`）+ **P0-7 导入批量事务化 + 无 identity 查重**（`169abb3b`，LIMIT-005 登记于 `9359dfb`）——详见 §6 条目 1-3。④ **P0-8 模型 SHA-256 固定 + 审查 F-1/F-2 并入**（ZCode 会话，`548d7fc`/`c46062f`/`4e91ee4`）——digest 三重验证后 pin `80ffe37d…ca2f`；CI 移除 `--allow-unverified`（每次下载 fail-closed）；审查 F-1：GUI 启动备份失败由裸调用崩溃改为 warning 不阻断；审查 F-2：热 `-wal` 残留时完整性门延迟至读写打开（真损坏仍由 bootstrap DatabaseError 兜底）。测试 +5。E2E 双路径实测：干净 zip verified→extract ✓ / 篡改 1 字节 → mismatch → Archive rejected → exit 1 ✓。⑦ **P0-9 路径锚定（本轮仅启动警告，D-B5）**（`37fb675`）——`bootstrap.py` 增纯函数 `cwd_dependent_path_warnings`：枚举全部 CWD 相对配置路径（数据库/模型/输出/照片根/归档根/日志），`bootstrap_application` 逐条 `logger.warning`（含本次解析绝对路径 + "换目录启动将使用另一个数据库" + .env 绝对路径建议）；`:memory:` 与绝对路径静默，未配置可选根跳过。测试 +5（纯函数矩阵 + 真实 bootstrap 经真实日志文件断言，tmp chdir 隔离）。真实入口冒烟：相对库启动日志 3 条警告 ✓ / 绝对库启动仅剩模型目录 1 条（设计预期）✓。⑧ **Phase D（形态一）P2-5 导出原子写**（`c33bbdd`）——新增 `_atomic_write.py`（`.part` 同卷兄弟临时文件 + `os.replace` 原子换入 + 失败清理），CSV/XLSX/HTML 三导出器全部路由（payload 抽取为 `_write_*` 私有方法，导出契约不变）；测试 +3（换入成功 / 失败保留旧导出且无 `.part` 残留 / 重复导出替换）。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 177 个源文件无问题；pytest 全量 **644 passed / 3 skipped / 0 failed**（含 P0-8 blocker 修复 +1：certifi SSL context 真实链路测试）；`pip check` 无损坏依赖。 |
-tracked 零改动（**origin/main 已对齐至 `f36e9d8`，owner 已推送并触发 CI——三平台全绿**）；剩余本地领先 2 笔（回退 `7834c8b` + e2e 轮询加固 `fa0c8fc`）待 owner 推送
-发版动作（GIT-020 归 owner）：① 推送回退修复 2 笔（CI 已实证回退前状态的三平台问题与回退后本地全绿）→ ② tag `v2.3.0` → ③ 手动验收清单 → ④ Release v2.3.0 + 说明素材（Phase D 报告 §4）。 |
-**CI 回退后三平台全绿（owner 实证）——回退有效性结案**。Owner 发布链继续：① 推送回退修复 2 笔 → ② tag `v2.3.0`（release workflow）→ ③ 手动验收清单 → ④ Release v2.3.0。AI 侧待命；Phase E 须另行授权。 |
+| 已完成 | ① **交接基线校验**（HEAD `f868b2d` / origin `3a2ef0a` / 领先 17 笔 / clean，全匹配）→ Phase B 计划草案 + Owner 批复 D-B1~D-B8。② **Phase B P0-5~P0-9 全部完成**：P0-5 WAL+busy_timeout（`22305dd`）；P0-6 损坏库门+中文指引+VACUUM INTO 备份（`ab92d5c`/`0295f62`/`9752af3`）；P0-7 导入批原子+无 identity 查重（`169abb3b`）；P0-8 模型 SHA-256 pin + CI fail-closed + 审查 F-1/F-2 并入（`548d7fc`/`c46062f`/`4e91ee4`）；P0-9 启动路径警告（`37fb675`，完整锚定降 P1）。③ **Phase C 时序 flake 专项**：LIMIT-005 根因=人员轴排序未定义（同刻 created_at + UUID 决胜随机）→ `list_all` 决胜改 name（`a6b70db`，mac CI 实证保留）；F-002 首版 is_finished 方案推送后 CI win/mac 原生崩溃 → **回退**（`7834c8b`）+ 测试侧轮询加固（`fa0c8fc`）。④ **Phase D 形态一**：P2-5 导出原子写（`c33bbdd`）+ v2.3.0 版本链（`24c7a86`）+ **P0-8 Release Blocker 修复**（`ae5a244`：Clean VM 模型下载 CERTIFICATE_VERIFY_FAILED → downloader TLS 显式锚定 certifi CA bundle + certifi 提升为正式 runtime dependency；证书/主机名校验保持开启，SHA-256 fail-closed 不变）。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 177 个源文件无问题；pytest 全量 **644 passed / 3 skipped / 0 failed**（含 blocker 修复 +1）；`pip check` 无损坏依赖；CI 三平台全绿（owner push 实证，回退结案）。 |
+| 工作区 | P0-8 blocker 修复（`ae5a244`）+ 状态文档提交后 tracked 零改动。 |
+| Remaining | **Phase D（形态一）发布链待 Owner**：① push（本地领先 3 笔：blocker 修复 + 状态文档 ×2）→ ② CI 重跑三平台全绿 → ③ **Clean Machine Acceptance 重验**（重点步骤 2.3 模型下载——原 v2.3.0 在此 BLOCKED，修复后必过性待实证）→ ④ tag `v2.3.0` → ⑤ Release + 说明素材。真桌面复验清单保留（P0-4/6/7/9）。Phase E（删除语义 ADR 门）未授权。 |
+| Next Step | **P0-8 blocker 修复已提交，STOP 等待 Owner 执行发布链**（push → CI → 验收重验 → tag → Release）。Phase E 须另行授权；P0-9 完整锚定（P1）凭需求信号。 |
 
 ---
 
