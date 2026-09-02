@@ -151,7 +151,10 @@ def test_controller_real_thread_pool_persists_pending(qtbot, tmp_path: Path) -> 
     assert pending[0].confidence == 1.0
 
     # Single-flight guard released by the terminal event (Commit 2 contract).
-    assert controller.is_running is False
+    # Phase C CI finding: the guard-release and this read race across threads
+    # (on Windows the race window even took down the interpreter) — poll
+    # instead of asserting immediately after waitSignal.
+    qtbot.waitUntil(lambda: not controller.is_running, timeout=8000)
 
 
 def test_second_run_refused_by_real_db_resume_semantics(qtbot, tmp_path: Path) -> None:
@@ -182,6 +185,9 @@ def test_second_run_refused_by_real_db_resume_semantics(qtbot, tmp_path: Path) -
     # mirrors production, where the completed slot runs on the next event-loop
     # turn after the commit becomes visible.
     qtbot.waitUntil(lambda: len(db.recognition.list_pending()) > 0, timeout=5000)
+    # Phase C CI finding: poll for the guard release too — the worker-thread
+    # releaser and the main-thread read must not be assumed ordered.
+    qtbot.waitUntil(lambda: not controller.is_running, timeout=8000)
 
     second = controller.start_match()
 

@@ -81,7 +81,7 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
     # deterministic, then persistence, then the UI refresh.
     runnable = window._active_runnable
     assert runnable is not None
-    qtbot.waitUntil(lambda: runnable.is_finished, timeout=30000)
+    qtbot.waitSignal(runnable.signals.completed, timeout=30000)
 
     # Real persistence proof via the repository protocol (not ad-hoc SQL):
     # the worker chain must land both Excel rows in SQLite.
@@ -110,7 +110,6 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
         if time.monotonic() > deadline:
             pytest.fail(
                 "person combo never refreshed after import: "
-                f"runnable.is_finished={runnable.is_finished} "
                 f"task_cancel={runnable.task.is_cancel_requested} "
                 f"people={[p.name for p in people_repository.list_all()]} "
                 f"combo={[person_combo.itemText(i) for i in range(person_combo.count())]} "
