@@ -9,6 +9,8 @@
 
 from html import escape
 from pathlib import Path
+
+from photo_archiver.infrastructure.exporters._atomic_write import write_atomic
 from string import Template
 
 from photo_archiver.application.ports.exporter import ExportRow
@@ -92,14 +94,11 @@ $rows
             OSError: When the output path is unwritable.
         """
         out = Path(output_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-
         header_cells = "".join(self._CELL_TEMPLATE.substitute(value=escape(h)) for h in self._HEADERS)
         body = "".join(self._render_row(row) for row in rows)
         document = self._DOCUMENT_TEMPLATE.substitute(header=header_cells, rows=body)
 
-        with open(str(out), "w", encoding="utf-8") as f:
-            f.write(document)
+        write_atomic(out, lambda path: Path(path).write_text(document, encoding="utf-8"))
 
         return f"Exported {len(rows)} rows to {out}"
 

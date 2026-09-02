@@ -7,6 +7,8 @@ UTF-8-BOM CSV so Excel can open it without guessing the encoding.
 from csv import writer as csv_writer
 from pathlib import Path
 
+from photo_archiver.infrastructure.exporters._atomic_write import write_atomic
+
 from photo_archiver.application.ports.exporter import ExportRow
 from photo_archiver.infrastructure.exporters._spreadsheet_safety import (
     sanitize_spreadsheet_cell,
@@ -32,17 +34,19 @@ class CsvExporter:
     ]
 
     def export(self, rows: list[ExportRow], output_path: str) -> str:
-        """Write rows as a CSV file with a header row."""
+        """Write rows as a CSV file with a header row (atomic swap, P2-5)."""
         out = Path(output_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
+        write_atomic(out, lambda path: self._write_csv(path, rows))
 
-        with open(str(out), "w", newline="", encoding="utf-8-sig") as f:
+        return f"Exported {len(rows)} rows to {out}"
+
+    def _write_csv(self, path: Path, rows: list[ExportRow]) -> None:
+        """Write the CSV payload to ``path`` (called via write_atomic)."""
+        with open(str(path), "w", newline="", encoding="utf-8-sig") as f:
             w = csv_writer(f)
             w.writerow(self._HEADERS)
             for row in rows:
                 w.writerow(self._to_row(row))
-
-        return f"Exported {len(rows)} rows to {out}"
 
     @staticmethod
     def _to_row(row: ExportRow) -> list[str | float | None]:

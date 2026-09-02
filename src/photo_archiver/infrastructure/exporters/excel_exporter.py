@@ -10,6 +10,8 @@ from pathlib import Path
 
 from openpyxl import Workbook
 
+from photo_archiver.infrastructure.exporters._atomic_write import write_atomic
+
 from photo_archiver.application.ports.exporter import ExportRow
 from photo_archiver.infrastructure.exporters._spreadsheet_safety import (
     sanitize_spreadsheet_cell,
@@ -50,8 +52,7 @@ class ExcelExporter:
             ws.append(self._to_row(row))
 
         out = Path(output_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        wb.save(str(out))
+        write_atomic(out, lambda path: wb.save(str(path)))
 
         return f"Exported {len(rows)} rows to {out}"
 
