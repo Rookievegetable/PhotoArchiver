@@ -1,7 +1,6 @@
 # PhotoArchiver 配置说明
 
-> Version: 1.1  
-> Last Updated: 2026-07-19
+> Version: 1.2 | Last Updated: 2026-09-02
 
 本文档说明 PhotoArchiver 当前支持的环境变量、默认值、运行目录和配置约束。
 
@@ -90,6 +89,11 @@ DATABASE_URL=sqlite:///
 ```
 
 启动时会创建数据库文件所在目录。Schema 由 `infrastructure/database/sqlite_connection.py` 集中初始化并走 Alembic 迁移管理（`alembic_runner.py`，ADR-024，当前 `001_initial_v4`）。
+
+连接层默认启用两个数据安全 PRAGMA（Phase B P0-5，连接路径统一生效）：
+
+- `journal_mode=WAL`：读写解耦，扫描长事务期间的并发写（审核/导入）不再报 `database is locked`。WAL 是数据库文件的持久属性，对既有库自动升级生效。**WAL 依赖本地盘共享内存语义，网络盘/挂载盘（SMB/NFS 等）不受支持——受支持运行形态为本地盘**（ADR-031 源码/clone 形态）。
+- `busy_timeout=5000`：写锁争用时最多等待 5000 毫秒再报 `database is locked`。当前为连接层常量（`sqlite_connection.BUSY_TIMEOUT_MS`），未开放为配置项。
 
 ## 5. 模型目录
 

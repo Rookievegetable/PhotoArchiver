@@ -7,6 +7,27 @@ import sqlite3
 import threading
 from typing import Optional
 
+# P0-5 (Phase B, data-safety floor): WAL decouples readers from the writer so a
+# long scan transaction no longer makes concurrent review/import writes fail
+# with "database is locked" (gap G-05). WAL is a persistent property of the
+# database file — re-issuing the pragma on every connection is idempotent and
+# also upgrades databases created before this change. busy_timeout is
+# per-connection state and must therefore be set on every new connection; it is
+# deliberately installed *before* the journal-mode pragma so a concurrent
+# journal conversion waits on the lock instead of erroring out.
+BUSY_TIMEOUT_MS = 5000
+WAL_JOURNAL_MODE = "WAL"
+IN_MEMORY_DATABASE = ":memory:"
+
+
+def _configure_connection(connection: sqlite3.Connection, database_path: Path | str) -> None:
+    """Apply the shared per-connection pragmas used by every connection path."""
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+    if str(database_path) != IN_MEMORY_DATABASE:
+        connection.execute(f"PRAGMA journal_mode = {WAL_JOURNAL_MODE}")
+
 
 class _SharedConnection:
     """Wrap the active transaction connection so repository ``with`` blocks do not close it.
@@ -68,8 +89,7 @@ class SQLiteConnectionProvider:
         if active is not None:
             return _SharedConnection(active)
         connection = sqlite3.connect(str(self.database_path))
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
+        _configure_connection(connection, self.database_path)
         return connection
 
     @contextmanager
@@ -92,8 +112,7 @@ class SQLiteConnectionProvider:
             raise RuntimeError("Nested SQLite transactions are not supported on a single thread")
 
         connection = sqlite3.connect(str(self.database_path))
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
+        _configure_connection(connection, self.database_path)
         connection.execute("BEGIN")
         self._active_connection = connection
         try:
