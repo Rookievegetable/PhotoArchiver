@@ -47,10 +47,8 @@ _当前无未决问题（O 级别产品缺陷）。_
 | ID | Description | Status | Impact | 说明 |
 |---|---|---|---|---|
 | LIMIT-001 | 真实模型包缺失集成测试未纳入 CI | Open | Low | `InsightFaceLoader.load` 缺包 raise `ModelPackMissing` 路径与 UI 失败反馈已有单元/组件测试覆盖（`test_recognition_ports.py`、`test_match_ui_wiring.py`）；但"真实缺模型 → `_UnavailableMatchService` → TaskFailed → UI"完整 E2E 依赖本地缺模型环境，未纳入 CI 自动套件（Principle 3：不把模型设为 CI 前提）。 |
-| LIMIT-002 | 识别取消粒度为 batch-level cooperative cancellation | Open | Low | `WorkerTaskCancelled` 由 `WorkerTask.run()` 前后边界触发，`MatchPersonsService` 单张 `except Exception` 不吞取消（有专项测试）。当前批处理中途不可逐张即时取消，属设计特征（Phase 4.2 Final Audit 明确记录），非缺陷。 |
-| LIMIT-003 | match 控制器真实线程池 e2e 时序 flake（审计级编号 F-002）**状态恶化**：2026-09-02 全项目体检实测全量 1 失败，且**单跑 ×2 均失败**（历史口径"全量偶发、单跑 ×2 稳定"失效）；失败点为 `controller.is_running` 单飞守卫断言（completed 信号已发射、持久化断言全部通过）——测试时序问题，非生产缺陷。**家族成员可轮换**：同文件 `test_second_run_refused_by_real_db_resume_semantics` 亦偶发（Phase B P0-8 轮全量失败、单跑 1.8s 稳定、双成员隔离复跑全绿——惯常成员当轮反而通过） | Open | Low | 修复属 Phase C（P1-2），前置 owner 解除"禁止修复"定性；处置前全量套件预期带此 1 红（成员可轮换），禁止以 sleep/时序调整掩盖；历次登记见体检报告 §10.2。 |
+| LIMIT-002 | 识别取消粒度为 batch-level cooperative cancellation | Open | Low | `WorkerTaskCancelled` 由 `WorkerTask.run()` 前后边界触发，`MatchPersonsService` 单张 `except Exception` 不吞取消（有专项测试）。当前批处理中途不可逐张即时取消，属设计特征（Phase 4.2 Final Audit 明确记录），非缺陷。scan 取消同为任务边界粒度（Phase A P0-4 确认，设计同型）。 |
 | LIMIT-004 | Qt 原生级崩溃（exit 127，无 Python traceback）：特定子集顺序（`test_archive_controller` + `test_export_controller*` 后紧接首个构造 MainWindow 的测试）触发；全量收集顺序不受影响 | Open | Low | 先于 Phase 9 存在（Phase 9 报告 §9.2 登记，干净基线 `git stash` 可复现）；仅影响子集顺序本地调试，CI 全量绿；后续轮候审，不阻塞 Phase A。 |
-| LIMIT-005 | Excel 导入 UI 闭环集成测试（`test_excel_import_ui_closed_loop`）在全量顺序下偶发 15s waitUntil 超时，失败点为 FilterBar person 组合框刷新段（持久化断言全部先行通过） | Open | Low | 首次观察于 Phase B P0-7 轮：3 次全量 2 挂 1 过、单跑稳定通过；同一轮第三次全量全绿（627 passed / 3 skipped / 0 failed），非确定性失败、与负载窗口相关，与 LIMIT-003 时序 flake 同谱系不同签名。处置：不修，候选并入 Phase C 时序 flake 专项候审；禁止以 sleep/时序调整掩盖。 |
 
 > 历史注记：ISSUE-018（打包安装态不可运行）已于 2026-08-26 经 ADR-031 裁决按 by-design 终结——安装态不在受支持运行形态内，详见 `docs/development/phase5-adr-draft.md`。
 
