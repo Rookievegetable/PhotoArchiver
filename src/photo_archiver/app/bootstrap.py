@@ -39,6 +39,40 @@ def resolve_app_version(settings: AppSettings) -> str:
         return settings.app_version or DEVELOPMENT_VERSION
 
 
+def cwd_dependent_path_warnings(settings: AppSettings) -> list[str]:
+    """Return warnings for configured paths that depend on the launch directory.
+
+    P0-9 (D-B5): full path anchoring was deferred to P1 — this round only
+    makes the risk visible. A relative configured path resolves against the
+    *current working directory*, so launching from a different directory
+    silently switches databases, outputs, models, and logs.
+
+    Returns:
+        One human-readable Chinese warning per CWD-relative configured path.
+    """
+    warnings: list[str] = []
+    database_path = settings.database_path
+    if str(database_path) != ":memory:" and not database_path.is_absolute():
+        warnings.append(
+            f"数据库路径随启动目录变化：{database_path}"
+            f"（本次解析为 {database_path.resolve()}）。"
+            "从不同目录启动将创建/使用另一个数据库；"
+            "建议在 .env 中将 DATABASE_URL 配置为绝对路径。"
+        )
+    for label, value in (
+        ("模型目录", settings.model_path),
+        ("输出目录", settings.output_root),
+        ("照片根目录", settings.photo_root),
+        ("归档根目录", settings.archive_root),
+        ("日志目录", settings.log_directory),
+    ):
+        if value is not None and not value.is_absolute():
+            warnings.append(
+                f"{label}随启动目录变化：{value}（本次解析为 {value.resolve()}）。"
+            )
+    return warnings
+
+
 def bootstrap_application(settings: AppSettings | None = None) -> ApplicationContext:
     """Load settings, initialize logging, and build the application context.
 
@@ -56,6 +90,10 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
         version=resolve_app_version(resolved_settings),
         environment=resolved_settings.env,
     )
+    # P0-9（D-B5）：完整路径锚定降级为 P1——本轮仅启动警告，使"CWD 相对路径"
+    # 的数据位置风险可见（尤其是数据库：换目录启动会静默换库）。
+    for path_warning in cwd_dependent_path_warnings(resolved_settings):
+        logger.warning(path_warning)
     try:
         # P0-6（D-B4）：损坏库在任何写入/迁移路径之前快速失败——只读
         # quick_check，绝不重建/换库；分类见 infrastructure.database.integrity。
