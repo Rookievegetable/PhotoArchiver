@@ -67,12 +67,16 @@ def test_verify_integrity_unpinned_refuses_by_default(tmp_path: Path) -> None:
 
 
 def test_verify_integrity_unpinned_allows_first_bootstrap(tmp_path: Path) -> None:
-    """No pinned digest + --allow-unverified -> permitted first bootstrap."""
+    """No pinned digest + --allow-unverified -> permitted first bootstrap.
+
+    Uses ``antelopev2`` (still unpinned) — buffalo_l is pinned since P0-8 and
+    now fails closed on unverified archives.
+    """
     dm = _load_script()
     f = tmp_path / "pack.zip"
     f.write_bytes(b"unverified payload")
 
-    assert dm.verify_integrity(f, "buffalo_l", None, allow_unverified=True)
+    assert dm.verify_integrity(f, "antelopev2", None, allow_unverified=True)
 
 
 def test_verify_integrity_falls_back_to_expected_sha256_map(
@@ -105,3 +109,30 @@ def test_verify_integrity_explicit_sha256_overrides_map(
         f, "buffalo_l", hashlib.sha256(b"explicit payload").hexdigest(),
         allow_unverified=False,
     )
+
+
+def test_buffalo_l_digest_is_pinned_fail_closed() -> None:
+    """P0-8: the production pin map must carry a real buffalo_l digest.
+
+    Guards against the map regressing to fail-open (empty string), which
+    would push CI back onto --allow-unverified.
+    """
+    import re
+
+    dm = _load_script()
+
+    pinned = dm.EXPECTED_SHA256["buffalo_l"]
+    assert re.fullmatch(r"[0-9a-f]{64}", pinned), (
+        "buffalo_l must stay pinned to a 64-hex-char SHA-256 digest"
+    )
+
+
+def test_verify_integrity_rejects_archive_not_matching_production_pin(
+    tmp_path: Path,
+) -> None:
+    """An archive that does not match the PRODUCTION buffalo_l pin fails."""
+    dm = _load_script()
+    f = tmp_path / "pack.zip"
+    f.write_bytes(b"payload that differs from the official release zip")
+
+    assert not dm.verify_integrity(f, "buffalo_l", None, allow_unverified=False)

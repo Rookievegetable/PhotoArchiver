@@ -41,17 +41,15 @@ jobs:
           key: models-buffalo_l-v1-${{ runner.os }}
 
       - name: Download AI models (idempotent, runs on cache miss)
-        # P2-008 (Phase 3 audit): download_models.py now verifies the archive
-        # itself (SHA-256 pinning, fail-closed). Until the official digest is
-        # pinned in EXPECTED_SHA256 (scripts/download_models.py), CI must use
-        # the first-bootstrap escape hatch below. REMOVE --allow-unverified
-        # once the digest is pinned — CI then fails closed on any mismatch.
+        # P0-8 (Phase B): the buffalo_l digest is pinned in
+        # scripts/download_models.py (EXPECTED_SHA256) — the script fails
+        # closed on any mismatch, so no escape hatch is needed here anymore.
         # 3 attempts ride out transient release/CDN failures so the single
         # model source is not a hard CI single point of failure.
         shell: bash
         run: |
           for i in 1 2 3; do
-            if python scripts/download_models.py --allow-unverified; then
+            if python scripts/download_models.py; then
               exit 0
             fi
             echo "attempt $i failed, retrying in 10s"

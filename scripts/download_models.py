@@ -50,7 +50,11 @@ DEFAULT_MODEL_URL = (
 # passed (first-bootstrap escape hatch). Pin the digest printed by the log
 # after verifying provenance once; CI must drop ``--allow-unverified`` then.
 EXPECTED_SHA256: dict[str, str] = {
-    "buffalo_l": "",
+    # P0-8 (Phase B): buffalo_l pinned. Digest computed from an archive
+    # fetched from the canonical release URL below; cross-checked against
+    # third-party LFS mirrors of the same asset and against the extracted
+    # pack that CI has been running the AI suite with.
+    "buffalo_l": "80ffe37d8a5940d59a7384c201a2a38d4741f2f3c51eef46ebb28218a7b0ca2f",
     "antelopev2": "",
 }
 
