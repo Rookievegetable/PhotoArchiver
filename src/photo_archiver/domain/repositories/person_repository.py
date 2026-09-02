@@ -19,5 +19,14 @@ class PersonRepository(Protocol):
     def find_by_identity(self, identity: PersonIdentity) -> Person | None:
         """Find a person by its external identity."""
 
+    def find_by_name_department(self, name: str, department: str | None) -> Person | None:
+        """Find a person by exact normalized name and department (P0-7, D-B2).
+
+        Args:
+            name: Already-stripped person name.
+            department: Already-normalized department (empty string normalized
+                to ``None``, mirroring ``Person.__post_init__``).
+        """
+
     def list_all(self) -> list[Person]:
         """Return all known people."""

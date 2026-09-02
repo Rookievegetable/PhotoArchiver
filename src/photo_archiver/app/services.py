@@ -148,6 +148,7 @@ def build_application_services(
                 text_reader=TxtPersonImportReader(),
             ),
             repositories.people,
+            unit_of_work=unit_of_work,
         ),
         register_photo=RegisterPhotoService(repositories.photos, metadata_reader),
         scan_photo_folder=ScanPhotoFolderService(scanner),

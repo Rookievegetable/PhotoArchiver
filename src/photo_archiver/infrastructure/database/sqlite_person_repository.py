@@ -50,6 +50,19 @@ class SQLitePersonRepository(PersonRepository):
             row = connection.execute("SELECT * FROM people WHERE identity = ?", (str(identity),)).fetchone()
         return person_from_row(row) if row is not None else None
 
+    def find_by_name_department(self, name: str, department: str | None) -> Person | None:
+        """Find a person by exact normalized name and department (P0-7, D-B2).
+
+        ``department IS ?`` is deliberately NULL-safe so a ``None`` department
+        matches stored NULLs as well as any concrete value.
+        """
+        with self._connection_provider.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM people WHERE name = ? AND department IS ?",
+                (name, department),
+            ).fetchone()
+        return person_from_row(row) if row is not None else None
+
     def list_all(self) -> list[Person]:
         """Return all known people."""
         with self._connection_provider.connect() as connection:

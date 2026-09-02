@@ -65,6 +65,13 @@ class InMemoryPersonRepository:
                 return person
         return None
 
+    def find_by_name_department(self, name: str, department: str | None) -> Person | None:
+        """Find a person by exact normalized name and department (P0-7, D-B2)."""
+        for person in self._people.values():
+            if person.name == name and person.department == department:
+                return person
+        return None
+
     def list_all(self) -> list[Person]:
         """Return all people."""
         return list(self._people.values())
