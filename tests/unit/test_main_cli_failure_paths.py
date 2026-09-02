@@ -74,3 +74,38 @@ def test_gui_shows_dialog_instead_of_traceback(
 
     assert exit_code == 2
     assert "文件损坏" in captured["message"]
+
+
+def test_gui_startup_survives_backup_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P0-8 round (F-1): a failing startup backup must not block GUI startup.
+
+    The backup is best-effort by design (D-B3) — a full disk or an unwritable
+    backup directory must degrade to a warning, never crash the launch the
+    same commit was meant to harden.
+    """
+    constructed: list[str] = []
+
+    class _FakeApplication:
+        def __init__(self, argv, context) -> None:
+            constructed.append("app")
+
+        def run(self) -> int:
+            return 0
+
+    def succeed_bootstrap() -> object:
+        return object()
+
+    def fail_backup(database_path) -> None:
+        raise RuntimeError("disk full while writing backup")
+
+    monkeypatch.setattr(main_module, "bootstrap_application", succeed_bootstrap)
+    monkeypatch.setattr(main_module, "backup_database", fail_backup)
+    monkeypatch.setattr(main_module, "PhotoArchiverApplication", _FakeApplication)
+
+    exit_code = main_module.main([])
+
+    assert exit_code == 0
+    assert constructed == ["app"]  # the application was still launched

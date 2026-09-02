@@ -2,6 +2,8 @@ import sys
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
+from loguru import logger
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 SOURCE_ROOT = PROJECT_ROOT / "src"
 if SOURCE_ROOT.is_dir():
@@ -182,8 +184,13 @@ def main(arguments: list[str] | None = None) -> int:
     except CorruptedDatabaseError as error:
         show_corrupted_database_dialog(_corrupted_database_message(error))
         return 2
-    # P0-6（D-B3）：GUI 启动成功即做一致性快照备份；失败仅告警不阻断启动。
-    backup_database(context.settings.database_path)
+    # P0-6（D-B3）：GUI 启动成功即做一致性快照备份。
+    # P0-8 轮（审查 F-1）：备份失败只告警不阻断启动——不可写目录/磁盘满
+    # 等场景不得击穿 P0-6 要加固的启动链路。
+    try:
+        backup_database(context.settings.database_path)
+    except Exception as error:  # noqa: BLE001 - backup is best-effort by design (D-B3)
+        logger.warning("Startup database backup failed (non-fatal): {}", error)
     application = PhotoArchiverApplication(sys.argv, context=context)
     return application.run()
 
