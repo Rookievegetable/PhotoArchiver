@@ -67,7 +67,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | Phase 7 死重剔除（v2.2.0） | ✅ | ADR-033 三项裁决全 A（W2-1 landmark 剔除 / W2-2 genderage 一并剔除，owner 确认近期无性别年龄功能规划 / W2-3 剩余非推理段本轮不改造）——loader `allowed_modules=("detection","recognition")` 落地，bbox/kps/embedding 逐字节不变；`tools/bench_recognition.py` 全网格复测落 docstring：2600×1 656.94→332.02s（**1.98×**）、2600×4 514.00→231.68s（**2.22×**）、600×4 2.45×，全部格子 100% 产出 / 全 PENDING 等价保持；门禁本地全绿（ruff 0 / mypy 168 ✓ / pytest **417** passed）；证据链 `tools/spike_segment_profile.py` v2（账目闭合）+ phase7 定稿（`docs/development/phase7-adr-draft.md`）。CI 实证已回填（owner push 后 API 实测 head `4fe8aa4` CI run completed/success 三平台全绿，2026-08-29）；发版链实证——tag `v2.1.0`@`bd52fbb` / tag `v2.2.0`@`f9fb8c5` 已由 owner 推送（ls-remote 实测远端指向正确），两 tag 触发 release workflow，owner 确认 CI 全绿，v2.1.0 / v2.2.0 已发布（2026-08-29）。 |
 | CI | ✅ | GitHub Actions 三 OS 矩阵、模型缓存与 AI/UI 断言已启用。 |
 
-当前 HEAD：`ae5a244`（fix(models): anchor downloader TLS to certifi CA bundle——P0-8 Release Blocker 修复）；origin/main = `f36e9d8`（owner 已推送，CI 三平台含 F-002/LIMIT-005 各一次失败），本地领先 **3 笔**（P0-8 blocker 修复 + 状态文档），推送后 CI 需重跑验证。版本链 2.3.0 三处一致（pyproject/.env.example/CHANGELOG），待 tag `v2.3.0`。tag 全景：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`；四个 Release 均已发布。历史重写注记与全项目状态锚点同前（`docs/health-check/PROJECT_HEALTH_CHECK.md`）。
+当前 HEAD：`1436a62`（fix(workers): replay terminal events lost to late wiring——macOS CI 竞态修复）；origin/main = owner 已推送 blocker 修复链（含 `ae5a244`，其 CI 触发本竞态暴露），本地领先 **1 笔**（本修复），推送后 CI 重跑验证。版本链 2.3.0 三处一致，待 tag `v2.3.0`。tag 全景：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`；四个 Release 均已发布。历史重写注记与全项目状态锚点同前（`docs/health-check/PROJECT_HEALTH_CHECK.md`）。
 
 ---
 
@@ -97,10 +97,10 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 生成者 | Cline |
 | 会话范围 | 交接基线校验 → Phase B 计划草案与 D-B1~D-B8 批复 → **P0-5/6/7 顺序执行**（Cline 会话）→ **P0-8 + 审查 F-1/F-2 并入 → P0-9 启动警告**（ZCode 会话）→ **Phase C 时序 flake 专项** → **Phase D 形态一 P2-5 导出原子写 + v2.3.0 发布准备**（ZCode 会话，D-0 裁决：源码形态 v1.0）。 |
 | 已完成 | ① **交接基线校验**（HEAD `f868b2d` / origin `3a2ef0a` / 领先 17 笔 / clean，全匹配）→ Phase B 计划草案 + Owner 批复 D-B1~D-B8。② **Phase B P0-5~P0-9 全部完成**：P0-5 WAL+busy_timeout（`22305dd`）；P0-6 损坏库门+中文指引+VACUUM INTO 备份（`ab92d5c`/`0295f62`/`9752af3`）；P0-7 导入批原子+无 identity 查重（`169abb3b`）；P0-8 模型 SHA-256 pin + CI fail-closed + 审查 F-1/F-2 并入（`548d7fc`/`c46062f`/`4e91ee4`）；P0-9 启动路径警告（`37fb675`，完整锚定降 P1）。③ **Phase C 时序 flake 专项**：LIMIT-005 根因=人员轴排序未定义（同刻 created_at + UUID 决胜随机）→ `list_all` 决胜改 name（`a6b70db`，mac CI 实证保留）；F-002 首版 is_finished 方案推送后 CI win/mac 原生崩溃 → **回退**（`7834c8b`）+ 测试侧轮询加固（`fa0c8fc`）。④ **Phase D 形态一**：P2-5 导出原子写（`c33bbdd`）+ v2.3.0 版本链（`24c7a86`）+ **P0-8 Release Blocker 修复**（`ae5a244`：Clean VM 模型下载 CERTIFICATE_VERIFY_FAILED → downloader TLS 显式锚定 certifi CA bundle + certifi 提升为正式 runtime dependency；证书/主机名校验保持开启，SHA-256 fail-closed 不变）。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 177 个源文件无问题；pytest 全量 **644 passed / 3 skipped / 0 failed**（含 blocker 修复 +1）；`pip check` 无损坏依赖；CI 三平台全绿（owner push 实证，回退结案）。 |
-| 工作区 | P0-8 blocker 修复（`ae5a244`）+ 状态文档提交后 tracked 零改动。 |
-| Remaining | **Phase D（形态一）发布链待 Owner**：① push（本地领先 3 笔：blocker 修复 + 状态文档 ×2）→ ② CI 重跑三平台全绿 → ③ **Clean Machine Acceptance 重验**（重点步骤 2.3 模型下载——原 v2.3.0 在此 BLOCKED，修复后必过性待实证）→ ④ tag `v2.3.0` → ⑤ Release + 说明素材。真桌面复验清单保留（P0-4/6/7/9）。Phase E（删除语义 ADR 门）未授权。 |
-| Next Step | **P0-8 blocker 修复已提交，STOP 等待 Owner 执行发布链**（push → CI → 验收重验 → tag → Release）。Phase E 须另行授权；P0-9 完整锚定（P1）凭需求信号。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 177 个源文件无问题；pytest 全量 **646 passed / 3 skipped / 0 failed 连续两轮**（含竞态修复 +3）；`pip check` 无损坏依赖。 |
+| 工作区 | macOS 竞态修复提交（`1436a62`）+ 状态文档提交后 tracked 零改动；HEAD/origin 状态见 §3。 |
+| Remaining | **Phase D（形态一）进行中：P2-5 原子写 ✅ + P0-8 Release Blocker 修复 ✅（已推送）+ macOS CI 竞态修复 ✅（本提交，待推送）**。剩余收口：owner 推送 1 笔 → CI 三平台重跑 → **Clean Machine Acceptance 重验**（重点步骤 2.3 模型下载）→ tag `v2.3.0` → Release v2.3.0（说明素材见 Phase D 报告 §4）。真桌面复验清单保留待 owner 补验（P0-4/6/7/9）。Phase E（删除语义 ADR 门）未授权。 |
+| Next Step | **macOS 竞态修复已提交，STOP 等待 Owner**：推送 1 笔 → CI 重跑（三平台全绿确认）→ Clean Machine Acceptance 重验 → tag `v2.3.0` → Release v2.3.0。Phase E 须另行授权。 |
 
 ---
 
