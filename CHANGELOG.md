@@ -49,6 +49,13 @@ authorized per phase, decisions D-B1~D-B8 and D-0 recorded in
   certifi's CA bundle (certificate and hostname verification stay fully
   enabled), and certifi is a declared runtime dependency so a clean machine
   always has the bundle.
+- **Terminal events lost to late signal wiring (macOS CI race)**: a task
+  that terminated between the executor's `submit()` and the view's signal
+  wiring fired its terminal event with zero receivers connected — the UI
+  never learned the task ended and the affected action stayed disabled
+  forever (surfaced as the export e2e 15s timeout on macOS CI). The worker
+  runnable now retains its terminal event, and all four connect sites
+  replay it right after the wiring completes.
 - **Scan cancellation**: cancelling a scan now resets the UI to the
   cancelled state (previously stuck at "Cancelling ..."), and a second scan
   cannot start while one is running (single-flight guard on controller and
@@ -63,7 +70,8 @@ authorized per phase, decisions D-B1~D-B8 and D-0 recorded in
 - **Match e2e test stability**: the two real-thread-pool match e2e tests
   poll the single-flight guard release instead of asserting immediately
   after the terminal signal (robust to cross-thread delivery ordering). The
-  underlying guard-race remains a registered known limitation.
+  underlying guard-race was subsequently root-caused as a real production
+  race and fixed via terminal-event replay (see above).
 
 ### Changed
 
