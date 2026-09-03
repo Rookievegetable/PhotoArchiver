@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.12.0 · Last Updated: 2026-09-02 · Status: Live
+> Version: 1.13.0 · Last Updated: 2026-09-04 · Status: Live
 
 ---
 
@@ -67,7 +67,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | Phase 7 死重剔除（v2.2.0） | ✅ | ADR-033 三项裁决全 A（W2-1 landmark 剔除 / W2-2 genderage 一并剔除，owner 确认近期无性别年龄功能规划 / W2-3 剩余非推理段本轮不改造）——loader `allowed_modules=("detection","recognition")` 落地，bbox/kps/embedding 逐字节不变；`tools/bench_recognition.py` 全网格复测落 docstring：2600×1 656.94→332.02s（**1.98×**）、2600×4 514.00→231.68s（**2.22×**）、600×4 2.45×，全部格子 100% 产出 / 全 PENDING 等价保持；门禁本地全绿（ruff 0 / mypy 168 ✓ / pytest **417** passed）；证据链 `tools/spike_segment_profile.py` v2（账目闭合）+ phase7 定稿（`docs/development/phase7-adr-draft.md`）。CI 实证已回填（owner push 后 API 实测 head `4fe8aa4` CI run completed/success 三平台全绿，2026-08-29）；发版链实证——tag `v2.1.0`@`bd52fbb` / tag `v2.2.0`@`f9fb8c5` 已由 owner 推送（ls-remote 实测远端指向正确），两 tag 触发 release workflow，owner 确认 CI 全绿，v2.1.0 / v2.2.0 已发布（2026-08-29）。 |
 | CI | ✅ | GitHub Actions 三 OS 矩阵、模型缓存与 AI/UI 断言已启用。 |
 
-当前 HEAD：`1436a62`（fix(workers): replay terminal events lost to late wiring——macOS CI 竞态修复）；origin/main = owner 已推送 blocker 修复链（含 `ae5a244`，其 CI 触发本竞态暴露），本地领先 **1 笔**（本修复），推送后 CI 重跑验证。版本链 2.3.0 三处一致，待 tag `v2.3.0`。tag 全景：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`；四个 Release 均已发布。历史重写注记与全项目状态锚点同前（`docs/health-check/PROJECT_HEALTH_CHECK.md`）。
+当前 HEAD：`efd9a40`（refactor(presentation): 删除 `1436a62` 在三个 controller 引入的重复 replay 调用——one-shot 语义下行为不变）== origin/main（owner 已推送完整修复链 `ae5a244`→`1436a62`→`efd9a40`），working tree clean。**CI run #24（head `efd9a40`）三平台 success 实证**（GitHub API，2026-09-03T17:00Z）。版本链 2.3.0 三处一致（pyproject / .env.example / CHANGELOG）。**⚠️ tag `v2.3.0` 漂移待处置**：tag 本地+remote 已推送，GitHub Release v2.3.0 已由 release workflow 自动创建（2026-09-02T18:27Z，wheel 256KB + sdist 180KB 已挂载），但 tag 指向 `682147f`——**早于 TLS blocker 修复（`ae5a244`）与竞态修复（`1436a62`）等 8 笔提交，已发布资产不含两项 blocker 修复**；且 Release body 仅 Full Changelog 链接，缺形态定位声明与已知限制清单。需 owner 裁决重打/重发。tag 全景：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`。历史重写注记与全项目状态锚点同前（`docs/health-check/PROJECT_HEALTH_CHECK.md`）。
 
 ---
 
@@ -97,10 +97,10 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 生成者 | Cline |
 | 会话范围 | 交接基线校验 → Phase B 计划草案与 D-B1~D-B8 批复 → **P0-5/6/7 顺序执行**（Cline 会话）→ **P0-8 + 审查 F-1/F-2 并入 → P0-9 启动警告**（ZCode 会话）→ **Phase C 时序 flake 专项** → **Phase D 形态一 P2-5 导出原子写 + v2.3.0 发布准备**（ZCode 会话，D-0 裁决：源码形态 v1.0）。 |
 | 已完成 | ① **交接基线校验**（HEAD `f868b2d` / origin `3a2ef0a` / 领先 17 笔 / clean，全匹配）→ Phase B 计划草案 + Owner 批复 D-B1~D-B8。② **Phase B P0-5~P0-9 全部完成**：P0-5 WAL+busy_timeout（`22305dd`）；P0-6 损坏库门+中文指引+VACUUM INTO 备份（`ab92d5c`/`0295f62`/`9752af3`）；P0-7 导入批原子+无 identity 查重（`169abb3b`）；P0-8 模型 SHA-256 pin + CI fail-closed + 审查 F-1/F-2 并入（`548d7fc`/`c46062f`/`4e91ee4`）；P0-9 启动路径警告（`37fb675`，完整锚定降 P1）。③ **Phase C 时序 flake 专项**：LIMIT-005 根因=人员轴排序未定义（同刻 created_at + UUID 决胜随机）→ `list_all` 决胜改 name（`a6b70db`，mac CI 实证保留）；F-002 首版 is_finished 方案推送后 CI win/mac 原生崩溃 → **回退**（`7834c8b`）+ 测试侧轮询加固（`fa0c8fc`）。④ **Phase D 形态一**：P2-5 导出原子写（`c33bbdd`）+ v2.3.0 版本链（`24c7a86`）+ **P0-8 Release Blocker 修复**（`ae5a244`：Clean VM 模型下载 CERTIFICATE_VERIFY_FAILED → downloader TLS 显式锚定 certifi CA bundle + certifi 提升为正式 runtime dependency；证书/主机名校验保持开启，SHA-256 fail-closed 不变）。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 177 个源文件无问题；pytest 全量 **646 passed / 3 skipped / 0 failed 连续两轮**（含竞态修复 +3）；`pip check` 无损坏依赖。 |
-| 工作区 | macOS 竞态修复提交（`1436a62`）+ 状态文档提交后 tracked 零改动；HEAD/origin 状态见 §3。 |
-| Remaining | **Phase D（形态一）进行中：P2-5 原子写 ✅ + P0-8 Release Blocker 修复 ✅（已推送）+ macOS CI 竞态修复 ✅（本提交，待推送）**。剩余收口：owner 推送 1 笔 → CI 三平台重跑 → **Clean Machine Acceptance 重验**（重点步骤 2.3 模型下载）→ tag `v2.3.0` → Release v2.3.0（说明素材见 Phase D 报告 §4）。真桌面复验清单保留待 owner 补验（P0-4/6/7/9）。Phase E（删除语义 ADR 门）未授权。 |
-| Next Step | **macOS 竞态修复已提交，STOP 等待 Owner**：推送 1 笔 → CI 重跑（三平台全绿确认）→ Clean Machine Acceptance 重验 → tag `v2.3.0` → Release v2.3.0。Phase E 须另行授权。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 177 个源文件无问题；pytest 全量 **646 passed / 3 skipped / 0 failed 连续三轮**（竞态修复与收尾净化后各含一轮）；`pip check` 无损坏依赖；CI run #24 三平台 success。 |
+| 工作区 | 全部修复链已推送（HEAD `efd9a40` == origin/main），tracked 零改动；HEAD/origin/tag 漂移状态见 §3。 |
+| Remaining | **Phase D（形态一）：P2-5 原子写 ✅ + P0-8 TLS Blocker 修复 ✅ + macOS CI 竞态修复 ✅ + 收尾净化 ✅（`efd9a40`）——全链已推送，CI run #24 三平台全绿**。剩余收口（owner）：① **tag `v2.3.0` 漂移处置**——tag/Release 已存在但构建自 `682147f`（不含 2 项 blocker 修复），需重打到 `efd9a40` 并重建 Release（或改发新版本号）；② **Clean Machine Acceptance 重验**（重点步骤 2.3 模型下载）；③ Release body 补形态定位声明 + 已知限制清单（LIMIT-001/002/004）；④ 真桌面复验清单（P0-4/6/7/9）；⑤ Owner 签核。Phase E（删除语义 ADR 门）未授权。 |
+| Next Step | **修复链全绿，STOP 等待 Owner**：tag `v2.3.0` 漂移处置裁决 → Clean Machine Acceptance 重验 → Release body 收口 → Owner 签核发布。Phase E 须另行授权。 |
 
 ---
 
@@ -119,7 +119,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 CI 事故结案注记：is_finished 方案（`9616c3e`，已回退）在 owner push 后的 CI 首跑中于 win/mac 触发 pytest-qt 内部错误与 Windows 原生崩溃；回退（`7834c8b`）后 owner 实证 CI 三平台全绿——方案与崩溃的因果确证，重试需改用非包装器机制。发版收尾（非阻塞，GIT-020 归 owner）
 
-macOS 竞态结案注记（`1436a62`）：owner 推送 blocker 链后的 CI mac 失败（export UI 链 15s 超时）根因为**真实生产竞态**——快失败任务的终态信号在视图接线前发射即永久丢失；`QtWorkerRunnable` 保留终态 + `replay_pending_terminal()`（4 接线点）根治。迟订阅回归测试 + 连续两轮全量 646/3/0。
+macOS 竞态结案注记（`1436a62`）：owner 推送 blocker 链后的 CI mac 失败（export UI 链 15s 超时）根因为**真实生产竞态**——快失败任务的终态信号在视图接线前发射即永久丢失；`QtWorkerRunnable` 保留终态 + `replay_pending_terminal()`（4 接线点）根治。迟订阅回归测试 + 连续两轮全量 646/3/0。收尾净化 `efd9a40` 删除三处 controller 的重复 replay 调用（one-shot 语义下行为不变），随链推送后 CI run #24 三平台全绿实证闭环。
 
 ## 7. Key Files（关键文件索引）
 
