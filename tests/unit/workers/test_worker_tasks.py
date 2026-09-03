@@ -559,3 +559,58 @@ def test_match_persons_task_detects_mid_batch_cancellation() -> None:
     assert cancellable.commands == [command]
     assert [type(event) for event in events] == [TaskStarted, TaskProgress, TaskCancelled]
     assert events[-1].reason == "user stopped mid-batch"
+
+
+def test_replay_pending_terminal_rescues_fast_fail_before_wiring() -> None:
+    """macOS CI race (v2.3.0 acceptance): a task that terminates between
+    submit() and the view's connect_signals() loses its terminal event —
+    zero receivers were connected at emit time and the UI never re-enabled.
+
+    Run the runnable synchronously (terminal reached, nothing connected),
+    THEN connect a subscriber and replay: the late subscriber must receive
+    the retained TaskFailed.
+    """
+    from photo_archiver.workers.events import TaskFailed
+    from photo_archiver.workers.qt_executor import QtWorkerRunnable
+
+    class _FailingTask(WorkerTask[object]):
+        def __init__(self) -> None:
+            super().__init__("instant_fail")
+
+        def execute(self) -> object:
+            raise ValueError("boom before any subscriber connected")
+
+    task = _FailingTask()
+    runnable = QtWorkerRunnable(task)  # noqa: SLF001 - constructor is public via executor
+    runnable.run()  # terminal reached with zero receivers connected
+
+    received: list[object] = []
+    runnable.signals.failed.connect(lambda event: received.append(event))
+    runnable.replay_pending_terminal()
+
+    assert len(received) == 1
+    assert isinstance(received[0], TaskFailed)
+    assert "boom before any subscriber connected" in str(received[0].message)
+
+    # Replay is one-shot: a second call delivers nothing.
+    runnable.replay_pending_terminal()
+    assert len(received) == 1
+
+
+def test_replay_pending_terminal_noop_when_task_still_running() -> None:
+    """No terminal yet → replay is a no-op and delivers nothing."""
+    from photo_archiver.workers.qt_executor import QtWorkerRunnable
+
+    class _IdleTask(WorkerTask[object]):
+        def __init__(self) -> None:
+            super().__init__("idle")
+
+        def execute(self) -> object:  # pragma: no cover - never invoked here
+            raise AssertionError("not executed in this test")
+
+    runnable = QtWorkerRunnable(_IdleTask())
+    received: list[object] = []
+    runnable.signals.completed.connect(lambda event: received.append(event))
+    runnable.replay_pending_terminal()
+
+    assert received == []

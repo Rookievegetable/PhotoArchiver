@@ -41,6 +41,9 @@ def _make_runnable():
             self.signals = Signals()
             self.cancel_calls: list[str] = []
 
+        def replay_pending_terminal(self) -> None:
+            """Interface parity with QtWorkerRunnable (no-op: no terminal retained)."""
+
         def cancel(self, reason: str = "") -> None:
             """Record cooperative-cancellation requests for later assertions."""
             self.cancel_calls.append(reason)

@@ -33,7 +33,31 @@ class QtWorkerRunnable(QRunnable):
         super().__init__()
         self.task = task
         self.signals = QtWorkerSignals()
+        self._pending_terminal: TaskEvent | None = None
         self.task.subscribe(self._emit_task_event)
+
+    def replay_pending_terminal(self) -> None:
+        """Re-emit the terminal event if it fired before late subscribers connected.
+
+        A fast-failing task can reach a terminal state between the executor's
+        ``submit()`` and the view's ``connect_signals()`` — the signal then
+        fires with no receivers and the UI never learns the task ended
+        (macOS CI: the export action stayed disabled for good after an
+        instant FILTERED rejection). Connect sites call this after wiring;
+        the event, if any, is re-emitted on the calling (main) thread so the
+        just-connected slots receive it through the normal queued path.
+
+        The rare concurrent interleaving can double-deliver; every consumer
+        slot is idempotent (guard releasers identity-check the runnable, UI
+        resets are assignments).
+        """
+        event, self._pending_terminal = self._pending_terminal, None
+        if isinstance(event, TaskCompleted):
+            self.signals.completed.emit(event)
+        elif isinstance(event, TaskFailed):
+            self.signals.failed.emit(event)
+        elif isinstance(event, TaskCancelled):
+            self.signals.cancelled.emit(event)
 
     def cancel(self, reason: str = "") -> None:
         """Request cooperative cancellation for the wrapped task."""
@@ -71,10 +95,16 @@ class QtWorkerRunnable(QRunnable):
         elif isinstance(event, TaskProgress):
             self.signals.progress.emit(event)
         elif isinstance(event, TaskCompleted):
+            # Terminal events are retained for replay_pending_terminal: a
+            # subscriber connecting after this emit would otherwise miss the
+            # task's end state entirely.
+            self._pending_terminal = event
             self.signals.completed.emit(event)
         elif isinstance(event, TaskFailed):
+            self._pending_terminal = event
             self.signals.failed.emit(event)
         elif isinstance(event, TaskCancelled):
+            self._pending_terminal = event
             self.signals.cancelled.emit(event)
 
 

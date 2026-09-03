@@ -100,9 +100,19 @@ class ExportController(QObject):
 
     @staticmethod
     def connect_signals(runnable, started: Slot, progress: Slot, completed: Slot, failed: Slot) -> None:
-        """Connect the runnable's task signals to the provided UI slots."""
+        """Connect the runnable's task signals to the provided UI slots.
+
+        A terminal event that fired before this call is replayed so a
+        fast-failing task cannot strand the UI (see QtWorkerRunnable.
+        replay_pending_terminal — the macOS CI export race).
+        """
         signals = runnable.signals
         signals.started.connect(started)
         signals.progress.connect(progress)
         signals.completed.connect(completed)
         signals.failed.connect(failed)
+        # macOS CI race: a fast-failing task can terminate between submit()
+        # and this wiring — without the replay its terminal event is lost
+        # with no receivers and the UI never re-enables.
+        runnable.replay_pending_terminal()
+        runnable.replay_pending_terminal()

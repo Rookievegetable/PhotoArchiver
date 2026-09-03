@@ -349,6 +349,7 @@ class MainWindow(QMainWindow):
             self._on_completed,  # type: ignore[arg-type]
             self._on_failed,  # type: ignore[arg-type]
         )
+        runnable.replay_pending_terminal()
         self._cancel_action.setEnabled(True)
 
     def _on_started(self, event: TaskStarted) -> None:

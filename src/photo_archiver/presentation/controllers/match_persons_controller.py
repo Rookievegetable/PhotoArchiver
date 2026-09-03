@@ -117,6 +117,9 @@ class MatchPersonsController(QObject):
         signals.completed.connect(releaser)
         signals.failed.connect(releaser)
         signals.cancelled.connect(releaser)
+        # macOS CI race: replay a terminal that fired before this wiring.
+        runnable.replay_pending_terminal()
+        runnable.replay_pending_terminal()
 
     def _make_releaser(self, runnable: QtWorkerRunnable):
         """Build an arity-agnostic slot that clears the guard for ``runnable``."""

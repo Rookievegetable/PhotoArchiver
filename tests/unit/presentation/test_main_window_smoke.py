@@ -59,6 +59,9 @@ def test_scan_controller_connect_signals_wires_slots(qtbot) -> None:
         def __init__(self) -> None:
             self.signals = Signals()
 
+        def replay_pending_terminal(self) -> None:
+            """Interface parity with QtWorkerRunnable (no-op: no terminal retained)."""
+
     runnable = FakeRunnable()
     called: list = []
 
