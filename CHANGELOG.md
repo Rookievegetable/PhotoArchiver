@@ -42,6 +42,13 @@ authorized per phase, decisions D-B1~D-B8 and D-0 recorded in
 
 ### Fixed
 
+- **Model download TLS (clean Windows)**: the downloader passed no SSL
+  context, so CPython's default CA loading applied — on a clean Windows
+  machine (no issuer for the github.com chain) the model bootstrap failed
+  with `CERTIFICATE_VERIFY_FAILED`. The TLS context is now anchored to
+  certifi's CA bundle (certificate and hostname verification stay fully
+  enabled), and certifi is a declared runtime dependency so a clean machine
+  always has the bundle.
 - **Scan cancellation**: cancelling a scan now resets the UI to the
   cancelled state (previously stuck at "Cancelling ..."), and a second scan
   cannot start while one is running (single-flight guard on controller and
@@ -53,10 +60,10 @@ authorized per phase, decisions D-B1~D-B8 and D-0 recorded in
 - **Person filter order**: the people dropdown ordered same-batch imports
   randomly (UUID tiebreak); ordering is now deterministic (creation time,
   then name).
-- **Scan single-flight race**: the in-flight guard now reads the worker's
-  authoritative finished state instead of racing cross-thread signal
-  delivery (also fixes the F-002/LIMIT-003 test flake family — two
-  consecutive full-suite runs fully green).
+- **Match e2e test stability**: the two real-thread-pool match e2e tests
+  poll the single-flight guard release instead of asserting immediately
+  after the terminal signal (robust to cross-thread delivery ordering). The
+  underlying guard-race remains a registered known limitation.
 
 ### Changed
 
