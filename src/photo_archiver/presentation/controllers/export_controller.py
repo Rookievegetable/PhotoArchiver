@@ -115,4 +115,3 @@ class ExportController(QObject):
         # and this wiring — without the replay its terminal event is lost
         # with no receivers and the UI never re-enables.
         runnable.replay_pending_terminal()
-        runnable.replay_pending_terminal()
