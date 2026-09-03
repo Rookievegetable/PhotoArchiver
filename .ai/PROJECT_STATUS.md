@@ -119,6 +119,8 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 CI 事故结案注记：is_finished 方案（`9616c3e`，已回退）在 owner push 后的 CI 首跑中于 win/mac 触发 pytest-qt 内部错误与 Windows 原生崩溃；回退（`7834c8b`）后 owner 实证 CI 三平台全绿——方案与崩溃的因果确证，重试需改用非包装器机制。发版收尾（非阻塞，GIT-020 归 owner）
 
+macOS 竞态结案注记（`1436a62`）：owner 推送 blocker 链后的 CI mac 失败（export UI 链 15s 超时）根因为**真实生产竞态**——快失败任务的终态信号在视图接线前发射即永久丢失；`QtWorkerRunnable` 保留终态 + `replay_pending_terminal()`（4 接线点）根治。迟订阅回归测试 + 连续两轮全量 646/3/0。
+
 ## 7. Key Files（关键文件索引）
 
 | 职责 | 文件 |
