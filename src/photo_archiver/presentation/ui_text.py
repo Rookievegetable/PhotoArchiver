@@ -73,7 +73,7 @@ PLUGIN_FAILURE_NO_DETAIL = "动作执行失败（未提供详细信息）。"
 # 闭合框内以灰色占位文字提示"该轴不设约束"。
 FILTER_PERSON_LABEL = "人员："
 FILTER_ALL_PERSONS = "全部人员"
-FILTER_PERSON_TOOLTIP = "按匹配的人员筛选照片；未选择时显示全部。"
+FILTER_PERSON_TOOLTIP = "按匹配的人员筛选照片；支持输入关键字即时搜索（如输入一个字即列出包含该字的人员）；未选择时显示全部。"
 FILTER_STATUS_LABEL = "状态："
 FILTER_STATUS_ALL = "全部"
 FILTER_STATUS_PLACEHOLDER_TOOLTIP = "未选择时显示全部审核状态。"

@@ -22,6 +22,12 @@ decision both fold into v2.3.1 as one release — no separate version).
   `qtbase_zh_CN` translation at startup, so standard buttons (保存 / 取消 /
   确定 / 关闭) and system dialogs (file pickers) render in Chinese. If the
   catalog is missing the app logs a warning and falls back to English.
+- **Searchable person filter**: the person dropdown accepts typing — the
+  completion list filters instantly with smart ranking (exact match →
+  prefix → contiguous containment by leftmost position → in-order
+  subsequence by smallest window span; e.g. "ab" ranks `ab`, `abxxx`,
+  `xabx`, `xxab`, `axbx`, `axxb`). Typing alone never changes the filter —
+  picking an entry (dropdown or completion) applies it; Clear resets.
 - **Filter dropdowns show only real options**: the status dropdown lists
   待审核 / 已通过 / 已拒绝 and the person dropdown lists imported people —
   no more "全部" / "全部人员" entries inside the list. An unselected combo

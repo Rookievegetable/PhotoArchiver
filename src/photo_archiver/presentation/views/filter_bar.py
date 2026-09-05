@@ -18,10 +18,11 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from PySide6.QtCore import QDateTime, Signal
+from PySide6.QtCore import QDateTime, Qt, Signal, QStringListModel
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QCompleter,
     QDateTimeEdit,
     QHBoxLayout,
     QLabel,
@@ -30,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from photo_archiver.domain import MatchStatus, Person, PhotoSearchCriteria
+from photo_archiver.presentation.person_matcher import rank_person_names
 from photo_archiver.presentation.ui_text import (
     FILTER_ALL_PERSONS,
     FILTER_CLEAR_BUTTON,
@@ -78,13 +80,29 @@ class FilterBar(QWidget):
 
         # Person axis — populated via set_persons(). 占位语义：下拉列表只含
         # 真实人员；未选中（currentIndex == -1）时闭合框内显示灰色占位
-        # "全部人员"= 该轴不设约束。
+        # "全部人员"= 该轴不设约束。可编辑 + 智能搜索补全（2026-09-05）：
+        # 输入即按 person_matcher 排名过滤（全等 → 前缀 → 连续包含 → 子序列），
+        # 从补全中选中才落到筛选值——纯输入不改变 criteria。
         layout.addWidget(QLabel(FILTER_PERSON_LABEL))
         self._person_combo = QComboBox(self)
+        self._person_combo.setEditable(True)
+        self._person_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self._person_combo.setPlaceholderText(FILTER_ALL_PERSONS)
         self._person_combo.setToolTip(FILTER_PERSON_TOOLTIP)
         self._person_combo.setCurrentIndex(-1)
         layout.addWidget(self._person_combo)
+        self._person_names: list[str] = []
+        self._person_ids_by_name: dict[str, str] = {}
+        self._person_completer = QCompleter(self._person_combo)
+        self._person_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._person_completer.setCompletionMode(
+            QCompleter.CompletionMode.UnfilteredPopupCompletion
+        )
+        self._person_completer_model = QStringListModel(self._person_completer)
+        self._person_completer.setModel(self._person_completer_model)
+        self._person_combo.setCompleter(self._person_completer)
+        self._person_completer.activated.connect(self._on_person_completion_activated)
+        self._person_combo.editTextChanged.connect(self._on_person_search_text_changed)
 
         # Status axis — MatchStatus 三值为仅有的可选项；未选中（-1）=
         # 不设约束，闭合框内灰色占位"全部"。
@@ -147,6 +165,29 @@ class FilterBar(QWidget):
         self._to_edit.setEnabled(checked)
         self._emit_criteria()
 
+    def _on_person_search_text_changed(self, text: str) -> None:
+        """Rebuild the completion list with smart-ranked matches for ``text``.
+
+        输入过程只影响补全列表——criteria 仍仅由"选中某个人员"（下拉选择或
+        补全激活，二者都会落到 currentIndex）驱动，见 _emit_criteria。
+        """
+        self._person_completer_model.setStringList(
+            rank_person_names(text, self._person_names)
+        )
+
+    def _on_person_completion_activated(self, name: str) -> None:
+        """Map a picked completion back to the person entry and select it.
+
+        同名人员（不同部门）在补全中以名称呈现——激活时落到该名称的首个
+        id，与下拉直接点选的既有限制一致。
+        """
+        person_id = self._person_ids_by_name.get(name)
+        if person_id is None:
+            return
+        index = self._person_combo.findData(person_id)
+        if index >= 0:
+            self._person_combo.setCurrentIndex(index)
+
     def set_persons(self, persons: Sequence[Person]) -> None:
         """Populate the person combo from the Application layer (FEAT-P9-2).
 
@@ -170,6 +211,14 @@ class FilterBar(QWidget):
                     self._person_combo.addItem(person.name, str(person.id))
         finally:
             self._person_combo.blockSignals(False)
+        # 搜索补全的数据源与名称→id 映射同步重建（同名人员取首个 id，
+        # 与补全激活的既有限制一致）。
+        self._person_names = [p.name for p in persons if p.id is not None]
+        self._person_ids_by_name = {}
+        for person in persons:
+            if person.id is not None:
+                self._person_ids_by_name.setdefault(person.name, str(person.id))
+        self._person_completer_model.setStringList(self._person_names)
         restore_index = self._person_combo.findData(selected_id)
         # 找不回原选择（含此前本就未选中）→ 回落未选中占位态（-1）。
         self._person_combo.setCurrentIndex(restore_index)
@@ -226,6 +275,10 @@ class FilterBar(QWidget):
         与 _emit_criteria 的判 None 逻辑二处维护。
         """
         self._person_combo.setCurrentIndex(-1)
+        # combo 已 setEditable(True)，lineEdit() 运行时恒非空——守卫仅满足可空注解。
+        line_edit = self._person_combo.lineEdit()
+        if line_edit is not None:
+            line_edit.clear()
         self._status_combo.setCurrentIndex(-1)
         self._from_check.setChecked(False)
         self._to_check.setChecked(False)
