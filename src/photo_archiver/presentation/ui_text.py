@@ -69,11 +69,14 @@ PLUGIN_RESULT_TITLE = "插件：{action_id}"
 PLUGIN_FAILURE_NO_DETAIL = "动作执行失败（未提供详细信息）。"
 
 # ---- 筛选栏（FilterBar） ----
+# 占位语义：下拉列表只含真实选项；未选中任何项（currentIndex == -1）时
+# 闭合框内以灰色占位文字提示"该轴不设约束"。
 FILTER_PERSON_LABEL = "人员："
 FILTER_ALL_PERSONS = "全部人员"
-FILTER_PERSON_TOOLTIP = "按匹配的人员筛选照片。"
+FILTER_PERSON_TOOLTIP = "按匹配的人员筛选照片；未选择时显示全部。"
 FILTER_STATUS_LABEL = "状态："
 FILTER_STATUS_ALL = "全部"
+FILTER_STATUS_PLACEHOLDER_TOOLTIP = "未选择时显示全部审核状态。"
 FILTER_STATUS_PENDING = "待审核"
 FILTER_STATUS_APPROVED = "已通过"
 FILTER_STATUS_REJECTED = "已拒绝"
@@ -107,6 +110,19 @@ SETTINGS_SAVE_HINT = "保存后写入平台偏好设置；取消将放弃修改�
 SETTINGS_INVALID_TITLE = "设置无效"
 SETTINGS_SELECT_IMPORT_FOLDER = "选择默认导入目录"
 SETTINGS_SELECT_EXPORT_FOLDER = "选择默认导出目录"
+# 主题/语言选项显示映射（userData 携带契约值；值域镜像
+# application.dtos.settings.VALID_THEMES / VALID_LANGUAGES——
+# test_ui_translations.py 守护两者同步）。
+SETTINGS_THEME_CHOICES = (
+    ("跟随系统", "system"),
+    ("浅色", "light"),
+    ("深色", "dark"),
+)
+SETTINGS_LANGUAGE_CHOICES = (
+    ("跟随系统", "system"),
+    ("中文", "zh"),
+    ("英语", "en"),
+)
 
 # ---- 导出对话框（ExportDialog） ----
 EXPORT_DIALOG_TITLE = "导出数据"

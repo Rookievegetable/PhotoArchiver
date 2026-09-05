@@ -4,10 +4,12 @@
 PhotoSearchCriteria 或 None）由 PhotoListController 接收调 SearchPhotosService。
 控件含人员下拉 + 状态下拉 + 日期区间（from/to）+ 清除按钮。
 
-状态下拉走 MatchStatus 三值 + "全部"占位。日期区间用 QDateTimeEdit 双控件，
-各自由 "From"/"To" 复选框门控（Phase 9 FEAT-P9-1）：未勾选 = 该轴不设约束
-（QDateTimeEdit 恒有值，必须显式表达"未设置"），勾选后取控件当前值。人员轴
-经 ``set_persons`` 供给（FEAT-P9-2，数据来自 Application 层 ListPersonsService）。
+状态下拉走 MatchStatus 三值，人员轴经 ``set_persons`` 供给（FEAT-P9-2）。
+两轴均为占位语义：下拉列表只含真实选项，未选中（currentIndex == -1）时
+闭合框内灰色占位（"全部" / "全部人员"）= 该轴不设约束。日期区间用
+QDateTimeEdit 双控件，各自由 "从"/"至" 复选框门控（Phase 9 FEAT-P9-1）：
+未勾选 = 该轴不设约束（QDateTimeEdit 恒有值，必须显式表达"未设置"），
+勾选后取控件当前值。
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ from photo_archiver.presentation.ui_text import (
     FILTER_STATUS_APPROVED,
     FILTER_STATUS_LABEL,
     FILTER_STATUS_PENDING,
+    FILTER_STATUS_PLACEHOLDER_TOOLTIP,
     FILTER_STATUS_REJECTED,
     FILTER_TO_CHECK,
     FILTER_TO_TOOLTIP,
@@ -73,21 +76,26 @@ class FilterBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
 
-        # Person axis — populated via set_persons(); "全部人员" (userData
-        # None) is the no-constraint entry.
+        # Person axis — populated via set_persons(). 占位语义：下拉列表只含
+        # 真实人员；未选中（currentIndex == -1）时闭合框内显示灰色占位
+        # "全部人员"= 该轴不设约束。
         layout.addWidget(QLabel(FILTER_PERSON_LABEL))
         self._person_combo = QComboBox(self)
-        self._person_combo.addItem(FILTER_ALL_PERSONS, None)
+        self._person_combo.setPlaceholderText(FILTER_ALL_PERSONS)
         self._person_combo.setToolTip(FILTER_PERSON_TOOLTIP)
+        self._person_combo.setCurrentIndex(-1)
         layout.addWidget(self._person_combo)
 
-        # Status axis — MatchStatus three values + "全部" placeholder.
+        # Status axis — MatchStatus 三值为仅有的可选项；未选中（-1）=
+        # 不设约束，闭合框内灰色占位"全部"。
         layout.addWidget(QLabel(FILTER_STATUS_LABEL))
         self._status_combo = QComboBox(self)
-        self._status_combo.addItem(FILTER_STATUS_ALL, None)  # userData None → no constraint
+        self._status_combo.setPlaceholderText(FILTER_STATUS_ALL)
+        self._status_combo.setToolTip(FILTER_STATUS_PLACEHOLDER_TOOLTIP)
         self._status_combo.addItem(FILTER_STATUS_PENDING, "pending")
         self._status_combo.addItem(FILTER_STATUS_APPROVED, "approved")
         self._status_combo.addItem(FILTER_STATUS_REJECTED, "rejected")
+        self._status_combo.setCurrentIndex(-1)
         layout.addWidget(self._status_combo)
 
         # Date range axis — each edit gated by a checkbox (FEAT-P9-1): an
@@ -145,7 +153,8 @@ class FilterBar(QWidget):
         Repopulation blocks the combo's signals so loading never emits
         spurious criteria; a single ``_emit_criteria`` runs afterwards. The
         previously selected person is preserved when still present, otherwise
-        the selection resets to "All persons".
+        the selection resets to the unselected placeholder state (index -1,
+        displaying the "全部人员" hint).
 
         The combo's userData carries the person id in **string** form:
         QVariant compares wrapped Python objects by identity, so findData /
@@ -156,14 +165,14 @@ class FilterBar(QWidget):
         self._person_combo.blockSignals(True)
         try:
             self._person_combo.clear()
-            self._person_combo.addItem(FILTER_ALL_PERSONS, None)
             for person in persons:
                 if person.id is not None:
                     self._person_combo.addItem(person.name, str(person.id))
         finally:
             self._person_combo.blockSignals(False)
         restore_index = self._person_combo.findData(selected_id)
-        self._person_combo.setCurrentIndex(restore_index if restore_index >= 0 else 0)
+        # 找不回原选择（含此前本就未选中）→ 回落未选中占位态（-1）。
+        self._person_combo.setCurrentIndex(restore_index)
         self._emit_criteria()
 
     def _emit_criteria(self) -> None:
@@ -216,8 +225,8 @@ class FilterBar(QWidget):
         返 None，故 clear() 复位控件后调 _emit_criteria() 即可——避免 emit None
         与 _emit_criteria 的判 None 逻辑二处维护。
         """
-        self._person_combo.setCurrentIndex(0)
-        self._status_combo.setCurrentIndex(0)
+        self._person_combo.setCurrentIndex(-1)
+        self._status_combo.setCurrentIndex(-1)
         self._from_check.setChecked(False)
         self._to_check.setChecked(False)
         self._from_edit.setDateTime(QDateTime.currentDateTime().addYears(-1))

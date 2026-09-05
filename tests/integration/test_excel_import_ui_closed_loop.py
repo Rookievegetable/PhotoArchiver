@@ -106,7 +106,7 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
     import time
 
     deadline = time.monotonic() + 20
-    while person_combo.itemText(1) != "Alice" or person_combo.itemText(2) != "Bob":
+    while person_combo.itemText(0) != "Alice" or person_combo.itemText(1) != "Bob":
         if time.monotonic() > deadline:
             pytest.fail(
                 "person combo never refreshed after import: "
@@ -118,5 +118,6 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
             )
         qtbot.wait(50)
 
-    assert person_combo.itemText(0) == "全部人员"
-    assert person_combo.count() == 3
+    assert person_combo.placeholderText() == "全部人员"
+    assert person_combo.currentIndex() == -1  # unselected = no constraint
+    assert person_combo.count() == 2  # Alice + Bob — real entries only

@@ -41,8 +41,8 @@ def test_settings_dialog_constructs_and_loads_fields(qtbot) -> None:
     dialog.show()
     qtbot.waitExposed(dialog)
     assert dialog.windowTitle() == "设置"
-    assert dialog._theme_combo.currentText() == "dark"
-    assert dialog._language_combo.currentText() == "zh"
+    assert dialog._theme_combo.currentData() == "dark"
+    assert dialog._language_combo.currentData() == "zh"
     assert dialog._import_path_edit.text() == str(Path("/imports"))
     assert dialog._export_path_edit.text() == str(Path("/exports"))
     assert dialog._threshold_spin.value() == pytest.approx(0.55)

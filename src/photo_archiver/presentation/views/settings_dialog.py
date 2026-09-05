@@ -58,13 +58,15 @@ from photo_archiver.presentation.ui_text import (
     SETTINGS_EXPORT_PATH_LABEL,
     SETTINGS_IMPORT_PATH_LABEL,
     SETTINGS_INVALID_TITLE,
+    SETTINGS_LANGUAGE_CHOICES,
     SETTINGS_LANGUAGE_LABEL,
     SETTINGS_MAX_WORKERS_LABEL,
     SETTINGS_SELECT_EXPORT_FOLDER,
     SETTINGS_SELECT_IMPORT_FOLDER,
     SETTINGS_SAVE_HINT,
-    SETTINGS_THRESHOLD_LABEL,
+    SETTINGS_THEME_CHOICES,
     SETTINGS_THEME_LABEL,
+    SETTINGS_THRESHOLD_LABEL,
     SETTINGS_USE_SYSTEM_DEFAULT,
 )
 
@@ -116,11 +118,15 @@ class SettingsDialog(QDialog):
 
     def _build_form(self) -> None:
         """Lay out the six UserPreferences fields in a QFormLayout."""
+        # 主题/语言下拉：显示中文标签，userData 携带契约值（system/light/
+        # dark、system/zh/en）——持久化与校验契约不变，仅显示层中文化。
         self._theme_combo = QComboBox(self)
-        self._theme_combo.addItems(VALID_THEMES)
+        for label, value in SETTINGS_THEME_CHOICES:
+            self._theme_combo.addItem(label, value)
 
         self._language_combo = QComboBox(self)
-        self._language_combo.addItems(VALID_LANGUAGES)
+        for label, value in SETTINGS_LANGUAGE_CHOICES:
+            self._language_combo.addItem(label, value)
 
         self._import_path_edit = QLineEdit(self)
         self._import_path_edit.setPlaceholderText(SETTINGS_USE_SYSTEM_DEFAULT)
@@ -181,8 +187,12 @@ class SettingsDialog(QDialog):
 
     def _populate_from_preferences(self, preferences: UserPreferences) -> None:
         """Set each widget value from the loaded UserPreferences."""
-        self._theme_combo.setCurrentText(preferences.theme)
-        self._language_combo.setCurrentText(preferences.language)
+        # findData 按 userData（契约值）回填；值不在选项域时回退首项——
+        # 持久化值本应经 validate_preferences 校验，此处仅为防御。
+        theme_index = self._theme_combo.findData(preferences.theme)
+        self._theme_combo.setCurrentIndex(theme_index if theme_index >= 0 else 0)
+        language_index = self._language_combo.findData(preferences.language)
+        self._language_combo.setCurrentIndex(language_index if language_index >= 0 else 0)
         self._import_path_edit.setText(
             str(preferences.default_import_path) if preferences.default_import_path is not None else ""
         )
@@ -208,9 +218,13 @@ class SettingsDialog(QDialog):
         """Read every widget value into a fresh UserPreferences value object."""
         import_text = self._import_path_edit.text().strip()
         export_text = self._export_path_edit.text().strip()
+        # 下拉以 userData 携带契约值；回填守卫保证 index >= 0，currentData
+        # 恒为 str——isinstance 分支仅类型收窄防御。
+        theme_data = self._theme_combo.currentData()
+        language_data = self._language_combo.currentData()
         return UserPreferences(
-            theme=self._theme_combo.currentText(),
-            language=self._language_combo.currentText(),
+            theme=theme_data if isinstance(theme_data, str) else VALID_THEMES[0],
+            language=language_data if isinstance(language_data, str) else VALID_LANGUAGES[0],
             default_import_path=Path(import_text) if import_text else None,
             default_export_path=Path(export_text) if export_text else None,
             match_threshold=self._threshold_spin.value(),

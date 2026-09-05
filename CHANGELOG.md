@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [2.3.2] - 2026-09-05
+
+UI defect-fix round reported from real desktop review of v2.3.1 (owner-approved).
+
+### Changed
+
+- **Settings dialog**: the Theme and Language dropdowns now show Chinese
+  labels (跟随系统 / 浅色 / 深色; 跟随系统 / 中文 / 英语) while their stored
+  contract values (`system` / `light` / `dark`, `system` / `zh` / `en`) are
+  unchanged — persisted preferences stay compatible.
+- **Qt standard texts localized**: the app installs PySide6's bundled
+  `qtbase_zh_CN` translation at startup, so standard buttons (保存 / 取消 /
+  确定 / 关闭) and system dialogs (file pickers) render in Chinese. If the
+  catalog is missing the app logs a warning and falls back to English.
+- **Filter dropdowns show only real options**: the status dropdown lists
+  待审核 / 已通过 / 已拒绝 and the person dropdown lists imported people —
+  no more "全部" / "全部人员" entries inside the list. An unselected combo
+  (grey placeholder text in the closed box) means "no constraint on this
+  axis"; the Clear button returns both axes to that state. Filter semantics
+  are unchanged (unselected = full listing).
+
 ## [2.3.1] - 2026-09-05
 
 Desktop UI polish: Chinese localization and a production-only toolbar

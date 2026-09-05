@@ -56,11 +56,11 @@ def test_person_combo_stays_usable_after_repopulation(qtbot) -> None:
     combo = bar._person_combo
     assert combo.isEnabled()
     assert [combo.itemText(i) for i in range(combo.count())] == [
-        "全部人员",
         "Alice",
         "Bob",
     ]
-    assert combo.currentIndex() == 0  # reset to the no-constraint entry
+    assert combo.placeholderText() == "全部人员"
+    assert combo.currentIndex() == -1  # reset to the unselected placeholder state
 
 
 def test_to_date_edit_is_managed_by_the_layout(qtbot) -> None:

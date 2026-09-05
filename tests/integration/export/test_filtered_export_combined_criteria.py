@@ -249,7 +249,7 @@ def _sections(rows: list[list[str]]) -> dict:
 
 def test_status_only_filtered_export_csv(qtbot, tmp_path, monkeypatch) -> None:
     window, _, seeded = _make_window(qtbot, tmp_path)
-    _select_status(window, 1)  # Pending
+    _select_status(window, 0)  # Pending
     assert window._current_criteria is not None
     assert window._current_criteria.match_status.value == "pending"
 
@@ -348,7 +348,7 @@ def test_person_date_status_triple_filtered_export_csv(qtbot, tmp_path, monkeypa
     window, _, seeded = _make_window(qtbot, tmp_path)
     _select_person(window, seeded["alice_id"])
     _set_date(window, frm=(2024, 1, 1, 0, 0, 0), to=(2024, 12, 31, 23, 59, 59))
-    _select_status(window, 3)  # Rejected
+    _select_status(window, 2)  # Rejected
     criteria = window._current_criteria
     assert criteria.person_id == seeded["alice_id"]
     assert criteria.match_status.value == "rejected"

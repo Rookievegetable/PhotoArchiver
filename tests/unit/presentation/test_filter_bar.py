@@ -120,7 +120,7 @@ def test_date_axis_combines_with_status_axis(qtbot) -> None:
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    bar._status_combo.setCurrentIndex(1)  # Pending
+    bar._status_combo.setCurrentIndex(0)  # Pending
     bar._from_check.setChecked(True)
     _set(bar._from_edit, 2023, 5, 1)
 
@@ -147,14 +147,14 @@ def test_clear_resets_every_axis_to_unset(qtbot) -> None:
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    bar._status_combo.setCurrentIndex(1)
+    bar._status_combo.setCurrentIndex(0)
     bar._from_check.setChecked(True)
     bar._to_check.setChecked(True)
     _set(bar._from_edit, 2023, 1, 1)
     bar.clear()
 
     assert recorder.last is None
-    assert bar._status_combo.currentIndex() == 0
+    assert bar._status_combo.currentIndex() == -1  # back to the placeholder state
     assert not bar._from_check.isChecked() and not bar._to_check.isChecked()
     assert not bar._from_edit.isEnabled() and not bar._to_edit.isEnabled()
 
@@ -181,17 +181,18 @@ def _make_person(name: str):
     return Person(name=name)
 
 
-def test_person_axis_starts_on_all_persons(qtbot) -> None:
-    """Before set_persons the combo offers only the no-constraint entry."""
+def test_person_axis_starts_on_placeholder_no_constraint(qtbot) -> None:
+    """未选中人员轴 = 占位态：空列表、currentIndex -1、"全部人员"灰色提示。"""
     bar = FilterBar()
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    assert bar._person_combo.count() == 1
-    assert bar._person_combo.itemData(0) is None
+    assert bar._person_combo.count() == 0
+    assert bar._person_combo.currentIndex() == -1
+    assert bar._person_combo.placeholderText() == "全部人员"
     assert bar._person_combo.currentData() is None
     # Emitting through another axis must still carry person_id=None.
-    bar._status_combo.setCurrentIndex(1)
+    bar._status_combo.setCurrentIndex(0)
     assert recorder.last.person_id is None
     assert recorder.last is not None and recorder.last.match_status is MatchStatus.PENDING
 
@@ -205,27 +206,27 @@ def test_set_persons_populates_combo_and_selection_filters(qtbot) -> None:
 
     bar.set_persons([alice, bob])
 
-    assert bar._person_combo.count() == 3  # All persons + two entries
-    assert bar._person_combo.itemText(1) == "Alice"
+    assert bar._person_combo.count() == 2  # real entries only — no placeholder item
+    assert bar._person_combo.itemText(0) == "Alice"
     # userData carries the id in string form (QVariant identity pitfall).
     from uuid import UUID
 
-    assert UUID(str(bar._person_combo.itemData(1))) == alice.id
-    bar._person_combo.setCurrentIndex(1)
+    assert UUID(str(bar._person_combo.itemData(0))) == alice.id
+    bar._person_combo.setCurrentIndex(0)
     assert recorder.last.person_id == alice.id
     assert recorder.last.match_status is None  # other axes unaffected
 
 
-def test_set_persons_empty_keeps_only_all_persons(qtbot) -> None:
-    """Empty person catalog is honestly represented: single entry, no filter."""
+def test_set_persons_empty_keeps_placeholder_no_constraint(qtbot) -> None:
+    """Empty person catalog is honestly represented: no entries, no filter."""
     bar = FilterBar()
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
     bar.set_persons([])
 
-    assert bar._person_combo.count() == 1
-    bar._person_combo.setCurrentIndex(0)
+    assert bar._person_combo.count() == 0
+    assert bar._person_combo.currentIndex() == -1
     assert recorder.last is None
 
 
@@ -249,7 +250,7 @@ def test_set_persons_preserves_current_selection(qtbot) -> None:
     bob = _make_person("Bob")
 
     bar.set_persons([alice, bob])
-    bar._person_combo.setCurrentIndex(2)  # Bob
+    bar._person_combo.setCurrentIndex(1)  # Bob
     recorder.emissions.clear()
 
     bar.set_persons([_make_person("Carol"), bob])  # Bob still present
@@ -266,12 +267,12 @@ def test_set_persons_resets_selection_when_person_gone(qtbot) -> None:
     alice = _make_person("Alice")
 
     bar.set_persons([alice])
-    bar._person_combo.setCurrentIndex(1)
+    bar._person_combo.setCurrentIndex(0)
     recorder.emissions.clear()
 
     bar.set_persons([_make_person("Bob")])  # Alice no longer exists
 
-    assert bar._person_combo.currentIndex() == 0
+    assert bar._person_combo.currentIndex() == -1  # reset to the placeholder state
     assert recorder.last is None
 
 
@@ -282,8 +283,8 @@ def test_person_axis_combines_with_status_and_date(qtbot) -> None:
     alice = _make_person("Alice")
 
     bar.set_persons([alice])
-    bar._person_combo.setCurrentIndex(1)
-    bar._status_combo.setCurrentIndex(2)  # Approved
+    bar._person_combo.setCurrentIndex(0)
+    bar._status_combo.setCurrentIndex(1)  # Approved
     bar._to_check.setChecked(True)
     _set(bar._to_edit, 2024, 12, 31)
 
@@ -301,9 +302,10 @@ def test_clear_resets_person_axis_too(qtbot) -> None:
     alice = _make_person("Alice")
 
     bar.set_persons([alice])
-    bar._person_combo.setCurrentIndex(1)
-    bar._status_combo.setCurrentIndex(1)
+    bar._person_combo.setCurrentIndex(0)
+    bar._status_combo.setCurrentIndex(0)
     bar.clear()
 
     assert recorder.last is None
-    assert bar._person_combo.currentIndex() == 0
+    assert bar._person_combo.currentIndex() == -1
+    assert bar._status_combo.currentIndex() == -1

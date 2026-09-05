@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QApplication
 from photo_archiver.app.context import ApplicationContext
 from photo_archiver.app.repositories import ApplicationRepositories
 from photo_archiver.app.services import ApplicationServices
+from photo_archiver.presentation.translations import install_chinese_ui_translations
 from photo_archiver.presentation.views.main_window import MainWindow
 
 
@@ -22,6 +23,9 @@ class PhotoArchiverApplication:
         """
         self._context = context
         self._qt_application = QApplication(list(arguments))
+        # Qt 标准按钮/系统对话框（保存/取消/确定/关闭、文件选择框）中文化——
+        # 尽早于窗口构造前安装；缺失仅告警（presentation.translations）。
+        install_chinese_ui_translations(self._qt_application)
         self._main_window = MainWindow(context)
 
     @property
