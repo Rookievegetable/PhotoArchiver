@@ -6,7 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
-## [Unreleased]
+## [2.3.1] - 2026-09-05
+
+Desktop UI polish: Chinese localization and a production-only toolbar
+(owner-directed round after the v2.3.0 release; version placement decided
+by the owner — folded here rather than re-tagging v2.3.0).
 
 ### Changed
 
