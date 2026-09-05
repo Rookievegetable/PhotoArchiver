@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.13.0 · Last Updated: 2026-09-04 · Status: Live
+> Version: 1.14.0 · Last Updated: 2026-09-05 · Status: Live
 
 ---
 
@@ -45,7 +45,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 - **Phase D（发布工程·形态一）**：🚧 D-0 裁决源码形态 v1.0（维持 ADR-031，方案 B 不触发）——P2-5 导出原子写已完成（`c33bbdd`）；剩余：发布验收清单执行（owner 手动）+ 发布说明素材（已交付会话）+ tag 命名裁决 + push/release。
 - **Phase B（数据安全底线）**：🚧 Owner 已授权（2026-09-02）按 AI 计划草案的建议方案执行——决策批复：D-B1 导入按批原子（500 行/批）/ D-B2 无 identity 行按 name+department 查重 / D-B3 备份 VACUUM INTO + 每启动 + 3 份滚动 / D-B4 损坏库报错退出（不重建/不换库）/ D-B5 Windows 源码形态下 P0-9 完整锚定降 P1、本轮仅做启动警告 / D-B7 常量默认值（busy_timeout=5000、批 500 行、backups 同目录）/ D-B8 逐项授权。范围 P0-5→P0-6→P0-7→P0-8→P0-9(警告) 按序独立提交，每项完成后 STOP 待指令。**P0-5/6/7/8/9 全部完成**（`22305dd` / `ab92d5c`+`0295f62`+`9752af3` / `169abb3b`+`9359dfb` / `548d7fc`+`c46062f`+`4e91ee4` / `37fb675`——P0-8 并入质量审查 F-1/F-2）（见 §5/§6）。
 
-当前无未解决的 O 级产品缺陷登记于 KNOWN_ISSUES（P0-1~3 修复中的缺陷见体检报告 §4.2/§15，落地即销，不重复登记）；`KNOWN_ISSUES.md` Limit 表格登记 4 项设计/测试覆盖限制（LIMIT-001/002 + LIMIT-003 F-002 恶化 + LIMIT-004 Qt 子集顺序崩溃）。
+当前登记 1 项未决问题 **ISSUE-019**（疑似缺陷：EXIF DateTimeOriginal 位于标准 Exif 子 IFD 时 reader 不可见，真实相机照片 captured_at 走 mtime 兜底——2026-09-04 桌面复验素材自验证受控实验发现，owner 决策立项，不阻塞 v2.3.0）；`KNOWN_ISSUES.md` Limit 表格登记 3 项设计/测试覆盖限制（LIMIT-001/002/004；LIMIT-003 已随 F-002 经 `1436a62` 根治删除，LIMIT-005 已随排序修复删除）。
 
 ---
 

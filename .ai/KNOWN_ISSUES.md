@@ -6,7 +6,7 @@
 >
 > 动态维护，实时更新。问题解决后**立即删除**，不保留历史记录。
 >
-> Version: 1.9.0 ｜ Last Updated: 2026-09-02 ｜ Status: Live
+> Version: 1.10.0 ｜ Last Updated: 2026-09-05 ｜ Status: Live
 
 ---
 
@@ -38,7 +38,9 @@
 
 ## 未决问题
 
-_当前无未决问题（O 级别产品缺陷）。_
+| ID | Description | Status | Impact | Temporary Workaround | Planned Resolution |
+|---|---|---|---|---|---|
+| ISSUE-019 | **疑似缺陷（高置信，待真实相机照片终验）**：`PillowPhotoMetadataReader._extract_captured_at` 仅读 `image.getexif().get(36868)`（IFD0 顶层），而 EXIF 标准将 DateTimeOriginal(36867)/DateTimeDigitized(36868) 置于 Exif 子 IFD（0x8769）——标准结构相机照片无法命中，`captured_at` 走 mtime 兜底，归档"按拍摄日期"分桶对真实相机照片实际按文件修改时间执行。证据（2026-09-04 受控实验）：合成 JPEG 将 36867/36868 写入 0x8769（PIL `get_ifd` 回读确认存在）→ reader captured_at = mtime；同图将 36868 置于 IFD0 顶层 → reader 精确命中 EXIF（2026-01-15）。Phase 2 Step 11 既有实现，**非 v2.3.0 回归**；既有测试全绿（fixture 未覆盖标准子 IFD 结构）。 | Open | Medium | 功能不中断（mtime 兜底）；桌面复验素材 `testdata/generate_materials.py` 以 IFD0 放置适配 reader | Owner 决策是否立项：reader 增加子 IFD 读取（36867 优先、36868 兜底）+ 真实相机照片终验 + 等价性回归评估（EXIF 命中后 captured_at 语义变化触归档命名）。不阻塞 v2.3.0 发布。 |
 
 > 注意：以下为**设计性/测试覆盖限制**，非缺陷，登记于表格供审计与 CI 规划参考。
 
