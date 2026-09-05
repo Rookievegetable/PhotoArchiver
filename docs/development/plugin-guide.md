@@ -175,10 +175,28 @@ Behavior notes:
 - Invalid rows (e.g. blank name) surface as per-row error strings; one bad row
   never aborts the batch.
 - A working example lives in `examples/plugins/import_people_demo_plugin.py`
-  (toolbar action "Import People (Demo)", rendered through the generic
-  `PluginReportDialog`).
+  (action label "Import People (Demo)", rendered through the generic
+  `PluginReportDialog` when loaded explicitly — see "Loading a Plugin into
+  the UI" below; example plugins are NOT auto-loaded into the production
+  toolbar).
 
 ## Testing a Plugin
+
+### Loading a Plugin into the UI
+
+The production toolbar does not auto-load `examples/plugins/` — the plugin
+registry is an external extension point. To surface a plugin's actions in the
+main window, load it explicitly through the public chain (the same path the
+UI-loading tests drive):
+
+```python
+window._plugin_registry.load_from_path(Path("examples/plugins"))
+window._plugin_registry.enable_all()
+window._add_plugin_actions()   # one QAction per plugin action on the toolbar
+```
+
+`load_from_path` accepts any plugin directory, so a deployment can point it at
+its own plugin folder.
 
 Run the plugin loader unit tests:
 

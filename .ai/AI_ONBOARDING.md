@@ -6,7 +6,7 @@
 >
 > 本文件回答的唯一问题：**"为了开始开发，我应该先了解什么？"**
 >
-> Version: 1.1.1 ｜ Status: Stable ｜ Last Updated: 2026-09-02 ｜ 适用范围: 任何 AI 编码助手（Codex / Claude / Gemini / Cursor / Windsurf / Roo Code / Cline / AtomCode 及未来 AI）
+> Version: 1.1.2 ｜ Status: Stable ｜ Last Updated: 2026-09-05 ｜ 适用范围: 任何 AI 编码助手（Codex / Claude / Gemini / Cursor / Windsurf / Roo Code / Cline / AtomCode 及未来 AI）
 
 ---
 
@@ -267,7 +267,7 @@ flowchart TD
 
 - [ ] Rules 已遵守（ai/coding/architecture/dependency/ui/worker/git/review）
 - [ ] Architecture 分层正确，无 forbidden import
-- [ ] Ruff / MyPy / pytest：按任务范围执行，并与当前质量基线及 `KNOWN_ISSUES.md` 已登记限制对照——pytest 当前非全绿（570 passed / 3 skipped / 1 failed，唯一 failed = F-002 / LIMIT-003），不得因此擅自修复
+- [ ] Ruff / MyPy / pytest：按任务范围执行，并与当前质量基线及 `KNOWN_ISSUES.md` 已登记限制对照——pytest 当前全绿（647 passed / 3 skipped / 0 failed；F-002 已随 `1436a62` 根治，实时基线以 `PROJECT_STATUS.md` §5 为准）
 - [ ] 无 TODO/FIXME/`print()`/Magic Number/bare except
 - [ ] 类型提示与 docstring 完整（公共 API）
 - [ ] 文档同步（`PROJECT_STATUS.md` 必更；ADR/Issues 按需）
@@ -363,7 +363,7 @@ flowchart TD
 <details>
 <summary>参考答案</summary>
 
-基础能力：Step 0.5-15 全部完成（Walking Skeleton / Logging / Configuration / Database / Domain / Excel Import / Folder Scanner / Thumbnail / Face Detection / Face Recognition / Matching Engine / Archive Generator / Main UI / Settings / Export / Plugin System），Schema 由 Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，后者为 Schema DDL 唯一权威，ADR-027）。当前阶段：**Phase A — Runtime Correctness**（全项目体检后的 P0 修复轮）——P0-10（Documentation Closure）已完成；P0-1（Plugin UI Loading）/ P0-2（Thumbnail Rendering）/ P0-3（Excel Import Wiring）/ P0-4（Cancellation + Scan Single-flight）按序待执行，任务顺序以 `docs/roadmap/DEVELOPMENT_ROADMAP.md` 为权威。质量门现状：ruff 0 / mypy 171 files 0 / pytest 570 passed / 3 skipped / 1 failed（唯一 failed = F-002，见 LIMIT-003）。
+基础能力：Step 0.5-15 全部完成（Walking Skeleton / Logging / Configuration / Database / Domain / Excel Import / Folder Scanner / Thumbnail / Face Detection / Face Recognition / Matching Engine / Archive Generator / Main UI / Settings / Export / Plugin System），Schema 由 Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，后者为 Schema DDL 唯一权威，ADR-027）。当前阶段：**Phase A — Runtime Correctness**（全项目体检后的 P0 修复轮）——P0-10（Documentation Closure）已完成；P0-1（Plugin UI Loading）/ P0-2（Thumbnail Rendering）/ P0-3（Excel Import Wiring）/ P0-4（Cancellation + Scan Single-flight）按序待执行，任务顺序以 `docs/roadmap/DEVELOPMENT_ROADMAP.md` 为权威。质量门现状：ruff 0 / mypy 178 files 0 / pytest 全量全绿（2026-09-05 实测 647 passed / 3 skipped / 0 failed，实时基线见 `.ai/PROJECT_STATUS.md` §5）。
 </details>
 
 ### Q3. 下一阶段是什么？
@@ -379,7 +379,7 @@ flowchart TD
 <details>
 <summary>参考答案</summary>
 
-当前**无未决 O 级问题**——历史风险均已解决（ISSUE-007 质量飘带已清零；ISSUE-012~015 文档体系漂移已治理，占位文档已删除）。现存四项设计/测试覆盖限制（`KNOWN_ISSUES.md` Limit 表）：LIMIT-001（真实缺模型 E2E 未纳入 CI）、LIMIT-002（识别取消粒度为 batch-level）、LIMIT-003（F-002 状态恶化——match 控制器线程池时序 flake，2026-09-02 实测全量 1 failed 且**单跑 ×2 均失败**，历史"单跑稳定"口径失效；属测试时序问题非生产缺陷，处置属 Phase C）与 LIMIT-004（Qt 子集顺序原生崩溃）。质量门基线：ruff 0 / mypy 171 files 0 / pytest 570 passed / 3 skipped / 1 failed（唯一 failed = F-002，见 LIMIT-003）。
+当前**无未决 O 级问题**——历史风险均已解决（ISSUE-007 质量飘带已清零；ISSUE-012~015 文档体系漂移已治理，占位文档已删除）。现存四项设计/测试覆盖限制（`KNOWN_ISSUES.md` Limit 表）：LIMIT-001（真实缺模型 E2E 未纳入 CI）、LIMIT-002（识别取消粒度为 batch-level）、LIMIT-003（F-002 状态恶化——match 控制器线程池时序 flake，2026-09-02 实测全量 1 failed 且**单跑 ×2 均失败**，历史"单跑稳定"口径失效；属测试时序问题非生产缺陷，处置属 Phase C）与 LIMIT-004（Qt 子集顺序原生崩溃）。质量门基线：ruff 0 / mypy 178 files 0 / pytest 全量全绿（2026-09-05 实测 647 passed / 3 skipped / 0 failed；F-002/LIMIT-003 已根治关闭，实时基线见 `.ai/PROJECT_STATUS.md` §5）。
 </details>
 
 ### Q5. 有哪些架构约束？

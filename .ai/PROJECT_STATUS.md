@@ -43,6 +43,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 - **Phase A（Runtime Correctness——全项目体检 P0 修复轮）**：🚧 Owner 已授权执行（2026-09-02）——范围 P0-10（文档收口）/ P0-1（插件 UI 加载）/ P0-2（缩略图 UI 渲染）/ P0-3（Excel 导入接线）/ P0-4（取消信号 + 扫描单飞），按序独立提交；每项完成后 STOP 待指令。体检基线报告：`docs/health-check/PROJECT_HEALTH_CHECK.md`（3 项用户可见功能失效 + 数据安全底线缺位 + F-002 恶化等 18 项 Finding）；开发路线图：`docs/roadmap/DEVELOPMENT_ROADMAP.md`。**Phase A 全部 5 项 P0 已完成（P0-10/1/2/3/4）**（见 §5/§6）。
 - **Phase C（时序 flake 专项）**：⚠️ Owner 授权并解除禁修定性（2026-09-02）——首版方案（is_finished 权威终态）推送后 CI win/mac 新故障签名（AttributeError + access violation），**整体回退**（根因待查）；测试侧加固替代方案落地（两 match e2e 守卫断言改轮询），LIMIT-005 排序修复保留并经 mac CI 实证；回退收尾后连续两轮全量全绿 641/3/0。F-002/LIMIT-003 竞态的根治方案待重研（禁用包装器属性读取方向）。
 - **Phase D（发布工程·形态一）**：🚧 D-0 裁决源码形态 v1.0（维持 ADR-031，方案 B 不触发）——P2-5 导出原子写已完成（`c33bbdd`）；剩余：发布验收清单执行（owner 手动）+ 发布说明素材（已交付会话）+ tag 命名裁决 + push/release。
+- **Phase D UI 整备（Owner 指令，2026-09-05，v2.3.0 tag 后落地）**：✅ 完成并全门禁绿（HEAD `eb08c2f`）——①桌面 UI 全面中文化：全部用户可见文案集中到新文案表 `presentation/ui_text.py`（ui-rules §24 单一翻译置换点），工具栏/筛选栏/状态栏/九类对话框全中文；任务名、枚举与冲突策略等契约值不变（冲突策略 UI 中文标签 + userData 携带契约值）。②示例插件不再自动加载进生产工具栏（Say Hello / Import People (Demo) / Stats Report 移除）——插件机制完整保留为外部扩展点（`PluginRegistry.load_from_path`），示例文件保留 `examples/plugins/`；P0-1 插件 UI 链测试改为显式驱动公开加载链并新增空注册表守卫。版本归属（折回 v2.3.0 需 owner 授权重打 tag / 或进 v2.3.1）待 owner 裁决，CHANGELOG 以 `[Unreleased]` 记录。
 - **Phase B（数据安全底线）**：🚧 Owner 已授权（2026-09-02）按 AI 计划草案的建议方案执行——决策批复：D-B1 导入按批原子（500 行/批）/ D-B2 无 identity 行按 name+department 查重 / D-B3 备份 VACUUM INTO + 每启动 + 3 份滚动 / D-B4 损坏库报错退出（不重建/不换库）/ D-B5 Windows 源码形态下 P0-9 完整锚定降 P1、本轮仅做启动警告 / D-B7 常量默认值（busy_timeout=5000、批 500 行、backups 同目录）/ D-B8 逐项授权。范围 P0-5→P0-6→P0-7→P0-8→P0-9(警告) 按序独立提交，每项完成后 STOP 待指令。**P0-5/6/7/8/9 全部完成**（`22305dd` / `ab92d5c`+`0295f62`+`9752af3` / `169abb3b`+`9359dfb` / `548d7fc`+`c46062f`+`4e91ee4` / `37fb675`——P0-8 并入质量审查 F-1/F-2）（见 §5/§6）。
 
 当前登记 1 项未决问题 **ISSUE-019**（疑似缺陷：EXIF DateTimeOriginal 位于标准 Exif 子 IFD 时 reader 不可见，真实相机照片 captured_at 走 mtime 兜底——2026-09-04 桌面复验素材自验证受控实验发现，owner 决策立项，不阻塞 v2.3.0）；`KNOWN_ISSUES.md` Limit 表格登记 3 项设计/测试覆盖限制（LIMIT-001/002/004；LIMIT-003 已随 F-002 经 `1436a62` 根治删除，LIMIT-005 已随排序修复删除）。
@@ -67,7 +68,7 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | Phase 7 死重剔除（v2.2.0） | ✅ | ADR-033 三项裁决全 A（W2-1 landmark 剔除 / W2-2 genderage 一并剔除，owner 确认近期无性别年龄功能规划 / W2-3 剩余非推理段本轮不改造）——loader `allowed_modules=("detection","recognition")` 落地，bbox/kps/embedding 逐字节不变；`tools/bench_recognition.py` 全网格复测落 docstring：2600×1 656.94→332.02s（**1.98×**）、2600×4 514.00→231.68s（**2.22×**）、600×4 2.45×，全部格子 100% 产出 / 全 PENDING 等价保持；门禁本地全绿（ruff 0 / mypy 168 ✓ / pytest **417** passed）；证据链 `tools/spike_segment_profile.py` v2（账目闭合）+ phase7 定稿（`docs/development/phase7-adr-draft.md`）。CI 实证已回填（owner push 后 API 实测 head `4fe8aa4` CI run completed/success 三平台全绿，2026-08-29）；发版链实证——tag `v2.1.0`@`bd52fbb` / tag `v2.2.0`@`f9fb8c5` 已由 owner 推送（ls-remote 实测远端指向正确），两 tag 触发 release workflow，owner 确认 CI 全绿，v2.1.0 / v2.2.0 已发布（2026-08-29）。 |
 | CI | ✅ | GitHub Actions 三 OS 矩阵、模型缓存与 AI/UI 断言已启用。 |
 
-当前 HEAD：`efd9a40`（refactor(presentation): 删除 `1436a62` 在三个 controller 引入的重复 replay 调用——one-shot 语义下行为不变）== origin/main（owner 已推送完整修复链 `ae5a244`→`1436a62`→`efd9a40`），working tree clean。**CI run #24（head `efd9a40`）三平台 success 实证**（GitHub API，2026-09-03T17:00Z）。版本链 2.3.0 三处一致（pyproject / .env.example / CHANGELOG）。**✅ tag `v2.3.0` 漂移已处置（2026-09-04，owner 选定 A1 路径）**：tag 重打 `682147f`→`e14409e`（lightweight 保持，forced update，`ls-remote` 已验证 remote 指向）；Release workflow run #6（head `e14409e`）**success**，wheel/sdist 资产已替换为新构建——wheel sha256 `2a789204…`（size 257471）、sdist sha256 `08fe836a…`（size 181353），均不同于旧资产（`447dac19…`/`df8d3543…`），**公开 Release 现包含 TLS blocker 修复与竞态修复**。Release body 已由 owner 网页收口（2026-09-04T13:15Z，API 复核全项通过）：v2.3.0 重复 Changelog 行清理，补运行形态/本版要点/质量（646 passed）/已知限制节；v2.2.0 污染恢复——标题与 ADR-033 基准数字复原、v2.3.0 内容零残留。tag 全景：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`。历史重写注记与全项目状态锚点同前（`docs/health-check/PROJECT_HEALTH_CHECK.md`）。
+当前 HEAD：`eb08c2f`（feat(presentation): 桌面 UI 中文化 + 移除示例插件自动加载，2026-09-05 UI 整备轮）——较 origin/main（`9295d1d`）**本地领先 1 笔待 owner 推送**，working tree 仅剩 `testdata/`（untracked 复验素材）。v2.3.0 发布链状态不变：tag `v2.3.0`→`e14409e`、Release run #6 success、资产/body 已收口、Clean Machine Acceptance 通过；CI run #24（`efd9a40`）三平台 success 仍为最近一次已推送代码的实证——**`eb08c2f` 推送后需 owner 重看 CI 三平台**。版本链 2.3.0 三处一致（pyproject / .env.example / CHANGELOG）；CHANGELOG 新增 `[Unreleased]` 段承载 UI 整备。tag 全景：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`。历史重写注记与全项目状态锚点同前（`docs/health-check/PROJECT_HEALTH_CHECK.md`）。
 
 ---
 
@@ -93,14 +94,14 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-02（本地） |
-| 生成者 | Cline |
-| 会话范围 | 交接基线校验 → Phase B 计划草案与 D-B1~D-B8 批复 → **P0-5/6/7 顺序执行**（Cline 会话）→ **P0-8 + 审查 F-1/F-2 并入 → P0-9 启动警告**（ZCode 会话）→ **Phase C 时序 flake 专项** → **Phase D 形态一 P2-5 导出原子写 + v2.3.0 发布准备**（ZCode 会话，D-0 裁决：源码形态 v1.0）。 |
-| 已完成 | ① **交接基线校验**（HEAD `f868b2d` / origin `3a2ef0a` / 领先 17 笔 / clean，全匹配）→ Phase B 计划草案 + Owner 批复 D-B1~D-B8。② **Phase B P0-5~P0-9 全部完成**：P0-5 WAL+busy_timeout（`22305dd`）；P0-6 损坏库门+中文指引+VACUUM INTO 备份（`ab92d5c`/`0295f62`/`9752af3`）；P0-7 导入批原子+无 identity 查重（`169abb3b`）；P0-8 模型 SHA-256 pin + CI fail-closed + 审查 F-1/F-2 并入（`548d7fc`/`c46062f`/`4e91ee4`）；P0-9 启动路径警告（`37fb675`，完整锚定降 P1）。③ **Phase C 时序 flake 专项**：LIMIT-005 根因=人员轴排序未定义（同刻 created_at + UUID 决胜随机）→ `list_all` 决胜改 name（`a6b70db`，mac CI 实证保留）；F-002 首版 is_finished 方案推送后 CI win/mac 原生崩溃 → **回退**（`7834c8b`）+ 测试侧轮询加固（`fa0c8fc`）。④ **Phase D 形态一**：P2-5 导出原子写（`c33bbdd`）+ v2.3.0 版本链（`24c7a86`）+ **P0-8 Release Blocker 修复**（`ae5a244`：Clean VM 模型下载 CERTIFICATE_VERIFY_FAILED → downloader TLS 显式锚定 certifi CA bundle + certifi 提升为正式 runtime dependency；证书/主机名校验保持开启，SHA-256 fail-closed 不变）。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 177 个源文件无问题；pytest 全量 **646 passed / 3 skipped / 0 failed 连续三轮**（竞态修复与收尾净化后各含一轮）；`pip check` 无损坏依赖；CI run #24 三平台 success。 |
-| 工作区 | 全部修复链已推送（HEAD `efd9a40` == origin/main），tracked 零改动；HEAD/origin/tag 漂移状态见 §3。 |
-| Remaining | **Phase D（形态一）：P2-5 原子写 ✅ + P0-8 TLS Blocker 修复 ✅ + macOS CI 竞态修复 ✅ + 收尾净化 ✅（`efd9a40`）——全链已推送，CI run #24 三平台全绿；tag `v2.3.0` 漂移处置 ✅（重打→`e14409e`，Release run #6 success，资产已替换）；Release body 收口 ✅（2026-09-04 owner 编辑 + AI API 复核通过：v2.3.0 结构完整/单条 Changelog/646 新数字/两项 blocker 修复表述，v2.2.0 污染恢复，见 §3）**。剩余收口（owner）：① Clean Machine Acceptance 重验 ~~（重点步骤 2.3 模型下载）~~ ✅（2026-09-04 owner 实证通过——TLS 修复最终实证落定）；② 真桌面复验清单（P0-4/6/7/9，AI 已交付逐项清单）；③ Owner 签核发布。Phase E（删除语义 ADR 门）未授权。 |
-| Next Step | **仅剩真桌面复验 + 签核，STOP 等待 Owner**：按 AI 交付的真桌面复验清单逐项验证（P0-4/6/7/9）→ 签核发布 v2.3.0。Phase E 须另行授权。 |
+| 时间 | 2026-09-05（本地） |
+| 生成者 | ZCode |
+| 会话范围 | 交接恢复 → v2.3.0 桌面复验清单交付（`testdata/DESKTOP_CHECKLIST_v2.3.0.md`）→ **Owner 指令 UI 整备：识别无效组件 + 中文化**（本轮）→ STOP 待 Owner。 |
+| 已完成 | ① 交接恢复报告：HEAD/origin/tag/质量门禁四项实测吻合文档快照（pytest 646/3/0 基线复验）。② 真桌面复验清单（P0-4/6/7/9）按 `generate_materials.py` 与源码预期重建，素材自验证通过。③ **UI 整备（`eb08c2f`）**：Owner 提供桌面截图后判定工具栏末三个按钮（Say Hello / Import People (Demo) / Stats Report）为 `examples/plugins/` 示例插件自动加载所致，属演示噪音——移除自动加载，插件机制保留为显式外部扩展点；全部用户可见文案中文化并集中至新文案表 `presentation/ui_text.py`（ui-rules §24），冲突策略/状态筛选以中文标签显示、userData 保留契约值；P0-1 插件 UI 链测试改显式驱动公开加载链 + 新增空注册表守卫；13 个测试文件的文案断言同步更新；用户文档触碰清单同轮刷新（workflow.md / faq.md / plugin-guide.md）。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 178 个源文件无问题；pytest 全量 **647 passed / 3 skipped / 0 failed**；`pip check` 无损坏依赖；offscreen 渲染冒烟核对工具栏九项中文动作与就绪状态栏（截图 `testdata/ui_zh_smoke.png`）。 |
+| 工作区 | 代码提交 `eb08c2f` 本地领先 origin/main 1 笔，**待 owner 推送**（推送后需重看 CI 三平台）；`testdata/` 保持 untracked。 |
+| Remaining | **Phase D（形态一）剩余收口（owner）**：① 真桌面复验（P0-4/6/7/9，清单已交付且按钮名已同步中文化后 UI）；② ISSUE-019 立项决策；③ UI 整备的版本归属裁决（折回 v2.3.0 需重打 tag=force 操作须 owner 明示授权，或进 v2.3.1）；④ Owner 签核发布。Phase E（删除语义 ADR 门）未授权。 |
+| Next Step | **STOP 等待 Owner**：推送 `eb08c2f` → 真桌面复验（中文化后 UI）→ 版本归属裁决 → 签核发布。 |
 
 ---
 
