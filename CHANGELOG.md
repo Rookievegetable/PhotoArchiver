@@ -6,9 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
-## [2.3.2] - 2026-09-05
+## [2.3.1] - 2026-09-05
 
-UI defect-fix round reported from real desktop review of v2.3.1 (owner-approved).
+Desktop UI polish: Chinese localization, a production-only toolbar, and the
+desktop-review defect fixes (owner-directed rounds after v2.3.0; per owner
+decision both fold into v2.3.1 as one release — no separate version).
 
 ### Changed
 
@@ -26,14 +28,6 @@ UI defect-fix round reported from real desktop review of v2.3.1 (owner-approved)
   (grey placeholder text in the closed box) means "no constraint on this
   axis"; the Clear button returns both axes to that state. Filter semantics
   are unchanged (unselected = full listing).
-
-## [2.3.1] - 2026-09-05
-
-Desktop UI polish: Chinese localization and a production-only toolbar
-(owner-directed round after the v2.3.0 release; version placement decided
-by the owner — folded here rather than re-tagging v2.3.0).
-
-### Changed
 
 - **Chinese desktop UI**: all user-visible text across the main window
   (toolbar, filter bar, status bar) and every dialog (import, scan, review,
