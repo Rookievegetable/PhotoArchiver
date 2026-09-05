@@ -6,6 +6,7 @@ from PySide6.QtCore import QObject, Slot
 
 from photo_archiver.application import ScanAndRegisterPhotosCommand, ScanAndRegisterPhotosUseCase
 from photo_archiver.workers import QtWorkerExecutor, QtWorkerRunnable, ScanAndRegisterPhotosTask
+from photo_archiver.presentation.ui_text import REFUSAL_SCAN_IN_FLIGHT
 
 
 class ScanController(QObject):
@@ -50,7 +51,7 @@ class ScanController(QObject):
         """
         self.last_refusal_reason = None
         if self._active_runnable is not None:
-            self.last_refusal_reason = "A scan task is already running."
+            self.last_refusal_reason = REFUSAL_SCAN_IN_FLIGHT
             return None
         command = ScanAndRegisterPhotosCommand(
             folder_path=folder_path,

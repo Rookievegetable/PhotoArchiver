@@ -38,6 +38,42 @@ from photo_archiver.presentation.controllers import (
     MatchPersonsController,
     ScanController,
 )
+from photo_archiver.presentation.ui_text import (
+    ACTION_ARCHIVE,
+    ACTION_CANCEL_TASK,
+    ACTION_DETECT_DUPLICATES,
+    ACTION_EXPORT_DATA,
+    ACTION_IMPORT_PEOPLE,
+    ACTION_REVIEW_PENDING,
+    ACTION_RUN_FACE_RECOGNITION,
+    ACTION_SCAN_FOLDER,
+    ACTION_SETTINGS,
+    ARCHIVE_DIALOG_TITLE,
+    ARCHIVE_NOTHING_TO_ARCHIVE,
+    ARCHIVE_ROOT_NOT_CONFIGURED,
+    DIALOG_SELECT_PEOPLE_FILE,
+    DIALOG_SELECT_PHOTO_FOLDER,
+    MAIN_WINDOW_TITLE,
+    PEOPLE_FILE_FILTER,
+    PLUGIN_ACTION_FAILED,
+    PLUGIN_ERROR_TITLE,
+    PLUGIN_FAILURE_NO_DETAIL,
+    PLUGIN_RESULT_TITLE,
+    STATUS_ARCHIVING,
+    STATUS_CANCELLING,
+    STATUS_EXPORTING,
+    STATUS_IMPORTING_FILE,
+    STATUS_MATCH_UNAVAILABLE,
+    STATUS_PENDING_REVIEW_COUNT,
+    STATUS_READY,
+    STATUS_SCAN_UNAVAILABLE,
+    STATUS_SCANNING_FOLDER,
+    STATUS_TASK_CANCELLED,
+    STATUS_TASK_COMPLETED,
+    STATUS_TASK_FAILED,
+    STATUS_TASK_STARTED,
+    task_label,
+)
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
 from photo_archiver.presentation.views.export_dialog import ExportDialog
 from photo_archiver.presentation.views.filter_bar import FilterBar
@@ -78,7 +114,7 @@ class MainWindow(QMainWindow):
                 and the controllers assembled in :meth:`_build_controllers`.
         """
         super().__init__()
-        self.setWindowTitle("PhotoArchiver")
+        self.setWindowTitle(MAIN_WINDOW_TITLE)
         self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         self._context = context
         self._build_controllers()
@@ -136,22 +172,22 @@ class MainWindow(QMainWindow):
         toolbar.setObjectName("Main")
         self.addToolBar(toolbar)
 
-        import_action = QAction("Import People", self)
+        import_action = QAction(ACTION_IMPORT_PEOPLE, self)
         import_action.triggered.connect(self._on_import_clicked)
         toolbar.addAction(import_action)
 
-        scan_action = QAction("Scan Folder", self)
+        scan_action = QAction(ACTION_SCAN_FOLDER, self)
         scan_action.triggered.connect(self._on_scan_clicked)
         toolbar.addAction(scan_action)
         # P0-4 single-flight: kept so the action can be disabled while a scan
         # task is in flight and re-enabled by its terminal signals.
         self._scan_action = scan_action
 
-        review_action = QAction("Review Pending", self)
+        review_action = QAction(ACTION_REVIEW_PENDING, self)
         review_action.triggered.connect(self._on_review_clicked)
         toolbar.addAction(review_action)
 
-        archive_action = QAction("Archive", self)
+        archive_action = QAction(ACTION_ARCHIVE, self)
         archive_action.triggered.connect(self._on_archive_clicked)
         toolbar.addAction(archive_action)
 
@@ -159,7 +195,7 @@ class MainWindow(QMainWindow):
         # task is in flight; re-enabled by every terminal signal (completed /
         # failed / cancelled). The controller's _active_runnable remains the
         # authoritative running state (AC-014), so no second UI busy flag.
-        self._match_action = QAction("Run Face Recognition", self)
+        self._match_action = QAction(ACTION_RUN_FACE_RECOGNITION, self)
         self._match_action.triggered.connect(self._on_match_clicked)
         toolbar.addAction(self._match_action)
 
@@ -168,20 +204,20 @@ class MainWindow(QMainWindow):
         # exposes 4 channels (no cancelled), matching the connect_signals contract.
         # UI-side enablement is the only single-flight state for export: unlike
         # the match controller, ExportController carries no guard of its own.
-        self._export_action = QAction("Export Data", self)
+        self._export_action = QAction(ACTION_EXPORT_DATA, self)
         self._export_action.triggered.connect(self._on_export_clicked)
         toolbar.addAction(self._export_action)
 
-        detect_duplicates_action = QAction("Detect Duplicates", self)
+        detect_duplicates_action = QAction(ACTION_DETECT_DUPLICATES, self)
         detect_duplicates_action.triggered.connect(self._on_detect_duplicates_clicked)
         toolbar.addAction(detect_duplicates_action)
 
-        settings_action = QAction("Settings", self)
+        settings_action = QAction(ACTION_SETTINGS, self)
         settings_action.setShortcut(QKeySequence("Ctrl+,"))
         settings_action.triggered.connect(self._on_settings_clicked)
         toolbar.addAction(settings_action)
 
-        self._cancel_action = QAction("Cancel Task", self)
+        self._cancel_action = QAction(ACTION_CANCEL_TASK, self)
         self._cancel_action.setEnabled(False)
         self._cancel_action.triggered.connect(self._on_cancel_clicked)
         toolbar.addAction(self._cancel_action)
@@ -190,26 +226,17 @@ class MainWindow(QMainWindow):
         self._plugin_actions: list[QAction] = []
 
     def _load_plugins(self) -> None:
-        """Discover, load, and register plugin menu actions.
+        """Construct the plugin registry (kept as an external extension point).
 
-        Plugins are loaded from ``examples/plugins/``. Each plugin's
-        ``actions()`` are turned into QAction entries appended to the toolbar.
-        Malformed plugins never crash the window — the loader logs and skips.
+        示例插件（``examples/plugins/``）不再自动加载进生产工具栏——它们是
+        开发者文档（plugin-guide / ADR-026 / ADR-028 的演示代码），不是产品
+        功能；自动加载曾使 Say Hello / Import People (Demo) / Stats Report
+        三个演示动作混入发布工具栏。插件机制本身完整保留：注册表 +
+        ``load_from_path`` + ``enable_all`` + ``_add_plugin_actions`` 构成
+        外部插件源的加载链（tests 驱动同一公开链路验证），未来接入真实
+        插件目录时在此挂载即可。
         """
         self._plugin_registry = PluginRegistry(self._context.plugin_context)
-        # parents[4] anchors at the repository root (…/views → presentation →
-        # photo_archiver → src → repo root) — the source/clone layout is the
-        # only supported runtime form (ADR-031). P0-1 fix: the former 4-parent
-        # anchor resolved to <repo>/src/examples/plugins (nonexistent), which
-        # silently skipped the entire plugin UI chain.
-        examples_plugins = Path(__file__).resolve().parents[4] / "examples" / "plugins"
-        if examples_plugins.is_dir():
-            self._plugin_registry.load_from_path(examples_plugins)
-            self._plugin_registry.enable_all()
-            self._add_plugin_actions()
-        else:
-            # Never skip silently again — the P0-1 defect hid precisely here.
-            logger.debug("Plugin directory not present, skipping plugin UI: {}", examples_plugins)
 
     def _add_plugin_actions(self) -> None:
         """Add one QAction per plugin action item to the main toolbar."""
@@ -243,8 +270,8 @@ class MainWindow(QMainWindow):
                 logger.exception("Plugin action {} failed", action_id)
                 QMessageBox.warning(
                     self,
-                    "Plugin Error",
-                    f"Plugin action '{action_id}' failed. See logs for details.",
+                    PLUGIN_ERROR_TITLE,
+                    PLUGIN_ACTION_FAILED.format(action_id=action_id),
                 )
                 return
             self._render_plugin_action_result(action_id, result)
@@ -259,7 +286,7 @@ class MainWindow(QMainWindow):
         """
         if not isinstance(result, ActionResult):
             return  # unexpected shape — silently ignore (defensive)
-        title = f"Plugin: {action_id}"
+        title = PLUGIN_RESULT_TITLE.format(action_id=action_id)
         if result.status == "success":
             if result.report is not None:
                 dialog = PluginReportDialog(result.report, self)
@@ -267,7 +294,7 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.information(self, title, result.message)
         elif result.status == "failure":
-            body = result.message or "Action failed (no detail provided)."
+            body = result.message or PLUGIN_FAILURE_NO_DETAIL
             QMessageBox.warning(self, title, body)
         # noop → 不渲染（_add_plugin_actions 已按 id 路由，不应走到）
 
@@ -334,7 +361,7 @@ class MainWindow(QMainWindow):
         self._progress.setRange(0, _PROGRESS_RESOLUTION)
         self._progress.setValue(0)
         self._status.addPermanentWidget(self._progress)
-        self._status_label = QLabel("Ready", self)
+        self._status_label = QLabel(STATUS_READY, self)
         self._status.addWidget(self._status_label)
 
     # ---- Worker task slots ----
@@ -354,7 +381,7 @@ class MainWindow(QMainWindow):
 
     def _on_started(self, event: TaskStarted) -> None:
         """Reflect task start in the status bar."""
-        self._status_label.setText(f"{event.task_name} started ...")
+        self._status_label.setText(STATUS_TASK_STARTED.format(label=task_label(event.task_name)))
 
     def _on_progress(self, event: TaskProgress) -> None:
         """Update the progress bar from task progress events."""
@@ -367,7 +394,7 @@ class MainWindow(QMainWindow):
         """Reflect task completion and refresh the photo list."""
         self._cancel_action.setEnabled(False)
         self._progress.setValue(_PROGRESS_RESOLUTION)
-        self._status_label.setText(f"{event.task_name} complete")
+        self._status_label.setText(STATUS_TASK_COMPLETED.format(label=task_label(event.task_name)))
         self._refresh_photo_list()
         if event.task_name == "import_people":
             # Phase 9 FEAT-P9-2: a people import changes the person catalog,
@@ -387,8 +414,10 @@ class MainWindow(QMainWindow):
         """Surface task failure with the concrete error message and reset progress."""
         self._cancel_action.setEnabled(False)
         self._progress.setValue(0)
-        self._status_label.setText(f"{event.task_name} failed.")
-        QMessageBox.warning(self, f"{event.task_name.title()} Failed", event.message)
+        self._status_label.setText(STATUS_TASK_FAILED.format(label=task_label(event.task_name)))
+        QMessageBox.warning(
+            self, STATUS_TASK_FAILED.format(label=task_label(event.task_name)), event.message
+        )
 
     def _on_cancel_clicked(self) -> None:
         """Request cooperative cancellation for the active task."""
@@ -396,7 +425,7 @@ class MainWindow(QMainWindow):
         if runnable is not None:
             runnable.cancel("User requested cancel")
             self._cancel_action.setEnabled(False)
-            self._status_label.setText("Cancelling ...")
+            self._status_label.setText(STATUS_CANCELLING)
 
     # ---- Toolbar actions ----
 
@@ -407,16 +436,16 @@ class MainWindow(QMainWindow):
         a scan is in flight (``runnable is None``) — the refusal reason is
         surfaced in the status bar and the running scan is left untouched.
         """
-        folder = QFileDialog.getExistingDirectory(self, "Select Photo Folder")
+        folder = QFileDialog.getExistingDirectory(self, DIALOG_SELECT_PHOTO_FOLDER)
         if not folder:
             return
         runnable = self._scan_controller.scan_folder(Path(folder))
         if runnable is None:
             reason = self._scan_controller.last_refusal_reason
-            self._status_label.setText(reason or "Scan unavailable.")
+            self._status_label.setText(reason or STATUS_SCAN_UNAVAILABLE)
             return
         self._progress.setValue(0)
-        self._status_label.setText(f"Scanning {folder} ...")
+        self._status_label.setText(STATUS_SCANNING_FOLDER.format(folder=folder))
         self._connect_scan_signals(runnable)
 
     def _connect_scan_signals(self, runnable) -> None:
@@ -451,18 +480,18 @@ class MainWindow(QMainWindow):
         """Reset UI after a cancelled scan (P0-4: previously stuck at 'Cancelling ...')."""
         self._cancel_action.setEnabled(False)
         self._progress.setValue(0)
-        self._status_label.setText(f"{event.task_name} cancelled.")
+        self._status_label.setText(STATUS_TASK_CANCELLED.format(label=task_label(event.task_name)))
         self._scan_action.setEnabled(True)
 
     def _on_import_clicked(self) -> None:
         """Open a file picker and start the people-import workflow."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select People File", "", "People files (*.txt *.csv *.xlsx)"
+            self, DIALOG_SELECT_PEOPLE_FILE, "", PEOPLE_FILE_FILTER
         )
         if not path:
             return
         self._progress.setValue(0)
-        self._status_label.setText(f"Importing {path} ...")
+        self._status_label.setText(STATUS_IMPORTING_FILE.format(path=path))
         runnable = self._import_controller.import_from(Path(path))
         self._connect_task_signals(runnable)
 
@@ -488,8 +517,8 @@ class MainWindow(QMainWindow):
         if archive_root is None:
             QMessageBox.warning(
                 self,
-                "Archive",
-                "ARCHIVE_ROOT is not configured. Set it in .env or use the CLI --archive-root flag.",
+                ARCHIVE_DIALOG_TITLE,
+                ARCHIVE_ROOT_NOT_CONFIGURED,
             )
             return
         photo_ids = self._collect_selected_photo_ids()
@@ -497,16 +526,15 @@ class MainWindow(QMainWindow):
         if plan.planned_count == 0:
             QMessageBox.information(
                 self,
-                "Archive",
-                f"Nothing to archive (skipped={plan.skipped_count}). "
-                "Approve recognition results first via the Review button.",
+                ARCHIVE_DIALOG_TITLE,
+                ARCHIVE_NOTHING_TO_ARCHIVE.format(skipped=plan.skipped_count),
             )
             return
         dialog = ArchivePreviewDialog(plan, archive_root, self)
         if not dialog.exec():
             return
         self._progress.setValue(0)
-        self._status_label.setText("Archiving ...")
+        self._status_label.setText(STATUS_ARCHIVING)
         runnable = self._archive_controller.execute(
             archive_root,
             person_ids=(),  # review M-5 fix: symmetric with preview(()) — "all persons with approvals"
@@ -579,7 +607,7 @@ class MainWindow(QMainWindow):
         runnable = self._match_controller.start_match()
         if runnable is None:
             reason = self._match_controller.last_refusal_reason
-            self._status_label.setText(reason or "Face recognition unavailable.")
+            self._status_label.setText(reason or STATUS_MATCH_UNAVAILABLE)
             return
         self._match_action.setEnabled(False)
         self._active_runnable = runnable
@@ -618,7 +646,7 @@ class MainWindow(QMainWindow):
         """Handle cooperative cancellation: reset progress and re-enable."""
         self._cancel_action.setEnabled(False)
         self._progress.setValue(0)
-        self._status_label.setText(f"{event.task_name} cancelled.")
+        self._status_label.setText(STATUS_TASK_CANCELLED.format(label=task_label(event.task_name)))
         self._match_action.setEnabled(True)
 
     # ------------------------------------------------------------------
@@ -647,7 +675,7 @@ class MainWindow(QMainWindow):
             return
         self._export_action.setEnabled(False)
         self._progress.setValue(0)
-        self._status_label.setText("Exporting ...")
+        self._status_label.setText(STATUS_EXPORTING)
         scope = dialog.scope
         # F5: the criteria snapshot rides only the FILTERED scope; ALL ignores
         # it. Still, UI-side disable is just the first UX layer — the Service
@@ -695,5 +723,5 @@ class MainWindow(QMainWindow):
         """
         pending = self._review_controller.list_pending()
         self._status_label.setText(
-            f"{len(pending)} recognition result(s) awaiting review"
+            STATUS_PENDING_REVIEW_COUNT.format(count=len(pending))
         )

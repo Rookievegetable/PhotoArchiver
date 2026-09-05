@@ -72,7 +72,7 @@ def test_cancelled_terminal_resets_ui_and_reenables_scan(
     window._scan_action.trigger()
     qtbot.waitUntil(lambda: not window._scan_action.isEnabled(), timeout=10000)
     assert window._cancel_action.isEnabled()
-    assert "Scanning" in window._status_label.text()
+    assert "正在扫描" in window._status_label.text()
 
     # Real user entry for cancellation: press the toolbar Cancel Task action.
     window._cancel_action.trigger()
@@ -84,7 +84,7 @@ def test_cancelled_terminal_resets_ui_and_reenables_scan(
     runnable.signals.cancelled.emit(
         TaskCancelled("scan_and_register_photos", "task_1", "User requested cancel")
     )
-    assert "cancelled" in window._status_label.text().lower()
+    assert "已取消" in window._status_label.text().lower()
     assert not window._cancel_action.isEnabled()
     assert window._scan_action.isEnabled()
 
@@ -109,7 +109,7 @@ def test_scan_refusal_surfaces_reason_through_real_ui(
     # system-level single-flight, not just a disabled button).
     window._scan_action.setEnabled(True)
     window._scan_action.trigger()
-    assert "already running" in window._status_label.text().lower()
+    assert "正在进行" in window._status_label.text().lower()
     assert window._scan_controller.is_running
     window._scan_action.setEnabled(False)
 
@@ -138,7 +138,7 @@ def test_real_cancelled_scan_reports_cancelled_terminal_and_recovers(
     assert runnable1.task.is_cancel_requested
 
     qtbot.waitUntil(
-        lambda: "cancelled" in window._status_label.text().lower(),
+        lambda: "已取消" in window._status_label.text().lower(),
         timeout=60000,
     )
     assert window._scan_action.isEnabled()

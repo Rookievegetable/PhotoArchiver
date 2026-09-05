@@ -52,6 +52,21 @@ from photo_archiver.application.dtos.settings import (
     VALID_THEMES,
 )
 from photo_archiver.presentation.controllers.settings_controller import SettingsController
+from photo_archiver.presentation.ui_text import (
+    SETTINGS_BROWSE_BUTTON,
+    SETTINGS_DIALOG_TITLE,
+    SETTINGS_EXPORT_PATH_LABEL,
+    SETTINGS_IMPORT_PATH_LABEL,
+    SETTINGS_INVALID_TITLE,
+    SETTINGS_LANGUAGE_LABEL,
+    SETTINGS_MAX_WORKERS_LABEL,
+    SETTINGS_SELECT_EXPORT_FOLDER,
+    SETTINGS_SELECT_IMPORT_FOLDER,
+    SETTINGS_SAVE_HINT,
+    SETTINGS_THRESHOLD_LABEL,
+    SETTINGS_THEME_LABEL,
+    SETTINGS_USE_SYSTEM_DEFAULT,
+)
 
 # Threshold spin box decimal precision — match_threshold is a similarity ratio
 # in [0.0, 1.0] so two decimal places is the smallest meaningful increment.
@@ -77,7 +92,7 @@ class SettingsDialog(QDialog):
             parent: Optional Qt parent for ownership / cleanup.
         """
         super().__init__(parent)
-        self.setWindowTitle("Settings")
+        self.setWindowTitle(SETTINGS_DIALOG_TITLE)
         self._controller = controller
         self._preferences: UserPreferences | None = None  # lazy-loaded on first showEvent
         self._build_form()
@@ -108,13 +123,13 @@ class SettingsDialog(QDialog):
         self._language_combo.addItems(VALID_LANGUAGES)
 
         self._import_path_edit = QLineEdit(self)
-        self._import_path_edit.setPlaceholderText("(use system default)")
-        self._import_browse = QPushButton("Browse...", self)
+        self._import_path_edit.setPlaceholderText(SETTINGS_USE_SYSTEM_DEFAULT)
+        self._import_browse = QPushButton(SETTINGS_BROWSE_BUTTON, self)
         self._import_browse.clicked.connect(self._on_import_browse)
 
         self._export_path_edit = QLineEdit(self)
-        self._export_path_edit.setPlaceholderText("(use system default)")
-        self._export_browse = QPushButton("Browse...", self)
+        self._export_path_edit.setPlaceholderText(SETTINGS_USE_SYSTEM_DEFAULT)
+        self._export_browse = QPushButton(SETTINGS_BROWSE_BUTTON, self)
         self._export_browse.clicked.connect(self._on_export_browse)
 
         self._threshold_spin = QDoubleSpinBox(self)
@@ -126,12 +141,12 @@ class SettingsDialog(QDialog):
         self._workers_spin.setRange(MIN_MAX_WORKERS, MAX_MAX_WORKERS)
 
         form = QFormLayout()
-        form.addRow("Theme", self._theme_combo)
-        form.addRow("Language", self._language_combo)
-        form.addRow("Default import path", self._import_path_layout())
-        form.addRow("Default export path", self._export_path_layout())
-        form.addRow("Match threshold", self._threshold_spin)
-        form.addRow("Max workers", self._workers_spin)
+        form.addRow(SETTINGS_THEME_LABEL, self._theme_combo)
+        form.addRow(SETTINGS_LANGUAGE_LABEL, self._language_combo)
+        form.addRow(SETTINGS_IMPORT_PATH_LABEL, self._import_path_layout())
+        form.addRow(SETTINGS_EXPORT_PATH_LABEL, self._export_path_layout())
+        form.addRow(SETTINGS_THRESHOLD_LABEL, self._threshold_spin)
+        form.addRow(SETTINGS_MAX_WORKERS_LABEL, self._workers_spin)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel,
@@ -143,7 +158,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addStretch(1)
-        layout.addWidget(QLabel("Save commits to platform preferences. Cancel discards edits."))
+        layout.addWidget(QLabel(SETTINGS_SAVE_HINT))
         layout.addWidget(buttons)
 
     def _import_path_layout(self) -> QWidget:
@@ -179,13 +194,13 @@ class SettingsDialog(QDialog):
 
     def _on_import_browse(self) -> None:
         """Open a folder picker and write the selected path into the import edit."""
-        folder = QFileDialog.getExistingDirectory(self, "Select Default Import Folder")
+        folder = QFileDialog.getExistingDirectory(self, SETTINGS_SELECT_IMPORT_FOLDER)
         if folder:
             self._import_path_edit.setText(folder)
 
     def _on_export_browse(self) -> None:
         """Open a folder picker and write the selected path into the export edit."""
-        folder = QFileDialog.getExistingDirectory(self, "Select Default Export Folder")
+        folder = QFileDialog.getExistingDirectory(self, SETTINGS_SELECT_EXPORT_FOLDER)
         if folder:
             self._export_path_edit.setText(folder)
 
@@ -217,7 +232,7 @@ class SettingsDialog(QDialog):
         except InvalidPreferencesError as exc:
             QMessageBox.warning(
                 self,
-                "Invalid settings",
+                SETTINGS_INVALID_TITLE,
                 self._controller.format_validation_error(exc),
             )
             return

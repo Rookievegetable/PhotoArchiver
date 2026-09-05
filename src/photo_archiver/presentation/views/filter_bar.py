@@ -28,6 +28,21 @@ from PySide6.QtWidgets import (
 )
 
 from photo_archiver.domain import MatchStatus, Person, PhotoSearchCriteria
+from photo_archiver.presentation.ui_text import (
+    FILTER_ALL_PERSONS,
+    FILTER_CLEAR_BUTTON,
+    FILTER_FROM_CHECK,
+    FILTER_FROM_TOOLTIP,
+    FILTER_PERSON_LABEL,
+    FILTER_PERSON_TOOLTIP,
+    FILTER_STATUS_ALL,
+    FILTER_STATUS_APPROVED,
+    FILTER_STATUS_LABEL,
+    FILTER_STATUS_PENDING,
+    FILTER_STATUS_REJECTED,
+    FILTER_TO_CHECK,
+    FILTER_TO_TOOLTIP,
+)
 
 
 class FilterBar(QWidget):
@@ -58,41 +73,41 @@ class FilterBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
 
-        # Person axis — populated via set_persons(); "All persons" (userData
+        # Person axis — populated via set_persons(); "全部人员" (userData
         # None) is the no-constraint entry.
-        layout.addWidget(QLabel("Person:"))
+        layout.addWidget(QLabel(FILTER_PERSON_LABEL))
         self._person_combo = QComboBox(self)
-        self._person_combo.addItem("All persons", None)
-        self._person_combo.setToolTip("Filter photos by matched person.")
+        self._person_combo.addItem(FILTER_ALL_PERSONS, None)
+        self._person_combo.setToolTip(FILTER_PERSON_TOOLTIP)
         layout.addWidget(self._person_combo)
 
-        # Status axis — MatchStatus three values + "All" placeholder.
-        layout.addWidget(QLabel("Status:"))
+        # Status axis — MatchStatus three values + "全部" placeholder.
+        layout.addWidget(QLabel(FILTER_STATUS_LABEL))
         self._status_combo = QComboBox(self)
-        self._status_combo.addItem("All", None)  # userData None → no constraint
-        self._status_combo.addItem("Pending", "pending")
-        self._status_combo.addItem("Approved", "approved")
-        self._status_combo.addItem("Rejected", "rejected")
+        self._status_combo.addItem(FILTER_STATUS_ALL, None)  # userData None → no constraint
+        self._status_combo.addItem(FILTER_STATUS_PENDING, "pending")
+        self._status_combo.addItem(FILTER_STATUS_APPROVED, "approved")
+        self._status_combo.addItem(FILTER_STATUS_REJECTED, "rejected")
         layout.addWidget(self._status_combo)
 
         # Date range axis — each edit gated by a checkbox (FEAT-P9-1): an
         # unchecked box = axis unset (no constraint), checked = use the edit's
         # current value. ``from > to`` is allowed and matches nothing.
-        self._from_check = QCheckBox("From", self)
+        self._from_check = QCheckBox(FILTER_FROM_CHECK, self)
         layout.addWidget(self._from_check)
         self._from_edit = QDateTimeEdit(self)
         self._from_edit.setCalendarPopup(True)
         self._from_edit.setEnabled(False)
-        self._from_edit.setToolTip("Match photos captured on or after this date.")
+        self._from_edit.setToolTip(FILTER_FROM_TOOLTIP)
         self._from_edit.setDateTime(QDateTime.currentDateTime().addYears(-1))
         layout.addWidget(self._from_edit)
 
-        self._to_check = QCheckBox("To", self)
+        self._to_check = QCheckBox(FILTER_TO_CHECK, self)
         layout.addWidget(self._to_check)
         self._to_edit = QDateTimeEdit(self)
         self._to_edit.setCalendarPopup(True)
         self._to_edit.setEnabled(False)
-        self._to_edit.setToolTip("Match photos captured on or before this date.")
+        self._to_edit.setToolTip(FILTER_TO_TOOLTIP)
         self._to_edit.setDateTime(QDateTime.currentDateTime())
         # P0-3: the To edit MUST join the layout — without addWidget it sat as
         # an unmanaged child at (0,0,100,30), overlapping and blocking the
@@ -101,7 +116,7 @@ class FilterBar(QWidget):
 
         layout.addStretch(1)
 
-        self._clear_button = QPushButton("Clear", self)
+        self._clear_button = QPushButton(FILTER_CLEAR_BUTTON, self)
         layout.addWidget(self._clear_button)
 
     def _wire_signals(self) -> None:
@@ -141,7 +156,7 @@ class FilterBar(QWidget):
         self._person_combo.blockSignals(True)
         try:
             self._person_combo.clear()
-            self._person_combo.addItem("All persons", None)
+            self._person_combo.addItem(FILTER_ALL_PERSONS, None)
             for person in persons:
                 if person.id is not None:
                     self._person_combo.addItem(person.name, str(person.id))

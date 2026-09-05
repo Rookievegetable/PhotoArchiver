@@ -17,10 +17,16 @@ from PySide6.QtWidgets import (
 )
 
 from photo_archiver.application.dtos import ArchivePlan
-
-# Conflict strategy choices mirror AppSettings / CLI; the combo box exposes
-# them in user-friendly order with descriptions trailing for clarity.
-_CONFLICT_CHOICES = ("skip", "overwrite", "rename")
+from photo_archiver.presentation.ui_text import (
+    ARCHIVE_CONFLICT_LABELS,
+    ARCHIVE_DRY_RUN_CHECK,
+    ARCHIVE_PREVIEW_CONFLICT_LABEL,
+    ARCHIVE_PREVIEW_PERSON_PHOTOS,
+    ARCHIVE_PREVIEW_PLANNED,
+    ARCHIVE_PREVIEW_ROOT,
+    ARCHIVE_PREVIEW_SKIPPED,
+    ARCHIVE_PREVIEW_TITLE,
+)
 
 
 class ArchivePreviewDialog(QDialog):
@@ -39,7 +45,7 @@ class ArchivePreviewDialog(QDialog):
             archive_root: Root path shown in the dialog header for context.
         """
         super().__init__(parent)
-        self.setWindowTitle("Archive Plan Preview")
+        self.setWindowTitle(ARCHIVE_PREVIEW_TITLE)
         self._plan = plan
         self._archive_root = archive_root
         self._build_ui()
@@ -48,23 +54,28 @@ class ArchivePreviewDialog(QDialog):
         """Lay out the plan summary, strategy combo, dry-run checkbox, and buttons."""
         layout = QFormLayout(self)
 
-        layout.addRow("Archive root:", QLabel(str(self._archive_root)))
-        layout.addRow("Planned items:", QLabel(str(self._plan.planned_count)))
-        layout.addRow("Skipped:", QLabel(str(self._plan.skipped_count)))
+        layout.addRow(ARCHIVE_PREVIEW_ROOT, QLabel(str(self._archive_root)))
+        layout.addRow(ARCHIVE_PREVIEW_PLANNED, QLabel(str(self._plan.planned_count)))
+        layout.addRow(ARCHIVE_PREVIEW_SKIPPED, QLabel(str(self._plan.skipped_count)))
 
         # Per-person breakdown so the user can sanity-check the plan shape.
         by_person: dict[str, int] = {}
         for item in self._plan.items:
             by_person[item.person_name] = by_person.get(item.person_name, 0) + 1
         for person_name, count in by_person.items():
-            layout.addRow(f"  {person_name}:", QLabel(f"{count} photos"))
+            layout.addRow(
+                f"  {person_name}:",
+                QLabel(ARCHIVE_PREVIEW_PERSON_PHOTOS.format(count=count)),
+            )
 
         self._strategy_combo = QComboBox(self)
-        for choice in _CONFLICT_CHOICES:
-            self._strategy_combo.addItem(choice)
-        layout.addRow("Conflict strategy:", self._strategy_combo)
+        # 显示中文标签，userData 携带契约值（skip/overwrite/rename，镜像
+        # AppSettings / CLI；冲突策略值是执行器契约，不随 UI 语言变化）。
+        for label, value in ARCHIVE_CONFLICT_LABELS:
+            self._strategy_combo.addItem(label, value)
+        layout.addRow(ARCHIVE_PREVIEW_CONFLICT_LABEL, self._strategy_combo)
 
-        self._dry_run_check = QCheckBox("Dry-run (preview only, no files written)", self)
+        self._dry_run_check = QCheckBox(ARCHIVE_DRY_RUN_CHECK, self)
         layout.addRow(self._dry_run_check)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok, self)  # type: ignore[attr-defined]
@@ -74,8 +85,9 @@ class ArchivePreviewDialog(QDialog):
 
     @property
     def conflict_strategy(self) -> str:
-        """Return the selected conflict strategy."""
-        return self._strategy_combo.currentText()
+        """Return the selected conflict strategy (the contract value, not the label)."""
+        data = self._strategy_combo.currentData()
+        return str(data) if data is not None else self._strategy_combo.currentText()
 
     @property
     def dry_run(self) -> bool:

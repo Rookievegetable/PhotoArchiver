@@ -71,7 +71,7 @@ def test_single_flight_guard_blocks_second_start() -> None:
 
     second = controller.scan_folder(Path("whatever"))
     assert second is None
-    assert "already running" in (controller.last_refusal_reason or "")
+    assert "正在进行" in (controller.last_refusal_reason or "")
 
 
 def test_guard_released_on_completed_allows_next_scan() -> None:
@@ -151,7 +151,7 @@ def test_real_executor_refuses_second_scan_mid_flight_and_recovers(qtbot, tmp_pa
 
     runnable2 = controller.scan_folder(folder)
     assert runnable2 is None
-    assert "already running" in (controller.last_refusal_reason or "")
+    assert "正在进行" in (controller.last_refusal_reason or "")
 
     # The in-flight scan runs to its designed granularity and completes;
     # the guard re-opens (poll — robust to direct/queued release timing).

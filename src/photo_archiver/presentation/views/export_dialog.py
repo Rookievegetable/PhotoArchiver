@@ -24,27 +24,47 @@ from PySide6.QtWidgets import (
 
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.domain import PhotoSearchCriteria
+from photo_archiver.presentation.ui_text import (
+    EXPORT_BROWSE_BUTTON,
+    EXPORT_CSV_FILTER,
+    EXPORT_DEFAULT_FILENAME,
+    EXPORT_DIALOG_TITLE,
+    EXPORT_FORMAT_CSV,
+    EXPORT_FORMAT_HTML,
+    EXPORT_FORMAT_LABEL,
+    EXPORT_FORMAT_XLSX,
+    EXPORT_HTML_FILTER,
+    EXPORT_NO_ACTIVE_CRITERIA_HINT,
+    EXPORT_NO_PATH_MESSAGE,
+    EXPORT_NO_PATH_TITLE,
+    EXPORT_OUTPUT_LABEL,
+    EXPORT_PATH_PLACEHOLDER,
+    EXPORT_SAVE_DIALOG_TITLE,
+    EXPORT_SCOPE_ALL,
+    EXPORT_SCOPE_ALL_TOOLTIP,
+    EXPORT_SCOPE_CURRENT_BATCH,
+    EXPORT_SCOPE_CURRENT_BATCH_TOOLTIP,
+    EXPORT_SCOPE_FILTERED,
+    EXPORT_SCOPE_FILTERED_TOOLTIP,
+    EXPORT_SCOPE_GROUP,
+    EXPORT_XLSX_FILTER,
+)
 
 _SCOPE_LABELS = {
-    ExportScope.ALL: "All data (people, photos, matches, archive history)",
-    ExportScope.CURRENT_BATCH: "Current batch (most recently processed)",
-    ExportScope.FILTERED: "Filtered results (photos matching the active filter criteria)",
+    ExportScope.ALL: EXPORT_SCOPE_ALL,
+    ExportScope.CURRENT_BATCH: EXPORT_SCOPE_CURRENT_BATCH,
+    ExportScope.FILTERED: EXPORT_SCOPE_FILTERED,
 }
 
 _SCOPE_TOOLTIPS = {
-    ExportScope.ALL: "Export the full catalog.",
-    ExportScope.CURRENT_BATCH: (
-        "Current batch export is not implemented yet (FEATURE-004 deferred)."
-    ),
-    ExportScope.FILTERED: (
-        "Export photos matching the active filter criteria. Requires a filter "
-        "to be set in the filter bar first."
-    ),
+    ExportScope.ALL: EXPORT_SCOPE_ALL_TOOLTIP,
+    ExportScope.CURRENT_BATCH: EXPORT_SCOPE_CURRENT_BATCH_TOOLTIP,
+    ExportScope.FILTERED: EXPORT_SCOPE_FILTERED_TOOLTIP,
 }
 
-_NO_ACTIVE_CRITERIA_HINT = "Set a filter in the filter bar to enable this scope."
+_NO_ACTIVE_CRITERIA_HINT = EXPORT_NO_ACTIVE_CRITERIA_HINT
 
-_FORMAT_CHOICES = ("Excel (.xlsx)", "CSV (.csv)", "HTML (.html)")
+_FORMAT_CHOICES = (EXPORT_FORMAT_XLSX, EXPORT_FORMAT_CSV, EXPORT_FORMAT_HTML)
 
 
 class ExportDialog(QDialog):
@@ -69,7 +89,7 @@ class ExportDialog(QDialog):
                 Falls back to the current working directory when ``None``.
         """
         super().__init__(parent)
-        self.setWindowTitle("Export Data")
+        self.setWindowTitle(EXPORT_DIALOG_TITLE)
         self.setMinimumWidth(520)
         self._default_output_root = default_output_root or Path.cwd()
         self._output_path: Path | None = None
@@ -81,7 +101,7 @@ class ExportDialog(QDialog):
         main_layout = QVBoxLayout(self)
 
         # --- Scope ------------------------------------------------------------
-        main_layout.addWidget(QLabel("Export scope:"))
+        main_layout.addWidget(QLabel(EXPORT_SCOPE_GROUP))
         self._scope_group = QVBoxLayout()
         self._scope_radios: dict[ExportScope, QRadioButton] = {}
         for scope, label in _SCOPE_LABELS.items():
@@ -110,16 +130,16 @@ class ExportDialog(QDialog):
         self._format_combo = QComboBox(self)
         for choice in _FORMAT_CHOICES:
             self._format_combo.addItem(choice)
-        fmt_layout.addRow("Format:", self._format_combo)
+        fmt_layout.addRow(EXPORT_FORMAT_LABEL, self._format_combo)
         main_layout.addLayout(fmt_layout)
 
         # --- Output path ------------------------------------------------------
         path_layout = QHBoxLayout()
         self._path_edit = QLineEdit(self)
-        self._path_edit.setPlaceholderText("Select export file destination …")
-        path_layout.addWidget(QLabel("Output:"))
+        self._path_edit.setPlaceholderText(EXPORT_PATH_PLACEHOLDER)
+        path_layout.addWidget(QLabel(EXPORT_OUTPUT_LABEL))
         path_layout.addWidget(self._path_edit)
-        browse_btn = QPushButton("Browse…", self)
+        browse_btn = QPushButton(EXPORT_BROWSE_BUTTON, self)
         browse_btn.clicked.connect(self._on_browse)
         path_layout.addWidget(browse_btn)
         main_layout.addLayout(path_layout)
@@ -167,16 +187,16 @@ class ExportDialog(QDialog):
         """Open a file-save dialog and populate the path edit."""
         selected_format = self.format_name
         if selected_format == "xlsx":
-            filter_str = "Excel files (*.xlsx)"
+            filter_str = EXPORT_XLSX_FILTER
         elif selected_format == "csv":
-            filter_str = "CSV files (*.csv)"
+            filter_str = EXPORT_CSV_FILTER
         else:
-            filter_str = "HTML files (*.html)"
-        default_name = f"export.{selected_format}"
+            filter_str = EXPORT_HTML_FILTER
+        default_name = EXPORT_DEFAULT_FILENAME.format(extension=selected_format)
 
         path_str, _ = QFileDialog.getSaveFileName(
             self,
-            "Save Export As",
+            EXPORT_SAVE_DIALOG_TITLE,
             str(self._default_output_root / default_name),
             filter_str,
         )
@@ -189,7 +209,7 @@ class ExportDialog(QDialog):
         if not raw:
             from PySide6.QtWidgets import QMessageBox
 
-            QMessageBox.warning(self, "No output path", "Please select an export file destination.")
+            QMessageBox.warning(self, EXPORT_NO_PATH_TITLE, EXPORT_NO_PATH_MESSAGE)
             return
         self._output_path = Path(raw)
         self.accept()

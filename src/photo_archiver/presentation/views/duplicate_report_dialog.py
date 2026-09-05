@@ -22,6 +22,15 @@ from PySide6.QtWidgets import (
 if TYPE_CHECKING:
     from photo_archiver.application.dtos import DuplicateReport
 
+from photo_archiver.presentation.ui_text import (
+    DUPLICATE_DIALOG_TITLE,
+    DUPLICATE_GROUP_NODE,
+    DUPLICATE_GROUP_PHOTOS,
+    DUPLICATE_HEADER_LABELS,
+    DUPLICATE_SUMMARY_FOUND,
+    DUPLICATE_SUMMARY_NONE,
+)
+
 
 class DuplicateReportDialog(QDialog):
     """Display the duplicate detection report as a read-only tree.
@@ -46,7 +55,7 @@ class DuplicateReportDialog(QDialog):
             parent: Optional parent widget.
         """
         super().__init__(parent)
-        self.setWindowTitle("Duplicate Photos Report")
+        self.setWindowTitle(DUPLICATE_DIALOG_TITLE)
         self.setMinimumSize(640, 480)
         self._report = report
         self._build_ui()
@@ -61,7 +70,7 @@ class DuplicateReportDialog(QDialog):
 
         self._tree = QTreeWidget(self)
         self._tree.setColumnCount(2)
-        self._tree.setHeaderLabels(["Member / Field", "Value"])
+        self._tree.setHeaderLabels(list(DUPLICATE_HEADER_LABELS))
         self._tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self._tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self._populate_tree()
@@ -74,11 +83,10 @@ class DuplicateReportDialog(QDialog):
     def _summary_text(self) -> str:
         """Return the human-readable summary line for the report header."""
         if not self._report.has_duplicates:
-            return "No duplicate photos found — every content hash is unique."
-        return (
-            f"Found {self._report.group_count} duplicate group(s) "
-            f"covering {self._report.photos_in_groups} photo(s). "
-            "This report is read-only; deleting duplicates is not supported in this version."
+            return DUPLICATE_SUMMARY_NONE
+        return DUPLICATE_SUMMARY_FOUND.format(
+            group_count=self._report.group_count,
+            photo_count=self._report.photos_in_groups,
         )
 
     def _populate_tree(self) -> None:
@@ -86,8 +94,8 @@ class DuplicateReportDialog(QDialog):
         for group in self._report.groups:
             group_node = QTreeWidgetItem(
                 [
-                    f"Group (hash {group.content_hash[:12]}…)",
-                    f"{len(group.members)} photos",
+                    DUPLICATE_GROUP_NODE.format(hash=group.content_hash[:12]),
+                    DUPLICATE_GROUP_PHOTOS.format(count=len(group.members)),
                 ]
             )
             for photo in group.members:

@@ -1,7 +1,7 @@
 """P0-3 regression: FilterBar person axis must stay usable after repopulation.
 
 Manual desktop smoke feedback (Phase A P0-3): after a real Excel import, the
-"Person:" label was seen painting over the person combo and the combo stopped
+"人员：" label was seen painting over the person combo and the combo stopped
 responding to clicks. These tests pin the widget contract through the exact
 production sequence — construction-time fill, then a post-import refill —
 asserting geometry (no overlap), usability, and content.
@@ -56,7 +56,7 @@ def test_person_combo_stays_usable_after_repopulation(qtbot) -> None:
     combo = bar._person_combo
     assert combo.isEnabled()
     assert [combo.itemText(i) for i in range(combo.count())] == [
-        "All persons",
+        "全部人员",
         "Alice",
         "Bob",
     ]

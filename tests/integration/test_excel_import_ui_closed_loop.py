@@ -2,7 +2,7 @@
 
 Proves the real production path from the user entry to visible state:
 
-    real .xlsx file → real "Import People" QAction → real file-picker boundary
+    real .xlsx file → real "导入人员" QAction → real file-picker boundary
     (modal double) → real ImportPeopleController → real worker task → real
     ImportPeopleService → real DispatchingPersonImportReader → real
     ExcelPersonImportReader (openpyxl) → real Person domain mapping → real
@@ -31,7 +31,7 @@ from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.presentation.views import main_window as main_window_module
 from photo_archiver.presentation.views.main_window import MainWindow
 
-FILTER_DIALOG_TITLE = "Select People File"
+FILTER_DIALOG_TITLE = "选择人员文件"
 
 
 def _write_people_workbook(path: Path) -> Path:
@@ -71,7 +71,7 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
     # Trigger the REAL user entry: the Import People toolbar action.
     toolbar = window.findChild(QToolBar, "Main")
     assert toolbar is not None
-    import_action = next(a for a in toolbar.actions() if a.text() == "Import People")
+    import_action = next(a for a in toolbar.actions() if a.text() == "导入人员")
     import_action.trigger()
 
     # Phase C (LIMIT-005): wait for the task TERMINAL first. With batched
@@ -118,5 +118,5 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
             )
         qtbot.wait(50)
 
-    assert person_combo.itemText(0) == "All persons"
+    assert person_combo.itemText(0) == "全部人员"
     assert person_combo.count() == 3

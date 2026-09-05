@@ -76,7 +76,7 @@ def _stub_start(window, monkeypatch):
 def test_action_exists_and_enabled_by_default(qtbot, tmp_path) -> None:
     """The Run Face Recognition toolbar action exists and starts enabled."""
     window = _make_window(qtbot, tmp_path)
-    assert window._match_action.text() == "Run Face Recognition"
+    assert window._match_action.text() == "运行人脸识别"
     assert window._match_action.isEnabled() is True
 
 
@@ -102,7 +102,7 @@ def test_started_signal_keeps_action_disabled_and_updates_status(qtbot, tmp_path
     runnable.signals.started.emit(TaskStarted("match_persons", "task_1"))
 
     assert window._match_action.isEnabled() is False
-    assert "started" in window._status_label.text()
+    assert "已开始" in window._status_label.text()
 
 
 def test_progress_uses_real_current_total_message(qtbot, tmp_path, monkeypatch) -> None:
@@ -137,7 +137,7 @@ def test_completed_enables_action_and_refreshes_photo_and_review(qtbot, tmp_path
     assert photo_refreshed == ["photos"]
     # The real _refresh_review_pending ran: re-queried list_pending and wrote
     # the pending count into the status bar (0 in an empty test DB).
-    assert "awaiting review" in window._status_label.text()
+    assert "待审核" in window._status_label.text()
 
 
 def test_failed_enables_action_and_surfaces_error(qtbot, tmp_path, monkeypatch) -> None:
@@ -158,7 +158,7 @@ def test_failed_enables_action_and_surfaces_error(qtbot, tmp_path, monkeypatch) 
 
     assert window._match_action.isEnabled() is True
     assert window._progress.value() == 0
-    assert "failed" in window._status_label.text()
+    assert "失败" in window._status_label.text()
     assert dialogs and "model pack missing" in dialogs[0][1]
 
 
@@ -172,7 +172,7 @@ def test_cancelled_enables_action_and_gives_feedback(qtbot, tmp_path, monkeypatc
 
     assert window._match_action.isEnabled() is True
     assert window._progress.value() == 0
-    assert "cancelled" in window._status_label.text()
+    assert "已取消" in window._status_label.text()
     assert window._cancel_action.isEnabled() is False
 
 
@@ -219,5 +219,5 @@ def test_cancel_action_forwards_cancellation_to_runnable(qtbot, tmp_path, monkey
 
     assert runnable.cancel_calls == ["User requested cancel"]
     assert window._cancel_action.isEnabled() is False
-    assert "Cancelling" in window._status_label.text()
+    assert "正在取消" in window._status_label.text()
 

@@ -112,7 +112,7 @@ def test_start_match_refuses_when_no_persons_imported() -> None:
     controller, executor = _make_controller(people=[], photos=[_photo("a.jpg", uuid4())])
 
     assert controller.start_match() is None
-    assert "No persons imported" in controller.last_refusal_reason
+    assert "尚未导入人员" in controller.last_refusal_reason
     assert executor.last_task is None
 
 
@@ -120,7 +120,7 @@ def test_start_match_refuses_when_no_photos_registered() -> None:
     controller, executor = _make_controller(people=[Person(name="Alice", id=uuid4())], photos=[])
 
     assert controller.start_match() is None
-    assert "No photos registered" in controller.last_refusal_reason
+    assert "尚未登记照片" in controller.last_refusal_reason
     assert executor.last_task is None
 
 
@@ -133,7 +133,7 @@ def test_start_match_refuses_when_all_photos_already_matched() -> None:
     )
 
     assert controller.start_match() is None
-    assert "already have recognition results" in controller.last_refusal_reason
+    assert "均已有识别结果" in controller.last_refusal_reason
     assert executor.last_task is None
 
 
@@ -150,7 +150,7 @@ def test_single_flight_guard_blocks_second_start() -> None:
 
     second = controller.start_match()
     assert second is None
-    assert "already running" in controller.last_refusal_reason
+    assert "正在进行" in controller.last_refusal_reason
     assert executor.last_runnable is first
 
 

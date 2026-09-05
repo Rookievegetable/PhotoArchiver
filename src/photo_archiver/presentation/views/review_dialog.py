@@ -35,6 +35,14 @@ from PySide6.QtWidgets import (
 
 from photo_archiver.domain import RecognitionResult
 from photo_archiver.presentation.controllers.review_controller import ReviewController
+from photo_archiver.presentation.ui_text import (
+    REVIEW_APPROVE_ALL,
+    REVIEW_APPROVE_SELECTED,
+    REVIEW_REJECT_SELECTED,
+    REVIEW_DIALOG_TITLE,
+    REVIEW_ROW_FORMAT,
+    REVIEW_STATUS_LINE,
+)
 
 
 class ReviewDialog(QDialog):
@@ -52,7 +60,7 @@ class ReviewDialog(QDialog):
             parent: Optional Qt parent for ownership / cleanup.
         """
         super().__init__(parent)
-        self.setWindowTitle("Review Pending Recognition")
+        self.setWindowTitle(REVIEW_DIALOG_TITLE)
         self._controller = controller
         self._build_ui()
         self._refresh_list()
@@ -62,11 +70,11 @@ class ReviewDialog(QDialog):
         self._list = QListWidget(self)
         self._list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
 
-        self._approve_selected = QPushButton("Approve Selected", self)
+        self._approve_selected = QPushButton(REVIEW_APPROVE_SELECTED, self)
         self._approve_selected.clicked.connect(self._on_approve_selected)
-        self._reject_selected = QPushButton("Reject Selected", self)
+        self._reject_selected = QPushButton(REVIEW_REJECT_SELECTED, self)
         self._reject_selected.clicked.connect(self._on_reject_selected)
-        self._approve_all = QPushButton("Approve All", self)
+        self._approve_all = QPushButton(REVIEW_APPROVE_ALL, self)
         self._approve_all.clicked.connect(self._on_approve_all)
 
         button_row = QHBoxLayout()
@@ -93,10 +101,7 @@ class ReviewDialog(QDialog):
         self._list.clear()
         for result in pending:
             self._list.addItem(self._make_row(result))
-        self._status.setText(
-            f"{len(pending)} pending result(s). Select rows then Approve/Reject, "
-            f"or Approve All to finalize the queue."
-        )
+        self._status.setText(REVIEW_STATUS_LINE.format(count=len(pending)))
         if not pending:
             self.accept()
 
@@ -104,7 +109,11 @@ class ReviewDialog(QDialog):
     def _make_row(result: RecognitionResult) -> QListWidgetItem:
         """Build a list row carrying the recognition result id for retrieve on action."""
         item = QListWidgetItem(
-            f"photo={result.photo_id} person={result.person_id} confidence={result.confidence:.2f}"
+            REVIEW_ROW_FORMAT.format(
+                photo_id=result.photo_id,
+                person_id=result.person_id,
+                confidence=result.confidence,
+            )
         )
         item.setData(Qt.ItemDataRole.UserRole, result.id)
         return item

@@ -168,7 +168,7 @@ def _stub_export(
 def test_export_action_exists_and_enabled_by_default(qtbot, tmp_path) -> None:
     """The Export Data toolbar action exists and starts enabled."""
     window = _make_window(qtbot, tmp_path)
-    assert window._export_action.text() == "Export Data"
+    assert window._export_action.text() == "导出数据"
     assert window._export_action.isEnabled() is True
 
 
@@ -181,7 +181,7 @@ def test_rejected_dialog_does_not_submit_and_keeps_action_enabled(qtbot, tmp_pat
 
     assert calls == []
     assert window._export_action.isEnabled() is True
-    assert window._status_label.text() == "Ready"  # flow never started
+    assert window._status_label.text() == "就绪"  # flow never started
 
 
 def test_accepted_dialog_submits_scope_format_and_disables_action(qtbot, tmp_path, monkeypatch) -> None:
@@ -203,7 +203,7 @@ def test_accepted_dialog_submits_scope_format_and_disables_action(qtbot, tmp_pat
     assert dialog.parent is window  # dialog is parented to the MainWindow
     assert window._export_action.isEnabled() is False  # in-flight lock
     assert window._progress.value() == 0
-    assert window._status_label.text() == "Exporting ..."
+    assert window._status_label.text() == "正在导出…"
     # The shared Cancel action stays untouched for export runs: the controller
     # exposes no cancelled channel, so no cancellation surface is fabricated.
     assert window._cancel_action.isEnabled() is False
@@ -218,7 +218,7 @@ def test_started_signal_keeps_action_disabled_and_updates_status(qtbot, tmp_path
     runnable.signals.started.emit(TaskStarted("export", "task_1"))
 
     assert window._export_action.isEnabled() is False
-    assert "started" in window._status_label.text()
+    assert "已开始" in window._status_label.text()
 
 
 def test_progress_two_phase_renders_bar_and_message(qtbot, tmp_path, monkeypatch) -> None:
@@ -252,7 +252,7 @@ def test_completed_reenables_action_and_refreshes_photo_list(qtbot, tmp_path, mo
     assert window._export_action.isEnabled() is True
     assert window._progress.value() == 100
     assert photo_refreshed == ["photos"]
-    assert "complete" in window._status_label.text()
+    assert "完成" in window._status_label.text()
 
 
 def test_failed_reenables_action_and_surfaces_error(qtbot, tmp_path, monkeypatch) -> None:
@@ -273,7 +273,7 @@ def test_failed_reenables_action_and_surfaces_error(qtbot, tmp_path, monkeypatch
 
     assert window._export_action.isEnabled() is True
     assert window._progress.value() == 0
-    assert "failed" in window._status_label.text()
+    assert "失败" in window._status_label.text()
     assert dialogs and "disk full" in dialogs[0][1]
 
 
@@ -350,8 +350,8 @@ def test_real_dialog_collects_scope_format_and_refuses_empty_path(qtbot, tmp_pat
 
     # AC-010: OK without a path is refused — warning recorded, no accept.
     dialog._on_accept()
-    assert warnings and warnings[0][0] == "No output path"
-    assert "export file destination" in warnings[0][1]
+    assert warnings and warnings[0][0] == "未选择输出路径"
+    assert "保存位置" in warnings[0][1]
     assert dialog.result() != 1  # not QDialog.DialogCode.Accepted
 
     # With a path the dialog accepts and exposes the chosen value.
@@ -438,7 +438,7 @@ def test_export_dialog_filtered_requires_active_criteria(qtbot, tmp_path) -> Non
     assert without_criteria._scope_radios[ExportScope.FILTERED].isEnabled() is False
     assert (
         without_criteria._scope_radios[ExportScope.FILTERED].toolTip()
-        == "Set a filter in the filter bar to enable this scope."
+        == "请先在筛选栏设置筛选条件，再启用此范围。"
     )
 
 
@@ -450,7 +450,7 @@ def test_export_dialog_current_batch_always_disabled_and_has_tooltip(qtbot, tmp_
     qtbot.addWidget(dialog)
     radio = dialog._scope_radios[ExportScope.CURRENT_BATCH]
     assert radio.isEnabled() is False
-    assert "not implemented" in radio.toolTip()
+    assert "暂未实现" in radio.toolTip()
 
 
 def test_export_dialog_all_always_enabled(qtbot, tmp_path) -> None:

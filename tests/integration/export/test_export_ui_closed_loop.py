@@ -2,7 +2,7 @@
 
 Runs the REAL production chain from the Commit 1 UI entry point:
 
-    MainWindow "Export Data" QAction
+    MainWindow "导出数据" QAction
       → _on_export_clicked (real handler)
         → ExportController.export (real controller, real exporters dict)
           → QtWorkerExecutor / QThreadPool (real worker, queued signals)
@@ -243,7 +243,7 @@ def test_csv_ui_trigger_exports_real_sqlite_rows_to_file(qtbot, tmp_path, monkey
     assert created and created[0].parent is window
     # Terminal observation: completed/failed handlers re-enable the action.
     qtbot.waitUntil(lambda: window._export_action.isEnabled(), timeout=_WAIT_TERMINAL_MS)
-    assert window._status_label.text() == "export complete"
+    assert window._status_label.text() == "导出完成"
 
     # ── Real file ──────────────────────────────────────────────────────────
     assert output_path.exists()
@@ -348,10 +348,10 @@ def test_failed_export_surfaces_taskfailed_through_ui(qtbot, tmp_path, monkeypat
     window._export_action.trigger()
     qtbot.waitUntil(lambda: window._export_action.isEnabled(), timeout=_WAIT_TERMINAL_MS)
 
-    assert window._status_label.text() == "export failed."
+    assert window._status_label.text() == "导出失败。"
     assert window._progress.value() == 0
     assert dialogs, "QMessageBox.warning must surface the TaskFailed event"
-    assert dialogs[0][0] == "Export Failed"
+    assert dialogs[0][0] == "导出失败。"
     assert dialogs[0][1] != ""
 
 
@@ -369,7 +369,7 @@ def test_empty_database_export_produces_header_only_file(qtbot, tmp_path, monkey
     window._export_action.trigger()
     qtbot.waitUntil(lambda: window._export_action.isEnabled(), timeout=_WAIT_TERMINAL_MS)
 
-    assert window._status_label.text() == "export complete"
+    assert window._status_label.text() == "导出完成"
     assert output_path.exists()
     with open(output_path, encoding="utf-8-sig", newline="") as handle:
         parsed = list(csv_reader(handle))

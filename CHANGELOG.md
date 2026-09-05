@@ -6,6 +6,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [Unreleased]
+
+### Changed
+
+- **Chinese desktop UI**: all user-visible text across the main window
+  (toolbar, filter bar, status bar) and every dialog (import, scan, review,
+  archive preview, export, settings, duplicate report, plugin report) is now
+  Chinese. Logic identifiers (worker task names, enum and strategy values)
+  are unchanged — only display text moved. All strings live in a single
+  catalog (`presentation/ui_text.py`), prepared for future translation
+  (ui-rules §24).
+- Conflict-strategy and status filter options now show Chinese labels;
+  the underlying contract values (`skip` / `overwrite` / `rename`,
+  `pending` / `approved` / `rejected`) are unchanged.
+
+### Removed
+
+- Example plugins are no longer auto-loaded into the production toolbar
+  ("Say Hello" / "Import People (Demo)" / "Stats Report" no longer appear in
+  the main window). The plugin mechanism is fully retained as an external
+  extension point (`PluginRegistry.load_from_path`); the example files stay
+  in `examples/plugins/` for developer reference.
+
 ## [2.3.0] - 2026-09-02
 
 Data-safety floor, runtime correctness, and flake elimination

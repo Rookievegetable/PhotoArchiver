@@ -40,7 +40,7 @@ def test_settings_dialog_constructs_and_loads_fields(qtbot) -> None:
     # Show the dialog so showEvent fires and the persisted values load.
     dialog.show()
     qtbot.waitExposed(dialog)
-    assert dialog.windowTitle() == "Settings"
+    assert dialog.windowTitle() == "设置"
     assert dialog._theme_combo.currentText() == "dark"
     assert dialog._language_combo.currentText() == "zh"
     assert dialog._import_path_edit.text() == str(Path("/imports"))

@@ -192,4 +192,4 @@ def test_second_run_refused_by_real_db_resume_semantics(qtbot, tmp_path: Path) -
     second = controller.start_match()
 
     assert second is None
-    assert "already have recognition results" in controller.last_refusal_reason
+    assert "均已有识别结果" in controller.last_refusal_reason

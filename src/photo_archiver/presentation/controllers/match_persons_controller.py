@@ -6,6 +6,12 @@ from photo_archiver.application import MatchPersonsUseCase
 from photo_archiver.application.commands import MatchPersonsCommand
 from photo_archiver.domain import PersonRepository, PhotoRepository, RecognitionRepository
 from photo_archiver.workers import MatchPersonsTask, QtWorkerExecutor, QtWorkerRunnable
+from photo_archiver.presentation.ui_text import (
+    REFUSAL_ALL_MATCHED,
+    REFUSAL_MATCH_IN_FLIGHT,
+    REFUSAL_NO_PERSONS,
+    REFUSAL_NO_PHOTOS,
+)
 
 
 class MatchPersonsController(QObject):
@@ -64,22 +70,20 @@ class MatchPersonsController(QObject):
         """
         self.last_refusal_reason = None
         if self._active_runnable is not None:
-            self.last_refusal_reason = "A recognition task is already running."
+            self.last_refusal_reason = REFUSAL_MATCH_IN_FLIGHT
             return None
         if not self._people.list_all():
-            self.last_refusal_reason = "No persons imported. Import people first."
+            self.last_refusal_reason = REFUSAL_NO_PERSONS
             return None
         photos = self._photos.list_all()
         if not photos:
-            self.last_refusal_reason = "No photos registered. Scan a folder first."
+            self.last_refusal_reason = REFUSAL_NO_PHOTOS
             return None
         photo_ids = tuple(photo.id for photo in photos if photo.id is not None)
         already_matched = self._recognition.list_first_by_photo_ids(photo_ids)
         pending_ids = tuple(pid for pid in photo_ids if pid not in already_matched)
         if not pending_ids:
-            self.last_refusal_reason = (
-                "All registered photos already have recognition results."
-            )
+            self.last_refusal_reason = REFUSAL_ALL_MATCHED
             return None
         pending_set = set(pending_ids)
         command = MatchPersonsCommand(

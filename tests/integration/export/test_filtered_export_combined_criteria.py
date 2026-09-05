@@ -218,7 +218,7 @@ def _run_export(qtbot, window, output_path, format_name, monkeypatch):
     created = _stub_dialog(monkeypatch, output_path, ExportScope.FILTERED, format_name)
     window._export_action.trigger()
     qtbot.waitUntil(lambda: window._export_action.isEnabled(), timeout=_WAIT_TERMINAL_MS)
-    assert window._status_label.text() == "export complete"
+    assert window._status_label.text() == "导出完成"
     assert output_path.exists()
     assert created[0].active_criteria is window._current_criteria  # F5 forwarding
     return created[0].active_criteria

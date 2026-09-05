@@ -19,6 +19,10 @@ from photo_archiver.application.dtos import DuplicateReport
 # to depend on Application; the service is the use case surface. A formal Protocol
 # can be split out later if a second implementation appears (YAGNI today).
 from photo_archiver.application.services import DetectDuplicatesService
+from photo_archiver.presentation.ui_text import (
+    DUPLICATE_FAILED_MESSAGE,
+    DUPLICATE_FAILED_TITLE,
+)
 from photo_archiver.presentation.views.duplicate_report_dialog import (
     DuplicateReportDialog,
 )
@@ -65,8 +69,8 @@ class DetectDuplicatesController(QObject):
             target = parent_widget if isinstance(parent_widget, QWidget) else None
             QMessageBox.critical(
                 target,
-                "Duplicate Detection Failed",
-                f"An unexpected error occurred while scanning for duplicates:\n\n{exc}",
+                DUPLICATE_FAILED_TITLE,
+                DUPLICATE_FAILED_MESSAGE.format(detail=exc),
             )
             return
         # dialog 期望 QWidget parent；controller 的 self.parent() 返 QObject，经

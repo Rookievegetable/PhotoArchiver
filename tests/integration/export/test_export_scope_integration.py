@@ -4,7 +4,7 @@ Real-chain verification of the three export scopes over a REAL SQLite
 database (alembic schema, foreign keys ON), per the authorized contract
 ``docs/health-check/PHASE_7_SCOPE_CONTRACT_REVISION.md``:
 
-    MainWindow "Export Data" QAction (UI tests)
+    MainWindow "导出数据" QAction (UI tests)
       → _on_export_clicked → ExportController.export (real)
         → QtWorkerExecutor / QThreadPool (real, queued signals)
           → ExportTask.execute (real, also exercised directly headless)
@@ -308,7 +308,7 @@ class TestFilteredCsv:
         # F5: the handler forwarded the held snapshot into the dialog.
         assert created and created[0].active_criteria is _PENDING_CRITERIA
         qtbot.waitUntil(lambda: window._export_action.isEnabled(), timeout=_WAIT_TERMINAL_MS)
-        assert window._status_label.text() == "export complete"
+        assert window._status_label.text() == "导出完成"
 
         # ── Real file, re-parsed with csv.reader ───────────────────────────
         assert output_path.exists()
@@ -504,10 +504,10 @@ class TestCurrentBatchRejection:
         window._export_action.trigger()
 
         qtbot.waitUntil(lambda: window._export_action.isEnabled(), timeout=_WAIT_TERMINAL_MS)
-        assert window._status_label.text() == "export failed."
+        assert window._status_label.text() == "导出失败。"
         # The contract error message reaches the user surface verbatim.
         assert warnings, "QMessageBox.warning must surface the TaskFailed event"
-        assert warnings[0][0] == "Export Failed"
+        assert warnings[0][0] == "导出失败。"
         assert "CURRENT_BATCH is deferred" in warnings[0][1]
         assert "refusing to silently fall back to ALL" in warnings[0][1]
         # No export file was produced — neither ALL, FILTERED, nor partial.
@@ -577,7 +577,7 @@ class TestFilteredWithoutCriteriaRejection:
         # The handler forwarded the None snapshot verbatim (F5).
         assert created and created[0].active_criteria is None
         qtbot.waitUntil(lambda: window._export_action.isEnabled(), timeout=_WAIT_TERMINAL_MS)
-        assert window._status_label.text() == "export failed."
+        assert window._status_label.text() == "导出失败。"
         assert warnings, "QMessageBox.warning must surface the TaskFailed event"
         assert "FILTERED requires a PhotoSearchCriteria snapshot" in warnings[0][1]
         assert not output_path.exists()

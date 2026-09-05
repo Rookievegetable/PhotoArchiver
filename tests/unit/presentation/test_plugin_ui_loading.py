@@ -11,6 +11,12 @@ silently skipped at window construction while every backend unit test
 stayed green. These tests assert the user-visible outcome, not merely that
 the loader object exists.
 
+2026-09-05 UI 整备：示例插件不再随主窗口自动加载（生产工具栏不展示
+Say Hello / Import People (Demo) / Stats Report 演示动作）。加载链保持
+不变——本测试改为显式驱动同一公开链路（``load_from_path`` →
+``enable_all`` → ``_add_plugin_actions``），即外部插件宿主接入真实插件
+目录时走过的路径；MainWindow 构造后持空注册表作为扩展点。
+
 Modal boundary doubles (established project policy): PluginReportDialog.exec
 and QMessageBox.information are recorded, never executed — everything else in
 the chain (loader, plugin exec, execute_action, SQLite reads, signal wiring)
@@ -37,6 +43,10 @@ from photo_archiver.presentation.views.main_window import MainWindow
 EXPECTED_PLUGIN_NAMES = {"hello", "stats_report", "import_people_demo"}
 EXPECTED_PLUGIN_LABELS = {"Say Hello", "Stats Report", "Import People (Demo)"}
 
+# tests/unit/presentation/ → repo root; the source/clone layout is the only
+# supported runtime form (ADR-031).
+EXAMPLES_PLUGINS_DIR = Path(__file__).resolve().parents[3] / "examples" / "plugins"
+
 
 def _build_window(qtbot, tmp_path: Path) -> MainWindow:
     """Bootstrap a real context on a throwaway DB and construct MainWindow."""
@@ -48,6 +58,17 @@ def _build_window(qtbot, tmp_path: Path) -> MainWindow:
     return window
 
 
+def _load_example_plugins(window: MainWindow) -> None:
+    """Drive the public plugin UI chain against the real example plugins.
+
+    Mirrors what an external plugin host does with its own plugin directory:
+    discover → load → enable → register toolbar QActions.
+    """
+    window._plugin_registry.load_from_path(EXAMPLES_PLUGINS_DIR)
+    window._plugin_registry.enable_all()
+    window._add_plugin_actions()
+
+
 def _toolbar_action_map(window: MainWindow) -> dict:
     """Map toolbar action text → QAction for the real 'Main' toolbar."""
     toolbar = window.findChild(QToolBar, "Main")
@@ -55,11 +76,23 @@ def _toolbar_action_map(window: MainWindow) -> dict:
     return {action.text(): action for action in toolbar.actions()}
 
 
-def test_plugin_actions_registered_enabled_and_visible(qtbot, tmp_path: Path) -> None:
-    """Real example plugins must surface as enabled, visible toolbar QActions."""
+def test_main_window_starts_with_empty_plugin_registry(qtbot, tmp_path: Path) -> None:
+    """生产工具栏不自动加载示例插件——构造后注册表为空、无插件动作。"""
     window = _build_window(qtbot, tmp_path)
 
-    # Discovery + loading + enabling happened during MainWindow construction.
+    assert window._plugin_registry.enabled_plugins == {}
+    assert not window._plugin_registry.has_errors()
+    assert window._plugin_actions == []
+    toolbar = window.findChild(QToolBar, "Main")
+    assert toolbar is not None
+    assert not (EXPECTED_PLUGIN_LABELS & set(_toolbar_action_map(window)))
+
+
+def test_plugin_actions_registered_enabled_and_visible(qtbot, tmp_path: Path) -> None:
+    """Explicitly loaded example plugins surface as enabled, visible QActions."""
+    window = _build_window(qtbot, tmp_path)
+    _load_example_plugins(window)
+
     enabled = set(window._plugin_registry.enabled_plugins)
     assert EXPECTED_PLUGIN_NAMES <= enabled
     assert not window._plugin_registry.has_errors()
@@ -88,6 +121,7 @@ def test_plugin_action_dispatch_reaches_report_dialog(
     real SQLite library); only the modal exec is doubled.
     """
     window = _build_window(qtbot, tmp_path)
+    _load_example_plugins(window)
     actions = _toolbar_action_map(window)
 
     constructed: list[str] = []
@@ -116,6 +150,7 @@ def test_plugin_action_without_report_shows_message(
 ) -> None:
     """A success result without a report renders an information message."""
     window = _build_window(qtbot, tmp_path)
+    _load_example_plugins(window)
     actions = _toolbar_action_map(window)
 
     messages: list[tuple[str, str]] = []
@@ -129,5 +164,5 @@ def test_plugin_action_without_report_shows_message(
 
     assert len(messages) == 1
     title, text = messages[0]
-    assert title == "Plugin: hello.greet"
+    assert title == "插件：hello.greet"
     assert "Hello" in text
