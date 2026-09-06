@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [Unreleased]
+
+### Fixed
+
+- **EXIF capture time for real camera photos (ISSUE-019)**: the metadata
+  reader only looked at tag 36868 in the IFD0 top level, while the EXIF
+  standard places DateTimeOriginal(36867)/DateTimeDigitized(36868) inside
+  the Exif sub-IFD — real camera/phone photos silently fell back to the
+  file modification time, so archive date bucketing and date filters used
+  the wrong date. The reader now resolves, in order: sub-IFD
+  DateTimeOriginal → sub-IFD DateTimeDigitized → IFD0 top-level 36868
+  (legacy compatibility) → mtime. Photos already registered keep their
+  stored captured_at (no backfill); new scans get the true capture time.
+
 ## [2.3.1] - 2026-09-05
 
 Desktop UI polish: Chinese localization, a production-only toolbar, and the

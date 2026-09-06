@@ -1,11 +1,14 @@
 """Pillow-based implementation of the photo metadata reader port.
 
-EXIF DateTimeOriginal 读取（落 Phase 2 Step 11 裁决 #2 链式降级）：
-    EXIF DateTimeOriginal → PhotoMetadata.modified_at（文件 mtime）→ None
+EXIF 拍摄时刻读取（落 Phase 2 Step 11 裁决 #2 链式降级；ISSUE-019 修复
+升级子 IFD 读取）：
+    Exif 子 IFD DateTimeOriginal(36867)
+    → Exif 子 IFD DateTimeDigitized(36868)
+    → IFD0 顶层 DateTimeDigitized(36868，历史兼容)
+    → PhotoMetadata.modified_at（文件 mtime）→ None
 Archive 阶段只消费 ``Photo.captured_at`` 领域字段，本适配器是该字段的
-唯一数据源。EXIF 字段号 36868（DateTimeOriginal）是相机原生记录，
-可信度最高；缺 EXIF 时回退 mtime（扫描过程中转存/拷贝会破坏 mtime，
-不可靠但好过留 None）。
+唯一数据源。DateTimeOriginal(36867) 是相机原生记录，可信度最高；缺 EXIF
+时回退 mtime（扫描过程中转存/拷贝会破坏 mtime，不可靠但好过留 None）。
 
 content_hash 计算（B1 重复图片检测）：
     可选注入 ``ContentHashCalculator`` 实例——注入时在 Pillow 开图读 EXIF
@@ -24,9 +27,17 @@ from photo_archiver.application.ports import PhotoMetadataReader
 from photo_archiver.domain import PhotoMetadata
 from photo_archiver.infrastructure.image import ContentHashCalculator
 
-# Pillow EXIF tag id for DateTimeOriginal (相机原生拍摄时刻)。
-# 用整数 id 而非字符串 tag 名以兼容旧 Pillow 版本对本名的差异。
-_EXIF_TAG_DATETIME_ORIGINAL = 36868
+# Pillow EXIF tag ids（EXIF 标准命名，ISSUE-019 顺修原注释的命名错位）：
+#   36867 = DateTimeOriginal（相机原生拍摄时刻，位于 Exif 子 IFD）
+#   36868 = DateTimeDigitized（位于 Exif 子 IFD）
+_EXIF_TAG_DATETIME_ORIGINAL = 36867
+_EXIF_TAG_DATETIME_DIGITIZED = 36868
+# EXIF 子 IFD 指针（0x8769）：EXIF 标准把拍摄时刻放在该子 IFD——真实相机/
+# 手机照片几乎全是此结构；IFD0 顶层读取仅命中个别非标准写放。
+_EXIF_SUB_IFD_POINTER = 0x8769
+# 历史兼容：Phase 2 Step 11 从 IFD0 顶层读 36868（非标准结构，个别工具
+# 按此写放），保留为降级链链尾（ISSUE-019）。
+_LEGACY_IFD0_TAG_DATETIME_DIGITIZED = 36868
 
 
 class PillowPhotoMetadataReader(PhotoMetadataReader):
@@ -64,7 +75,9 @@ class PillowPhotoMetadataReader(PhotoMetadataReader):
     def read(self, path: Path) -> PhotoMetadata:
         """Return image dimensions, filesystem metadata, captured_at, and content hash.
 
-        captured_at 降级链：EXIF DateTimeOriginal → 文件 mtime → None。
+        captured_at 降级链：Exif 子 IFD DateTimeOriginal → 子 IFD
+        DateTimeDigitized → IFD0 顶层 DateTimeDigitized（历史兼容）→
+        文件 mtime → None。
         EXIF 解析失败不抛错（只 log warning），mtime 兜底——保持本适配器
         对"无 EXIF 图片"（如 PNG、被剥离 EXIF 的 JPG）的非致命容忍。
 
@@ -131,7 +144,18 @@ class PillowPhotoMetadataReader(PhotoMetadataReader):
 
     @staticmethod
     def _extract_captured_at(image, image_path: Path) -> datetime | None:
-        """Try to read EXIF DateTimeOriginal, returning None on any failure.
+        """Read EXIF capture time down a priority chain, tolerating failures.
+
+        降级链（ISSUE-019 修复，2026-09-06）：
+
+            Exif 子 IFD DateTimeOriginal(36867)
+            → Exif 子 IFD DateTimeDigitized(36868)
+            → IFD0 顶层 DateTimeDigitized(36868，历史兼容链尾)
+            → None（调用方以文件 mtime 兜底）
+
+        EXIF 标准把拍摄时刻置于 Exif 子 IFD（0x8769）——真实相机/手机照片
+        几乎全是此结构；仅读 IFD0 顶层会 miss 而落 mtime 兜底，导致归档
+        "按拍摄日期"分桶实际按文件修改时间执行（ISSUE-019 缺陷本体）。
 
         Args:
             image: An open PIL Image instance.
@@ -149,7 +173,34 @@ class PillowPhotoMetadataReader(PhotoMetadataReader):
             return None
         if not exif_data:
             return None
-        raw_value = exif_data.get(_EXIF_TAG_DATETIME_ORIGINAL)
+        try:
+            sub_ifd = exif_data.get_ifd(_EXIF_SUB_IFD_POINTER)
+        except (AttributeError, OSError, ValueError) as exc:
+            # 子 IFD 访问失败不致命：继续走 IFD0 历史兼容链尾。
+            logger.debug("Exif sub-IFD unavailable for {}: {}", image_path, exc)
+            sub_ifd = {}
+        candidates = (
+            (_EXIF_TAG_DATETIME_ORIGINAL, "DateTimeOriginal(sub-IFD)", sub_ifd),
+            (_EXIF_TAG_DATETIME_DIGITIZED, "DateTimeDigitized(sub-IFD)", sub_ifd),
+            (
+                _LEGACY_IFD0_TAG_DATETIME_DIGITIZED,
+                "DateTimeDigitized(IFD0 legacy)",
+                exif_data,
+            ),
+        )
+        for tag_id, tag_label, source in candidates:
+            parsed = PillowPhotoMetadataReader._parse_exif_datetime(
+                source.get(tag_id), image_path, tag_label
+            )
+            if parsed is not None:
+                return parsed
+        return None
+
+    @staticmethod
+    def _parse_exif_datetime(
+        raw_value: str, image_path: Path, tag_label: str
+    ) -> datetime | None:
+        """Parse one EXIF datetime candidate; log and return None on failure."""
         if raw_value is None:
             return None
         try:
@@ -157,7 +208,8 @@ class PillowPhotoMetadataReader(PhotoMetadataReader):
             return datetime.strptime(raw_value, "%Y:%m:%d %H:%M:%S")
         except (TypeError, ValueError) as exc:
             logger.warning(
-                "Unparsable EXIF DateTimeOriginal for {}: {} ({})",
+                "Unparsable EXIF datetime ({}) for {}: {} ({})",
+                tag_label,
                 image_path,
                 raw_value,
                 exc,

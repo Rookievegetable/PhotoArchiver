@@ -90,7 +90,10 @@ class FilterBar(QWidget):
         # 占位必须设在内部 lineEdit 上：Windows 样式下可编辑 QComboBox 不绘制
         # combo 级占位（2026-09-06 桌面实测），QLineEdit 占位渲染可靠。
         self._person_combo.setPlaceholderText(FILTER_ALL_PERSONS)
-        self._person_combo.lineEdit().setPlaceholderText(FILTER_ALL_PERSONS)
+        # combo 已 setEditable(True)，lineEdit() 运行时恒非空——守卫仅满足可空注解。
+        line_edit = self._person_combo.lineEdit()
+        if line_edit is not None:
+            line_edit.setPlaceholderText(FILTER_ALL_PERSONS)
         self._person_combo.setToolTip(FILTER_PERSON_TOOLTIP)
         self._person_combo.setCurrentIndex(-1)
         layout.addWidget(self._person_combo)
