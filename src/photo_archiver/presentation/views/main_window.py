@@ -11,6 +11,7 @@ Status:  progress bar + status label
 from pathlib import Path
 from uuid import UUID
 
+from PySide6.QtCore import QSize
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -313,6 +314,15 @@ class MainWindow(QMainWindow):
         self._photo_list = QListView(self)
         self._photo_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._photo_list.setModel(self._photo_list_model)
+        # 照片墙网格布局（2026-09-06 桌面感知抽查反馈）：换行流式多列排列，
+        # 单元格与委托 sizeHint 匹配（160px 缩略框 + 文件名条）。
+        self._photo_list.setViewMode(QListView.ViewMode.IconMode)
+        self._photo_list.setFlow(QListView.Flow.LeftToRight)
+        self._photo_list.setWrapping(True)
+        self._photo_list.setResizeMode(QListView.ResizeMode.Adjust)
+        self._photo_list.setUniformItemSizes(True)
+        self._photo_list.setGridSize(QSize(184, 202))
+        self._photo_list.setSpacing(8)
         # P0-2: install the thumbnail delegate — the THUMBNAIL_ROLE consumer.
         # Without it the default delegate renders filenames only, leaving the
         # entire thumbnail pipeline invisible to the user.

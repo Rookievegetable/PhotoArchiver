@@ -25,10 +25,10 @@ from PySide6.QtWidgets import (
 
 from photo_archiver.presentation.views.photo_list_model import THUMBNAIL_ROLE
 
-# Matches the generation contract: PhotoListController generates thumbnails
-# inside a 256px bounding box, so painting uses the same box for the image
-# area and reserves a strip beneath it for the file name.
-_THUMBNAIL_BOX = 256
+# The generation contract keeps thumbnails inside a 256px bounding box
+# (PhotoListController); the DISPLAY cell shows them in a compact grid —
+# the 256px source downscales on paint (SmoothTransformation).
+_THUMBNAIL_BOX = 160
 _TEXT_HEIGHT = 24
 _PADDING = 6
 
@@ -94,10 +94,13 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
         painter.restore()
 
     def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:  # type: ignore[override]
-        """Row height fits the thumbnail box plus the name strip."""
-        thumbnail = self._load_pixmap(index.data(THUMBNAIL_ROLE))
-        if thumbnail.isNull():
-            return super().sizeHint(option, index)  # type: ignore[arg-type]
+        """Return a constant cell size — data-INDEPENDENT by design.
+
+        缩略图经异步管线后到：若 sizeHint 依赖数据（无图时回退默认小尺寸），
+        ``QListView.uniformItemSizes`` 会把首项的"未加载"尺寸锁死给全部单元
+        （2026-09-06 桌面实测：73×18 坍缩）。恒定尺寸让缩略图到达前后布局
+        稳定；无图回退绘制在同等矩形内照常工作。
+        """
         return QSize(_THUMBNAIL_BOX + 2 * _PADDING, _THUMBNAIL_BOX + _TEXT_HEIGHT + _PADDING)
 
     def _load_pixmap(self, source: object) -> QPixmap:

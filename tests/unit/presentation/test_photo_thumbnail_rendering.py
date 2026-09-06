@@ -19,7 +19,7 @@ pytest.importorskip("PIL")
 
 from pathlib import Path
 
-from PySide6.QtCore import QRect, Qt
+from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import QStyleOptionViewItem
 
@@ -113,6 +113,12 @@ def test_photo_list_renders_real_thumbnail(qtbot, tmp_path: Path) -> None:
     assert isinstance(delegate, PhotoThumbnailDelegate)
 
     # Rendered-pixels proof: paint the delegate and find the source color.
+    # 采样点取显示盒（160px 缩略框）中心——网格单元布局下 option.rect 中心
+    # 已落在文件名条/空白区。
+    from photo_archiver.presentation.views.photo_list_delegate import (
+        _THUMBNAIL_BOX,
+    )
+
     option = QStyleOptionViewItem()
     option.rect = QRect(0, 0, 280, 320)
     image = QImage(option.rect.size(), QImage.Format.Format_ARGB32)
@@ -120,7 +126,10 @@ def test_photo_list_renders_real_thumbnail(qtbot, tmp_path: Path) -> None:
     painter = QPainter(image)
     delegate.paint(painter, option, index)
     painter.end()
-    assert image.pixelColor(option.rect.center()) == QColor(*_SOURCE_COLOR)
+    sample_point = option.rect.topLeft() + QPoint(
+        option.rect.width() // 2, _THUMBNAIL_BOX // 2
+    )
+    assert image.pixelColor(sample_point) == QColor(*_SOURCE_COLOR)
 
     # Whole-widget rendering proof: the real view (shown in the real window)
     # draws the thumbnail onto the screen pixmap.
@@ -140,3 +149,37 @@ def test_photo_list_renders_real_thumbnail(qtbot, tmp_path: Path) -> None:
     )
     window._photo_list_controller.load_thumbnail(photo.id, source)
     assert cache_hits == [thumbnail_path]
+
+def test_photo_list_uses_wrapped_grid_layout(qtbot, tmp_path: Path) -> None:
+    """照片墙网格布线（2026-09-06 桌面感知抽查反馈）：换行流式多列排列。
+
+    网格单元格与委托 sizeHint 匹配（160px 缩略框 + 文件名条），缩略图在
+    任意单元矩形内按比例绘制——排列优化不得破坏委托渲染契约。
+    """
+    from PySide6.QtCore import QSize as _QSize
+    from PySide6.QtWidgets import QListView
+
+    settings = AppSettings(
+        database_url=f"sqlite:///{tmp_path / 'grid.db'}",
+        output_root=tmp_path / "out",
+    )
+    settings.ensure_runtime_directories()
+    context = bootstrap_application(settings)
+    window = MainWindow(context)
+    qtbot.addWidget(window)
+
+    view = window._photo_list
+    assert isinstance(view, QListView)
+    assert view.viewMode() == QListView.ViewMode.IconMode
+    assert view.flow() == QListView.Flow.LeftToRight
+    assert view.isWrapping()
+    assert view.resizeMode() == QListView.ResizeMode.Adjust
+    assert view.uniformItemSizes()
+    grid = view.gridSize()
+    assert isinstance(grid, _QSize) and grid.width() >= 172 and grid.height() >= 190
+    assert view.spacing() > 0
+
+    delegate = view.itemDelegate()
+    assert isinstance(delegate, PhotoThumbnailDelegate)
+    hint = delegate.sizeHint(QStyleOptionViewItem(), view.model().index(0, 0))
+    assert hint.width() <= grid.width() and hint.height() <= grid.height()
