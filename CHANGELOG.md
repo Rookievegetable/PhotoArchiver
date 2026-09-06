@@ -36,9 +36,9 @@ the EXIF capture-time correction for real camera photos.
 
 ## [2.3.1] - 2026-09-05
 
-Desktop UI polish: Chinese localization, a production-only toolbar, and the
-desktop-review defect fixes (owner-directed rounds after v2.3.0; per owner
-decision both fold into v2.3.1 as one release — no separate version).
+Desktop UI polish (owner-directed rounds after v2.3.0): Chinese
+localization, a production-only toolbar, and a searchable person filter —
+folded into v2.3.1 per owner decision (no separate version).
 
 ### Changed
 

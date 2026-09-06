@@ -2,11 +2,11 @@
 
 > **本文档是项目当前运行状态（Current Runtime State）的唯一快照。**
 >
-> 回答：**“项目现在开发到哪里了？”**
+> 回答：**"项目现在开发到哪里了？"**
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.14.0 · Last Updated: 2026-09-05 · Status: Live
+> Version: 1.15.0 · Last Updated: 2026-09-06 · Status: Live
 
 ---
 
@@ -20,34 +20,27 @@
 | 12–14 | Main UI、Settings、Export | ✅ Completed |
 | 15 | Plugin System | ✅ Completed |
 
-M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 均已落地。
+M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 均已落地。此后进入发布工程与桌面验收驱动的迭代修复（v2.3.x 系列已发布至 v2.3.2）。
 
 ---
 
 ## 2. Current Step（当前开发阶段）
 
-项目主路线图已完成；经 2026-09-02 全项目体检后，**Phase A/B/C 均已完成，当前处于 Phase D（发布工程·形态一）执行轮**（D-0 裁决：源码形态 v1.0，维持 ADR-031；决策批复 D-B1~D-B8 记录于 §2）。
+**v2.3.2 已发布（2026-09-06）并待 owner 签核**。本版本为桌面复验驱动的修复版：
 
-- 阶段 0（质量基线与文档收口）：✅ 完成。
-- 阶段 1（PluginContext 公共边界加固，ADR-026）：✅ 完成。
-- 阶段 2（Alembic 接管 Schema DDL，ADR-027）：✅ 完成。
-- 阶段 3（插件写能力 import_people，ADR-028）：✅ 完成（仅 import_people；export 经 ADR-030 裁决 YAGNI 正式关闭）。
-- 阶段 4（技术债轮：search_photos N+1 加固 ADR-029 + 轮次裁决 ADR-030）：✅ 完成（兼容路径移除原挂账 v2.0.0，已于 v2.0.0 轮兑现——见下表「v2.0.0 破坏性窗口」行；审批门续暂缓）。
-- 阶段 5（识别管线吞吐加固，ADR-032）：✅ 完成——线程并行 + `add_many` 单事务批下推 + 基准工具入库（全网格基线落档；线程扩展 1.28× 弱于建议阈值）。二轮证据链闭合：batch 批推理经 W1 尖刺证据性出局；W2-segment 尖刺段内分解定址两个死重模型（landmark 35.4ms + genderage 9.8ms，生产零消费）——phase7 执行轮完成（ADR-033，owner 三项全 A 拍板 2026-08-29）：landmark 双模型 + genderage 死重剔除（loader `allowed_modules=("detection","recognition")` 一行配置），全网格复测 2600 串行 656.94→332.02s（**1.98×**）、4-worker 5.06→**11.22** photos/s（**2.22×**），等价不变量全程保持（pytest 417），v2.2.0。
-- **Phase 4.2（FEATURE-001：Face Recognition / Matching 生产触发入口）**：✅ 完成并 Final Audit **CLOSED**（2026-08-30，HEAD `638ef30`）——原 P1「Face Recognition 无 UI/CLI 触发入口」闭环：四个 Commit（`2788d64` Worker Task → `ba9a413` Controller → `afc29e9` UI Action → `638ef30` Integration tests）。真实持久化链路（Task → Service → SQLite → PENDING → Review approve）由真实 SQLite integration 验证（AC-015/AC-016 PASS）；AC-001~016 逐条对账；`pytest 485 passed / 3 skipped`、`ruff`、`mypy 170 files`、`pip check` 全绿。两项设计/测试覆盖限制登记 `KNOWN_ISSUES.md`（LIMIT-001 真实缺模型 E2E 未入 CI；LIMIT-002 取消粒度为 batch-level）。
-- **Phase 5（FEATURE-002：Export 生产触发入口 / Export UI）**：✅ 完成并 Final Audit **PASS / CLOSED**（2026-08-31，HEAD `3db7074`）——原 P1「Export 无 UI/CLI 触发入口」闭环：两个 Feature Commit（`4f054b4` feat(ui) 增加 Export Data QAction + handler + 信号 wiring；`396b706` test(integration) UI→Controller→Task→Service→Exporter→SQLite→file 全真实链路集成测试）+ Final Audit Commit `3db7074`（docs(audit) AC 证据缺口闭合 + Final Audit 报告，已随 Git 历史清理自 main 移除）。AC-001~015 全部 PASS（15/15，结论保留于本节）；`pytest 500 passed / 3 skipped`、`ruff`、`mypy 170 files`、`pip check` 全绿；生产代码变更仅 Commit 1 的 `main_window.py`（+69 行），Commit 2/3 生产代码 0。Finding 对账：F-001（ExportService scope stub，CURRENT_BATCH/FILTERED 未实现）保持既有 P3 登记（FEATURE-004 独立跟进，不重复入 KNOWN_ISSUES）；F-002（match 控制器真实线程池集成测试偶发时序 flake）保持 Phase 4.2 审计既有记录；F-003 已于 Final Audit 闭合（补测完成）。Phase 5 无新增开放问题，`KNOWN_ISSUES.md` 维持既有 2 项设计/测试覆盖限制（LIMIT-001/002）。
-- **Phase 6（FEATURE-COMPLETENESS-001：已 CLOSED Feature 完整性审计与稳定性加固）**：✅ 完成并 Final Audit **PASS**（2026-09-01，Baseline commit `b9b6c90`）——对已 CLOSED 的 FEATURE-001（Face Recognition）与 FEATURE-002（Export Data）做完整性核验：Feature Matrix 全在位（FEATURE-001 Controller/WorkerTask/Service/Repository/UI Action/Review Pipeline；FEATURE-002 Controller/WorkerTask/Service/Exporter/SQLite 读取/文件输出/UI Action），实现零漂移（`git diff HEAD -- src/ tests/ alembic/` 为空）；**AC 31/31 PASS**（16/16 + 15/15，逐条以当前代码 + 当前测试双证据核验）；**Quality Gates**：`pytest 499 passed / 3 skipped / 1 known failure`（唯一 failed = F-002 历史线程池时序 flake，单跑 ×2 稳定）、`ruff`、`mypy 170 files`、`pip check` 全绿；**Production Code Changes: NONE**。Finding 对账：F-001（Export scope stub，Deferred FEATURE-004）、F-002（Known limitation）、LIMIT-001/002 均维持既有登记，新增 None。审计结论：Baseline Audit Rev 2 PASS + Final Audit PASS（报告已随 Git 历史清理自 main 移除）。
-- **Phase 7（FEATURE-004：Export Scope Implementation）**：✅ 完成并 Final Audit **PASS / CLOSED**（2026-09-02，HEAD `747ccab`）——Phase 5 遗留 P3 F-001（ExportService scope stub）闭环，四 Commit（`d339904` audit(export) Scope Contract 定义 + criteria 签名贯通 → `0e1e9e3` feat(export) `_gather_data` 三分支 dispatch + `RecognitionRepository`/`ArchiveRecordRepository` `list_by_photo_ids`（Protocol 默认实现 + SQLite IN-clause 分块覆写）→ `c4ca958` feat(ui) scope selection + `_current_criteria` 持有一点 → `747ccab` test(export) 真实 SQLite 集成收口）。ALL 行为零漂移（逐字节不变性测试 + 真实 SQLite 8 行 approved-only 回归）；FILTERED 契约 §3/F1–F8 全量落地——criteria 快照在导出执行时刻经 `PhotoRepository.search` 重查询、matches/people/archive_records 严格自主集派生（matches 全状态含 Pending）、真实 UI→Controller→Task→Service→Repository→Exporter→file 链 CSV/XLSX 双格式逐项断言、Photo A/B 泄漏矩阵零泄漏；CURRENT_BATCH 按 §2 D1–D5 裁决 **DEFERRED**（UI 永久禁用 + 枚举成员保留 + Service/Task 层诚实 `ValueError`，无静默 fallback）；FILTERED+criteria=None 经真实链路双层拒绝。**AC 8/8 PASS**（0 NOT VERIFIED）；`pytest 535 passed / 3 skipped`、`ruff`、`mypy 170 files`、`pip check` 全绿（F-002 本轮全量复现 1 次，单跑 ×2 稳定复判为同一已知 flake）。Finding 对账：F-001 **CLOSED**；F-002 维持 Known limitation；LIMIT-001/002 维持；新增 None。审计链：Baseline Audit（BLOCKED）→ Scope Contract Revision（解锁契约）→ Final Audit（PASS）→ Closure（报告已随 Git 历史清理自 main 移除）。
+- **EXIF 拍摄时刻修正（ISSUE-019，已修复关闭）**：元数据读取器此前只读 IFD0 顶层 tag，真实相机/手机照片（标准 Exif 子 IFD 结构）的 `captured_at` 被文件修改时间冒名顶替。现按降级链读取：子 IFD DateTimeOriginal(36867) → 子 IFD DateTimeDigitized(36868) → IFD0 顶层（历史兼容）→ mtime。真机终验通过：手机直出照 IMG_20240713_164201.jpg（EXIF 2024:07:13 16:42:01）经真实 UI 扫描全链精确命中；已入库照片不回填（快照语义）。条目已自 KNOWN_ISSUES 删除。
+- **照片墙布局**：照片列表由"一行一张巨图"改为换行多列网格（约 160px 缩略格 + 文件名条）；委托器单元格尺寸恒定化（修复 uniformItemSizes + 异步缩略图导致的单元坍缩）。
+- **人员筛选占位修复**：可编辑人员下拉的"全部人员"占位此前在 Windows 桌面不渲染，改由内部 lineEdit 承载后显示可靠。
 
-- **Phase 9 P0（FEAT-P9-1/2/3：Filter Completeness）**：✅ 完成（2026-09-02，HEAD `3a2ef0a`）——日期范围筛选（From/To checkbox 门控）、人员筛选（新增薄读取用例 `ListPersonsService`）、三轴联合 AND 语义矩阵 + FILTERED 导出真实链路联测（泄漏矩阵零泄漏）。DoD 23/23；`pytest 570 passed / 3 skipped`；联测暴露并修复 QVariant userData 缺陷（userData 改存字符串 id）。实施报告：`docs/development/PHASE_9_FILTER_COMPLETENESS_REPORT.md`；规划：`docs/roadmap/NEXT_PHASE_FEATURE_DEVELOPMENT_PLAN.md`。
-- **Phase A（Runtime Correctness——全项目体检 P0 修复轮）**：🚧 Owner 已授权执行（2026-09-02）——范围 P0-10（文档收口）/ P0-1（插件 UI 加载）/ P0-2（缩略图 UI 渲染）/ P0-3（Excel 导入接线）/ P0-4（取消信号 + 扫描单飞），按序独立提交；每项完成后 STOP 待指令。体检基线报告：`docs/health-check/PROJECT_HEALTH_CHECK.md`（3 项用户可见功能失效 + 数据安全底线缺位 + F-002 恶化等 18 项 Finding）；开发路线图：`docs/roadmap/DEVELOPMENT_ROADMAP.md`。**Phase A 全部 5 项 P0 已完成（P0-10/1/2/3/4）**（见 §5/§6）。
-- **Phase C（时序 flake 专项）**：⚠️ Owner 授权并解除禁修定性（2026-09-02）——首版方案（is_finished 权威终态）推送后 CI win/mac 新故障签名（AttributeError + access violation），**整体回退**（根因待查）；测试侧加固替代方案落地（两 match e2e 守卫断言改轮询），LIMIT-005 排序修复保留并经 mac CI 实证；回退收尾后连续两轮全量全绿 641/3/0。F-002/LIMIT-003 竞态的根治方案待重研（禁用包装器属性读取方向）。
-- **Phase D（发布工程·形态一）**：🚧 D-0 裁决源码形态 v1.0（维持 ADR-031，方案 B 不触发）——P2-5 导出原子写已完成（`c33bbdd`）；剩余：发布验收清单执行（owner 手动）+ 发布说明素材（已交付会话）+ tag 命名裁决 + push/release。
-- **Phase D UI 整备（Owner 指令，2026-09-05，v2.3.0 tag 后落地）**：✅ 完成并全门禁绿（HEAD `eb08c2f`）——①桌面 UI 全面中文化：全部用户可见文案集中到新文案表 `presentation/ui_text.py`（ui-rules §24 单一翻译置换点），工具栏/筛选栏/状态栏/九类对话框全中文；任务名、枚举与冲突策略等契约值不变（冲突策略 UI 中文标签 + userData 携带契约值）。②示例插件不再自动加载进生产工具栏（Say Hello / Import People (Demo) / Stats Report 移除）——插件机制完整保留为外部扩展点（`PluginRegistry.load_from_path`），示例文件保留 `examples/plugins/`；P0-1 插件 UI 链测试改为显式驱动公开加载链并新增空注册表守卫。版本归属已经 owner 裁决（2026-09-05）：**归入 v2.3.1**——版本链已 bump 2.3.1 三处一致（`acc12a0`），CHANGELOG 段落 `[2.3.1] - 2026-09-05`，不重打 v2.3.0。**发版已落地（2026-09-05）**：owner 推送 main 4 笔（CI run #30 三平台 success）→ tag `v2.3.1`→`39c0ca7` 推送（Release workflow run #7/#8 两度触发均 success——#7 为 owner 首次推 tag、删除远端 tag 后重推为 #8）；GitHub Release v2.3.1 已发布（published 2026-09-05T14:23:43Z），双资产挂载实测确认：wheel `photo_archiver-2.3.1-py3-none-any.whl`（261,825 B）/ sdist `photo_archiver-2.3.1.tar.gz`（185,007 B）；wheel 内容深检因本机对 github.com 的间歇 TLS 故障未完成（chain 证据闭环：run head_sha=39c0ca7 + 资产文件名含 2.3.1）。Release body 当前仅为自动生成行——**owner 待粘贴 AI 起草的收口文案**（`testdata/release_body_v2.3.1.md`，结构镜像 v2.3.0：运行形态/本版要点/质量 647/3/0/已知限制）。
-- **v2.3.2 UI 缺陷修复轮（Owner 真桌面验收报告两缺陷 → 审批方案 → 本轮执行，2026-09-05）**：✅ 完成并全门禁绿。①残留英文根治——设置对话框主题/语言下拉改中文标签 + userData 契约值（持久化兼容，`test_ui_translations.py` 守护值域与 `VALID_THEMES/VALID_LANGUAGES` 同步）；新增 `presentation/translations.py` 于 `PhotoArchiverApplication` 启动时装载 PySide6 自带 `qtbase_zh_CN`——QDialogButtonBox 标准按钮（保存/取消/确定/关闭）与文件选择对话框系统性中文化，缺失仅告警回退英文。②筛选下拉占位语义——状态下拉仅含 待审核/已通过/已拒绝、人员下拉仅含真实人员，未选中（index -1）闭合框灰色占位"全部"/"全部人员"= 不设约束，清除按钮复位占位态；筛选契约零变化（None → list_all）。门禁：pytest **650 passed / 3 skipped / 0 failed**（+3 翻译/同步守护）、ruff 0、mypy 179 files、pip check 绿；offscreen 实测 保存/取消 按钮中文、下拉项与占位全部符合批复。**补丁追加（同日第二项 Owner 指令）**：人员下拉新增键入即时搜索——新纯函数模块 `presentation/person_matcher.py` 实现四级智能排名（全等 → 前缀 → 连续包含按首现位置 → 子序列按最小窗口 DP 跨度；owner 以 `ab`→`ab/abxxx/xabx/xxab/axbx/axxb` 锁定规格），`FilterBar` 人员下拉改可编辑 + QCompleter 排序补全（输入仅刷新补全列表，选中才落 criteria；清除复位占位态；NoInsert 防污染选项集）。+12 测试（matcher 排名验收 + 接线），门禁 pytest **662 passed / 3 skipped / 0 failed**、ruff 0、mypy 180 files、pip check 绿。版本归属（owner 裁决修订 2026-09-05）：**本轮为 v2.3.1 的补丁，不发新版本**——v2.3.2 版本链 bump 已回退（pyproject / .env.example 回到 2.3.1，CHANGELOG `[2.3.2]` 段折入 `[2.3.1]`），落地机制沿用 v2.3.0 先例，**已全部执行完毕（2026-09-05/06）**：owner 推送全部提交（origin/main = `f8876f0`）→ tag `v2.3.1` 重打至 `f8876f0`（force，remote ls-remote 实测指向正确）→ release workflow run #9（`f689c01` 中间重打）/ #10（`f8876f0` 终态）均 success → 双资产已重建替换（wheel 267,654 B / sdist 189,822 B，updated 16:03:29Z，较补丁前增大与补丁代码量吻合）→ **Release body 草案 v2 已由 owner 重贴上线**（API 实测含 运行形态/本版要点/真桌面验收缺陷修复/人员筛选快捷搜索/质量 662/3/0/已知限制 全部小节）。**二次重打（2026-09-06，CI 事件闭环后 owner 选定"重打"）**：tag `v2.3.1` 重打至 `90c46db`（CI 三平台绿树）→ release workflow run #11 success → 双资产重建（wheel 268,070 B / sdist 190,161 B @ 09:47:41Z）；**body 两处微调已由 AI 经认证 API 完成（2026-09-06，owner "继续"指令推进）**：质量数字 →667/3/0、构建自行 →`90c46db`（run #39），API 回读实证（667 在场 / 662 零残留 / 90c46db 在场 / 四小节完好）。
-- **Phase B（数据安全底线）**：🚧 Owner 已授权（2026-09-02）按 AI 计划草案的建议方案执行——决策批复：D-B1 导入按批原子（500 行/批）/ D-B2 无 identity 行按 name+department 查重 / D-B3 备份 VACUUM INTO + 每启动 + 3 份滚动 / D-B4 损坏库报错退出（不重建/不换库）/ D-B5 Windows 源码形态下 P0-9 完整锚定降 P1、本轮仅做启动警告 / D-B7 常量默认值（busy_timeout=5000、批 500 行、backups 同目录）/ D-B8 逐项授权。范围 P0-5→P0-6→P0-7→P0-8→P0-9(警告) 按序独立提交，每项完成后 STOP 待指令。**P0-5/6/7/8/9 全部完成**（`22305dd` / `ab92d5c`+`0295f62`+`9752af3` / `169abb3b`+`9359dfb` / `548d7fc`+`c46062f`+`4e91ee4` / `37fb675`——P0-8 并入质量审查 F-1/F-2）（见 §5/§6）。
+### 历史发版锚点
 
-当前未决问题清零（2026-09-06：ISSUE-019 EXIF 子 IFD 拍摄时刻缺陷已修复并经真机终验关闭——owner 提供手机直出照 IMG_20240713_164201.jpg，EXIF 子 IFD DateTimeOriginal=2024:07:13 16:42:01 经真实 UI 扫描精确命中库内 captured_at，无 EXIF 网图正确落 mtime 兜底，降级链全分支实证；条目已同提交删除）；`KNOWN_ISSUES.md` Limit 表格登记 4 项（LIMIT-001/002/004/006；LIMIT-003 已随 F-002 经 `1436a62` 根治删除，LIMIT-005 已随排序修复删除）。
+| 版本 | tag → 提交 | 主题 |
+|---|---|---|
+| v2.3.0 | `e14409e` | 数据安全底线 + 运行时正确性（Phase A/B/C，D-B1~D-B8 裁决） |
+| v2.3.1 | `90c46db` | 桌面 UI 中文化 + 工具栏纯化 + 人员筛选智能搜索（owner 裁决多轮折入单一发布；tag 二次重打至 CI 绿树） |
+| v2.3.2 | `2aadcee` | 桌面复验修复：EXIF 拍摄时刻 + 照片墙 + 占位（本版） |
+
+更早锚点：v1.0.0→`49b2ac6`、v2.0.0→`ba3ad02`、v2.1.0→`bd52fbb`、v2.2.0→`f9fb8c5`。
 
 ---
 
@@ -55,21 +48,17 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 | 范围 | 状态 | 当前事实 |
 |---|---|---|
-| 15 步产品路线图 | ✅ | Step 0.5–15 全部已实现并验证。 |
-| 阶段 B 业务增强 B1–B5 | ✅ | 重复图片、搜索/筛选、批量归档、HTML 导出、只读插件上下文均已落地。 |
-| 阶段 0 质量基线 | ✅ | 质量门和文档收口已完成。 |
-| 阶段 1 PluginContext | ✅ | ADR-026：`ContextAwarePlugin` 生命周期、Plugin DTO 边界、结构化 `PluginReport`。 |
-| 阶段 2 Schema DDL 所有权 | ✅ | ADR-027：`002_split_create_ddl` 为 Schema DDL 唯一权威。 |
-| 阶段 3 插件写能力 | ✅ | ADR-028：`PluginContext.import_people` 已实现——插件经 `PluginImportPeopleCommand`/`PluginImportPersonRow` 写入人员实体（宿主补 row_number），结果 `PluginImportResult` 以 str ids 脱 Domain；无宿主审批门；export 写能力经 ADR-030 裁决 YAGNI 正式关闭。示例插件 `examples/plugins/import_people_demo_plugin.py` 端到端演示。 |
-| 阶段 4 技术债轮 | ✅ | ADR-029：插件查询识别状态批量联查——2600 张库单次查询 1137.9ms → 62.5ms（18.2×），往返 O(N)→O(1)；ADR-030：兼容路径移除挂账 v2.0.0（已兑现，见「v2.0.0 破坏性窗口」行）、export 暂缓终结、审批门续暂缓。基线工具 `tools/bench_plugin_search.py` 入库可复跑。 |
-| M8 可发布里程碑 | ✅ | MIT License 落定（占位已删除）；pyproject 元数据落位（version 1.0.0 / license / classifiers / readme / description）；`.github/workflows/release.yml` 增补（tag 触发 sdist+wheel 构建并发布 GitHub Release）；`CHANGELOG.md` 建立；tag `v1.0.0` 已推送，GitHub Release v1.0.0 资产挂载确认（sdist+wheel）。 |
-| M9 分发定位裁决 | ✅ | ADR-031 登记并执行完毕——运行形态定位为「源码/clone 唯一受支持」；Release v1.0.0 body 置顶安装态标注已由 owner 粘贴（2026-08-26 API 实测生效，B5-3 销账）；ISSUE-018 以 by-design 正式终结（KNOWN_ISSUES 回归空态）。 |
-| v2.0.0 破坏性窗口 | ✅ | ADR-030/B4-1 兑现——旧 `enable(context)` 分发分支移除（loader 三分叉收敛为二分叉：ContextAware / 无参 enable），生产与示例代码零消费者 grep 实证；测试矩阵净减 3 个 legacy 用例（413→410 全绿）；CHANGELOG `[2.0.0]` BREAKING 标注落定；版本链 bump 2.0.0（pyproject + .env.example 示例值；settings 回退值按 configuration.md 口径保持不动）。发版链实证——tag `v2.0.0` 已推送并触发 release workflow（run 33071797649 双 job success）：GitHub Release v2.0.0 自动创建且双资产挂载 API 实测确认（wheel 220KB / sdist 152KB）；发布前实现提交 `ba3ad02` CI 三平台全绿（run 33070707134）。Breaking Notes 已由 owner 粘贴（2026-08-27 API 复验：body 859 字符、文案逐字到位，紧随自动生成的 Full Changelog 行呈现，Review MINOR-4 销账）。 |
-| Phase 6 吞吐加固 | ✅ | ADR-032 五项裁决落地——ThreadPoolExecutor per-photo 并行（并行段限纯推理、持久化回主线程、`max_workers=1` 逐字节串行原路径）；Domain `RecognitionRepository` 扩 `add_many`、SQLite 端单事务批量提交（往返 O(N)→O(1)）；基准工具 `tools/bench_recognition.py` 入库（全网格基线落 docstring：2600 张串行 656.9s → 4 workers 514.0s = **1.28×**；InsightFace session 跨线程共享实测安全）；等价不变量测试锁定（pytest 410→**417** passed）。线程扩展弱于 ≥2× 建议阈值——batch 批推理（A-2=B）二轮证据已触发；W1 尖刺实测完成（`tools/spike_batch_inference.py`，2026-08-29）：纯推理天花板 ≈13.7 photos/s、线程超订阅假设证伪、瓶颈定址非推理段（~143ms/张）；W2-segment 尖刺（`tools/spike_segment_profile.py` v2，账目闭合 251.3≈249.4≈254.4 ms/张）定址两个零消费死重模型——landmark 双模型 35.4ms（剔除 1.522×）、genderage 9.8ms（合计 1.985×），剔除落点为 loader `allowed_modules` 一行配置；phase7 前置门草案待 owner 拍板（W2-1/W2-2/W2-3）。 |
-| Phase 7 死重剔除（v2.2.0） | ✅ | ADR-033 三项裁决全 A（W2-1 landmark 剔除 / W2-2 genderage 一并剔除，owner 确认近期无性别年龄功能规划 / W2-3 剩余非推理段本轮不改造）——loader `allowed_modules=("detection","recognition")` 落地，bbox/kps/embedding 逐字节不变；`tools/bench_recognition.py` 全网格复测落 docstring：2600×1 656.94→332.02s（**1.98×**）、2600×4 514.00→231.68s（**2.22×**）、600×4 2.45×，全部格子 100% 产出 / 全 PENDING 等价保持；门禁本地全绿（ruff 0 / mypy 168 ✓ / pytest **417** passed）；证据链 `tools/spike_segment_profile.py` v2（账目闭合）+ phase7 定稿（`docs/development/phase7-adr-draft.md`）。CI 实证已回填（owner push 后 API 实测 head `4fe8aa4` CI run completed/success 三平台全绿，2026-08-29）；发版链实证——tag `v2.1.0`@`bd52fbb` / tag `v2.2.0`@`f9fb8c5` 已由 owner 推送（ls-remote 实测远端指向正确），两 tag 触发 release workflow，owner 确认 CI 全绿，v2.1.0 / v2.2.0 已发布（2026-08-29）。 |
-| CI | ✅ | GitHub Actions 三 OS 矩阵、模型缓存与 AI/UI 断言已启用。 |
+| 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
+| 版本链 | ✅ | v2.3.2 三处一致（pyproject / .env.example / CHANGELOG `[2.3.2] - 2026-09-06`）。 |
+| CI | ✅ | run #46（head `2aadcee`）三平台 success——v2.3.2 发布树的直接实证；run #44（ISSUE-019 修复）亦绿。 |
+| 桌面复验 | ✅ | 机制项（N1–N4 自动化：1200 行导入闭环/取消一致性/备份恢复演练/换目录子进程）+ 感知项（J1–J7 owner 逐项判定）全部通过。 |
+| 未决问题 | ✅ 清零 | ISSUE-019 已修复并经真机终验关闭（条目同提交删除）。 |
+| Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消为任务边界粒度，设计特征）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS CI runner 压力扫描段错误，darwin skip），均 Low、不阻塞。 |
+| Release body | ✅ | v2.3.2 body 已由 owner 粘贴并经 API 缓存穿透回读实证（668/3/0 + 全部小节 + 构建自 `2aadcee`）。 |
 
-当前 HEAD：v2.3.2 发版后收口态（origin/main 同步），working tree 全净（无未跟踪文件）。v2.3.1 发版终态：tag `v2.3.1`→`90c46db`（二次重打，CI 三平台绿树，remote 实测）；release workflow run #11 success；Release v2.3.1 双资产已重建（wheel 268,070 B / sdist 190,161 B @ 2026-09-06T09:47:41Z）；线上 body 两处微调已由 AI 完成（667/3/0 + 构建自 `90c46db`，API 回读实证）。CI 实证：run #39（head `90c46db`）三平台 success——补丁链全平台绿；LIMIT-006（macOS 压力用例 darwin skip）与 N3 竞态修复均在绿树上。版本链 **2.3.2** 三处一致（pyproject / .env.example / CHANGELOG `[2.3.2] - 2026-09-06`）。tag 全景：`v1.0.0`→`49b2ac6`、`v2.0.0`→`ba3ad02`、`v2.1.0`→`bd52fbb`、`v2.2.0`→`f9fb8c5`、`v2.3.0`→`e14409e`、`v2.3.1`→`90c46db`、`v2.3.2`→`2aadcee`（remote 实测）。历史重写注记与全项目状态锚点同前（`docs/health-check/PROJECT_HEALTH_CHECK.md`）。
+### 数据库 Schema
+
+Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGMA user_version = 4`。本版未改 Schema。
 
 ---
 
@@ -78,16 +67,13 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 | 模块 | 状态 | 关键位置 |
 |---|---|---|
 | Logging / Configuration | ✅ | `infrastructure/logging/`、`infrastructure/config/` |
-| Database | ✅ | Alembic 已启用；`002_split_create_ddl` 为 Schema DDL 唯一权威（ADR-024、ADR-027）。 |
-| Domain / Import / Scan / Thumbnail | ✅ | `domain/`、`application/services/`、`infrastructure/`；`ImportPeopleService.import_rows` 提供预解析行导入入口（文件路径 `execute()` 委托同一落库核心）。 |
-| Recognition / Review | ✅ | InsightFace detect/recognize/match 与审核闭环已完成。 |
-| Archive | ✅ | Planner → Plan → Executor，支持 dry-run、captured_at 和批量筛选归档。 |
-| UI / Settings / Export | ✅ | 主窗口、设置闭环、Excel/CSV/HTML 导出和 Worker 路径已完成。 |
-| Plugins | ✅ | 发现/加载/生命周期 + PluginContext 读方法（search_photos/detect_duplicates）+ 写方法 `import_people`（ADR-028）；宿主经通用 PluginReportDialog 渲染插件报告。 |
-
-### 数据库 Schema
-
-`PRAGMA user_version = 4`。Schema 演进由 `alembic/` 与 `alembic_runner.py` 管理；表与索引 DDL 属于 Alembic 迁移（ADR-027）。阶段 3 未改 Schema、未新增依赖。
+| Database | ✅ | Alembic 管理（ADR-027） |
+| Domain / Import / Scan / Thumbnail | ✅ | `domain/`、`application/services/`、`infrastructure/`；`PillowPhotoMetadataReader` 支持 Exif 子 IFD 拍摄时刻（ISSUE-019 修复） |
+| Recognition / Review | ✅ | InsightFace detect/recognize/match 与审核闭环 |
+| Archive | ✅ | Planner → Plan → Executor，captured_at 现对真实相机照片正确分桶 |
+| UI / Settings / Export | ✅ | 主窗口、设置闭环、Excel/CSV/HTML 导出、照片墙网格布局 |
+| 人员筛选 | ✅ | 三轴组合筛选 + 人员轴键入即时搜索（`presentation/person_matcher.py` 四级智能排名） |
+| Plugins | ✅ | 发现/加载/生命周期 + PluginContext 读方法 + import_people 写方法；示例插件不自动加载（外部扩展点） |
 
 ---
 
@@ -95,49 +81,38 @@ M1–M7 及 Step 0.5–15 已全部完成；阶段 B 业务增强 B1–B5 与收
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-05（本地） |
+| 时间 | 2026-09-06（本地） |
 | 生成者 | ZCode |
-| 会话范围 | 交接恢复 → v2.3.0 桌面复验清单交付（`testdata/DESKTOP_CHECKLIST_v2.3.0.md`）→ **Owner 指令 UI 整备：识别无效组件 + 中文化**（本轮）→ STOP 待 Owner。 |
-| 已完成 | ① 交接恢复报告：HEAD/origin/tag/质量门禁四项实测吻合文档快照（pytest 646/3/0 基线复验）。② 真桌面复验清单（P0-4/6/7/9）按 `generate_materials.py` 与源码预期重建，素材自验证通过。③ **UI 整备（`eb08c2f`）**：Owner 提供桌面截图后判定工具栏末三个按钮（Say Hello / Import People (Demo) / Stats Report）为 `examples/plugins/` 示例插件自动加载所致，属演示噪音——移除自动加载，插件机制保留为显式外部扩展点；全部用户可见文案中文化并集中至新文案表 `presentation/ui_text.py`（ui-rules §24），冲突策略/状态筛选以中文标签显示、userData 保留契约值；P0-1 插件 UI 链测试改显式驱动公开加载链 + 新增空注册表守卫；13 个测试文件的文案断言同步更新；用户文档触碰清单同轮刷新（workflow.md / faq.md / plugin-guide.md）。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 180 个源文件无问题；pytest 全量 **662 passed / 3 skipped / 0 failed**；`pip check` 无损坏依赖；offscreen 实测三项缺陷修复（保存/取消中文、设置下拉中文标签、筛选下拉占位语义）；人员搜索排名经 owner 规格 ab 六级用例验收。 |
-| 工作区 | 代码提交 `eb08c2f` 本地领先 origin/main 1 笔，**待 owner 推送**（推送后需重看 CI 三平台）；`testdata/` 保持 untracked。 |
-| Remaining | **v2.3.1 发版技术链 ✅ 全部闭环**（tag 重打 `f8876f0` / run #9、#10 success / 资产重建 / body v2 已上线——见 §2/§3）。**真桌面复验进行中（2026-09-06 Owner 实测进度，清单 `testdata/DESKTOP_CHECKLIST_v2.3.0.md`）**：P0-4 扫描取消+单飞 ⚠️ 约 20%（待完整扫描取消测试，清单 B17–B19）；P0-6 数据安全+启动备份 ⚠️ 约 40%（待完整损坏库测试，清单 B5–B7）；P0-7 人员导入 ✅ 基础完成约 70%（Excel/TXT 导入链路已验证；待 1200 行大批量跨批用例，清单 B13/B14）；P0-9 启动路径警告 ✅ 基础完成约 80%（待部分换目录恢复测试，清单 A3 后半）；另 InsightFace 启动链路已验证通过。**自动化补充已落地（2026-09-06，Owner 批准 N1–N4 提案）**：B13/B14 大批量闭环、B19 取消一致性+重扫幂等、B7 快照恢复演练、A3 换目录子进程四项入 CI 套件（`tests/integration/test_{bulk_people_import_closed_loop,scan_cancel_consistency,backup_restore_drill,cwd_change_process_level}.py`），门禁 pytest **667 passed / 3 skipped / 0 failed**、ruff 0、mypy 180、pip check 绿；实现期实证扫描取消仅在 run 边界生效（在途取消扫完收尾，LIMIT-002 既载特征），清单 B18 预期已修正。分析全文 `testdata/AUTOMATION_ANALYSIS_v2.3.1.md`。**⚠️ CI 事件（2026-09-06 定位，修复待 CI 实证）**：CI run #32–#35（head `f689c01`→`cfe1f7b`，即 UI 缺陷修复链首推起）mac/ubuntu 双平台 Pytest 步骤连续红、Windows 绿（本地 667/3/0 全绿）。根因（高置信推断，平台模式 + Windows 侧机制验证吻合）：`translations.py` 硬编码轮子平铺路径 `PySide6/translations`——PySide6 轮子 Qt 目录布局分平台（Windows 平铺 / Linux・macOS 在 `PySide6/Qt/` 下），非 Windows 平台 load 必 miss → `test_installs_bundled_chinese_translation` 确定性失败。修复（`QLibraryInfo` 主定位 + 双轮子布局兜底）已推送并经 run #36 实证：**ubuntu/windows 转绿**（翻译根因成立）。**macOS 仍红但性质不同**：exit 139（SIGSEGV 原生段错误，非测试断言；run #32 起四连）——job 时长约等于全量套件时长、无失败用例注解，最一致的解释是套件尾部/解释器退出期的 Qt 原生销毁序崩溃，Owner 贴回 macOS 全量日志定谳：崩溃在**既有用例** `test_scan_single_flight::test_real_executor_refuses_second_scan_mid_flight_and_recovers`（真实线程池 + 2000 文件压力扫描），扫描 worker 线程于 pathlib.glob 段错误（本轮全部新测试在 macOS 均 PASSED，崩在 91% 处）——**LIMIT-004 的 macOS CI 变体，已登记 LIMIT-006**，两个真实执行器压力用例 darwin 范围 skipif（win/linux 照跑），QCompleter 假设撤销。run #37 红属预期（skip 之前的 docs 提交）；run #38 暴露第二个问题——N3 取消用例的竞速前提（提交后置旗与 worker 启动竞速，ubuntu 输掉 → 等 cancelled 60s 超时），已改为**双结局容忍**（cancelled/completed 均为合法终态，断言同一组不变量）。**run #39（head `90c46db`）三平台 success——CI 事件闭环**，补丁链首次取得全平台绿实证。**tag 树 CI 差异已消解（2026-09-06，owner 选定"重打"）**：tag `v2.3.1` 二次重打至 `90c46db`（run #39 三平台绿树，含 translations QLibraryInfo 产品级修复）→ release run #11 success → 资产重建（wheel 268,070 B / sdist 190,161 B @ 09:47:41Z）→ **body 两处微调已由 AI 经认证 API 完成**（质量数字 →667/3/0、构建自行 →`90c46db`，API 回读实证：667 在场/662 零残留/四小节完好）。**真桌面复验全部完成（2026-09-06，J1–J7 AI 代驾 + owner 逐项判定）**：机械项由 N1–N4 自动化实证；感知项——J1 主窗口观感 OK、J2 导入对话框（20 人落库 ✅；标题/过滤器疑点判读为 owner 观察偏差，过滤器含"人员文件"前缀正确）、J3 缩略图渲染 ✅ + 排列反馈当场修复（网格照片墙：IconMode 流式换行 + 184×202 单元；连带修正委托器 sizeHint 数据依赖导致的 uniformItemSizes 坍缩——缩略图异步到达前布局恒定）、J4 搜索+占位 ✅（占位缺陷修复：Windows 样式下可编辑 QComboBox 不绘制 combo 级占位 → lineEdit 承载，桌面实证）、J5 批量导入响应性 ✅、J6 损坏库弹框四要素完整 + 退出码 2 + owner 照指引恢复实做（回滚到快照时点验证）✅、J7 备份失败告警不阻断 ✅（确定性注入实证）。感知抽查修复连同网格布线测试：门禁 pytest **668 passed / 3 skipped / 0 failed**、ruff 0、mypy 180、pip check 绿。**v2.3.2 已发布（2026-09-06）**：版本链 2.3.2 三处一致（`2aadcee` chore(release)）→ CI run #46 三平台绿 → tag `v2.3.2`→`2aadcee` 推送 → release workflow run #12 success → 双资产（wheel 269,607 B / sdist 191,546 B @ 14:02:33Z）；**Release body 已由 owner 粘贴并经 API 缓存穿透回读实证**（668/3/0 + 运行形态/本版要点/已知限制/构建自 `2aadcee` 全部在场；首两次匿名 API 回读为 CDN 缓存滞后，owner 浏览器实拍为权威证据）。**剩余 Owner 项**：① Owner 签核发布 v2.3.2（body/资产/CI 全部就位）。Phase E（删除语义 ADR 门）未授权。测试辅助数据已于 owner 确认后删除（2026-09-06：隔离库/探针/`testdata\`/仓库 `data\` 五项全清，**工作树回归全净——无未跟踪文件**；桌面复验报告与 body 草案随删，内容已消费于本轮状态记录与线上 Release）。 |
-| Next Step | **STOP 等待 Owner**：测试辅助数据删除确认 → 签核发布 v2.3.2。桌面复验（机制 + 感知）、ISSUE-019、发版链均已闭环。 |
+| 会话范围 | 交接恢复 → v2.3.1 发版支持 → 复验清单自动化分理 → N1–N4 自动化落地 → 桌面感知抽查代驾（J1–J7）→ CI 事件排障（run #32–#39）→ ISSUE-019 立项/修复/终验/关闭 → **v2.3.2 发版**。 |
+| 关键产出 | ① `presentation/ui_text.py` 单一文案表（桌面 UI 全中文化）；② 示例插件退出生产工具栏（机制保留为外部扩展点）；③ `presentation/person_matcher.py` 四级智能排名 + 人员筛选搜索；④ `presentation/translations.py` QLibraryInfo 翻译装载（跨平台）；⑤ 照片墙网格布局 + 可靠占位 + 恒定 sizeHint；⑥ ISSUE-019 修复 + 4 条回归测试 + 真机终验；⑦ N1–N4 桌面复验自动化；⑧ LIMIT-006 登记与 darwin skip。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 180 个源文件无问题；pytest 全量 **672 passed / 3 skipped / 0 failed**（本地）；CI run #44/#46 三平台绿。 |
+| 工作区 | HEAD == origin/main，working tree 全净（测试辅助数据已经 owner 确认删除：隔离库/探针/`testdata\`/仓库 `data\` 五项全清）。 |
+| Remaining | ① Owner 签核发布 v2.3.2（技术链全部就位）。Phase E（删除语义 ADR 门）未授权。 |
 
 ---
 
 ## 6. Next Step（下一步开发计划）
 
-**Phase B（数据安全底线）执行状态**：Owner 已授权（2026-09-02）按 AI 计划草案建议方案执行（决策批复 D-B1~D-B8 见 §2）；每项以 静态契约 + 单测 + 集成测试 + Runtime Smoke + 用户视角验证 五层达标方为 COMPLETE，独立提交，完成后 STOP 待 Owner 逐项指令。
+**签核发布 v2.3.2**（owner 动作，技术链全部就位）。可选后续候选（均需另行立项）：
+- 历史照片 `captured_at` 回填 CLI（参照 backfill-content-hash 先例）；
+- LIMIT-006 macOS 原生崩溃追查（需 macOS 调试手段）；
+- 完整路径锚定 P1（用户目录/注册表定位）。
 
-1. ~~P0-5 SQLite WAL + busy_timeout~~ ✅ 已完成（`22305dd`）：`sqlite_connection.py` 两条连接路径（`connect()` / `transaction()`）统一经 `_configure_connection` 施加 PRAGMA——`busy_timeout=5000`（先于 journal 设置，写锁争用时等待而非报错）+ `journal_mode=WAL`（`:memory:` 跳过；WAL 为库文件持久属性，既有库幂等升级）。+6 真实链路测试（`tests/unit/infrastructure/test_sqlite_connection_pragmas.py`：双路径 PRAGMA 断言 / `:memory:` 边界 / 既有契约回归 / 双连接真实锁场景——写者 B 在 busy_timeout 内等待写者 A 提交后成功）；`docs/development/configuration.md` v1.2 增补 PRAGMA 说明 + WAL 网络盘限制注记。Runtime Smoke PASS（offscreen 真实 `bootstrap_application` + 隔离库 `%TEMP%\p0p5_smoke`：journal_mode=wal / busy_timeout=5000 实测，Alembic 迁移链真实跑通）。质量门：pytest **601 passed / 3 skipped / 0 failed**（F-002 本轮未复现——LIMIT-003 定性不变，不因单次全绿宣布处置）、ruff / mypy 173 files / pip check 全绿。
-2. ~~P0-6 损坏库友好失败 + 最小备份~~ ✅ 已完成（`ab92d5c` + `0295f62` + `9752af3`）：①完整性门 `infrastructure/database/integrity.py`——`verify_database_integrity` 以 URI mode=ro 只读跑 `PRAGMA quick_check`（缺文件/`:memory:` 跳过，绝不写坏文件/绝不创建文件），`CorruptedDatabaseError(path, issues)` 承载具体 issues；bootstrap 在 repos/migrations 前置该门，`sqlite3.DatabaseError` 兜底归一同类（防御纵深）。②友好失败 `presentation/startup_failure.py`——中文恢复指引（数据库位置/备份目录/复制恢复步骤/技术细节），GUI 自备 QApplication 弹 QMessageBox（QApplication 默认 quitOnLastWindowClosed=True，进程随返回码 2 退出），CLI stderr 同文案；main.py 四入口分流（CLI stderr+exit 2 / GUI dialog+exit 2），presentation 仅收 Path/str 原语零 infrastructure 依赖。③启动备份 `infrastructure/database/backup.py`（D-B3）——GUI 启动成功后 `VACUUM INTO` 快照至库同目录 `backups/`，3 份滚动保留，同秒冲突 _N 后缀，备份失败仅 WARNING 不阻塞启动、半成品清理，CLI 不备份；配置说明 v1.3 注记。Runtime Smoke A/B/C 全 PASS（A 注坏库 GUI 弹框 offscreen 截图核对中文文案；B 正常启动备份生成 + roundtrip 可读；C CLI 注坏库 exit 2 + stderr 指引 + 零备份泄漏 + 零 WAL 残留）。质量门：pytest **620 passed / 3 skipped / 0 failed**（+19：integrity 5 / startup_failure 4 / CLI 失败路径 4 / backup 5 / UoW 错误归类 1；F-002 连续三轮未复现——LIMIT-003 定性不变，处置仍归 Phase C）、ruff / mypy 176 files / pip check 全绿。
-3. ~~P0-7 导入事务化 + 无 identity 查重~~ ✅ 已完成（`169abb3b` 功能 + `9359dfb` LIMIT-005 登记）：①按批原子（D-B1）——`ImportPeopleService` 增可选 `UnitOfWork` 注入（`ReviewRecognitionService` 同型惯例，`None`=内存测试路径裸写），行按 `BATCH_SIZE=500`（D-B7）分块，每批一个 UoW 作用域：批内意外失败仅回滚当前批、先前批保持已提交，永不留半批；②逐行错误隔离保留——`ValueError`/`ValidationError` 记入 `result.errors` 不中断批次（roadmap「避免把弹性导入变成全有全无」注记）；③无 identity 查重（D-B2）——`PersonRepository` 协议扩 `find_by_name_department`（SQLite 实现 `name=? AND department IS ?` NULL 安全 / InMemory 同步 / 领域契约测试替身更新），归一镜像 `Person.__post_init__`（strip / `or None`）；插件 `import_rows` 路径（ADR-028）同受批+查重覆盖。+7 真实链路测试（`tests/unit/application/test_import_people_transactional.py`：真实 SQLite tmp 库 + 真实 UoW——批中途崩溃→仅当前批回滚主断言 / identity 重复 / name+department 查重矩阵（含 NULL 部门）/ 跨批提交）。Runtime Smoke PASS（offscreen 真实 `bootstrap_application` + 隔离库 `%TEMP%\p0p7_smoke`：20 行→15 导入 / 5 查重跳过 / 0 错误，二轮幂等全跳 20，库内计数 15 一致）。过程发现：Excel 导入 UI 闭环集成测试负载敏感时序 flake（3 次全量 2 挂 1 过 + 单跑稳定，失败点 FilterBar 刷新段、持久化断言均先过）按 Scope Lock 登记 `KNOWN_ISSUES` LIMIT-005 不修，候选并入 Phase C 时序 flake 专项。质量门：pytest **627 passed / 3 skipped / 0 failed**（F-002 连续三轮未复现——LIMIT-003 定性不变）、ruff / mypy 176 files / pip check 全绿。
-4. ~~P0-8 模型 SHA-256 固定~~ ✅ 已完成（`548d7fc` + `c46062f` + `4e91ee4`，质量审查 F-1/F-2 经 owner 批复并入本轮）：①`EXPECTED_SHA256["buffalo_l"]` pin 官方 v0.7 zip digest `80ffe37d…ca2f`（三重验证：官方 URL 下载件实测 / zip 内 5 ONNX 与 CI 绿色工作包逐一一致 / Hugging Face LFS 记录同前缀交叉印证）；②CI 移除 `--allow-unverified` 与 TODO（每次下载 fail-closed）；③审查 F-1：GUI 启动备份失败由裸调用崩溃改为 warning 不阻断（`main.py`，D-B3 best-effort 语义落地）；④审查 F-2：热 `-wal` 残留时完整性门延迟至读写打开（真损坏仍由 bootstrap DatabaseError 兜底，防御纵深不损失）。测试 +5（生产 pin 失开回归守卫 / 不匹配拒绝 / F-1 备份失败仍启动 / 热 WAL 延迟 + 无 sidecar 仍报损）。E2E 双路径实测：干净 zip verified→extract ✓ / 篡改 1 字节 → mismatch → Archive rejected → exit 1 ✓。CI 三平台强校验首跑依赖 owner push（D-B6 知会项）。
-5. ~~P0-9 路径锚定~~ ✅ 已完成——本轮仅启动警告（`37fb675`，D-B5 批复：完整锚定降 P1）：`bootstrap.py` 增 `cwd_dependent_path_warnings` 枚举全部 CWD 相对配置路径，启动时逐条中文 warning（含解析绝对路径与 .env 建议）；`:memory:`/绝对路径静默、未配置可选根跳过。测试 +5（纯函数矩阵 + 真实 bootstrap 经真实日志文件断言）。真实入口冒烟：相对库 3 条警告 / 绝对库仅模型目录 1 条（设计预期）。完整锚定（用户目录/注册表定位）降 P1，凭需求信号另启。
-6. ~~P0-9 路径锚定~~ 补充：P0-9 用户可见复验=换目录启动核对日志警告（清单保留）。
-7. ~~Phase C 时序 flake 专项~~ ✅ 已完成——**含一次回退（如实记录）**：①F-002/LIMIT-003 首版方案（`9616c3e`：`QtWorkerRunnable.is_finished` 权威终态 + 控制器 `is_running` 语义升级）推送后 **CI win/mac 双平台出现新故障签名**（pytest-qt 内部 AttributeError + Windows access violation 崩溃，历史未见）→ 疑点指向 main 线程读取已被 autoDelete 的 QRunnable 包装器属性 → **整体 revert（`7834c8b`）**，根因待查（is_finished 思路需改用非包装器机制重试）。②测试侧加固替代方案已落地：两 match e2e 的守卫断言改 `qtbot.waitUntil` 轮询（对投递时序鲁棒，不触生产）。③LIMIT-005 修复（`a6b70db` 人员轴排序确定性）经 mac CI 实证有效、保留。验证：回退收尾后连续两轮全量全绿 641/3/0。
-8. **Phase B/C 收口**：Phase B（P0-5~P0-9）+ Phase C（时序 flake 专项）全部完工；Phase D/E 须另行授权。
-
-CI 事故结案注记：is_finished 方案（`9616c3e`，已回退）在 owner push 后的 CI 首跑中于 win/mac 触发 pytest-qt 内部错误与 Windows 原生崩溃；回退（`7834c8b`）后 owner 实证 CI 三平台全绿——方案与崩溃的因果确证，重试需改用非包装器机制。发版收尾（非阻塞，GIT-020 归 owner）
-
-macOS 竞态结案注记（`1436a62`）：owner 推送 blocker 链后的 CI mac 失败（export UI 链 15s 超时）根因为**真实生产竞态**——快失败任务的终态信号在视图接线前发射即永久丢失；`QtWorkerRunnable` 保留终态 + `replay_pending_terminal()`（4 接线点）根治。迟订阅回归测试 + 连续两轮全量 646/3/0。收尾净化 `efd9a40` 删除三处 controller 的重复 replay 调用（one-shot 语义下行为不变），随链推送后 CI run #24 三平台全绿实证闭环。
+---
 
 ## 7. Key Files（关键文件索引）
 
 | 职责 | 文件 |
 |---|---|
-| 插件协议与上下文 | `src/photo_archiver/application/ports/plugin.py`、`src/photo_archiver/application/ports/plugin_context.py` |
-| 插件上下文服务（读映射 + import_people 写编排） | `src/photo_archiver/application/services/plugin_context_service.py` |
-| 人员导入服务（文件/预解析行双入口） | `src/photo_archiver/application/services/import_people_service.py` |
-| Plugin import DTO | `src/photo_archiver/application/dtos/plugin_context.py` |
-| 插件加载与应用装配 | `src/photo_archiver/plugins/loader.py`、`src/photo_archiver/app/bootstrap.py`、`src/photo_archiver/app/context.py` |
-| 示例插件 | `examples/plugins/stats_report_plugin.py`（读）、`examples/plugins/import_people_demo_plugin.py`（写） |
-| 插件设计与决策 | `docs/development/plugin-context-design.md`、`docs/development/phase3-adr-draft.md`、`.ai/ARCHITECTURE_DECISIONS.md`（ADR-026/028） |
-| 性能基线 | `tools/bench_plugin_search.py`（插件查询路径，零依赖可离线复跑，数据见 phase4 定稿 §6）、`tools/bench_recognition.py`（识别管线全网格基线，数字续记 docstring，phase6/ADR-032）、`tools/spike_batch_inference.py`（W1 批推理/线程尖刺，数据落 docstring）、`tools/spike_segment_profile.py`（W2 段内分解 + A/B 死重实验，数据落 docstring，phase7 证据） |
-| Schema 初始化与迁移 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`、`src/photo_archiver/infrastructure/database/alembic_runner.py`、`alembic/versions/002_split_create_ddl.py` |
+| 插件协议与上下文 | `src/photo_archiver/application/ports/plugin.py`、`plugin_context.py` |
+| 人员导入服务 | `src/photo_archiver/application/services/import_people_service.py` |
+| UI 文案表（中文化单一置换点） | `src/photo_archiver/presentation/ui_text.py` |
+| Qt 标准翻译装载 | `src/photo_archiver/presentation/translations.py` |
+| 人员搜索智能排名 | `src/photo_archiver/presentation/person_matcher.py` |
+| EXIF 元数据读取（子 IFD 修复） | `src/photo_archiver/infrastructure/filesystem/pillow_photo_metadata_reader.py` |
+| 数据库初始化/迁移 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`、`alembic_runner.py`、`alembic/versions/002_split_create_ddl.py` |
 | 质量验证 | `tests/`、`.github/workflows/ci.yml` |
-| 体检与规划 | `docs/health-check/PROJECT_HEALTH_CHECK.md`（全项目体检基线）、`docs/roadmap/DEVELOPMENT_ROADMAP.md`（Phase A–E 路线图）、`docs/roadmap/NEXT_PHASE_FEATURE_DEVELOPMENT_PLAN.md`（Phase 9 规划，历史） |
+| 发布工作流 | `.github/workflows/release.yml` |
 
 ---
 
