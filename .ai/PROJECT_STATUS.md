@@ -28,6 +28,8 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 **v2.3.2 已发布并经 owner 签核（2026-09-06）——发布轮正式收官**。本版本为桌面复验驱动的修复版：
 
+**Phase E 库管理已立项（owner 选定路径二）**：完整开发计划落 `docs/development/phase-e-deletion-plan.md`（实证 schema 级联矩阵 + ADR-034 裁决点 D1–D6 + 实施分期 E-1~E-6，≈7–8 天）——**待 owner 对 D1–D6 拍板后动工**。
+
 - **EXIF 拍摄时刻修正（ISSUE-019，已修复关闭）**：元数据读取器此前只读 IFD0 顶层 tag，真实相机/手机照片（标准 Exif 子 IFD 结构）的 `captured_at` 被文件修改时间冒名顶替。现按降级链读取：子 IFD DateTimeOriginal(36867) → 子 IFD DateTimeDigitized(36868) → IFD0 顶层（历史兼容）→ mtime。真机终验通过：手机直出照 IMG_20240713_164201.jpg（EXIF 2024:07:13 16:42:01）经真实 UI 扫描全链精确命中；已入库照片不回填（快照语义）。条目已自 KNOWN_ISSUES 删除。
 - **照片墙布局**：照片列表由"一行一张巨图"改为换行多列网格（约 160px 缩略格 + 文件名条）；委托器单元格尺寸恒定化（修复 uniformItemSizes + 异步缩略图导致的单元坍缩）。
 - **人员筛选占位修复**：可编辑人员下拉的"全部人员"占位此前在 Windows 桌面不渲染，改由内部 lineEdit 承载后显示可靠。
@@ -87,7 +89,7 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 | 关键产出 | ① `presentation/ui_text.py` 单一文案表（桌面 UI 全中文化）；② 示例插件退出生产工具栏（机制保留为外部扩展点）；③ `presentation/person_matcher.py` 四级智能排名 + 人员筛选搜索；④ `presentation/translations.py` QLibraryInfo 翻译装载（跨平台）；⑤ 照片墙网格布局 + 可靠占位 + 恒定 sizeHint；⑥ ISSUE-019 修复 + 4 条回归测试 + 真机终验；⑦ N1–N4 桌面复验自动化；⑧ LIMIT-006 登记与 darwin skip。 |
 | 当前质量门 | `ruff check .` 通过；`mypy src` 180 个源文件无问题；pytest 全量 **672 passed / 3 skipped / 0 failed**（本地）；CI run #44/#46 三平台绿。 |
 | 工作区 | HEAD == origin/main，working tree 全净（测试辅助数据已经 owner 确认删除：隔离库/探针/`testdata\`/仓库 `data\` 五项全清）。 |
-| Remaining | 无（v2.3.2 已于 2026-09-06 经 owner 签核，发布轮正式收官）。Phase E（删除语义 ADR 门）未授权——如启动须 owner 另行批准。 |
+| Remaining | **Phase E 等待 owner 对裁决点 D1–D6 拍板**（计划见 `docs/development/phase-e-deletion-plan.md`；删除语义 ADR 为首期交付）。 |
 
 ---
 
@@ -97,6 +99,8 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 - 历史照片 `captured_at` 回填 CLI（参照 backfill-content-hash 先例）；
 - LIMIT-006 macOS 原生崩溃追查（需 macOS 调试手段）；
 - 完整路径锚定 P1（用户目录/注册表定位）。
+
+| Next Step | **等待 Owner 对 Phase E 裁决点 D1–D6 拍板** → 按分期 E-1~E-6 实施（ADR-034 先行），完成后发版 v2.4.0。 |
 
 ---
 
