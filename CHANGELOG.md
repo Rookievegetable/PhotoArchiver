@@ -6,7 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
-## [Unreleased]
+## [2.3.2] - 2026-09-06
+
+Desktop-review fixes: photo-wall layout, reliable filter placeholder, and
+the EXIF capture-time correction for real camera photos.
 
 ### Fixed
 
@@ -19,6 +22,17 @@ Commit-level history lives in git — this file is the user-facing digest.
   DateTimeOriginal → sub-IFD DateTimeDigitized → IFD0 top-level 36868
   (legacy compatibility) → mtime. Photos already registered keep their
   stored captured_at (no backfill); new scans get the true capture time.
+- **Person filter placeholder was never drawn**: the editable person
+  combo's "全部人员" hint was not rendered by the Windows style; it is now
+  carried by the internal line edit and displays reliably (owner-verified
+  on the real desktop).
+
+### Changed
+
+- **Photo grid layout**: the photo list switched from one giant thumbnail
+  per row to a wrapped multi-column photo wall (~160 px cells with the
+  file name beneath); the delegate cell size is constant so the layout
+  stays stable while thumbnails load asynchronously.
 
 ## [2.3.1] - 2026-09-05
 
