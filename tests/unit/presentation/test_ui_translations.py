@@ -34,8 +34,8 @@ def test_installs_bundled_chinese_translation(qtbot) -> None:
     assert box.button(QDialogButtonBox.StandardButton.Save).text() == "保存"
 
 
-def test_returns_false_when_catalog_missing(qtbot, tmp_path, monkeypatch) -> None:
-    """翻译目录缺失 → 返回 False（告警不阻断），不安装空翻译器。"""
+def test_returns_false_when_all_candidates_missing(qtbot, tmp_path, monkeypatch) -> None:
+    """全部候选目录都缺目录 → 返回 False（告警不阻断），不安装空翻译器。"""
     app = QApplication.instance()
     assert app is not None
 
@@ -43,10 +43,9 @@ def test_returns_false_when_catalog_missing(qtbot, tmp_path, monkeypatch) -> Non
 
     monkeypatch.setattr(
         translations_module,
-        "_TRANSLATIONS_DIRECTORY_NAME",
-        str(tmp_path / "no_such_translations"),
+        "translation_directory_candidates",
+        lambda: (tmp_path / "no_such_translations",),
     )
-    # 目录名被替换为不存在路径后，load 以之为父目录必然失败。
     assert translations_module.install_chinese_ui_translations(app) is False
 
 
