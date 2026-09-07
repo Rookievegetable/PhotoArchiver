@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.1.0 ｜ Status: Stable ｜ Last Updated: 2026-08-26
+> Version: 1.2.0 ｜ Status: Stable ｜ Last Updated: 2026-09-06
 
 ---
 
@@ -345,6 +345,15 @@
 | 决策 | 三项裁决：(1) W2-1 landmark 死重剔除 = **A**——loader `FaceAnalysis` 构造传 `allowed_modules=("detection", "recognition")`，加载层直接跳过 buffalo_l 包内 1k3d68 + 2d106det 两个 landmark 模型（35.4 ms/张，生产仅消费 bbox+kps+embedding，零消费 grep 实证）；(2) W2-2 genderage 一并剔除 = **A（附条件已确认）**——`Person` 域实体无性别/年龄字段，src 全库零消费，未来需要时加回一个模块名即恢复，无数据/接口迁移成本；(3) W2-3 剔除后剩余 ~38 ms/张非推理段（rec 对齐 ~30 + det 前后处理）本轮不改造——先拿零风险增益复测，按剩余占比与真实需求再议；进程池方案已被 W1 证据排除（模型多份加载不划算）。 |
 | 理由 | W2-segment 尖刺（`tools/spike_segment_profile.py` v2，账目闭合 251.3≈249.4≈254.4 ms/张）A/B 移除实验实证：剔除后 254.4→128.2 ms/张（**1.985×**）且 bbox/kps/embedding 输出逐字节不变——最大增益不是复杂的并发改造而是两行加载配置；insightface `allowed_modules` 为公开 API（签名实测第 4 参），锁版本前提下稳定。phase6 并行化 1.28× 的根因（非推理 GIL 串行段 ~143ms/张）经本轮剔除削减近半，零结构风险。 |
 | 影响范围 | `infrastructure/ai/insightface_loader.py`（`allowed_modules` 一行 + 证据注记）、`tools/bench_recognition.py`（复测数字续记 docstring）、`CHANGELOG.md`（v2.2.0 段）、版本链 bump（pyproject + .env.example）、`docs/development/phase7-adr-draft.md`（转定稿）、`.ai/PROJECT_STATUS.md`、本文件。不变：Schema、依赖、AI 端口契约（`FaceDetector`/`FaceRecognizer` 签名）、phase6 并行结构（线程池 + `add_many` 批持久化 + 进度语义）、识别结果集与入库顺序逐字节等价。 |
+
+### ADR-034 — Phase E 删除语义与库管理（照片/人员删除 + 重扫对账 + 重复处置）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 拍板 2026-09-06：D1–D6 全部按建议执行——「按建议执行」） |
+| 决策 | 六项裁决落定（定稿草案 `docs/development/phase8-adr-draft.md`，证据链为 `002_split_create_ddl` 的 FK 级联矩阵实证）：(D1) 照片删除确认既有 CASCADE——识别结果与归档记录随删（FK 层自动）；(D2) 人员删除确认既有 SET NULL + CASCADE——嵌入随删、识别结果归属置空为"未知人员"、照片全部保留；(D3) 磁盘文件一律不动（含归档产物），删除仅作用于库内登记，UI/CLI 必须明示；(D4) 硬删除、不扩 schema（回收站/撤销为 roadmap Out-of-Scope，安全网 = Phase B 启动备份）；(D5) 重扫对账"只增不删"——文件消失不自动删库（防移动盘误判），提供显式 `prune-missing` 清理入口（dry-run 默认），文件内容变化（mtime/hash）更新登记元数据；(D6) 重复处置组内保留最早注册一张（`created_at` 最小、同刻 id 决胜），其余删登记。通用：remove 幂等（0 行成功）、删除必经确认流（级联计数预览）、loguru 审计行、IN 子句 500 分块（ADR-029 先例）。 |
+| 理由 | 删除级联语义已由 schema FK 完整表达（recognition/archive 对 photo CASCADE、recognition 对 person SET NULL、embeddings 对 person CASCADE、photos 对 folder SET NULL）且连接强制 `PRAGMA foreign_keys=ON`——本 ADR 确认既有语义而非新设计，零 schema migration；Phase B 备份（J6 恢复演练实证）满足 roadmap 前置"删除必须建立在有备份的基础上"；软删除被否决因其引入 migration + 全查询过滤 + 撤销语义，而撤销明确 Out-of-Scope。 |
+| 影响范围 | `domain/repositories/{photo,person}_repository.py`（协议扩 remove）、`infrastructure/database/sqlite_{photo,person}_repository.py`（分块 DELETE）、`infrastructure/repositories/in_memory_*`（替身同步，不模拟级联——级联裁判专属真实 SQLite 集成测试）、`application/dtos/deletion.py` 与四个删除/对账服务（新建）、`presentation`（删除入口 + 确认流 + 重复处置按钮）、`main.py`（prune-missing 子命令）、scan service（内容变更元数据更新，PhotoRepository 扩 update_metadata）、`tests/`（级联矩阵/幂等/预览/对账/CLI）、CHANGELOG v2.4.0 + 用户指南。不变：既有方法签名、Schema、导入/扫描/归档/导出行为、磁盘文件（零触碰不变量）。 |
 
 ---
 
