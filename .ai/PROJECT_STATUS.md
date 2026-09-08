@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.15.1 · Last Updated: 2026-09-06 · Status: Live
+> Version: 1.15.2 · Last Updated: 2026-09-08 · Status: Live
 
 ---
 
@@ -28,7 +28,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 **v2.3.2 已发布并经 owner 签核（2026-09-06）——发布轮正式收官**。本版本为桌面复验驱动的修复版：
 
-**Phase E 库管理已立项（owner 选定路径二）**：完整开发计划落 `docs/development/phase-e-deletion-plan.md`（实证 schema 级联矩阵 + ADR-034 裁决点 D1–D6 + 实施分期 E-1~E-6，≈7–8 天）——**待 owner 对 D1–D6 拍板后动工**。
+**Phase E 库管理实施中（owner 选定路径二）**：完整开发计划落 `docs/development/phase-e-deletion-plan.md`（实证 schema 级联矩阵 + ADR-034 裁决点 D1–D6 + 实施分期 E-1~E-6，≈7–8 天）。**D1–D6 已全部拍板**（2026-09-06，全部按建议执行——ADR-034 定稿登记 `ARCHITECTURE_DECISIONS.md`）：E-1 完成；**E-2 完成**（Domain 协议扩删 `PhotoRepository.remove(ids)` / `PersonRepository.remove(id)` + SQLite 500 参数分块 DELETE（ADR-029 先例）+ InMemory 替身同步（有意不模拟级联）+ 真实 SQLite 级联矩阵测试 4 用例，全质量门绿）。
 
 - **EXIF 拍摄时刻修正（ISSUE-019，已修复关闭）**：元数据读取器此前只读 IFD0 顶层 tag，真实相机/手机照片（标准 Exif 子 IFD 结构）的 `captured_at` 被文件修改时间冒名顶替。现按降级链读取：子 IFD DateTimeOriginal(36867) → 子 IFD DateTimeDigitized(36868) → IFD0 顶层（历史兼容）→ mtime。真机终验通过：手机直出照 IMG_20240713_164201.jpg（EXIF 2024:07:13 16:42:01）经真实 UI 扫描全链精确命中；已入库照片不回填（快照语义）。条目已自 KNOWN_ISSUES 删除。
 - **照片墙布局**：照片列表由"一行一张巨图"改为换行多列网格（约 160px 缩略格 + 文件名条）；委托器单元格尺寸恒定化（修复 uniformItemSizes + 异步缩略图导致的单元坍缩）。
@@ -83,24 +83,24 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-06（本地） |
-| 生成者 | ZCode |
-| 会话范围 | 交接恢复 → v2.3.1 发版支持 → 复验清单自动化分理 → N1–N4 自动化落地 → 桌面感知抽查代驾（J1–J7）→ CI 事件排障（run #32–#39）→ ISSUE-019 立项/修复/终验/关闭 → **v2.3.2 发版**。 |
-| 关键产出 | ① `presentation/ui_text.py` 单一文案表（桌面 UI 全中文化）；② 示例插件退出生产工具栏（机制保留为外部扩展点）；③ `presentation/person_matcher.py` 四级智能排名 + 人员筛选搜索；④ `presentation/translations.py` QLibraryInfo 翻译装载（跨平台）；⑤ 照片墙网格布局 + 可靠占位 + 恒定 sizeHint；⑥ ISSUE-019 修复 + 4 条回归测试 + 真机终验；⑦ N1–N4 桌面复验自动化；⑧ LIMIT-006 登记与 darwin skip。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 180 个源文件无问题；pytest 全量 **672 passed / 3 skipped / 0 failed**（本地）；CI run #44/#46 三平台绿。 |
-| 工作区 | HEAD == origin/main，working tree 全净（测试辅助数据已经 owner 确认删除：隔离库/探针/`testdata\`/仓库 `data\` 五项全清）。 |
-| Remaining | **Phase E 等待 owner 对裁决点 D1–D6 拍板**（计划见 `docs/development/phase-e-deletion-plan.md`；删除语义 ADR 为首期交付）。 |
+| 时间 | 2026-09-08（本地） |
+| 生成者 | Cline |
+| 会话范围 | 交接恢复 → Phase E 状态核实（D1–D6 已拍板、E-1 已定稿于 HEAD `e131333`）→ **E-2 收尾**：修复 E-2 级联矩阵测试的 domain API 误用（`PhotoPath.base`→`PhotoPathBase` 枚举、Windows 绝对路径 `.resolve()`、`FaceEmbedding`/`Folder`/`PersonIdentity` 真实构造签名、`embedding_repo.save`/`list_all` 映射语义）、清理 ruff F401/F841、补 D1 归档记录 CASCADE 断言 → 全量回归两轮。 |
+| 关键产出 | ① `tests/unit/infrastructure/test_deletion_cascade.py` 修复并补强至 4 用例全绿（D1 照片→识别+归档记录级联清空、D2 人员→嵌入清空+识别 SET NULL+照片保留、folder→SET NULL、幂等/混合批量）；② 质量门恢复全绿：ruff 0 / mypy 180 files 0 / pytest **676 passed / 3 skipped / 0 failed**；③ E-2 源码（上一会话遗留 working tree）经复核确认符合 ADR-034 契约：仅作用于库内登记、幂等返 0、级联交由既有外键。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 180 个源文件无问题；pytest 全量 **676 passed / 3 skipped / 0 failed**（本地实测两轮）。 |
+| 工作区 | HEAD = `e131333`（领先 origin/main 1 commit：ADR-034 定稿）；E-2 变更已提交，PROJECT_STATUS 同步刷新。 |
+| Remaining | Phase E E-3（Application 层删除用例 + 级联预览 DTO + 审计日志）→ E-4 UI → E-5 重扫对账 → E-6 发版 v2.4.0。 |
 
 ---
 
 ## 6. Next Step（下一步开发计划）
 
-**v2.3.2 已签核收官**（2026-09-06）。可选后续候选（均需 owner 另行立项）：
+**v2.3.2 已签核收官**（2026-09-06）；Phase E 实施中（D1–D6 已拍板，E-1/E-2 完成）。可选后续候选（均需 owner 另行立项）：
 - 历史照片 `captured_at` 回填 CLI（参照 backfill-content-hash 先例）；
 - LIMIT-006 macOS 原生崩溃追查（需 macOS 调试手段）；
 - 完整路径锚定 P1（用户目录/注册表定位）。
 
-| Next Step | **等待 Owner 对 Phase E 裁决点 D1–D6 拍板** → 按分期 E-1~E-6 实施（ADR-034 先行），完成后发版 v2.4.0。 |
+| Next Step | **Phase E-3**：Application 层 `DeletePhotosUseCase`（级联预览 DTO）+ `DeletePersonUseCase`（归属置空预览）+ `PruneMissingPhotosUseCase`（D5 失联清理）+ 重复处置编排（D6）+ 审计日志 → E-4 UI → E-5 对账 → E-6 发版 v2.4.0（计划见 `docs/development/phase-e-deletion-plan.md` §4）。 |
 
 ---
 
