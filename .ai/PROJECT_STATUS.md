@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.15.2 · Last Updated: 2026-09-08 · Status: Live
+> Version: 1.15.3 · Last Updated: 2026-09-08 · Status: Live
 
 ---
 
@@ -28,7 +28,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 **v2.3.2 已发布并经 owner 签核（2026-09-06）——发布轮正式收官**。本版本为桌面复验驱动的修复版：
 
-**Phase E 库管理实施中（owner 选定路径二）**：完整开发计划落 `docs/development/phase-e-deletion-plan.md`（实证 schema 级联矩阵 + ADR-034 裁决点 D1–D6 + 实施分期 E-1~E-6，≈7–8 天）。**D1–D6 已全部拍板**（2026-09-06，全部按建议执行——ADR-034 定稿登记 `ARCHITECTURE_DECISIONS.md`）：E-1 完成；**E-2 完成**（Domain 协议扩删 `PhotoRepository.remove(ids)` / `PersonRepository.remove(id)` + SQLite 500 参数分块 DELETE（ADR-029 先例）+ InMemory 替身同步（有意不模拟级联）+ 真实 SQLite 级联矩阵测试 4 用例，全质量门绿）。
+**Phase E 库管理实施中（owner 选定路径二）**：完整开发计划落 `docs/development/phase-e-deletion-plan.md`（实证 schema 级联矩阵 + ADR-034 裁决点 D1–D6 + 实施分期 E-1~E-6，≈7–8 天）。**D1–D6 已全部拍板**（2026-09-06，全部按建议执行——ADR-034 定稿登记 `ARCHITECTURE_DECISIONS.md`）：E-1 完成；**E-2 完成**（Domain 协议扩删 `PhotoRepository.remove(ids)` / `PersonRepository.remove(id)` + SQLite 500 参数分块 DELETE（ADR-029 先例）+ InMemory 替身同步（有意不模拟级联）+ 真实 SQLite 级联矩阵测试 4 用例）；**E-3 完成**（Application 层四删除/对账用例：`DeletePhotosService`（级联预览 DTO + 事务内批量删）、`DeletePersonService`（嵌入级联/识别置空预览，照片全保留）、`PruneMissingPhotosService`（D5 失联清理，预览/执行双端防误删 + photo_root 路径解析）、`DisposeDuplicatesService`（D6 保留最早注册 id 决胜 + 执行端防误删复验）+ `dtos/deletion.py` / `commands/deletion.py` / `use_cases/deletion.py` Protocol + loguru 审计行 + 组合根装配 + SQLite 真库测试 14 用例）。
 
 - **EXIF 拍摄时刻修正（ISSUE-019，已修复关闭）**：元数据读取器此前只读 IFD0 顶层 tag，真实相机/手机照片（标准 Exif 子 IFD 结构）的 `captured_at` 被文件修改时间冒名顶替。现按降级链读取：子 IFD DateTimeOriginal(36867) → 子 IFD DateTimeDigitized(36868) → IFD0 顶层（历史兼容）→ mtime。真机终验通过：手机直出照 IMG_20240713_164201.jpg（EXIF 2024:07:13 16:42:01）经真实 UI 扫描全链精确命中；已入库照片不回填（快照语义）。条目已自 KNOWN_ISSUES 删除。
 - **照片墙布局**：照片列表由"一行一张巨图"改为换行多列网格（约 160px 缩略格 + 文件名条）；委托器单元格尺寸恒定化（修复 uniformItemSizes + 异步缩略图导致的单元坍缩）。
@@ -85,11 +85,11 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 |---|---|
 | 时间 | 2026-09-08（本地） |
 | 生成者 | Cline |
-| 会话范围 | 交接恢复 → Phase E 状态核实（D1–D6 已拍板、E-1 已定稿于 HEAD `e131333`）→ **E-2 收尾**：修复 E-2 级联矩阵测试的 domain API 误用（`PhotoPath.base`→`PhotoPathBase` 枚举、Windows 绝对路径 `.resolve()`、`FaceEmbedding`/`Folder`/`PersonIdentity` 真实构造签名、`embedding_repo.save`/`list_all` 映射语义）、清理 ruff F401/F841、补 D1 归档记录 CASCADE 断言 → 全量回归两轮。 |
-| 关键产出 | ① `tests/unit/infrastructure/test_deletion_cascade.py` 修复并补强至 4 用例全绿（D1 照片→识别+归档记录级联清空、D2 人员→嵌入清空+识别 SET NULL+照片保留、folder→SET NULL、幂等/混合批量）；② 质量门恢复全绿：ruff 0 / mypy 180 files 0 / pytest **676 passed / 3 skipped / 0 failed**；③ E-2 源码（上一会话遗留 working tree）经复核确认符合 ADR-034 契约：仅作用于库内登记、幂等返 0、级联交由既有外键。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 180 个源文件无问题；pytest 全量 **676 passed / 3 skipped / 0 failed**（本地实测两轮）。 |
-| 工作区 | HEAD = `e131333`（领先 origin/main 1 commit：ADR-034 定稿）；E-2 变更已提交，PROJECT_STATUS 同步刷新。 |
-| Remaining | Phase E E-3（Application 层删除用例 + 级联预览 DTO + 审计日志）→ E-4 UI → E-5 重扫对账 → E-6 发版 v2.4.0。 |
+| 会话范围 | 交接恢复 → Phase E 状态核实（D1–D6 已拍板、E-1 已定稿）→ **E-2 收尾**（修复级联测试 domain API 误用 + 补 D1 归档级联断言）→ **E-3 实施**（Application 层四删除/对账用例 + DTO/Command/UseCase Protocol + 审计 + 装配 + 测试）。 |
+| 关键产出 | ① E-2：`test_deletion_cascade.py` 修复并补强至 4 用例全绿；② E-3：`DeletePhotosService` / `DeletePersonService` / `PruneMissingPhotosService` / `DisposeDuplicatesService`（预览→确认→事务内执行 + 幂等 + loguru 审计行；失联清理与重复处置双端防误删复验；`DisposeDuplicatesService` 按 (created_at, id) 显式排序保留最早注册）+ `dtos/deletion.py`（10 个 frozen DTO）+ `commands/deletion.py`（4 命令，空 id = no-op）+ `use_cases/deletion.py`（4 Protocol，DEP-010 边界）+ `app/services.py` 装配（photo_root 注入 Prune）；③ `test_deletion_services.py` 14 用例（预览计数==实际级联、幂等、防误删、保留判定）；④ 质量门全绿：ruff 0 / mypy 187 files 0 / pytest **690 passed / 3 skipped / 0 failed**。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 187 个源文件无问题；pytest 全量 **690 passed / 3 skipped / 0 failed**（本地实测）。 |
+| 工作区 | HEAD = `185d0fb` → 本轮 2 commit（E-2 feat + E-3 feat），领先 origin/main 4 commit；PROJECT_STATUS 同步刷新。 |
+| Remaining | Phase E E-4（UI：照片多选删除入口 + 确认对话框 + 人员删除 + 重复处置按钮 + ui_text 中文化）→ E-5（重扫对账：内容变更元数据更新 + prune-missing CLI/UI）→ E-6（全量回归 + 用户指南 + 发版 v2.4.0）。 |
 
 ---
 
@@ -100,7 +100,7 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 - LIMIT-006 macOS 原生崩溃追查（需 macOS 调试手段）；
 - 完整路径锚定 P1（用户目录/注册表定位）。
 
-| Next Step | **Phase E-3**：Application 层 `DeletePhotosUseCase`（级联预览 DTO）+ `DeletePersonUseCase`（归属置空预览）+ `PruneMissingPhotosUseCase`（D5 失联清理）+ 重复处置编排（D6）+ 审计日志 → E-4 UI → E-5 对账 → E-6 发版 v2.4.0（计划见 `docs/development/phase-e-deletion-plan.md` §4）。 |
+| Next Step | **Phase E-4**：UI 删除入口——照片列表多选删除 + 确认对话框（级联计数预览 + "不删除磁盘文件"明示，消费 `DeletePhotosUseCase.preview`）+ 人员删除入口（`DeletePersonUseCase`）+ 重复报告处置按钮（`DisposeDuplicatesUseCase`）+ 全中文化（ui_text）→ E-5 重扫对账 → E-6 发版 v2.4.0（计划见 `docs/development/phase-e-deletion-plan.md` §4）。 |
 
 ---
 
