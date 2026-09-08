@@ -6,6 +6,18 @@ from photo_archiver.application.dtos.archive import (
     ArchivePlanItem,
     ArchiveResult,
 )
+from photo_archiver.application.dtos.deletion import (
+    DuplicateDisposalGroup,
+    DuplicateDisposalPreview,
+    DuplicateDisposalResult,
+    MissingPhotoItem,
+    PersonDeletionPreview,
+    PersonDeletionResult,
+    PhotoDeletionPreview,
+    PhotoDeletionResult,
+    PruneMissingPreview,
+    PruneMissingResult,
+)
 from photo_archiver.application.dtos.duplicates import DuplicateGroup, DuplicateReport
 from photo_archiver.application.dtos.export import ExportData, ExportScope
 from photo_archiver.application.dtos.import_people import ImportPeopleResult, PersonImportRow
@@ -55,6 +67,9 @@ __all__ = [
     "DEFAULT_MATCH_THRESHOLD",
     "DEFAULT_MAX_WORKERS",
     "DEFAULT_THEME",
+    "DuplicateDisposalGroup",
+    "DuplicateDisposalPreview",
+    "DuplicateDisposalResult",
     "DuplicateGroup",
     "DuplicateReport",
     "ExportData",
@@ -72,7 +87,12 @@ __all__ = [
     "MIN_MAX_WORKERS",
     "MatchCandidate",
     "MatchResult",
+    "MissingPhotoItem",
+    "PersonDeletionPreview",
+    "PersonDeletionResult",
     "PersonImportRow",
+    "PhotoDeletionPreview",
+    "PhotoDeletionResult",
     "PhotoScanItem",
     "PluginDuplicateGroup",
     "PluginDuplicateReport",
@@ -82,6 +102,8 @@ __all__ = [
     "PluginPhotoQuery",
     "PluginPhotoSummary",
     "PluginReport",
+    "PruneMissingPreview",
+    "PruneMissingResult",
     "RegisterPhotoResult",
     "ScanAndRegisterPhotosResult",
     "ScanPhotoFolderResult",

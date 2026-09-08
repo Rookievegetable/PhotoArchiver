@@ -9,11 +9,15 @@ from photo_archiver.application import (
     ArchivePhotosService,
     ArchivePlanner,
     BackfillContentHashService,
+    DeletePersonService,
+    DeletePhotosService,
     DetectDuplicatesService,
+    DisposeDuplicatesService,
     ExportService,
     ImportPeopleService,
     ListPersonsService,
     MatchPersonsService,
+    PruneMissingPhotosService,
     RegisterPhotoService,
     ReviewRecognitionService,
     ScanAndRegisterPhotosService,
@@ -51,6 +55,10 @@ class ApplicationServices:
     backfill_content_hash: BackfillContentHashService
     search_photos: SearchPhotosService
     list_persons: ListPersonsService
+    delete_photos: DeletePhotosService
+    delete_person: DeletePersonService
+    prune_missing_photos: PruneMissingPhotosService
+    dispose_duplicates: DisposeDuplicatesService
 
 
 def build_application_services(
@@ -138,6 +146,35 @@ def build_application_services(
     # (Presentation never touches the repository directly — DEP-003/DEP-004).
     list_persons_service = ListPersonsService(repositories.people)
 
+    # Phase E E-3 (ADR-034): deletion management services — preview/execute
+    # orchestration over the E-2 repository remove capability. Prune needs the
+    # settings photo_root so PHOTO_ROOT-based relative registrations can be
+    # resolved against disk; None keeps them conservatively unresolvable.
+    delete_photos_service = DeletePhotosService(
+        repositories.photos,
+        repositories.recognition,
+        repositories.archive_records,
+        unit_of_work=unit_of_work,
+    )
+    delete_person_service = DeletePersonService(
+        repositories.people,
+        repositories.photos,
+        repositories.recognition,
+        repositories.face_embeddings,
+        unit_of_work=unit_of_work,
+    )
+    prune_missing_photos_service = PruneMissingPhotosService(
+        repositories.photos,
+        photo_root=settings.photo_root,
+        unit_of_work=unit_of_work,
+    )
+    dispose_duplicates_service = DisposeDuplicatesService(
+        repositories.photos,
+        repositories.recognition,
+        repositories.archive_records,
+        unit_of_work=unit_of_work,
+    )
+
     return ApplicationServices(
         # P0-3: extension dispatch routes .xlsx/.xlsm to the openpyxl reader —
         # before this wiring only the TXT reader was injected and the import
@@ -168,6 +205,10 @@ def build_application_services(
         backfill_content_hash=backfill_content_hash_service,
         search_photos=search_photos_service,
         list_persons=list_persons_service,
+        delete_photos=delete_photos_service,
+        delete_person=delete_person_service,
+        prune_missing_photos=prune_missing_photos_service,
+        dispose_duplicates=dispose_duplicates_service,
     )
 
 

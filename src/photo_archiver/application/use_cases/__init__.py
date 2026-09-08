@@ -1,6 +1,12 @@
 """Application use case boundaries."""
 
 from photo_archiver.application.use_cases.archive import ArchivePhotosUseCase
+from photo_archiver.application.use_cases.deletion import (
+    DeletePersonUseCase,
+    DeletePhotosUseCase,
+    DisposeDuplicatesUseCase,
+    PruneMissingPhotosUseCase,
+)
 from photo_archiver.application.use_cases.import_people import ImportPeopleUseCase
 from photo_archiver.application.use_cases.match_persons import MatchPersonsUseCase
 from photo_archiver.application.use_cases.register_photo import RegisterPhotoUseCase
@@ -11,8 +17,12 @@ from photo_archiver.application.use_cases.settings import SettingsUseCase
 
 __all__ = [
     "ArchivePhotosUseCase",
+    "DeletePersonUseCase",
+    "DeletePhotosUseCase",
+    "DisposeDuplicatesUseCase",
     "ImportPeopleUseCase",
     "MatchPersonsUseCase",
+    "PruneMissingPhotosUseCase",
     "RegisterPhotoUseCase",
     "ReviewRecognitionUseCase",
     "ScanAndRegisterPhotosUseCase",
