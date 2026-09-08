@@ -148,6 +148,7 @@ def build_ui_controllers(
         ),
         detect_duplicates=DetectDuplicatesController(
             service=services.detect_duplicates,
+            disposal=services.dispose_duplicates,
         ),
     )
 

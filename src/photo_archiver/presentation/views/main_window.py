@@ -42,6 +42,8 @@ from photo_archiver.presentation.controllers import (
 from photo_archiver.presentation.ui_text import (
     ACTION_ARCHIVE,
     ACTION_CANCEL_TASK,
+    ACTION_DELETE_PERSON,
+    ACTION_DELETE_PHOTOS,
     ACTION_DETECT_DUPLICATES,
     ACTION_EXPORT_DATA,
     ACTION_IMPORT_PEOPLE,
@@ -52,10 +54,18 @@ from photo_archiver.presentation.ui_text import (
     ARCHIVE_DIALOG_TITLE,
     ARCHIVE_NOTHING_TO_ARCHIVE,
     ARCHIVE_ROOT_NOT_CONFIGURED,
+    DELETE_FAILED_MESSAGE,
+    DELETE_FAILED_TITLE,
+    DELETE_PHOTOS_DONE,
+    DELETE_PHOTOS_DONE_TITLE,
+    DELETE_PHOTOS_NO_SELECTION,
+    DELETE_PHOTOS_NO_SELECTION_TITLE,
     DIALOG_SELECT_PEOPLE_FILE,
     DIALOG_SELECT_PHOTO_FOLDER,
     MAIN_WINDOW_TITLE,
     PEOPLE_FILE_FILTER,
+    PERSON_DELETE_DONE,
+    PERSON_DELETE_DIALOG_TITLE,
     PLUGIN_ACTION_FAILED,
     PLUGIN_ERROR_TITLE,
     PLUGIN_FAILURE_NO_DETAIL,
@@ -76,8 +86,13 @@ from photo_archiver.presentation.ui_text import (
     task_label,
 )
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
+from photo_archiver.application.commands import DeletePersonCommand, DeletePhotosCommand
 from photo_archiver.presentation.views.export_dialog import ExportDialog
 from photo_archiver.presentation.views.filter_bar import FilterBar
+from photo_archiver.presentation.views.person_deletion_dialog import PersonDeletionDialog
+from photo_archiver.presentation.views.photo_deletion_confirm_dialog import (
+    PhotoDeletionConfirmDialog,
+)
 from photo_archiver.presentation.views.photo_list_delegate import PhotoThumbnailDelegate
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
 from photo_archiver.presentation.views.photo_list_model import PHOTO_ID_ROLE, PhotoListModel
@@ -212,6 +227,17 @@ class MainWindow(QMainWindow):
         detect_duplicates_action = QAction(ACTION_DETECT_DUPLICATES, self)
         detect_duplicates_action.triggered.connect(self._on_detect_duplicates_clicked)
         toolbar.addAction(detect_duplicates_action)
+
+        # Phase E E-4 (ADR-034): library-management entries — photo-registration
+        # removal (multi-select in the photo wall) and person removal. Both run
+        # the E-3 preview→confirm→execute flow synchronously (fast SQLite).
+        delete_photos_action = QAction(ACTION_DELETE_PHOTOS, self)
+        delete_photos_action.triggered.connect(self._on_delete_photos_clicked)
+        toolbar.addAction(delete_photos_action)
+
+        delete_person_action = QAction(ACTION_DELETE_PERSON, self)
+        delete_person_action.triggered.connect(self._on_delete_person_clicked)
+        toolbar.addAction(delete_person_action)
 
         settings_action = QAction(ACTION_SETTINGS, self)
         settings_action.setShortcut(QKeySequence("Ctrl+,"))
@@ -600,6 +626,90 @@ class MainWindow(QMainWindow):
         不下沉 Worker——查重是 SQL 下推的快速查询。
         """
         self._context.detect_duplicates_controller.detect_and_show()
+
+    # ---- Library management (Phase E E-4, ADR-034) ----
+
+    def _on_delete_photos_clicked(self) -> None:
+        """Remove the selected photo registrations after confirmation (E-4).
+
+        Flow: collect multi-selection → preview cascade counts → confirm dialog
+        (disk-file disclaimer, D3) → execute → refresh list. Synchronous on the
+        UI thread (fast SQLite push-down, same rationale as archive preview).
+        """
+        selected = self._collect_selected_photo_ids()
+        if not selected:
+            QMessageBox.information(
+                self,
+                DELETE_PHOTOS_NO_SELECTION_TITLE,
+                DELETE_PHOTOS_NO_SELECTION,
+            )
+            return
+        try:
+            preview = self._context.services.delete_photos.preview(selected)
+            if preview.is_empty:
+                QMessageBox.information(
+                    self,
+                    DELETE_PHOTOS_NO_SELECTION_TITLE,
+                    DELETE_PHOTOS_NO_SELECTION,
+                )
+                return
+            if not PhotoDeletionConfirmDialog(preview, parent=self).exec():
+                return
+            result = self._context.services.delete_photos.execute(
+                DeletePhotosCommand(photo_ids=selected)
+            )
+        except Exception as exc:  # noqa: BLE001  # UI boundary: show the user, log the detail
+            logger.exception("Photo registration deletion failed unexpectedly")
+            QMessageBox.critical(self, DELETE_FAILED_TITLE, DELETE_FAILED_MESSAGE.format(detail=exc))
+            return
+        self._refresh_photo_list()
+        QMessageBox.information(
+            self,
+            DELETE_PHOTOS_DONE_TITLE,
+            DELETE_PHOTOS_DONE.format(
+                removed=result.removed,
+                recognition_cascade=result.recognition_cascade,
+                archive_cascade=result.archive_cascade,
+            ),
+        )
+
+    def _on_delete_person_clicked(self) -> None:
+        """Open the person-deletion dialog and run the confirmed removal (E-4).
+
+        The dialog owns selection + live preview (D2: 嵌入删除、识别归属置空、
+        照片全保留明示); on accept we execute the confirmed id and refresh the
+        filter person axis + photo list (recognition attributions changed).
+        """
+        dialog = PersonDeletionDialog(
+            self._context.services.list_persons,
+            self._context.services.delete_person,
+            parent=self,
+        )
+        if not dialog.exec():
+            return
+        person_id = dialog.selected_person_id()
+        person_name = dialog.selected_person_name()
+        if person_id is None:
+            return
+        try:
+            result = self._context.services.delete_person.execute(
+                DeletePersonCommand(person_ids=(person_id,))
+            )
+        except Exception as exc:  # noqa: BLE001  # UI boundary: show the user, log the detail
+            logger.exception("Person deletion failed unexpectedly")
+            QMessageBox.critical(self, DELETE_FAILED_TITLE, DELETE_FAILED_MESSAGE.format(detail=exc))
+            return
+        self._refresh_filter_persons()
+        self._refresh_photo_list()
+        QMessageBox.information(
+            self,
+            PERSON_DELETE_DIALOG_TITLE,
+            PERSON_DELETE_DONE.format(
+                name=person_name,
+                embedding_cascade=result.embedding_cascade,
+                recognition_orphaned=result.recognition_orphaned,
+            ),
+        )
 
     # ---- Face recognition (match persons) ----
 

@@ -170,7 +170,7 @@ DUPLICATE_HEADER_LABELS = ("成员 / 字段", "值")
 DUPLICATE_SUMMARY_NONE = "未发现重复照片——所有内容哈希均唯一。"
 DUPLICATE_SUMMARY_FOUND = (
     "发现 {group_count} 组重复照片，涉及 {photo_count} 张。"
-    "本报告为只读；当前版本不支持删除重复照片。"
+    "可点「按建议处置」：每组保留最早注册的一张，其余移除库内登记（磁盘文件不动）。"
 )
 DUPLICATE_GROUP_NODE = "重复组（哈希 {hash}…）"
 DUPLICATE_GROUP_PHOTOS = "{count} 张照片"
@@ -185,6 +185,56 @@ REFUSAL_MATCH_IN_FLIGHT = "已有人脸识别任务正在进行。"
 REFUSAL_NO_PERSONS = "尚未导入人员，请先通过「导入人员」导入人员名单。"
 REFUSAL_NO_PHOTOS = "尚未登记照片，请先通过「扫描文件夹」扫描照片目录。"
 REFUSAL_ALL_MATCHED = "已登记的照片均已有识别结果，无需重复运行。"
+
+# ---- 照片登记删除（Phase E E-4，ADR-034 D1/D3） ----
+ACTION_DELETE_PHOTOS = "删除登记"
+DELETE_PHOTOS_NO_SELECTION_TITLE = "未选择照片"
+DELETE_PHOTOS_NO_SELECTION = (
+    "请先在照片列表中选择要移除登记的照片（可按住 Ctrl 或 Shift 多选）。"
+)
+DELETE_PHOTOS_TITLE = "确认移除照片登记"
+DELETE_PHOTOS_CONFIRM = (
+    "将从库中移除 {photo_count} 张照片的登记；其 {recognition_count} 条识别结果与 "
+    "{archive_count} 条归档记录将一并移除。\n\n仅从库中移除登记，不会删除磁盘上的任何文件。"
+)
+DELETE_PHOTOS_MISSING_NOTE = "另有 {missing_count} 个所选项目不在库中，将自动跳过。"
+DELETE_PHOTOS_CONFIRM_BUTTON = "移除登记"
+DELETE_PHOTOS_DONE_TITLE = "删除登记"
+DELETE_PHOTOS_DONE = (
+    "已移除 {removed} 张照片登记（级联移除识别 {recognition_cascade} 条、归档 {archive_cascade} 条）。"
+)
+
+# ---- 人员删除（Phase E E-4，ADR-034 D2/D3） ----
+ACTION_DELETE_PERSON = "删除人员"
+PERSON_DELETE_DIALOG_TITLE = "删除人员"
+PERSON_DELETE_SELECTOR_LABEL = "选择要删除的人员："
+PERSON_DELETE_CONFIRM = (
+    "将从库中移除人员「{name}」：其 {embedding_count} 条人脸嵌入将一并删除；"
+    "{recognition_count} 条识别结果将保留但归属置空（显示为未知人员）。\n\n"
+    "该人员的全部照片与磁盘文件均保留，不会删除任何文件。"
+)
+PERSON_DELETE_BUTTON = "删除该人员"
+PERSON_DELETE_EMPTY = "库中暂无人员——请先通过「导入人员」导入人员名单。"
+PERSON_DELETE_DONE = (
+    "已移除人员「{name}」（删除嵌入 {embedding_cascade} 条、识别归属置空 {recognition_orphaned} 条）。"
+)
+
+# ---- 删除失败提示（照片/人员共用） ----
+DELETE_FAILED_TITLE = "删除失败"
+DELETE_FAILED_MESSAGE = "删除操作时发生意外错误：\n\n{detail}"
+
+# ---- 重复报告处置（Phase E E-4，ADR-034 D6） ----
+DUPLICATE_DISPOSE_BUTTON = "按建议处置（每组保留最早一张）"
+DUPLICATE_DISPOSE_CONFIRM_TITLE = "确认处置重复照片"
+DUPLICATE_DISPOSE_CONFIRM = (
+    "共 {group_count} 组重复：每组保留最早注册的一张，其余 {photo_count} 张将从库中移除登记"
+    "（级联移除识别 {recognition_count} 条、归档 {archive_count} 条）。\n\n"
+    "仅移除库内登记，不删除磁盘文件。"
+)
+DUPLICATE_DISPOSE_NONE = "当前报告未发现重复组，无需处置。"
+DUPLICATE_DISPOSE_DONE = (
+    "处置完成：移除 {removed} 张登记（涉及 {groups_affected} 组），拒绝 {rejected} 项。"
+)
 
 
 def task_label(task_name: str) -> str:
