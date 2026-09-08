@@ -16,6 +16,14 @@ class InMemoryPersonRepository(PersonRepository):
         """Persist a person entity in memory."""
         self._people_by_id[person.id] = person  # type: ignore[index]  # UUID | None guarantee
 
+    def remove(self, person_id: UUID) -> int:
+        """Remove the person from memory; return 1 when removed, else 0.
+
+        幂等：目标不存在返 0。**不模拟级联**（ADR-034 §4.4）——嵌入删除
+        与识别归属置空由真实 SQLite 外键承担，级联裁判专属集成测试。
+        """
+        return 1 if self._people_by_id.pop(person_id, None) is not None else 0
+
     def find_by_id(self, person_id: UUID) -> Person | None:
         """Find a person by its domain identifier."""
         return self._people_by_id.get(person_id)

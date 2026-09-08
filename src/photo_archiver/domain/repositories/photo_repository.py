@@ -1,5 +1,6 @@
 """Photo repository interface."""
 
+from collections.abc import Sequence
 from typing import Protocol
 from uuid import UUID
 
@@ -12,6 +13,15 @@ class PhotoRepository(Protocol):
 
     def add(self, photo: Photo) -> None:
         """Add a photo entity or replace the existing aggregate with the same id."""
+
+    def remove(self, photo_ids: Sequence[UUID]) -> int:
+        """Remove the given photos from the registry; return the removed count.
+
+        ADR-034（D1）：删除仅作用于库内登记——识别结果与归档记录随照片
+        级联删除（SQLite 外键既有语义）；**磁盘文件一律不动**（D3）。
+        幂等：目标不存在计 0 行，不抛错。InMemory 测试替身不模拟级联——
+        级联语义的唯一裁判是真实 SQLite 集成测试。
+        """
 
     def find_by_id(self, photo_id: UUID) -> Photo | None:
         """Find a photo by its domain identifier."""

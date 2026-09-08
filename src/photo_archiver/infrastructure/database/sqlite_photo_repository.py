@@ -1,5 +1,6 @@
 """SQLite implementation of the photo repository interface."""
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from photo_archiver.domain import Photo, PhotoPath, PhotoRepository, PhotoSearchCriteria
@@ -9,6 +10,9 @@ from photo_archiver.infrastructure.database.sqlite_mappers import (
     path_to_columns,
     photo_from_row,
 )
+
+# ADR-029 先例：SQLite 绑定参数上限规避——IN 子句按 500 参数分块。
+_SQLITE_PARAMETER_CHUNK = 500
 
 
 class SQLitePhotoRepository(PhotoRepository):
@@ -70,6 +74,28 @@ class SQLitePhotoRepository(PhotoRepository):
                     metadata.content_hash if metadata is not None else None,
                 ),
             )
+
+    def remove(self, photo_ids: Sequence[UUID]) -> int:
+        """Remove the given photos; return the actually removed row count.
+
+        ADR-034（D1）：识别结果与归档记录由外键 ``ON DELETE CASCADE`` 自动
+        级联删除（连接强制 ``foreign_keys=ON``）——本方法只删 ``photos``
+        行，不手写级联。按 500 参数分块（ADR-029 先例）；幂等：不存在的
+        id 计 0 行。磁盘文件一律不动（D3）。
+        """
+        if not photo_ids:
+            return 0
+        removed = 0
+        with self._connection_provider.connect() as connection:
+            for chunk_start in range(0, len(photo_ids), _SQLITE_PARAMETER_CHUNK):
+                chunk = photo_ids[chunk_start : chunk_start + _SQLITE_PARAMETER_CHUNK]
+                placeholders = ", ".join("?" for _ in chunk)
+                cursor = connection.execute(
+                    f"DELETE FROM photos WHERE id IN ({placeholders})",
+                    [str(photo_id) for photo_id in chunk],
+                )
+                removed += cursor.rowcount
+        return removed
 
     def find_by_id(self, photo_id: UUID) -> Photo | None:
         """Find a photo by its domain identifier."""

@@ -1,5 +1,6 @@
 """In-memory implementation of the photo repository interface."""
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from photo_archiver.domain import Photo, PhotoPath, PhotoRepository, PhotoSearchCriteria
@@ -15,6 +16,18 @@ class InMemoryPhotoRepository(PhotoRepository):
     def add(self, photo: Photo) -> None:
         """Persist a photo entity in memory."""
         self._photos_by_id[photo.id] = photo  # type: ignore[index]  # UUID | None guarantee
+
+    def remove(self, photo_ids: Sequence[UUID]) -> int:
+        """Remove the given photos from memory; return the removed count.
+
+        幂等：不存在的 id 计 0 行。**不模拟级联**（ADR-034 §4.4）——
+        识别/归档级联语义的唯一裁判是真实 SQLite 集成测试。
+        """
+        removed = 0
+        for photo_id in photo_ids:
+            if self._photos_by_id.pop(photo_id, None) is not None:
+                removed += 1
+        return removed
 
     def find_by_id(self, photo_id: UUID) -> Photo | None:
         """Find a photo by its domain identifier."""

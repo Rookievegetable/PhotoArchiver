@@ -30,3 +30,11 @@ class PersonRepository(Protocol):
 
     def list_all(self) -> list[Person]:
         """Return all known people."""
+
+    def remove(self, person_id: UUID) -> int:
+        """Remove the person from the registry; return 1 when removed, else 0.
+
+        ADR-034（D2）：删除仅作用于库内登记——人脸嵌入随人员级联删除、
+        其识别结果归属置空为"未知人员"（SQLite 外键既有语义）、**照片全部
+        保留**；磁盘文件一律不动（D3）。幂等：目标不存在返 0，不抛错。
+        """

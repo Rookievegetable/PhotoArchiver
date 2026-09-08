@@ -44,6 +44,17 @@ class SQLitePersonRepository(PersonRepository):
             row = connection.execute("SELECT * FROM people WHERE id = ?", (str(person_id),)).fetchone()
         return person_from_row(row) if row is not None else None
 
+    def remove(self, person_id: UUID) -> int:
+        """Remove the person; return 1 when removed, else 0 (idempotent).
+
+        ADR-034（D2）：外键既有语义承担级联——人脸嵌入 CASCADE 删除、识别
+        结果归属 SET NULL 为"未知人员"、照片全部保留（F2/F3 实证）。磁盘
+        文件一律不动（D3）。
+        """
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute("DELETE FROM people WHERE id = ?", (str(person_id),))
+        return cursor.rowcount
+
     def find_by_identity(self, identity: PersonIdentity) -> Person | None:
         """Find a person by its external identity."""
         with self._connection_provider.connect() as connection:
