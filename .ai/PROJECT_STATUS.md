@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.15.5 · Last Updated: 2026-09-08 · Status: Live
+> Version: 1.15.6 · Last Updated: 2026-09-08 · Status: Live
 
 ---
 
@@ -26,13 +26,18 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 ## 2. Current Step（当前开发阶段）
 
-**v2.3.2 已发布并经 owner 签核（2026-09-06）——发布轮正式收官**。本版本为桌面复验驱动的修复版：
+**Phase E 库管理 E-1~E-5 全部实施完成，v2.4.0 发版准备就绪（2026-09-08）**——版本链已 bump（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08`）、用户指南已补章（`docs/user-guide/workflow.md` ⑤ 库管理 + 重扫对账 + prune-missing CLI）、发版前全量回归 **710 passed / 3 skipped / 0 failed**。**待 owner 签核发版**（tag + push + release body 为 owner 动作，GIT-020）。开发计划与裁决记录：`docs/development/phase-e-deletion-plan.md` + ADR-034（D1–D6 全部按建议执行）。
 
-**Phase E 库管理实施中（owner 选定路径二）**：完整开发计划落 `docs/development/phase-e-deletion-plan.md`（实证 schema 级联矩阵 + ADR-034 裁决点 D1–D6 + 实施分期 E-1~E-6，≈7–8 天）。**D1–D6 已全部拍板**（2026-09-06，全部按建议执行——ADR-034 定稿登记 `ARCHITECTURE_DECISIONS.md`）：E-1 完成；**E-2 完成**（Domain 协议扩删 + SQLite 分块 DELETE + InMemory 替身 + 级联矩阵测试 4 用例）；**E-3 完成**（Application 层四删除/对账用例 + 级联预览 DTO + 审计 + 装配 + 真库测试 14 用例）；**E-4 完成**（UI：照片列表多选「删除登记」→ 确认对话框（级联计数 + D3 磁盘不动明示）→ 刷新；「删除人员」交互对话框（下拉选人 + 实时预览嵌入删除/识别置空 + 照片保留明示）；重复报告「按建议处置」（每组保留最早注册，二次确认 + 完成反馈）；全中文化走 ui_text + 8 用例）；**E-5 完成**（重扫对账 D5：`PhotoRepository.update_metadata` 双实现（只刷 metadata 列，captured_at 快照保留）+ `ScanAndRegisterPhotosService` 内容变更检测（hash 强比对，无 hash 退化 mtime+size；updated_count 进 DTO/CLI 输出）+ `prune-missing` CLI 子命令（dry-run 默认，--execute 才清理，失联路径逐行列出供核实）+ 12 用例）。
+本版本为新增能力 minor 版（库管理 P2-1/P2-2/P2-3）：
 
-- **EXIF 拍摄时刻修正（ISSUE-019，已修复关闭）**：元数据读取器此前只读 IFD0 顶层 tag，真实相机/手机照片（标准 Exif 子 IFD 结构）的 `captured_at` 被文件修改时间冒名顶替。现按降级链读取：子 IFD DateTimeOriginal(36867) → 子 IFD DateTimeDigitized(36868) → IFD0 顶层（历史兼容）→ mtime。真机终验通过：手机直出照 IMG_20240713_164201.jpg（EXIF 2024:07:13 16:42:01）经真实 UI 扫描全链精确命中；已入库照片不回填（快照语义）。条目已自 KNOWN_ISSUES 删除。
-- **照片墙布局**：照片列表由"一行一张巨图"改为换行多列网格（约 160px 缩略格 + 文件名条）；委托器单元格尺寸恒定化（修复 uniformItemSizes + 异步缩略图导致的单元坍缩）。
-- **人员筛选占位修复**：可编辑人员下拉的"全部人员"占位此前在 Windows 桌面不渲染，改由内部 lineEdit 承载后显示可靠。
+- **删除登记**（照片，D1/D3）：照片墙多选 → 确认对话框（级联计数：识别/归档随删）→ 事务内幂等移除；磁盘文件一律不动。
+- **删除人员**（D2/D3）：下拉选人实时预览（嵌入随删、识别归属置空为"未知人员"、照片全保留）→ 确认执行。
+- **重复照片处置**（D6）：重复报告「按建议处置」——每组保留最早注册一张（同刻 id 决胜），执行端逐项复核防误删。
+- **重扫对账**（D5）：内容变化（hash 强比对 / mtime+size 弱退化）自动刷新元数据（`update_metadata` 只刷 metadata 列，captured_at 快照保留）；`updated=` 计数进结果 DTO 与 scan CLI 输出。
+- **prune-missing CLI**（D5）：失联登记 dry-run 默认列出（含期望路径），`--execute` 才清理；扫描绝不自动删库。
+- 全量删除操作走确认流 + loguru 审计行 + Phase B 启动备份兜底。
+
+v2.3.2（上一版，桌面复验修复：EXIF 拍摄时刻 ISSUE-019 + 照片墙 + 占位）已于 2026-09-06 签核收官。
 
 ### 历史发版锚点
 
@@ -40,7 +45,8 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 |---|---|---|
 | v2.3.0 | `e14409e` | 数据安全底线 + 运行时正确性（Phase A/B/C，D-B1~D-B8 裁决） |
 | v2.3.1 | `90c46db` | 桌面 UI 中文化 + 工具栏纯化 + 人员筛选智能搜索（owner 裁决多轮折入单一发布；tag 二次重打至 CI 绿树） |
-| v2.3.2 | `2aadcee` | 桌面复验修复：EXIF 拍摄时刻 + 照片墙 + 占位（本版） |
+| v2.3.2 | `2aadcee` | 桌面复验修复：EXIF 拍摄时刻 + 照片墙 + 占位 |
+| v2.4.0 | 待 owner 打 tag | 库管理：删除登记 / 删除人员 / 重复处置 / 重扫对账 / prune-missing CLI（Phase E） |
 
 更早锚点：v1.0.0→`49b2ac6`、v2.0.0→`ba3ad02`、v2.1.0→`bd52fbb`、v2.2.0→`f9fb8c5`。
 
@@ -51,7 +57,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | 范围 | 状态 | 当前事实 |
 |---|---|---|
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
-| 版本链 | ✅ | v2.3.2 三处一致（pyproject / .env.example / CHANGELOG `[2.3.2] - 2026-09-06`）。 |
+| 版本链 | ✅ | v2.4.0 三处一致（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08`）；历史锚点 v2.3.2 保留。 |
 | CI | ✅ | run #46（head `2aadcee`）三平台 success——v2.3.2 发布树的直接实证；run #44（ISSUE-019 修复）亦绿。 |
 | 桌面复验 | ✅ | 机制项（N1–N4 自动化：1200 行导入闭环/取消一致性/备份恢复演练/换目录子进程）+ 感知项（J1–J7 owner 逐项判定）全部通过。 |
 | 未决问题 | ✅ 清零 | ISSUE-019 已修复并经真机终验关闭（条目同提交删除）。 |
@@ -85,11 +91,11 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 |---|---|
 | 时间 | 2026-09-08（本地） |
 | 生成者 | Cline |
-| 会话范围 | 交接恢复 → **E-2 收尾**（级联测试修复 + 补 D1 归档断言）→ **E-3 实施**（Application 四删除用例 + 装配 + 真库测试 14）→ **E-4 实施**（UI 删除入口）→ **E-5 实施**（重扫对账 + prune-missing CLI）。 |
-| 关键产出 | ① E-2：`test_deletion_cascade.py` 修复补强 4 用例；② E-3：四个删除/对账 Service + DTO/Command/UseCase + 审计 + 装配 + 14 测试；③ E-4：`PhotoDeletionConfirmDialog`、`PersonDeletionDialog`、重复报告处置按钮 + controller 二次确认编排、main_window 工具栏双入口、ui_text 中文化、8 测试；④ E-5：`PhotoRepository.update_metadata`（Protocol + SQLite/InMemory 双实现，只刷 metadata 列保留 captured_at 快照）、`ScanAndRegisterPhotosService` 变更检测（hash 强比对 / mtime+size 弱退化 / reader 缺失与读失败保守 skip、DTO 加 updated_count、CLI scan 输出加 updated）、`prune-missing` CLI 子命令（dry-run 默认逐行列失联路径、--execute 才清理、无失联友好提示）、deletion 命令补进 application 顶层导出、12 测试；⑤ 质量门全绿：ruff 0 / mypy 189 files 0 / pytest **710 passed / 3 skipped / 0 failed**。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 189 个源文件无问题；pytest 全量 **710 passed / 3 skipped / 0 failed**（本地实测）。 |
-| 工作区 | HEAD = `eeb9c21` → 本轮 E-5 提交，领先 origin/main 8 commit；PROJECT_STATUS 同步刷新。 |
-| Remaining | Phase E E-6（收尾发版）：全量回归（已连续三轮全绿，发版前再跑一轮）+ 用户指南补章（删除/对账/CLI 新能力）+ 版本链 bump（pyproject/.env.example/CHANGELOG → 2.4.0）+ release 流程。 |
+| 会话范围 | 交接恢复 → **E-2 收尾**（级联测试修复 + 补 D1 归档断言）→ **E-3 实施**（Application 四删除用例 + 装配 + 真库测试 14）→ **E-4 实施**（UI 删除入口）→ **E-5 实施**（重扫对账 + prune-missing CLI）→ **E-6 收尾**（指南补章 + 版本链 bump + 发版前回归）。 |
+| 关键产出 | ① E-2：`test_deletion_cascade.py` 修复补强 4 用例；② E-3：四个删除/对账 Service + DTO/Command/UseCase + 审计 + 装配 + 14 测试；③ E-4：`PhotoDeletionConfirmDialog`、`PersonDeletionDialog`、重复报告处置按钮 + controller 二次确认编排、main_window 工具栏双入口、ui_text 中文化、8 测试；④ E-5：`update_metadata` 双实现、扫描变更检测、`prune-missing` CLI、12 测试；⑤ E-6：`docs/user-guide/workflow.md` 补 ⑤ 库管理章（删除登记/删除人员/重复处置/失联清理 + 附加能力表/命令行表更新）+ 版本链 bump 至 **2.4.0**（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08` 英文全段）+ 发版前全量回归 **710 passed / 3 skipped / 0 failed**（连续四次全绿）；⑥ 质量门全绿：ruff 0 / mypy 189 files 0 / pip check 通过。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 189 个源文件无问题；pytest 全量 **710 passed / 3 skipped / 0 failed**（发版前实测）。 |
+| 工作区 | HEAD = `41f7e3a` → 本轮 E-6 prepare 提交，领先 origin/main 10 commit；PROJECT_STATUS 同步刷新。 |
+| Remaining | **v2.4.0 发版动作（owner）**：本地打 tag `v2.4.0`（建议打在 release prepare commit）→ push 分支与 tag（触发 release workflow）→ GitHub Release body 可直接复用 CHANGELOG `[2.4.0]` 段 → 签核收官。 |
 
 ---
 
@@ -100,7 +106,7 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 - LIMIT-006 macOS 原生崩溃追查（需 macOS 调试手段）；
 - 完整路径锚定 P1（用户目录/注册表定位）。
 
-| Next Step | **Phase E-6**（收尾发版 v2.4.0）：用户指南补章（删除登记/删除人员/重复处置/重扫对账/prune-missing CLI）+ 版本链 bump（pyproject / .env.example / CHANGELOG `[2.4.0]`）+ 全量回归 + owner 签核发版（计划见 `docs/development/phase-e-deletion-plan.md` §4）。 |
+| Next Step | **v2.4.0 发版（owner 动作，GIT-020）**：本地打 tag `v2.4.0` → push 分支与 tag 触发 release workflow → GitHub Release body 复用 CHANGELOG `[2.4.0]` 段 → 签核收官。Phase E 全部六期（E-1~E-6）实施完成。 |
 
 ---
 

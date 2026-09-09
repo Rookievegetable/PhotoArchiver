@@ -6,6 +6,53 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [2.4.0] - 2026-09-08
+
+Library management (Phase E, ADR-034): the photo library is no longer
+append-only — photo and person registrations can be removed safely,
+duplicate groups can be disposed of, and re-scans now reconcile changed
+files. Every deletion is preview-confirmed, transactional, idempotent and
+audit-logged; disk files are never touched, and the startup backup remains
+the recovery path.
+
+### Added
+
+- **Delete photo registrations** (删除登记): multi-select photos in the wall
+  and remove their registry entries. The confirmation dialog previews the
+  cascade (recognition results and archive records removed with the photo)
+  and explicitly states that disk files are never touched. Idempotent —
+  ids that are no longer in the library are skipped.
+- **Delete persons** (删除人员): pick a person from a dropdown with a live
+  cascade preview. Face embeddings are removed with the person, their
+  recognition results stay but lose their attribution (rendered as
+  "未知人员"), and all of the person's photos — and disk files — are
+  preserved.
+- **Duplicate disposal** (按建议处置): the duplicate report now offers a
+  dispose action. Each group keeps its earliest-registered photo (id as the
+  deterministic tiebreak) and the rest of the registrations are removed
+  after a second confirmation; the executor re-validates every id against
+  the current proposal so keepers and unique photos can never be removed.
+- **Rescan reconciliation** (重扫对账): re-scanning a folder detects changed
+  files — strong comparison by content hash, falling back to modification
+  time + size for legacy registrations without a hash — and refreshes their
+  metadata through the new `PhotoRepository.update_metadata`. Snapshot
+  columns (captured_at, created_at) are never rewritten. Scan output now
+  reports `updated=<n>` alongside registered/skipped.
+- **`prune-missing` CLI**: list registry entries whose disk file is gone —
+  dry-run by default, printing the expected path for each entry.
+  `--execute` removes those registrations. Files that disappear are never
+  deleted from the library automatically during scans (protecting against
+  unmounted drives), and unresolvable relative paths are conservatively
+  skipped.
+
+### Changed
+
+- `python main.py scan` output now includes `updated=<n>` (rescan
+  reconciliation count).
+- The duplicate report dialog is no longer strictly read-only: with the
+  disposal use case wired it offers the dispose action described above;
+  without it (legacy/CLI wiring) it stays read-only.
+
 ## [2.3.2] - 2026-09-06
 
 Desktop-review fixes: photo-wall layout, reliable filter placeholder, and
