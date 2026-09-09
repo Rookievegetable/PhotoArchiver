@@ -26,7 +26,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 ## 2. Current Step（当前开发阶段）
 
-**Phase E 库管理 E-1~E-5 全部实施完成，v2.4.0 发版准备就绪（2026-09-08）**——版本链已 bump（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08`）、用户指南已补章（`docs/user-guide/workflow.md` ⑤ 库管理 + 重扫对账 + prune-missing CLI）、发版前全量回归 **710 passed / 3 skipped / 0 failed**。**待 owner 签核发版**（tag + push + release body 为 owner 动作，GIT-020）。开发计划与裁决记录：`docs/development/phase-e-deletion-plan.md` + ADR-034（D1–D6 全部按建议执行）。
+**v2.4.0 已发布（Phase E 库管理收官，2026-09-08）**——tag `v2.4.0` → `93b7a15`，CI 三平台绿（macOS LIMIT-006 darwin skip 4 用例生效后通过），Phase E 全部六期（E-1~E-6）实施完成。**待 owner 完成收尾两步**：① 核对 GitHub Release 页面（tag `v2.4.0` 触发的 workflow 应已附 `dist-*` 构建产物；release.yml 不跑 pytest，macOS 测试面问题不影响资产）；② 将 `CHANGELOG.md` 第 9–54 行 `[2.4.0]` 段粘贴进 Release body（`generate_release_notes` 只自动生成贡献者/提交摘要）后签核。
 
 本版本为新增能力 minor 版（库管理 P2-1/P2-2/P2-3）：
 
@@ -37,8 +37,6 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 - **prune-missing CLI**（D5）：失联登记 dry-run 默认列出（含期望路径），`--execute` 才清理；扫描绝不自动删库。
 - 全量删除操作走确认流 + loguru 审计行 + Phase B 启动备份兜底。
 
-v2.3.2（上一版，桌面复验修复：EXIF 拍摄时刻 ISSUE-019 + 照片墙 + 占位）已于 2026-09-06 签核收官。
-
 ### 历史发版锚点
 
 | 版本 | tag → 提交 | 主题 |
@@ -46,7 +44,7 @@ v2.3.2（上一版，桌面复验修复：EXIF 拍摄时刻 ISSUE-019 + 照片�
 | v2.3.0 | `e14409e` | 数据安全底线 + 运行时正确性（Phase A/B/C，D-B1~D-B8 裁决） |
 | v2.3.1 | `90c46db` | 桌面 UI 中文化 + 工具栏纯化 + 人员筛选智能搜索（owner 裁决多轮折入单一发布；tag 二次重打至 CI 绿树） |
 | v2.3.2 | `2aadcee` | 桌面复验修复：EXIF 拍摄时刻 + 照片墙 + 占位 |
-| v2.4.0 | 待 owner 打 tag | 库管理：删除登记 / 删除人员 / 重复处置 / 重扫对账 / prune-missing CLI（Phase E） |
+| v2.4.0 | `93b7a15` | 库管理：删除登记 / 删除人员 / 重复处置 / 重扫对账 / prune-missing CLI（Phase E） |
 
 更早锚点：v1.0.0→`49b2ac6`、v2.0.0→`ba3ad02`、v2.1.0→`bd52fbb`、v2.2.0→`f9fb8c5`。
 
@@ -58,11 +56,11 @@ v2.3.2（上一版，桌面复验修复：EXIF 拍摄时刻 ISSUE-019 + 照片�
 |---|---|---|
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
 | 版本链 | ✅ | v2.4.0 三处一致（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08`）；历史锚点 v2.3.2 保留。 |
-| CI | ⚠️ | 最近 push 的 macOS job 段错误复发——LIMIT-006 第三形态（N3 `test_rescan_grows_superset_idempotently`，worker 于 pathlib.is_file/stat，非确定性与产品代码无因果，见 KNOWN_ISSUES）。处置：N3 两用例 darwin skip 扩展（真实执行器压力用例 darwin skip 共 4 个），commit 待 push 后 CI 重跑验证；win/linux 全量绿（本地 710/3/0）。 |
+| CI | ✅ | 三平台绿（macOS LIMIT-006 darwin skip 4 个真实执行器压力用例生效后通过——skip 为测试面处置，非产品缺陷，见 KNOWN_ISSUES）；Windows/Linux 全量 710/3/0 本地实证。 |
 | 桌面复验 | ✅ | 机制项（N1–N4 自动化：1200 行导入闭环/取消一致性/备份恢复演练/换目录子进程）+ 感知项（J1–J7 owner 逐项判定）全部通过。 |
 | 未决问题 | ✅ 清零 | ISSUE-019 已修复并经真机终验关闭（条目同提交删除）。 |
 | Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消为任务边界粒度，设计特征）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS CI runner 压力扫描段错误，darwin skip），均 Low、不阻塞。 |
-| Release body | ✅ | v2.3.2 body 已由 owner 粘贴并经 API 缓存穿透回读实证（668/3/0 + 全部小节 + 构建自 `2aadcee`）。 |
+| Release body | ⏳ 待 owner | GitHub Release 已由 tag `v2.4.0` 触发生成（`generate_release_notes` 自动摘要 + `dist-*` 资产）；`CHANGELOG.md` 第 9–54 行 `[2.4.0]` 段需 owner 粘贴进 body 后签核（v2.3.2 同流程）。 |
 
 ### 数据库 Schema
 
@@ -91,11 +89,11 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 |---|---|
 | 时间 | 2026-09-08（本地） |
 | 生成者 | Cline |
-| 会话范围 | 交接恢复 → **E-2 收尾**（级联测试修复 + 补 D1 归档断言）→ **E-3 实施**（Application 四删除用例 + 装配 + 真库测试 14）→ **E-4 实施**（UI 删除入口）→ **E-5 实施**（重扫对账 + prune-missing CLI）→ **E-6 收尾**（指南补章 + 版本链 bump + 发版前回归）。 |
-| 关键产出 | ① E-2：`test_deletion_cascade.py` 修复补强 4 用例；② E-3：四个删除/对账 Service + DTO/Command/UseCase + 审计 + 装配 + 14 测试；③ E-4：`PhotoDeletionConfirmDialog`、`PersonDeletionDialog`、重复报告处置按钮 + controller 二次确认编排、main_window 工具栏双入口、ui_text 中文化、8 测试；④ E-5：`update_metadata` 双实现、扫描变更检测、`prune-missing` CLI、12 测试；⑤ E-6：`docs/user-guide/workflow.md` 补 ⑤ 库管理章（删除登记/删除人员/重复处置/失联清理 + 附加能力表/命令行表更新）+ 版本链 bump 至 **2.4.0**（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08` 英文全段）+ 发版前全量回归 **710 passed / 3 skipped / 0 failed**（连续四次全绿）；⑥ 质量门全绿：ruff 0 / mypy 189 files 0 / pip check 通过；⑦ **macOS CI 段错误复发处置**：N3 `test_scan_cancel_consistency` 2 用例 darwin skip 扩展（LIMIT-006 第三形态：worker 于 pathlib.is_file/stat，与产品代码无因果，完整栈分析见 KNOWN_ISSUES），Windows 本地两用例照跑 PASSED 验证。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 189 个源文件无问题；pytest 全量 **710 passed / 3 skipped / 0 failed**（发版前实测）。 |
-| 工作区 | 本轮 E-1~E-6 与 LIMIT-006 skip 扩展提交后工作树全净；origin/main 与 tag `v2.4.0` 状态以 `git log` 实时为准（owner 已 push E-1~E-6 树并打 tag）。 |
-| Remaining | **v2.4.0 发版动作（owner）**：push 分支（含 LIMIT-006 darwin skip 扩展）→ 重跑 CI 三平台验证全绿 → 本地打 tag `v2.4.0` → push tag（触发 release workflow）→ GitHub Release body 复用 CHANGELOG `[2.4.0]` 段 → 签核收官。Phase E 全部六期（E-1~E-6）实施完成。 |
+| 会话范围 | 交接恢复 → **E-2 收尾** → **E-3 实施** → **E-4 实施** → **E-5 实施** → **E-6 收尾发版** → **v2.4.0 发布收官**（macOS CI 段错误处置）。 |
+| 关键产出 | ① E-2：级联矩阵测试 4 用例；② E-3：四删除/对账 UseCase + 预览 DTO + 审计 + 装配 + 14 测试；③ E-4：UI 删除入口三处 + 确认流 + 8 测试；④ E-5：重扫对账（update_metadata 双实现 + 变更检测）+ prune-missing CLI + 12 测试；⑤ E-6：用户指南补章 + 版本链 bump 2.4.0 + CHANGELOG `[2.4.0]` 段 + 发版前回归 710/3/0；⑥ **macOS CI 段错误处置**：N3 两用例 darwin skip 扩展（LIMIT-006 第三形态：worker 于 pathlib.is_file/stat，与产品代码无因果，完整栈分析见 KNOWN_ISSUES），push 后 CI 三平台绿验证；⑦ 质量门全绿：ruff 0 / mypy 189 files 0 / pip check 通过。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 189 个源文件无问题；pytest 全量 **710 passed / 3 skipped / 0 failed**（本地；CI 三平台绿，macOS skip 4 压力用例）。 |
+| 工作区 | 本轮提交已全部 push（origin/main == 本地 HEAD），工作树全净；tag `v2.4.0` = `93b7a15`。 |
+| Remaining | owner 收尾两步：① 核对 GitHub Release 页面资产；② 粘贴 CHANGELOG `[2.4.0]` 段进 body 后签核。下一轮候选（均需 owner 另行立项）：历史照片 captured_at 回填 CLI、LIMIT-006 macOS 原生崩溃追查（需 macOS 调试手段）、完整路径锚定 P1。 |
 
 ---
 
@@ -106,7 +104,7 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 - LIMIT-006 macOS 原生崩溃追查（需 macOS 调试手段）；
 - 完整路径锚定 P1（用户目录/注册表定位）。
 
-| Next Step | **v2.4.0 发版（owner 动作，GIT-020）**：本地打 tag `v2.4.0` → push 分支与 tag 触发 release workflow → GitHub Release body 复用 CHANGELOG `[2.4.0]` 段 → 签核收官。Phase E 全部六期（E-1~E-6）实施完成。 |
+| Next Step | **v2.4.0 签核（owner 手工项）**：核对 GitHub Release 页面资产 + 粘贴 CHANGELOG `[2.4.0]` 段进 body + 签核。开发侧无未竟项；下一轮候选均需 owner 另行立项。 |
 
 ---
 
