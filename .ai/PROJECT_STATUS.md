@@ -94,7 +94,7 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 | 会话范围 | 交接恢复 → **E-2 收尾**（级联测试修复 + 补 D1 归档断言）→ **E-3 实施**（Application 四删除用例 + 装配 + 真库测试 14）→ **E-4 实施**（UI 删除入口）→ **E-5 实施**（重扫对账 + prune-missing CLI）→ **E-6 收尾**（指南补章 + 版本链 bump + 发版前回归）。 |
 | 关键产出 | ① E-2：`test_deletion_cascade.py` 修复补强 4 用例；② E-3：四个删除/对账 Service + DTO/Command/UseCase + 审计 + 装配 + 14 测试；③ E-4：`PhotoDeletionConfirmDialog`、`PersonDeletionDialog`、重复报告处置按钮 + controller 二次确认编排、main_window 工具栏双入口、ui_text 中文化、8 测试；④ E-5：`update_metadata` 双实现、扫描变更检测、`prune-missing` CLI、12 测试；⑤ E-6：`docs/user-guide/workflow.md` 补 ⑤ 库管理章（删除登记/删除人员/重复处置/失联清理 + 附加能力表/命令行表更新）+ 版本链 bump 至 **2.4.0**（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08` 英文全段）+ 发版前全量回归 **710 passed / 3 skipped / 0 failed**（连续四次全绿）；⑥ 质量门全绿：ruff 0 / mypy 189 files 0 / pip check 通过；⑦ **macOS CI 段错误复发处置**：N3 `test_scan_cancel_consistency` 2 用例 darwin skip 扩展（LIMIT-006 第三形态：worker 于 pathlib.is_file/stat，与产品代码无因果，完整栈分析见 KNOWN_ISSUES），Windows 本地两用例照跑 PASSED 验证。 |
 | 当前质量门 | `ruff check .` 通过；`mypy src` 189 个源文件无问题；pytest 全量 **710 passed / 3 skipped / 0 failed**（发版前实测）。 |
-| 工作区 | HEAD = `41f7e3a` → 本轮 E-6 prepare 提交，领先 origin/main 10 commit；PROJECT_STATUS 同步刷新。 |
+| 工作区 | 本轮 E-1~E-6 与 LIMIT-006 skip 扩展提交后工作树全净；origin/main 与 tag `v2.4.0` 状态以 `git log` 实时为准（owner 已 push E-1~E-6 树并打 tag）。 |
 | Remaining | **v2.4.0 发版动作（owner）**：push 分支（含 LIMIT-006 darwin skip 扩展）→ 重跑 CI 三平台验证全绿 → 本地打 tag `v2.4.0` → push tag（触发 release workflow）→ GitHub Release body 复用 CHANGELOG `[2.4.0]` 段 → 签核收官。Phase E 全部六期（E-1~E-6）实施完成。 |
 
 ---
