@@ -15,7 +15,15 @@ from photo_archiver.application.ports import (
     UnitOfWork,
 )
 from photo_archiver.application.use_cases import ScanAndRegisterPhotosUseCase
-from photo_archiver.domain import Folder, FolderRepository, Photo, PhotoPath, PhotoPathBase, PhotoRepository
+from photo_archiver.domain import (
+    Folder,
+    FolderRepository,
+    Photo,
+    PhotoMetadata,
+    PhotoPath,
+    PhotoPathBase,
+    PhotoRepository,
+)
 
 # Report progress at most every N items to avoid flooding the event stream.
 # First and last items always report so small batches stay visible to the UI.
@@ -72,23 +80,34 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
         total = len(scan_items)
         folder = self._get_or_create_folder(folder_path, display_name)
 
-        # Pre-fetch existing photo paths for this folder once to avoid N+1
+        # Pre-fetch existing photos for this folder once to avoid N+1
         # find_by_path queries inside the scan loop (P1-b fix). Path comparison
-        # happens in memory against the fetched set.
-        existing_paths = {
-            photo.path for photo in self._photo_repository.list_by_folder_id(folder.id)  # type: ignore[arg-type]  # UUID | None guarantee
+        # happens in memory against the fetched mapping — E-5 重扫对账需要
+        # path → 既有 Photo（拿既有 id 做元数据刷新）。
+        existing_photos = {
+            photo.path: photo
+            for photo in self._photo_repository.list_by_folder_id(folder.id)  # type: ignore[arg-type]  # UUID | None guarantee
         }
 
         registered_count = 0
+        updated_count = 0
         skipped_count = 0
         errors: list[str] = []
 
         for index, item in enumerate(scan_items, start=1):
             photo_path = self._absolute_path(item.path)
             path_value = self._photo_path(photo_path)
-            if path_value in existing_paths:
-                skipped_count += 1
-                self._report(index, total, "Skipping existing photo")
+            existing = existing_photos.get(path_value)
+            if existing is not None:
+                # Phase E E-5（ADR-034 D5）：重扫对账——内容变化（mtime /
+                # content hash）刷新元数据；未变化者保持 skipped。读取失败
+                # 或 reader 未绑定时保守视为未变化，不误更新登记。
+                if self._update_if_changed(existing, photo_path):
+                    updated_count += 1
+                    self._report(index, total, "Updated changed photo metadata")
+                else:
+                    skipped_count += 1
+                    self._report(index, total, "Skipping existing photo")
                 continue
 
             metadata = None
@@ -108,21 +127,61 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
                 captured_at=metadata.captured_at if metadata is not None else None,
             )
             self._photo_repository.add(photo)
-            existing_paths.add(path_value)
+            existing_photos[path_value] = photo
             registered_count += 1
             self._report(index, total, "Registered photo")
 
         folder.total_photos = total
-        folder.scanned_photos = registered_count + skipped_count
+        folder.scanned_photos = registered_count + updated_count + skipped_count
         self._folder_repository.add(folder)
 
         return ScanAndRegisterPhotosResult(
             folder_id=folder.id,
             discovered_count=total,
             registered_count=registered_count,
+            updated_count=updated_count,
             skipped_count=skipped_count,
             failed_count=len(errors),
             errors=tuple(errors),
+        )
+
+    def _update_if_changed(self, photo: Photo, photo_path: Path) -> bool:
+        """Refresh the registration metadata when the file content changed.
+
+        Phase E E-5（ADR-034 D5）：比较 fresh 读与既有 metadata 的内容相关
+        字段；变化则 ``PhotoRepository.update_metadata`` 刷新（只改 metadata
+        列，快照列不动），返回 True。reader 缺失、读取失败或内容未变化时
+        返回 False（保守：不误更新，保持 skipped 语义）。
+        """
+        if self._metadata_reader is None:
+            return False
+        try:
+            fresh = self._metadata_reader.read(photo_path)
+        except (OSError, ValueError, RuntimeError):
+            logger.warning("Reconcile scan: failed to re-read {}, keeping existing metadata", photo_path)
+            return False
+        if self._metadata_unchanged(photo.metadata, fresh):
+            return False
+        self._photo_repository.update_metadata(photo.id, fresh)  # type: ignore[arg-type]  # UUID | None guarantee
+        return True
+
+    @staticmethod
+    def _metadata_unchanged(old: PhotoMetadata | None, new: PhotoMetadata | None) -> bool:
+        """Return whether content-relevant metadata is identical between reads.
+
+        D5 语义："mtime 或 content hash 比对"。双方 content_hash 均可比时
+        以 hash 为准（内容强等价）；任一方缺 hash 时退化为 mtime + file_size
+        比对（弱信号，B1 回填前的历史照片适配）。
+        """
+        if old is None and new is None:
+            return True
+        if old is None or new is None:
+            return False
+        if old.content_hash is not None and new.content_hash is not None:
+            return old.content_hash == new.content_hash
+        return (
+            old.modified_at == new.modified_at
+            and old.file_size_bytes == new.file_size_bytes
         )
 
     def _report(self, current: int, total: int, message: str) -> None:

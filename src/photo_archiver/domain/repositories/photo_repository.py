@@ -5,7 +5,7 @@ from typing import Protocol
 from uuid import UUID
 
 from photo_archiver.domain.entities import Photo
-from photo_archiver.domain.value_objects import PhotoPath, PhotoSearchCriteria
+from photo_archiver.domain.value_objects import PhotoMetadata, PhotoPath, PhotoSearchCriteria
 
 
 class PhotoRepository(Protocol):
@@ -21,6 +21,20 @@ class PhotoRepository(Protocol):
         级联删除（SQLite 外键既有语义）；**磁盘文件一律不动**（D3）。
         幂等：目标不存在计 0 行，不抛错。InMemory 测试替身不模拟级联——
         级联语义的唯一裁判是真实 SQLite 集成测试。
+        """
+
+    def update_metadata(self, photo_id: UUID, metadata: PhotoMetadata | None) -> int:
+        """Update only the metadata columns for a photo.
+
+        Phase E E-5 重扫对账（ADR-034 D5）：文件内容变化（mtime/content
+        hash 变）时刷新元数据。只更新 metadata 相关列（width / height /
+        file_size_bytes / modified_at / content_hash）——**保留** captured_at
+        与 created_at 等快照列（ISSUE-019 快照语义：已入库不回填拍摄时刻）。
+
+        Returns:
+            The number of rows updated (1 on hit, 0 when the photo id is
+            missing). Callers SHOULD treat 0 as a concurrent-removal signal
+            rather than silently assuming success.
         """
 
     def find_by_id(self, photo_id: UUID) -> Photo | None:

@@ -1,9 +1,16 @@
 """In-memory implementation of the photo repository interface."""
 
 from collections.abc import Sequence
+from dataclasses import replace
 from uuid import UUID
 
-from photo_archiver.domain import Photo, PhotoPath, PhotoRepository, PhotoSearchCriteria
+from photo_archiver.domain import (
+    Photo,
+    PhotoMetadata,
+    PhotoPath,
+    PhotoRepository,
+    PhotoSearchCriteria,
+)
 
 
 class InMemoryPhotoRepository(PhotoRepository):
@@ -28,6 +35,19 @@ class InMemoryPhotoRepository(PhotoRepository):
             if self._photos_by_id.pop(photo_id, None) is not None:
                 removed += 1
         return removed
+
+    def update_metadata(self, photo_id: UUID, metadata: PhotoMetadata | None) -> int:
+        """Replace only the metadata on the stored photo; keep other columns.
+
+        Phase E E-5（ADR-034 D5）：重扫对账刷新元数据。用 ``replace`` 仅替
+        metadata 一字段——保留 captured_at / created_at / folder_id / path。
+        幂等：id 不存在返回 0。
+        """
+        photo = self._photos_by_id.get(photo_id)
+        if photo is None:
+            return 0
+        self._photos_by_id[photo_id] = replace(photo, metadata=metadata)
+        return 1
 
     def find_by_id(self, photo_id: UUID) -> Photo | None:
         """Find a photo by its domain identifier."""

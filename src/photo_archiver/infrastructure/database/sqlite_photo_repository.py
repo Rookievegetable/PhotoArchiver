@@ -3,7 +3,13 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from photo_archiver.domain import Photo, PhotoPath, PhotoRepository, PhotoSearchCriteria
+from photo_archiver.domain import (
+    Photo,
+    PhotoMetadata,
+    PhotoPath,
+    PhotoRepository,
+    PhotoSearchCriteria,
+)
 from photo_archiver.infrastructure.database.sqlite_connection import SQLiteConnectionProvider
 from photo_archiver.infrastructure.database.sqlite_mappers import (
     datetime_to_text,
@@ -96,6 +102,40 @@ class SQLitePhotoRepository(PhotoRepository):
                 )
                 removed += cursor.rowcount
         return removed
+
+    def update_metadata(self, photo_id: UUID, metadata: PhotoMetadata | None) -> int:
+        """Update only the metadata columns; return the updated row count.
+
+        Phase E E-5（ADR-034 D5）：重扫对账刷新元数据。只 UPDATE metadata_*
+        五列，**不触碰 captured_at / created_at / folder_id / raw_path**——
+        快照列保持原值（ISSUE-019 已入库不回填拍摄时刻的语义延续）。幂等：
+        id 不存在返回 0，不抛错。
+        """
+        width = height = file_size = modified_at_text = content_hash = None
+        if metadata is not None:
+            width = metadata.width
+            height = metadata.height
+            file_size = metadata.file_size_bytes
+            modified_at_text = (
+                datetime_to_text(metadata.modified_at)
+                if metadata.modified_at is not None
+                else None
+            )
+            content_hash = metadata.content_hash
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE photos
+                SET metadata_width = ?,
+                    metadata_height = ?,
+                    metadata_file_size_bytes = ?,
+                    metadata_modified_at = ?,
+                    metadata_content_hash = ?
+                WHERE id = ?
+                """,
+                (width, height, file_size, modified_at_text, content_hash, str(photo_id)),
+            )
+        return cursor.rowcount
 
     def find_by_id(self, photo_id: UUID) -> Photo | None:
         """Find a photo by its domain identifier."""

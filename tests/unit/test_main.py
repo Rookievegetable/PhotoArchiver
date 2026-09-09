@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
 
 import main as main_module
 from photo_archiver.application import ScanAndRegisterPhotosCommand, ScanAndRegisterPhotosResult
@@ -62,3 +63,93 @@ def test_main_returns_failure_when_scan_has_errors(monkeypatch, capsys) -> None:
     captured = capsys.readouterr()
     assert "failed=1" in captured.out
     assert "Error: bad.jpg" in captured.err
+
+
+# ---- prune-missing CLI（Phase E E-5，ADR-034 D5）----
+
+
+class StubPruneMissingPhotosService:
+    """Capture prune preview/execute calls and return configured results."""
+
+    def __init__(self, preview, result=None):
+        self._preview = preview
+        self._result = result
+        self.executed_command = None
+
+    def preview(self):
+        return self._preview
+
+    def execute(self, command):
+        self.executed_command = command
+        return self._result
+
+
+def _prune_preview():
+    """Preview with one missing registration."""
+    from photo_archiver.application.dtos.deletion import MissingPhotoItem, PruneMissingPreview
+
+    return PruneMissingPreview(
+        scanned=2,
+        items=(MissingPhotoItem(photo_id=uuid4(), disk_path=Path("/photos/gone.jpg")),),
+        unresolvable=0,
+    )
+
+
+def _prune_prune_result():
+    from photo_archiver.application.dtos.deletion import PruneMissingResult
+
+    return PruneMissingResult(scanned=2, missing=1, requested=1, pruned=1, rejected=0, unresolvable=0)
+
+
+def test_main_prune_missing_dry_run_lists_but_does_not_execute(monkeypatch, capsys) -> None:
+    """默认 dry-run：列出失联登记，不调用 execute（不删除）。"""
+    service = StubPruneMissingPhotosService(_prune_preview(), _prune_prune_result())
+    context = SimpleNamespace(
+        services=SimpleNamespace(prune_missing_photos=service),
+    )
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["prune-missing"])
+
+    assert exit_code == 0
+    assert service.executed_command is None  # dry-run 绝不执行
+    captured = capsys.readouterr()
+    assert "Dry-run: nothing pruned" in captured.out
+    assert "missing" in captured.out
+
+
+def test_main_prune_missing_execute_removes_registrations(monkeypatch, capsys) -> None:
+    """--execute：确认后执行清理，输出 pruned 计数。"""
+    service = StubPruneMissingPhotosService(_prune_preview(), _prune_prune_result())
+    context = SimpleNamespace(
+        services=SimpleNamespace(prune_missing_photos=service),
+    )
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["prune-missing", "--execute"])
+
+    assert exit_code == 0
+    assert service.executed_command is not None
+    assert len(service.executed_command.photo_ids) == 1
+    captured = capsys.readouterr()
+    assert "Prune complete: pruned=1" in captured.out
+    assert "unresolvable=0" in captured.out
+
+
+def test_main_prune_missing_nothing_missing(monkeypatch, capsys) -> None:
+    """无失联登记 → 提示信息且不执行。"""
+    from photo_archiver.application.dtos.deletion import PruneMissingPreview
+
+    empty = PruneMissingPreview(scanned=1, items=(), unresolvable=0)
+    service = StubPruneMissingPhotosService(empty, None)
+    context = SimpleNamespace(
+        services=SimpleNamespace(prune_missing_photos=service),
+    )
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["prune-missing", "--execute"])
+
+    assert exit_code == 0
+    assert service.executed_command is None
+    captured = capsys.readouterr()
+    assert "no missing registrations found" in captured.out

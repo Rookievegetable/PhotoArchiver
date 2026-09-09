@@ -11,6 +11,7 @@ class ScanAndRegisterPhotosResult:
     folder_id: UUID | None = None
     discovered_count: int = 0
     registered_count: int = 0
+    updated_count: int = 0
     skipped_count: int = 0
     failed_count: int = 0
     errors: tuple[str, ...] = field(default_factory=tuple)

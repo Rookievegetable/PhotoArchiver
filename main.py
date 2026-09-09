@@ -10,7 +10,11 @@ if SOURCE_ROOT.is_dir():
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from photo_archiver.app import ApplicationContext, PhotoArchiverApplication, bootstrap_application  # noqa: E402  # sys.path injection above is required before app imports
-from photo_archiver.application import ArchivePhotosCommand, ScanAndRegisterPhotosCommand  # noqa: E402  # sys.path injection above is required before app imports
+from photo_archiver.application import (  # noqa: E402  # sys.path injection above is required before app imports
+    ArchivePhotosCommand,
+    PruneMissingCommand,
+    ScanAndRegisterPhotosCommand,
+)
 from photo_archiver.infrastructure.database.backup import backup_database  # noqa: E402
 from photo_archiver.infrastructure.database.integrity import (  # noqa: E402
     BACKUP_DIRECTORY_NAME,
@@ -85,6 +89,16 @@ def build_argument_parser() -> ArgumentParser:
         "backfill-content-hash",
         help="one-time backfill of content_hash for photos registered before B1 wiring",
     )
+
+    prune_parser = subparsers.add_parser(
+        "prune-missing",
+        help="list registry entries whose disk file is missing; with --execute, remove those registrations",
+    )
+    prune_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="really remove the missing registrations (default: dry-run preview only)",
+    )
     return parser
 
 
@@ -104,6 +118,7 @@ def run_scan_command(arguments: Namespace) -> int:
         "Scan complete: "
         f"discovered={result.discovered_count}, "
         f"registered={result.registered_count}, "
+        f"updated={result.updated_count}, "
         f"skipped={result.skipped_count}, "
         f"failed={result.failed_count}\n"
     )
@@ -164,6 +179,48 @@ def run_backfill_content_hash_command(arguments: Namespace) -> int:
     return 0 if result.succeeded else 1
 
 
+def run_prune_missing_command(arguments: Namespace) -> int:
+    """List (or, with --execute, remove) registrations whose file is missing.
+
+    Phase E E-5（ADR-034 D5）：文件消失**不自动删库**（防移动盘未挂载误判）。
+    默认 dry-run 只列失联登记（含期望磁盘路径，供用户核实）；带 ``--execute``
+    才移除这些登记——磁盘文件一律不动（D3）。无法解析路径者保守跳过不计入。
+    """
+    context = _bootstrap_for_cli()
+    if context is None:
+        return 2
+    service = context.services.prune_missing_photos
+    preview = service.preview()
+    if preview.is_empty:
+        sys.stdout.write(
+            "Prune-missing: no missing registrations found — every registered "
+            "photo has a file on disk.\n"
+        )
+        return 0
+    sys.stdout.write(
+        f"Prune-missing: {preview.missing_count} registration(s) whose file is gone "
+        f"(scanned {preview.scanned}; unresolvable {preview.unresolvable} skipped "
+        "conservatively):\n"
+    )
+    for item in preview.items:
+        sys.stdout.write(f"  {item.photo_id}  {item.disk_path}\n")
+    if not arguments.execute:
+        sys.stdout.write(
+            "Dry-run: nothing pruned. Re-run with --execute to remove these "
+            "registrations (disk files are never touched).\n"
+        )
+        return 0
+    command = PruneMissingCommand(
+        photo_ids=tuple(item.photo_id for item in preview.items)
+    )
+    result = service.execute(command)
+    sys.stdout.write(
+        f"Prune complete: pruned={result.pruned}, rejected={result.rejected}, "
+        f"missing={result.missing}, unresolvable={result.unresolvable}\n"
+    )
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run the PhotoArchiver desktop application.
 
@@ -178,6 +235,8 @@ def main(arguments: list[str] | None = None) -> int:
         return run_archive_command(parsed_arguments)
     if parsed_arguments.command == "backfill-content-hash":
         return run_backfill_content_hash_command(parsed_arguments)
+    if parsed_arguments.command == "prune-missing":
+        return run_prune_missing_command(parsed_arguments)
 
     try:
         context = bootstrap_application()
