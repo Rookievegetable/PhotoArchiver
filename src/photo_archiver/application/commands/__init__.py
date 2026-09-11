@@ -1,6 +1,7 @@
 """Application command objects."""
 
 from photo_archiver.application.commands.archive import ArchivePhotosCommand
+from photo_archiver.application.commands.backfill_capture_time import BackfillCaptureTimeCommand
 from photo_archiver.application.commands.deletion import (
     DeletePersonCommand,
     DeletePhotosCommand,
@@ -15,6 +16,7 @@ from photo_archiver.application.commands.scan_photo_folder import ScanPhotoFolde
 
 __all__ = [
     "ArchivePhotosCommand",
+    "BackfillCaptureTimeCommand",
     "DeletePersonCommand",
     "DeletePhotosCommand",
     "DisposeDuplicatesCommand",

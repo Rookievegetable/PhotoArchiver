@@ -1,6 +1,7 @@
 """SQLite implementation of the photo repository interface."""
 
 from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID
 
 from photo_archiver.domain import (
@@ -134,6 +135,23 @@ class SQLitePhotoRepository(PhotoRepository):
                 WHERE id = ?
                 """,
                 (width, height, file_size, modified_at_text, content_hash, str(photo_id)),
+            )
+        return cursor.rowcount
+
+    def update_capture_time(self, photo_id: UUID, captured_at: datetime | None) -> int:
+        """Update only the captured_at column; return the updated row count.
+
+        Phase F F-1（ADR-035）：Issue-019 后历史照片拍摄时刻回填专用通道。
+        只 UPDATE captured_at 一列，metadata_* 与 created_at 不动。幂等：
+        id 不存在返回 0，不抛错。
+        """
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE photos SET captured_at = ? WHERE id = ?",
+                (
+                    datetime_to_text(captured_at) if captured_at is not None else None,
+                    str(photo_id),
+                ),
             )
         return cursor.rowcount
 

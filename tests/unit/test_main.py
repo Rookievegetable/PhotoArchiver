@@ -153,3 +153,67 @@ def test_main_prune_missing_nothing_missing(monkeypatch, capsys) -> None:
     assert service.executed_command is None
     captured = capsys.readouterr()
     assert "no missing registrations found" in captured.out
+
+
+# ---- backfill-capture-time CLI（Phase F F-1，ADR-035）----
+
+
+class StubBackfillCaptureTimeService:
+    """Capture backfill commands and return a configured result."""
+
+    def __init__(self, result):
+        self.result = result
+        self.commands: list = []
+
+    def execute(self, command):
+        self.commands.append(command)
+        return self.result
+
+
+def _capture_result(dry_run: bool):
+    from photo_archiver.application.services.backfill_capture_time_service import (
+        BackfillCaptureTimeResult,
+    )
+
+    return BackfillCaptureTimeResult(
+        scanned=1,
+        updated=0 if dry_run else 1,
+        would_update=1 if dry_run else 0,
+        unchanged=0,
+        failed=0,
+        skipped_missing=0,
+    )
+
+
+def test_main_backfill_capture_time_dry_run_by_default(monkeypatch, capsys) -> None:
+    """默认 dry-run：只报差异计数，不写库，提示 --execute。"""
+    service = StubBackfillCaptureTimeService(_capture_result(dry_run=True))
+    context = SimpleNamespace(
+        services=SimpleNamespace(backfill_capture_time=service),
+    )
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["backfill-capture-time"])
+
+    assert exit_code == 0
+    assert service.commands[0].dry_run is True
+    captured = capsys.readouterr()
+    assert "would_update=1" in captured.out
+    assert "Dry-run: nothing written" in captured.out
+
+
+def test_main_backfill_capture_time_execute_updates(monkeypatch, capsys) -> None:
+    """--execute：写入纠错，输出 updated 计数。"""
+    service = StubBackfillCaptureTimeService(_capture_result(dry_run=False))
+    context = SimpleNamespace(
+        services=SimpleNamespace(backfill_capture_time=service),
+    )
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["backfill-capture-time", "--execute"])
+
+    assert exit_code == 0
+    assert service.commands[0].dry_run is False
+    captured = capsys.readouterr()
+    assert "updated=1" in captured.out
+    assert "Dry-run" not in captured.out

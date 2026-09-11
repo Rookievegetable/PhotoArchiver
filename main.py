@@ -12,6 +12,7 @@ if SOURCE_ROOT.is_dir():
 from photo_archiver.app import ApplicationContext, PhotoArchiverApplication, bootstrap_application  # noqa: E402  # sys.path injection above is required before app imports
 from photo_archiver.application import (  # noqa: E402  # sys.path injection above is required before app imports
     ArchivePhotosCommand,
+    BackfillCaptureTimeCommand,
     PruneMissingCommand,
     ScanAndRegisterPhotosCommand,
 )
@@ -98,6 +99,16 @@ def build_argument_parser() -> ArgumentParser:
         "--execute",
         action="store_true",
         help="really remove the missing registrations (default: dry-run preview only)",
+    )
+
+    capture_parser = subparsers.add_parser(
+        "backfill-capture-time",
+        help="one-time captured_at correction for photos registered before the ISSUE-019 EXIF fix (dry-run by default)",
+    )
+    capture_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="really update the registrations (default: dry-run preview only)",
     )
     return parser
 
@@ -221,6 +232,34 @@ def run_prune_missing_command(arguments: Namespace) -> int:
     return 0
 
 
+def run_backfill_capture_time_command(arguments: Namespace) -> int:
+    """One-time captured_at correction for pre-ISSUE-019 registrations.
+
+    Phase F F-1（ADR-035）：历史照片拍摄时刻全量重读对齐（EXIF 事实源），
+    dry-run 默认只报差异计数，``--execute`` 才写。幂等：重跑差异归零。
+    """
+    context = _bootstrap_for_cli()
+    if context is None:
+        return 2
+    command = BackfillCaptureTimeCommand(dry_run=not arguments.execute)
+    result = context.services.backfill_capture_time.execute(command)
+    diff_label = "would_update" if command.dry_run else "updated"
+    diff_value = result.would_update if command.dry_run else result.updated
+    sys.stdout.write(
+        "Backfill capture-time complete: "
+        f"scanned={result.scanned}, "
+        f"{diff_label}={diff_value}, "
+        f"unchanged={result.unchanged}, "
+        f"failed={result.failed}, "
+        f"skipped_missing={result.skipped_missing}\n"
+    )
+    if command.dry_run:
+        sys.stdout.write(
+            "Dry-run: nothing written. Re-run with --execute to apply the corrections.\n"
+        )
+    return 0 if result.succeeded else 1
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run the PhotoArchiver desktop application.
 
@@ -237,6 +276,8 @@ def main(arguments: list[str] | None = None) -> int:
         return run_backfill_content_hash_command(parsed_arguments)
     if parsed_arguments.command == "prune-missing":
         return run_prune_missing_command(parsed_arguments)
+    if parsed_arguments.command == "backfill-capture-time":
+        return run_backfill_capture_time_command(parsed_arguments)
 
     try:
         context = bootstrap_application()

@@ -1,6 +1,7 @@
 """Photo repository interface."""
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -35,6 +36,18 @@ class PhotoRepository(Protocol):
             The number of rows updated (1 on hit, 0 when the photo id is
             missing). Callers SHOULD treat 0 as a concurrent-removal signal
             rather than silently assuming success.
+        """
+
+    def update_capture_time(self, photo_id: UUID, captured_at: datetime | None) -> int:
+        """Update only the captured_at column for a photo.
+
+        Phase F F-1（ADR-035）：Issue-019 后历史照片拍摄时刻一次性回填的
+        专用通道——与 ``update_metadata`` 对称，只动 captured_at 列
+        （metadata_* 与 created_at 等列不动）。
+
+        Returns:
+            The number of rows updated (1 on hit, 0 when the photo id is
+            missing). Callers SHOULD treat 0 as a concurrent-removal signal.
         """
 
     def find_by_id(self, photo_id: UUID) -> Photo | None:

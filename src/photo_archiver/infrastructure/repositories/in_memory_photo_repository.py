@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import replace
+from datetime import datetime
 from uuid import UUID
 
 from photo_archiver.domain import (
@@ -47,6 +48,18 @@ class InMemoryPhotoRepository(PhotoRepository):
         if photo is None:
             return 0
         self._photos_by_id[photo_id] = replace(photo, metadata=metadata)
+        return 1
+
+    def update_capture_time(self, photo_id: UUID, captured_at: datetime | None) -> int:
+        """Replace only captured_at on the stored photo; keep other columns.
+
+        Phase F F-1（ADR-035）：与 SQLite 实现语义一致——``replace`` 仅替
+        captured_at 字段。幂等：id 不存在返回 0。
+        """
+        photo = self._photos_by_id.get(photo_id)
+        if photo is None:
+            return 0
+        self._photos_by_id[photo_id] = replace(photo, captured_at=captured_at)
         return 1
 
     def find_by_id(self, photo_id: UUID) -> Photo | None:

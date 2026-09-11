@@ -2,6 +2,7 @@
 
 from photo_archiver.application.commands import (
     ArchivePhotosCommand,
+    BackfillCaptureTimeCommand,
     DeletePersonCommand,
     DeletePhotosCommand,
     DisposeDuplicatesCommand,
@@ -43,6 +44,7 @@ from photo_archiver.application.services import (
     ArchivePathBuilderService,
     ArchivePhotosService,
     ArchivePlanner,
+    BackfillCaptureTimeService,
     BackfillContentHashService,
     DeletePersonService,
     DeletePhotosService,
@@ -87,6 +89,8 @@ __all__ = [
     "ArchivePlanItem",
     "ArchivePlanner",
     "ArchiveResult",
+    "BackfillCaptureTimeCommand",
+    "BackfillCaptureTimeService",
     "BackfillContentHashService",
     "DeletePersonCommand",
     "DeletePersonService",

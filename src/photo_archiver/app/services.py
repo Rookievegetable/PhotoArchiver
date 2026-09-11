@@ -8,6 +8,7 @@ from photo_archiver.application import (
     ArchivePathBuilderService,
     ArchivePhotosService,
     ArchivePlanner,
+    BackfillCaptureTimeService,
     BackfillContentHashService,
     DeletePersonService,
     DeletePhotosService,
@@ -53,6 +54,7 @@ class ApplicationServices:
     export: ExportService
     detect_duplicates: DetectDuplicatesService
     backfill_content_hash: BackfillContentHashService
+    backfill_capture_time: BackfillCaptureTimeService
     search_photos: SearchPhotosService
     list_persons: ListPersonsService
     delete_photos: DeletePhotosService
@@ -141,6 +143,12 @@ def build_application_services(
         repositories.photos,
         metadata_reader,
     )
+    # Phase F F-1（ADR-035）：captured_at 一次性纠错回填（Issue-019 后）。
+    # 复用同一 metadata_reader（子 IFD 降级链已修复），dry-run 默认。
+    backfill_capture_time_service = BackfillCaptureTimeService(
+        repositories.photos,
+        metadata_reader,
+    )
     search_photos_service = SearchPhotosService(repositories.photos)
     # Phase 9 FEAT-P9-2: read-only person catalog for the FilterBar person axis
     # (Presentation never touches the repository directly — DEP-003/DEP-004).
@@ -203,6 +211,7 @@ def build_application_services(
         export=export_service,
         detect_duplicates=detect_duplicates_service,
         backfill_content_hash=backfill_content_hash_service,
+        backfill_capture_time=backfill_capture_time_service,
         search_photos=search_photos_service,
         list_persons=list_persons_service,
         delete_photos=delete_photos_service,
