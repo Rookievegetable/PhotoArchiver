@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.15.6 · Last Updated: 2026-09-08 · Status: Live
+> Version: 1.16.0 · Last Updated: 2026-09-12 · Status: Live
 
 ---
 
@@ -26,16 +26,11 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 ## 2. Current Step（当前开发阶段）
 
-**v2.4.0 已发布（Phase E 库管理收官，2026-09-08）**——tag `v2.4.0` → `93b7a15`，CI 三平台绿。**待 owner 收尾 v2.4.0**：核对 GitHub Release 资产 + 粘贴 `CHANGELOG.md` 第 9–54 行 `[2.4.0]` 段进 body 后签核。
+**v2.5.0 已发布（Phase F 正确性收口收官，2026-09-12）**——Phase F 全部六期完成：前三候选（captured_at 回填 CLI + 路径锚定 + CI macOS 崩溃诊断，ADR-035）与正确性收口五项（Windows 文件名净化 + 扫描环防护 / 查询去重 + 未匹配哨兵 / 取消接线与 UX / 质量基建 / CLI 对等，ADR-036，owner 2026-09-12 按建议批准 D4–D9）。待 owner 收尾 v2.5.0：核对 GitHub Release 资产 + 粘贴 `CHANGELOG.md` 第 9–44 行 `[2.5.0]` 段进 body 后签核。
 
-**Phase F（数据正确性与长期运营收尾）三候选已实施完成（ADR-035 登记，2026-09-08）**，全量回归 **728 passed / 3 skipped / 0 failed**：
+全量回归 **783 passed / 4 skipped / 0 failed**；覆盖率基线 **92%**（pytest-cov 首次引入，dev-only，不设门槛）。
 
-- **F-1 captured_at 回填 CLI**：Issue-019 后历史照片拍摄时刻一次性纠错——`PhotoRepository.update_capture_time`（只动快照列）+ `BackfillCaptureTimeService`（全量重读对齐，dry-run 默认、幂等、异常降级）+ `backfill-capture-time` 子命令。
-- **F-2 默认路径锚定 P1**：数据库/日志默认值由 CWD 相对改为 platformdirs 用户数据目录锚定（显式 `.env`/env 完全优先、零破坏）；bootstrap 增旧 CWD 库首启迁移引导（不自动搬库）；N4b 进程级反向实证（陌生 CWD + 无显式配置 → 库落锚定目录）。
-- **F-3 LIMIT-006 D-1**：CI macOS job 崩溃时自动收集 `.ips` crash report 为 artifact（追查从被动变主动）；D-2 复现与 D-3 修复待 macOS 调试手段立项。
-
-以上变更（含依赖批准 platformdirs 与默认行为变化）未发版——是否 prepare v2.5.0 由 owner 决定。
-
+### 历史发版锚点
 ### 历史发版锚点
 
 | 版本 | tag → 提交 | 主题 |
@@ -44,7 +39,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | v2.3.1 | `90c46db` | 桌面 UI 中文化 + 工具栏纯化 + 人员筛选智能搜索（owner 裁决多轮折入单一发布；tag 二次重打至 CI 绿树） |
 | v2.3.2 | `2aadcee` | 桌面复验修复：EXIF 拍摄时刻 + 照片墙 + 占位 |
 | v2.4.0 | `93b7a15` | 库管理：删除登记 / 删除人员 / 重复处置 / 重扫对账 / prune-missing CLI（Phase E） |
-| （未发版） | — | Phase F：captured_at 回填 CLI + 默认路径锚定 + CI macOS 崩溃诊断（是否 v2.5.0 待 owner） |
+| v2.5.0 | 2026-09-12 | Phase F：captured_at 回填 + 路径锚定 + CI 崩溃诊断 + Windows 保留名净化/扫描环防护 + 查询去重/未匹配哨兵 + 取消接线/UX + 覆盖率基线 + CLI 对等（ADR-035/036） |
 
 更早锚点：v1.0.0→`49b2ac6`、v2.0.0→`ba3ad02`、v2.1.0→`bd52fbb`、v2.2.0→`f9fb8c5`。
 
@@ -56,9 +51,9 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 |---|---|---|
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
 | 版本链 | ✅ | v2.4.0 三处一致（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08`）；历史锚点 v2.3.2 保留。 |
-| CI | ✅ | 三平台绿（macOS LIMIT-006 darwin skip 4 个真实执行器压力用例生效后通过——skip 为测试面处置，非产品缺陷）；Windows/Linux 全量 728/3/0 本地实证；Phase F 增 CI macOS 崩溃诊断收集（LIMIT-006 D-1）。 |
+| CI | ✅ | 三平台绿；本地全量 783/4/0 实证；CI no-skip 守卫改为运行期统计（F-5/体检 T-5）；macOS 崩溃报告收集在位（LIMIT-006 D-1）。 |
 | 桌面复验 | ✅ | 机制项（N1–N4 自动化：1200 行导入闭环/取消一致性/备份恢复演练/换目录子进程）+ 感知项（J1–J7 owner 逐项判定）全部通过。 |
-| 未决问题 | ✅ 清零 | ISSUE-019 已修复并经真机终验关闭（条目同提交删除）。 |
+| 未决问题 | 5 项登记 | ISSUE-020..024（体检 N-1/F-8/N-5/N-8/N-7，均为 Low/Medium 非阻塞；2026-09-10 体检其余发现已随 Phase F 正确性收口修复）。 |
 | Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消为任务边界粒度，设计特征）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS CI runner 压力扫描段错误，darwin skip），均 Low、不阻塞。 |
 | Release body | ⏳ 待 owner | GitHub Release 已由 tag `v2.4.0` 触发生成（`generate_release_notes` 自动摘要 + `dist-*` 资产）；`CHANGELOG.md` 第 9–54 行 `[2.4.0]` 段需 owner 粘贴进 body 后签核（v2.3.2 同流程）。 |
 
@@ -87,24 +82,22 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-08（本地） |
-| 生成者 | Cline |
-| 会话范围 | 交接恢复 → **E-2 收尾** → **E-3 实施** → **E-4 实施** → **E-5 实施** → **E-6 收尾发版** → **v2.4.0 发布收官**（macOS CI 段错误处置）→ **Phase F 三候选实施**（captured_at 回填 + 路径锚定 + CI 崩溃诊断）。 |
-| 关键产出 | ① E-2~E-6：Phase E 全部完成（追加 38 测试）；② v2.4.0 发布 + macOS CI 段错误 darwin skip 扩展（LIMIT-006 第三形态，产品代码无因果）；③ **Phase F-1**：`update_capture_time` 协议/双实现 + `BackfillCaptureTimeService`（dry-run 默认）+ `backfill-capture-time` CLI + 11 测试；④ **Phase F-2**：默认路径锚定用户数据目录（platformdirs，显式配置优先）+ 旧 CWD 库首启引导 + N4b 反向实证 + 7 测试；⑤ **Phase F-3**：CI macOS 崩溃报告收集（D-1）；⑥ ADR-035 登记（回填通道 + 锚定 + platformdirs 批准）+ dependency-rules §13 + base.txt；⑦ 质量门全绿：ruff 0 / mypy 191 files 0 / pytest **728 passed / 3 skipped / 0 failed**。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 191 个源文件无问题；pytest 全量 **728 passed / 3 skipped / 0 failed**（本地实测）。 |
-| 工作区 | Phase F 三 commit 本地完成（`7707bc1` 为最新），待 owner push；此前提交已同步 origin；tag `v2.4.0` = `93b7a15`。 |
-| Remaining | v2.4.0 签核（owner：Release 资产核对 + body 粘贴）· Phase F 是否发版 v2.5.0（owner 决定）· LIMIT-006 D-2/D-3（需 macOS 调试手段立项）。 |
+| 时间 | 2026-09-12（本地） |
+| 会话范围 | 交接恢复 → 体检报告核验 → Phase F 正确性收口实施（F-2/F-5/F-1/F-3/F-6/F-7，ADR-036，owner 批准 D4–D9）→ v2.5.0 发版。 |
+| 关键产出 | ① **F-2**：识别轴 JOIN DISTINCT 去重 + `UNMATCHED` 哨兵（LEFT JOIN IS NULL，Domain 导出）；② **F-5**：`tests/conftest.py` 共享 SQLite 工厂 fixture（3 模块重构采用）+ pytest-cov 7.1.0（覆盖率基线 92%）+ CI no-skip 守卫运行期化；③ **F-1**：`sanitize_windows_filename` Domain 净化（保留设备名矩阵/非法字符/尾点尾空格）+ builder 审计日志 + 扫描器迭代式 os.scandir 重写（realpath 环检测 + 深度上限 + junction reparse-tag 识别，2000 文件 0.037s vs glob 0.218s）；④ **F-3**：import cancelled 接线 + 导出取消通道 + 照片墙空态占位 + 审核行姓名化 + 语言占位标注 + .xlsm 过滤器 + `_active_runnable` 终态清零；⑤ **F-6**：CLI `import-people`/`export` 子命令 + CLI 启动备份对齐（D8）；⑥ **F-7**：README 矛盾段删除 + user-guide 新命令表 + 配置默认路径文档修正 + v2.5.0 发版。 |
+| 当前质量门 | ruff 0 / mypy 191 files 0 / pytest **783 passed / 4 skipped / 0 failed** / pip check 通过（本地实测）。 |
+| 工作区 | Phase F 正确性收口 + v2.5.0 发版提交完成并 push。 |
+| Remaining | v2.5.0 签核（owner：Release 资产核对 + body 粘贴）· ISSUE-020..024 排期（N-1 插件可见性需产品裁决）· LIMIT-006 D-2/D-3（需 macOS 调试手段立项）。 |
 
 ---
 
 ## 6. Next Step（下一步开发计划）
 
-v2.4.0 已发布待签核；Phase F（captured_at 回填 + 路径锚定 + CI 崩溃诊断）三候选已实施完成。可选后续（均需 owner 另行立项）：
+v2.5.0 已发布待签核。可选后续（均需 owner 另行立项）：
 
-| Next Step | **owner 汇总决策**：① v2.4.0 签核（Release 资产核对 + body 粘贴）；② Phase F 是否合入发版 prepare **v2.5.0**（新增能力 minor + 默认路径行为变化——需 CHANGELOG `[2.5.0]` 段 + 指南已补章）；③ **LIMIT-006 D-2/D-3**（macOS 追查：需 macOS 调试手段；plant 候选 `os.scandir` 重写 scanner——既收窄竞态窗口又省 N 次 stat）；④ 下一候选立项（如：旧 CWD 库自动迁移 `migrate` 子命令、CURRENT_BATCH 导出 P2-4）。 |
+| Next Step | **owner 汇总决策**：① v2.5.0 签核；② ISSUE-020 插件可见性二选一（接入可配置插件目录 vs 收回 README/FAQ 宣传）；③ ISSUE-021 并行匹配分片 flush（F-8）；④ 下一候选立项（如旧 CWD 库自动迁移 `migrate` 子命令、CURRENT_BATCH 导出 P2-4、"未匹配"筛选的 UI 暴露）。
 
 ---
-
 ## 7. Key Files（关键文件索引）
 
 | 职责 | 文件 |

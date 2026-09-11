@@ -72,13 +72,16 @@ python main.py
 | `python main.py scan <照片目录>` | 扫描并注册照片（默认递归，加 `--no-recursive` 仅扫一层） |
 | `python main.py archive --archive-root <目录>` | 将全部已审核通过的照片归档（支持 `--dry-run` 预演、`--conflict-strategy skip/overwrite/rename`） |
 | `python main.py backfill-content-hash` | 为历史数据一次性补齐内容哈希（幂等，重复执行无副作用） |
+| `python main.py import-people <人员文件>` | 导入人员（.txt/.csv/.xlsx/.xlsm，与界面导入同一管线；`--no-header` 无表头、`--sheet-name` 指定工作表） |
+| `python main.py export <输出文件>` | 导出库数据（xlsx/csv/html 按后缀自动识别；`--scope filtered` 配合 `--status/--person/--captured-from/--captured-to` 筛选） |
 
 ## 6. 数据与日志位置
 
 | 内容 | 默认位置 |
 |---|---|
-| 业务数据库（单文件 SQLite） | `data/photo_archiver.db`（由 `DATABASE_URL` 控制） |
+| 业务数据库（单文件 SQLite） | 用户数据目录下的 `photo_archiver.db`（Windows `%LOCALAPPDATA%\PhotoArchiver`，macOS `~/Library/Application Support/PhotoArchiver`，Linux `~/.local/share/PhotoArchiver`；`DATABASE_URL` 显式配置优先，ADR-035） |
+| 启动备份 | 数据库同目录的 `backups/`（滚动保留 3 份，GUI 与 CLI 均生成） |
 | 缩略图缓存 | 输出目录下 `thumbnails/` |
-| 运行日志 | `logs/photo_archiver.log`（10 MB 轮转，保留 30 天） |
+| 运行日志 | 用户日志目录 `photo_archiver.log`（10 MB 轮转，保留 30 天；`LOG_DIRECTORY` 显式配置优先） |
 
 备份时仅需拷贝数据库文件即可完整保留人员、照片登记、审核状态与归档记录。

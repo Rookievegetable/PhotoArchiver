@@ -37,8 +37,8 @@ copy .env.example .env
 | `ENV`           | `development`                      | 当前运行环境。                             |
 | `DEBUG`         | `false`                            | 是否启用调试模式。                         |
 | `LOG_LEVEL`     | `INFO`                             | 日志等级。                                 |
-| `LOG_DIRECTORY` | `logs`                             | 日志输出目录。                             |
-| `DATABASE_URL`  | `sqlite:///data/photo_archiver.db` | SQLite 数据库 URL。                        |
+| `LOG_DIRECTORY` | 用户日志目录（`platformdirs.user_log_dir("PhotoArchiver")`，ADR-035） | 日志输出目录；显式配置优先。               |
+| `DATABASE_URL`  | 用户数据目录下的 `photo_archiver.db`（`platformdirs.user_data_dir("PhotoArchiver")`，ADR-035） | SQLite 数据库 URL；显式配置优先。          |
 | `MODEL_PATH`    | `resources/models`                | AI 模型目录（ADR-012）。                  |
 | `PHOTO_ROOT`    | 空                                 | 默认照片根目录，可留空。                   |
 | `OUTPUT_ROOT`   | 空                                 | 默认输出目录，可留空。                     |

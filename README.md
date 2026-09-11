@@ -263,25 +263,9 @@ Infrastructure
 - Plugins 插件系统（Plugin interface + loader + 示例插件 + MainWindow 注册）。
 - Workers 通用执行器框架（QtWorkerExecutor）。
 - Settings 闭环（QSettings/InMemory 双适配器）。
-- 单元测试与集成测试体系。
-- 单元测试与集成测试体系（pytest 226 passed / 8 skipped）。
+- 库管理（v2.4.0）：删除登记 / 删除人员 / 重复处置 / 重扫对账 / prune-missing CLI。
+- 单元测试与集成测试体系（当前规模与质量门数字以 `.ai/PROJECT_STATUS.md` §5 为唯一权威）。
 - AI 开发知识库 AI Runtime Context 四文档体系 + 工程规则 + 文档体系导航。
-
-待实现：
-
-- Step 14 Export：`ExportService` + Excel/CSV 导出器 + `ExportWorker` + `ExportDialog`，导出范围全量/当前批次/筛选结果。
-- Step 15 Plugin System：插件接口 + 发现/加载机制 + 生命周期管理 + 示例插件。
-- SQLAlchemy/Alembic 迁移体系替代当前 `PRAGMA user_version`（roadmap Step 3 收尾）。
-- 既有 19 mypy + 2 ruff 飘带单独一轮清理。
-
-## 下一阶段计划
-
-> 详见 `.ai/business/roadmap.md`（15 步权威路线图）与 `.ai/PROJECT_STATUS.md`。
-
-1. Step 14 Export 导出与统计报告。
-2. Step 15 Plugin System 插件扩展机制。
-3. SQLAlchemy/Alembic 迁移体系（roadmap Step 3 收尾）。
-4. 既有飘带单独一轮清理。
 
 ## AI 协作说明
 
