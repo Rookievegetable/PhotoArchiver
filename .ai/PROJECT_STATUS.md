@@ -83,11 +83,11 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 | 项目 | 值 |
 |---|---|
 | 时间 | 2026-09-12（本地） |
-| 会话范围 | 交接恢复 → 体检报告核验 → Phase F 正确性收口实施（F-2/F-5/F-1/F-3/F-6/F-7，ADR-036，owner 批准 D4–D9）→ v2.5.0 发版。 |
+| 会话范围 | 交接恢复 → 体检报告核验 → Phase F 正确性收口实施（F-2/F-5/F-1/F-3/F-6/F-7，ADR-036）→ v2.5.0 发版 + 签核 → CI 双修复（stat 常量平台性 + LIMIT-006 守卫白名单）→ **ISSUE-021 分片 flush（ADR-037）** → **LIMIT-006 D-2 解除实验**（os.scandir 下段错误仍复现，已回退并登记证据）。 |
 | 关键产出 | ① **F-2**：识别轴 JOIN DISTINCT 去重 + `UNMATCHED` 哨兵（LEFT JOIN IS NULL，Domain 导出）；② **F-5**：`tests/conftest.py` 共享 SQLite 工厂 fixture（3 模块重构采用）+ pytest-cov 7.1.0（覆盖率基线 92%）+ CI no-skip 守卫运行期化；③ **F-1**：`sanitize_windows_filename` Domain 净化（保留设备名矩阵/非法字符/尾点尾空格）+ builder 审计日志 + 扫描器迭代式 os.scandir 重写（realpath 环检测 + 深度上限 + junction reparse-tag 识别，2000 文件 0.037s vs glob 0.218s）；④ **F-3**：import cancelled 接线 + 导出取消通道 + 照片墙空态占位 + 审核行姓名化 + 语言占位标注 + .xlsm 过滤器 + `_active_runnable` 终态清零；⑤ **F-6**：CLI `import-people`/`export` 子命令 + CLI 启动备份对齐（D8）；⑥ **F-7**：README 矛盾段删除 + user-guide 新命令表 + 配置默认路径文档修正 + v2.5.0 发版。 |
 | 当前质量门 | ruff 0 / mypy 191 files 0 / pytest **783 passed / 4 skipped / 0 failed** / pip check 通过（本地实测）。 |
 | 工作区 | Phase F 正确性收口 + v2.5.0 发版提交完成并 push。 |
-| Remaining | v2.5.0 签核（owner：Release 资产核对 + body 粘贴）· ISSUE-020..024 排期（N-1 插件可见性需产品裁决）· LIMIT-006 D-2/D-3（需 macOS 调试手段立项）。 |
+| Remaining | ISSUE-020 插件可见性二选一（owner 产品裁决：接入可配置插件目录 vs 收回 README/FAQ 宣传）· ISSUE-022/023/024 技术债排期 · LIMIT-006 D-3（macOS 调试手段立项；D-2 已实证非 pathlib glob）。 |
 
 ---
 
