@@ -6,6 +6,61 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [2.5.0] - 2026-09-12
+
+Phase F correctness closeout (ADR-035/036): the library survives hostile
+filenames and linked directories, filtered results stop duplicating rows,
+long tasks became cancellable, and the CLI reaches parity with the GUI —
+including the same startup-backup safety net.
+
+### Added
+
+- **CLI parity**（CLI 对等）: `import-people` brings the Excel/TXT people
+  import pipeline to the command line; `export` writes xlsx/csv/html with
+  `--scope filtered` driven by `--status` / `--person` / `--captured-from` /
+  `--captured-to`. Both run through the same Application services as the UI.
+- **CLI startup backup**: write-capable CLI commands now take the same
+  `VACUUM INTO` snapshot as the GUI before touching the database (best-effort,
+  never blocks the run) — revised the documented "CLI skips backup" behavior.
+- **"未匹配" filter sentinel**: `PhotoSearchCriteria` accepts an `UNMATCHED`
+  sentinel so "photos with no recognition results at all" can be selected
+  programmatically (LEFT JOIN … IS NULL push-down; not yet a UI radio).
+- **Coverage visibility**: pytest-cov added as a dev dependency; baseline
+  recorded at 92% line coverage (no gate enforced yet).
+
+### Fixed
+
+- **Filtered results no longer duplicate rows**: a photo with several faces
+  (multiple recognition rows) appeared once per row in person/status-filtered
+  lists — the recognition JOIN is now DISTINCT.
+- **Windows reserved filenames**（Windows 保留名）: person names like `con`
+  and source files like `nul.jpg` made archiving fail systematically. The
+  three naming segments are now sanitized (illegal characters and control
+  characters → `_`, trailing dots/spaces removed, reserved device names
+  prefixed with `_`); sanitized values are what previews and records show,
+  and each replacement leaves a warning in the log.
+- **Scanner link-loop guard**（扫描环防护）: scanning no longer follows
+  symlinked or junctioned directories (realpath loop detection + depth cap),
+  so a self-referencing junction can neither recurse out of control nor
+  register the same photos twice. Discovery itself got ~6× faster on a
+  2000-file tree by switching from `glob("**/*")` to iterative `os.scandir`.
+- **Cancellable import & export**: cancelling an import no longer leaves the
+  UI stuck at "Cancelling …"; exports can be cancelled cooperatively at task
+  boundaries. Terminal events now also clear the window's active-run handle.
+- **README contradictions removed**: the stale "待实现" section that listed
+  finished steps (Export, Plugins, Alembic) is gone; test counts now point to
+  `.ai/PROJECT_STATUS.md` instead of an outdated snapshot.
+
+### Changed
+
+- The people-file picker now also lists `.xlsm` (the reader always supported it).
+- Review rows display the photo file name and person name instead of bare
+  UUIDs; a deleted person renders as 未知人员.
+- The photo wall shows an empty-state hint when the library (or the current
+  filter) has no rows.
+- The settings language dropdown is annotated as Out-of-Scope instead of
+  silently doing nothing.
+
 ## [2.4.0] - 2026-09-08
 
 Library management (Phase E, ADR-034): the photo library is no longer
