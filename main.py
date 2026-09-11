@@ -1,6 +1,8 @@
 import sys
 from argparse import ArgumentParser, Namespace
+from datetime import datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 from loguru import logger
 
@@ -13,8 +15,16 @@ from photo_archiver.app import ApplicationContext, PhotoArchiverApplication, boo
 from photo_archiver.application import (  # noqa: E402  # sys.path injection above is required before app imports
     ArchivePhotosCommand,
     BackfillCaptureTimeCommand,
+    ImportPeopleCommand,
     PruneMissingCommand,
     ScanAndRegisterPhotosCommand,
+)
+from photo_archiver.application.dtos.export import ExportScope  # noqa: E402
+from photo_archiver.domain import MatchStatus, PhotoSearchCriteria  # noqa: E402
+from photo_archiver.infrastructure.exporters import (  # noqa: E402
+    CsvExporter,
+    ExcelExporter,
+    HtmlExporter,
 )
 from photo_archiver.infrastructure.database.backup import backup_database  # noqa: E402
 from photo_archiver.infrastructure.database.integrity import (  # noqa: E402
@@ -39,15 +49,33 @@ def _corrupted_database_message(error: CorruptedDatabaseError) -> str:
 def _bootstrap_for_cli() -> ApplicationContext | None:
     """Bootstrap for CLI commands; on corruption report guidance and give up.
 
+    ADR-036 D8：CLI 与 GUI 对齐——写库子命令同样先做启动备份（best-effort，
+    失败只告警不阻断）。修订 ``docs/development/configuration.md`` 既定的
+    "CLI 不生成启动备份"行为（CLI 与 GUI 的写库风险面同量级）。
+
     Returns:
         The application context, or ``None`` when the database is corrupted
         (guidance has been written to stderr by then).
     """
     try:
-        return bootstrap_application()
+        context = bootstrap_application()
     except CorruptedDatabaseError as error:
         sys.stderr.write(_corrupted_database_message(error) + "\n")
         return None
+    _backup_database_best_effort(context)
+    return context
+
+
+def _backup_database_best_effort(context: ApplicationContext) -> None:
+    """Take a startup backup snapshot (D-B3 semantics), never blocking the run."""
+    settings = getattr(context, "settings", None)
+    database_path = getattr(settings, "database_path", None)
+    if database_path is None:
+        return
+    try:
+        backup_database(database_path)
+    except Exception as error:  # noqa: BLE001 - backup is best-effort by design (D-B3)
+        logger.warning("CLI startup database backup failed (non-fatal): {}", error)
 
 
 def build_argument_parser() -> ArgumentParser:
@@ -109,6 +137,58 @@ def build_argument_parser() -> ArgumentParser:
         "--execute",
         action="store_true",
         help="really update the registrations (default: dry-run preview only)",
+    )
+
+    import_parser = subparsers.add_parser(
+        "import-people",
+        help="import people from a TXT/CSV/Excel file (same pipeline as the UI import)",
+    )
+    import_parser.add_argument("source", type=Path, help="people file (.txt/.csv/.xlsx/.xlsm)")
+    import_parser.add_argument(
+        "--no-header",
+        action="store_true",
+        help="the source file has no header row (default: header expected)",
+    )
+    import_parser.add_argument(
+        "--sheet-name",
+        help="Excel sheet name for xlsx/xlsm sources (default: first sheet)",
+    )
+
+    export_parser = subparsers.add_parser(
+        "export",
+        help="export the library to Excel/CSV/HTML (ALL scope by default)",
+    )
+    export_parser.add_argument("output", type=Path, help="output file path")
+    export_parser.add_argument(
+        "--format",
+        dest="format_name",
+        choices=("xlsx", "csv", "html"),
+        help="output format (default: derived from the output suffix, else csv)",
+    )
+    export_parser.add_argument(
+        "--scope",
+        choices=("all", "filtered"),
+        default="all",
+        help="export scope: all, or the result of the --status/--person/--captured-* filters",
+    )
+    export_parser.add_argument(
+        "--status",
+        choices=("pending", "approved", "rejected"),
+        help="filtered scope: only photos with >=1 recognition result in this status",
+    )
+    export_parser.add_argument(
+        "--person",
+        help="filtered scope: person name (exact match) or UUID",
+    )
+    export_parser.add_argument(
+        "--captured-from",
+        dest="captured_from",
+        help="filtered scope: inclusive lower bound, YYYY-MM-DD",
+    )
+    export_parser.add_argument(
+        "--captured-to",
+        dest="captured_to",
+        help="filtered scope: inclusive upper bound, YYYY-MM-DD",
     )
     return parser
 
@@ -260,6 +340,104 @@ def run_backfill_capture_time_command(arguments: Namespace) -> int:
     return 0 if result.succeeded else 1
 
 
+def run_import_people_command(arguments: Namespace) -> int:
+    """Run the people-import workflow from CLI arguments (ADR-036 F-6)."""
+    context = _bootstrap_for_cli()
+    if context is None:
+        return 2
+    result = context.services.import_people.execute(
+        ImportPeopleCommand(
+            source_path=arguments.source,
+            has_header=not arguments.no_header,
+            sheet_name=arguments.sheet_name,
+        )
+    )
+    sys.stdout.write(
+        "Import complete: "
+        f"imported={result.imported_count}, "
+        f"skipped={result.skipped_count}, "
+        f"failed={len(result.errors)}\n"
+    )
+    for error in result.errors:
+        sys.stderr.write(f"Error: {error}\n")
+    return 0 if not result.errors else 1
+
+
+def _resolve_cli_export_criteria(
+    context: ApplicationContext, arguments: Namespace
+) -> PhotoSearchCriteria | None:
+    """Build the FILTERED-scope criteria from CLI filter flags.
+
+    Returns ``None`` for the ALL scope. FILTERED without any filter flag is
+    rejected here (the Service would independently reject it — this surfaces
+    the cause at the CLI boundary instead of a generic error).
+    """
+    if arguments.scope != "filtered":
+        return None
+    if not (arguments.status or arguments.person or arguments.captured_from or arguments.captured_to):
+        raise ValueError(
+            "scope=filtered requires at least one of --status/--person/--captured-from/--captured-to"
+        )
+    person_id = None
+    if arguments.person:
+        try:
+            person_id = UUID(arguments.person)
+        except ValueError:
+            match = next(
+                (p for p in context.repositories.people.list_all() if p.name == arguments.person),
+                None,
+            )
+            if match is None:
+                raise ValueError(f"person not found: {arguments.person!r}") from None
+            person_id = match.id
+    date_format = "%Y-%m-%d"
+    return PhotoSearchCriteria(
+        match_status=MatchStatus(arguments.status) if arguments.status else None,
+        person_id=person_id,
+        captured_from=(
+            datetime.strptime(arguments.captured_from, date_format)
+            if arguments.captured_from
+            else None
+        ),
+        captured_to=(
+            datetime.strptime(arguments.captured_to, date_format)
+            + timedelta(days=1)
+            - timedelta(seconds=1)
+            if arguments.captured_to
+            else None
+        ),
+    )
+
+
+def run_export_command(arguments: Namespace) -> int:
+    """Run the export workflow from CLI arguments (ADR-036 F-6)."""
+    context = _bootstrap_for_cli()
+    if context is None:
+        return 2
+    try:
+        criteria = _resolve_cli_export_criteria(context, arguments)
+    except ValueError as error:
+        sys.stderr.write(f"Error: {error}\n")
+        return 2
+    format_name = arguments.format_name or arguments.output.suffix.lstrip(".").lower()
+    exporters = {"xlsx": ExcelExporter(), "csv": CsvExporter(), "html": HtmlExporter()}
+    if format_name not in exporters:
+        sys.stderr.write(
+            f"Error: cannot derive an export format from {arguments.output.name!r}; "
+            "pass --format xlsx|csv|html.\n"
+        )
+        return 2
+    scope = ExportScope.FILTERED if arguments.scope == "filtered" else ExportScope.ALL
+    path = context.services.export.execute(
+        exporters[format_name],
+        str(arguments.output),
+        scope,
+        criteria=criteria,
+    )
+    sys.stdout.write(f"Export complete: {path}\n")
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run the PhotoArchiver desktop application.
 
@@ -278,6 +456,10 @@ def main(arguments: list[str] | None = None) -> int:
         return run_prune_missing_command(parsed_arguments)
     if parsed_arguments.command == "backfill-capture-time":
         return run_backfill_capture_time_command(parsed_arguments)
+    if parsed_arguments.command == "import-people":
+        return run_import_people_command(parsed_arguments)
+    if parsed_arguments.command == "export":
+        return run_export_command(parsed_arguments)
 
     try:
         context = bootstrap_application()

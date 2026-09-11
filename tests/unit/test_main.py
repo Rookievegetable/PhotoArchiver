@@ -217,3 +217,160 @@ def test_main_backfill_capture_time_execute_updates(monkeypatch, capsys) -> None
     captured = capsys.readouterr()
     assert "updated=1" in captured.out
     assert "Dry-run" not in captured.out
+
+class StubImportPeopleService:
+    """Capture import commands and return a configured result."""
+
+    def __init__(self) -> None:
+        from photo_archiver.application.dtos import ImportPeopleResult
+
+        self.result = ImportPeopleResult(imported_count=2, skipped_count=1)
+        self.commands: list = []
+
+    def execute(self, command):
+        self.commands.append(command)
+        return self.result
+
+
+class StubExportService:
+    """Capture export calls and echo the output path."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def execute(self, exporter, output_path, scope, criteria=None):
+        self.calls.append((exporter, output_path, scope, criteria))
+        return output_path
+
+
+def test_main_runs_import_people_command(monkeypatch, capsys, tmp_path) -> None:
+    """ADR-036 F-6: import-people delegates to the real import pipeline."""
+    service = StubImportPeopleService()
+    context = SimpleNamespace(services=SimpleNamespace(import_people=service))
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    source = tmp_path / "people.txt"
+    exit_code = main_module.main(["import-people", str(source), "--no-header"])
+
+    assert exit_code == 0
+    command = service.commands[0]
+    assert command.source_path == source
+    assert command.has_header is False
+    assert command.sheet_name is None
+    captured = capsys.readouterr()
+    assert "imported=2" in captured.out
+    assert "skipped=1" in captured.out
+
+
+def test_main_import_people_reports_errors_with_failure_exit(monkeypatch, capsys, tmp_path) -> None:
+    from photo_archiver.application.dtos import ImportPeopleResult
+
+    service = StubImportPeopleService()
+    service.result = ImportPeopleResult(
+        imported_count=0, skipped_count=0, errors=("row 3: bad data",)
+    )
+    context = SimpleNamespace(services=SimpleNamespace(import_people=service))
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["import-people", str(tmp_path / "people.txt")])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "row 3: bad data" in captured.err
+
+
+def test_main_export_all_scope_derives_format_from_suffix(monkeypatch, capsys, tmp_path) -> None:
+    """ADR-036 F-6: export ALL with format derived from the output suffix."""
+    from photo_archiver.application.dtos.export import ExportScope
+    from photo_archiver.infrastructure.exporters import CsvExporter
+
+    service = StubExportService()
+    context = SimpleNamespace(services=SimpleNamespace(export=service))
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    output = tmp_path / "library.csv"
+    exit_code = main_module.main(["export", str(output)])
+
+    assert exit_code == 0
+    exporter, path, scope, criteria = service.calls[0]
+    assert isinstance(exporter, CsvExporter)
+    assert path == str(output)
+    assert scope is ExportScope.ALL
+    assert criteria is None
+    captured = capsys.readouterr()
+    assert str(output) in captured.out
+
+
+def test_main_export_filtered_resolves_person_by_name(monkeypatch, capsys, tmp_path) -> None:
+    """FILTERED scope builds criteria from flags; person name resolves via the repo."""
+    from datetime import datetime
+
+    from photo_archiver.application.dtos.export import ExportScope
+    from photo_archiver.domain import MatchStatus, Person
+    from photo_archiver.infrastructure.exporters import ExcelExporter
+
+    alice = Person(name="Alice")
+    service = StubExportService()
+    people_repo = SimpleNamespace(list_all=lambda: [alice])
+    context = SimpleNamespace(
+        services=SimpleNamespace(export=service),
+        repositories=SimpleNamespace(people=people_repo),
+    )
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    output = tmp_path / "filtered.xlsx"
+    exit_code = main_module.main(
+        [
+            "export", str(output),
+            "--scope", "filtered",
+            "--status", "approved",
+            "--person", "Alice",
+            "--captured-to", "2024-12-31",
+        ]
+    )
+
+    assert exit_code == 0
+    exporter, _, scope, criteria = service.calls[0]
+    assert isinstance(exporter, ExcelExporter)
+    assert scope is ExportScope.FILTERED
+    assert criteria is not None
+    assert criteria.match_status is MatchStatus.APPROVED
+    assert criteria.person_id == alice.id
+    assert criteria.captured_to is not None
+    assert criteria.captured_to <= datetime(2024, 12, 31, 23, 59, 59)
+    assert criteria.captured_to > datetime(2024, 12, 31, 0, 0, 0)
+
+
+def test_main_export_filtered_without_flags_is_rejected(monkeypatch, capsys, tmp_path) -> None:
+    """FILTERED without any filter flag is rejected at the CLI boundary."""
+    service = StubExportService()
+    context = SimpleNamespace(services=SimpleNamespace(export=service))
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(
+        ["export", str(tmp_path / "out.csv"), "--scope", "filtered"]
+    )
+
+    assert exit_code == 2
+    assert service.calls == []
+    captured = capsys.readouterr()
+    assert "scope=filtered requires" in captured.err
+
+
+def test_main_export_unknown_person_fails_cleanly(monkeypatch, capsys, tmp_path) -> None:
+    service = StubExportService()
+    people_repo = SimpleNamespace(list_all=lambda: [])
+    context = SimpleNamespace(
+        services=SimpleNamespace(export=service),
+        repositories=SimpleNamespace(people=people_repo),
+    )
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(
+        ["export", str(tmp_path / "out.csv"), "--scope", "filtered", "--person", "Nobody"]
+    )
+
+    assert exit_code == 2
+    assert service.calls == []
+    captured = capsys.readouterr()
+    assert "person not found: 'Nobody'" in captured.err
