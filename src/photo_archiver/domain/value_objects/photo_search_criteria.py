@@ -7,19 +7,40 @@
 字段语义：
     person_id: 仅返回此人物相关的照片（JOIN recognition_results on person_id；
         status 轨独立由 match_status 字段约束，不附带 status=APPROVED）
-    match_status: 仅返回此审核状态的照片（pending/approved/rejected）；NULL 照片不参与
+    match_status: 仅返回此审核状态的照片（pending/approved/rejected）；NULL 照片不参与；
+        传哨兵 ``UNMATCHED``（D6）则反向选择"完全没有识别结果"的照片
     captured_from / captured_to: 按拍摄时刻 ``Photo.captured_at`` 区间筛选；
         NULL captured_at 的照片默认排除并文档化（见 PhotoRepository.search 契约）
 """
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Final
 from uuid import UUID
 
 # 从 recognition 子模块直导而非 entities/__init__——避免与 value_objects/__init__
 # 反向 import 形成 circular（entities/__init__ 不 import value_objects，但
 # value_objects/__init__ 被 domain/__init__ 触发时 entities 尚未就绪）。
 from photo_archiver.domain.entities.recognition import MatchStatus
+
+
+@dataclass(frozen=True, slots=True)
+class UnmatchedSentinel:
+    """Sentinel selecting photos with no recognition results at all (ADR-036 D6).
+
+    Pass ``match_status=UNMATCHED`` in ``PhotoSearchCriteria`` to filter for
+    photos absent from ``recognition_results``（"还没识别过的照片"）. A dedicated
+    sentinel — rather than a ``MatchStatus`` member — keeps the enum honest:
+    "no recognition result" is not a review lifecycle state. Instances compare
+    equal (field-less frozen dataclass), so tests and callers may construct
+    their own instead of importing the singleton.
+    """
+
+    def __repr__(self) -> str:
+        return "UNMATCHED"
+
+
+UNMATCHED: Final = UnmatchedSentinel()
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,11 +56,11 @@ class PhotoSearchCriteria:
         APPROVED  — has ≥1 recognition result with status APPROVED
         REJECTED  — has ≥1 recognition result with status REJECTED
         PENDING   — has ≥1 recognition result with status PENDING
-        NULL      — photo with no recognition results at all (handled by
-                    a sentinel rather than this enum; see PhotoRepository.search)
+        UNMATCHED — photo with no recognition results at all (the D6 sentinel;
+                    see ``UNMATCHED`` below and PhotoRepository.search)
     """
 
     person_id: UUID | None = None
-    match_status: MatchStatus | None = None
+    match_status: MatchStatus | UnmatchedSentinel | None = None
     captured_from: datetime | None = None
     captured_to: datetime | None = None

@@ -32,6 +32,8 @@ from photo_archiver.domain.value_objects import (
     PhotoPath,
     PhotoPathBase,
     PhotoSearchCriteria,
+    UNMATCHED,
+    UnmatchedSentinel,
 )
 
 __all__ = [
@@ -56,6 +58,8 @@ __all__ = [
     "PhotoPathBase",
     "PhotoRepository",
     "PhotoSearchCriteria",
+    "UNMATCHED",
+    "UnmatchedSentinel",
     "RecognitionRepository",
     "RecognitionResult",
     "RepositoryError",

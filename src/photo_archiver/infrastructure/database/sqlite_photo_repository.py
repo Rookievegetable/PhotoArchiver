@@ -5,11 +5,13 @@ from datetime import datetime
 from uuid import UUID
 
 from photo_archiver.domain import (
+    MatchStatus,
     Photo,
     PhotoMetadata,
     PhotoPath,
     PhotoRepository,
     PhotoSearchCriteria,
+    UnmatchedSentinel,
 )
 from photo_archiver.infrastructure.database.sqlite_connection import SQLiteConnectionProvider
 from photo_archiver.infrastructure.database.sqlite_mappers import (
@@ -193,14 +195,23 @@ class SQLitePhotoRepository(PhotoRepository):
         match_status 均涉 recognition_results，走同一 JOIN（person_id 过滤 person_id
         列、match_status 过滤 status 列）。captured_from/to 走 photos.captured_at
         区间。SQL 仅在本 infrastructure/database 层（ADR-004），参数化防注入。
+
+        识别轴 JOIN 用 ``SELECT DISTINCT p.*`` 去重（ADR-036 D6）：一张照片多张
+        人脸（多条 recognition_results 行）时结果只出现一次。``match_status``
+        传 ``UNMATCHED`` 哨兵时改走 ``LEFT JOIN ... IS NULL``，反向选择完全无
+        识别结果的照片（此时行天然唯一，无需去重）；与 person_id 组合在语义上
+        矛盾（命中人物要求存在识别行），恒返回空表。
         """
         clauses: list[str] = []
         params: list[str] = []
+        unmatched = isinstance(criteria.match_status, UnmatchedSentinel)
         join_needed = criteria.person_id is not None or criteria.match_status is not None
         if criteria.person_id is not None:
             clauses.append("rr.person_id = ?")
             params.append(str(criteria.person_id))
-        if criteria.match_status is not None:
+        if unmatched:
+            clauses.append("rr.photo_id IS NULL")
+        elif isinstance(criteria.match_status, MatchStatus):
             clauses.append("rr.status = ?")
             params.append(criteria.match_status.value)
         if criteria.captured_from is not None:
@@ -210,8 +221,10 @@ class SQLitePhotoRepository(PhotoRepository):
             clauses.append("p.captured_at <= ?")
             params.append(datetime_to_text(criteria.captured_to))
         where = " AND ".join(clauses) if clauses else "1 = 1"
-        sql = "SELECT p.* FROM photos p"
-        if join_needed:
+        sql = "SELECT DISTINCT p.* FROM photos p" if join_needed else "SELECT p.* FROM photos p"
+        if unmatched:
+            sql += " LEFT JOIN recognition_results rr ON rr.photo_id = p.id"
+        elif join_needed:
             sql += " JOIN recognition_results rr ON rr.photo_id = p.id"
         sql += f" WHERE {where} ORDER BY p.created_at, p.id"
         with self._connection_provider.connect() as connection:

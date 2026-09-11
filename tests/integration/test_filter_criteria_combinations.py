@@ -36,6 +36,7 @@ from photo_archiver.domain import (
     PhotoPath,
     PhotoSearchCriteria,
     RecognitionResult,
+    UNMATCHED,
 )
 from photo_archiver.infrastructure.config import AppSettings
 
@@ -258,3 +259,65 @@ def test_boundary_dates_are_inclusive(tmp_path) -> None:
         )
     )
     assert _paths(exact, ids) == {"bob_candid.jpg", "alice_party.jpg"}
+
+
+def test_multi_recognition_rows_yield_photo_exactly_once(tmp_path) -> None:
+    """ADR-036 D6: photos with several recognition rows appear exactly once.
+
+    The seed gives photo A two Alice rows (PENDING + APPROVED) and photo C two
+    Alice rows (REJECTED + PENDING) — before the DISTINCT push-down the
+    recognition-axis JOIN duplicated each of them per matching row. Set
+    comparisons in the matrix above cannot see duplicates, so these list-level
+    length assertions lock the dedupe.
+    """
+    _, ids = _seed(tmp_path)
+    service = ids["service"]
+    assert len(service.execute(PhotoSearchCriteria(person_id=ids["alice"].id))) == 2
+    assert len(service.execute(PhotoSearchCriteria(match_status=MatchStatus.PENDING))) == 2
+    assert len(service.execute(PhotoSearchCriteria(match_status=MatchStatus.APPROVED))) == 2
+    assert len(service.execute(PhotoSearchCriteria(match_status=MatchStatus.REJECTED))) == 1
+    combined = service.execute(
+        PhotoSearchCriteria(person_id=ids["alice"].id, match_status=MatchStatus.PENDING)
+    )
+    assert len(combined) == 2
+    # Deduped rows keep the stable created_at/id ordering without gaps.
+    # (Sorted comparison: photos created in the same instant tie on
+    # created_at, so UUID tie-break order is not deterministic across runs.)
+    names = [photo.original_name for photo in combined]
+    assert sorted(names) == ["alice_party.jpg", "alice_portrait.jpg"]
+
+
+def test_unmatched_sentinel_selects_photos_without_recognition_results(tmp_path) -> None:
+    """ADR-036 D6: match_status=UNMATCHED returns photos with no recognition rows.
+
+    Every seeded photo carries recognition rows, so a fresh photo D is
+    registered without any — it is the only "not yet recognized" photo.
+    """
+    context, ids = _seed(tmp_path)
+    service = ids["service"]
+    photo_d = Photo(
+        path=PhotoPath("photos/dave_unrecognized.jpg"),
+        folder_id=ids["photo_a"].folder_id,
+        original_name="dave_unrecognized.jpg",
+        captured_at=datetime(2023, 3, 3, 8, 0, 0),
+    )
+    context.repositories.photos.add(photo_d)
+
+    result = service.execute(PhotoSearchCriteria(match_status=UNMATCHED))
+    assert [photo.original_name for photo in result] == ["dave_unrecognized.jpg"]
+    # AND semantics hold against the date axis: D was captured in 2023.
+    result = service.execute(
+        PhotoSearchCriteria(match_status=UNMATCHED, captured_to=_TO_2023)
+    )
+    assert [photo.original_name for photo in result] == ["dave_unrecognized.jpg"]
+    assert service.execute(
+        PhotoSearchCriteria(match_status=UNMATCHED, captured_from=_FROM_2024)
+    ) == []
+    # Sentinel combined with person_id is a semantic contradiction (a person
+    # hit requires a recognition row) — honest empty result, no error.
+    assert (
+        service.execute(
+            PhotoSearchCriteria(match_status=UNMATCHED, person_id=ids["alice"].id)
+        )
+        == []
+    )

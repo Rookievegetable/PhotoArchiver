@@ -75,10 +75,12 @@ class PhotoRepository(Protocol):
                 (JOIN recognition_results); status filtering is independent
                 — use ``match_status`` to additionally constrain the result status.
             match_status: photos having ≥1 recognition result in this status.
-                ``MatchStatus.PENDING/APROVED/REJECTED`` filter by that status.
+                ``MatchStatus.PENDING/APPROVED/REJECTED`` filter by that status.
                 Photos with NO recognition results at all are **excluded** from
-                any ``match_status`` filter (a sentinel "no result" axis is not
-                covered by ``MatchStatus`` enum; future extension if needed).
+                those filters. Pass the ``UNMATCHED`` sentinel (ADR-036 D6) to
+                invert the axis: only photos with no recognition results at all.
+                Photos returned by a person/match_status query appear exactly
+                once each even when they carry multiple recognition rows.
             captured_from / captured_to: inclusive closed interval over
                 ``Photo.captured_at``. Photos with NULL ``captured_at`` are
                 **excluded** from any date-axis constraint (documented default).

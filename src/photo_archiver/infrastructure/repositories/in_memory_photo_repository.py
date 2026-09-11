@@ -83,10 +83,10 @@ class InMemoryPhotoRepository(PhotoRepository):
 
         InMemory 走内存过滤（B2-a 裁决已拍板：InMemory 为测试替身，复杂度让位
         可读性；与 SQLite 实现的结果一致性靠对照测试守护）。person_id 与
-        match_status 需查 recognition_results——但 InMemory 仓储不持 recognition
-        结果，故这两个轴在 InMemory 下**无对应数据可过**，按契约"无 recognition
-        结果的照片被 match_status 排除"——person_id/match_status 非空时返回空列表
-        （测试替身场景下不会真筛这两轴，对照测试只用 captured_from/to 轴）。
+        match_status（含 ``UNMATCHED`` 哨兵，ADR-036 D6）需查 recognition_results
+        ——但 InMemory 仓储不持 recognition 结果，故这些轴在 InMemory 下**无对应
+        数据可过**，按"recognition 依赖轴返回空"惯例返回空列表（测试替身场景下
+        不会真筛这些轴，对照测试只用 captured_from/to 轴）。
         captured_from/to 走 Photo.captured_at 区间，NULL captured_at 默认排除。
         """
         results: list[Photo] = []
