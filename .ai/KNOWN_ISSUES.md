@@ -6,7 +6,7 @@
 >
 > 动态维护，实时更新。问题解决后**立即删除**，不保留历史记录。
 >
-> Version: 1.13.0 ｜ Last Updated: 2026-09-06 ｜ Status: Live
+> Version: 1.14.0 ｜ Last Updated: 2026-09-12 ｜ Status: Live
 
 ---
 
@@ -41,7 +41,15 @@
 | ID | Description | Status | Impact | Temporary Workaround | Planned Resolution |
 |---|---|---|---|---|---|
 
-_当前无未决问题条目（2026-09-06：ISSUE-019 EXIF 子 IFD 拍摄时刻缺陷已修复并经真机终验关闭——手机直出照 IMG_20240713_164201.jpg 的 EXIF 拍摄时刻 2024:07:13 16:42:01 经真实 UI 扫描精确命中库内 captured_at；历史见 git 与 CHANGELOG Unreleased）。_
+_ISSUE-019（EXIF 子 IFD 拍摄时刻）已于 2026-09-06 修复终验关闭。以下条目来自 2026-09-10 全项目体检（`docs/health-check/PROJECT_HEALTH_CHECK_2026-09-10.md` §15.2）经 owner 决策登记（2026-09-12）；体检其余发现（F-10/F-11/F-13/N-2/N-3/N-4/N-6/N-9）已立项 Phase F 正确性收口（`docs/development/phase-f-correctness-plan.md`，ADR-036），随修复同提交删除、不再预登记。_
+
+| ID | Description | Status | Impact | Temporary Workaround | Planned Resolution |
+|---|---|---|---|---|---|
+| ISSUE-020 | 插件动作对用户不可见：`main_window._add_plugin_actions()` 生产代码零调用（仅测试调用），插件机制完整但用户视角缺失；README/FAQ 仍宣传插件能力，名实不符（体检 N-1） | Open | Medium | 无（机制在，缺生产接入） | 待 owner 对"接入可配置插件目录 vs 收回对外宣传"单独裁决后另轮处理 |
+| ISSUE-021 | 并行人脸匹配整批末次持久化：`max_workers>1` 时识别结果在批次末尾单次 `add_many`，进程崩溃丢整批（体检 F-8 剩余） | Open | Medium | 默认 `max_workers=1` 规避 | 下一轮处理（Phase F 明确不触碰识别管线，避免与 ADR-032/033 调优叠加风险） |
+| ISSUE-022 | 导入去重按 name+department：同名同部门但不同 identity 的两名真实人员会被误判重复而跳过（体检 N-5） | Open | Low | 数据侧避免同名同部门 | 影响面评估后单独立项 |
+| ISSUE-023 | 缩略图孤儿缓存无清理：内容寻址缓存只增不减（体检 N-8） | Open | Low | 磁盘占用缓慢增长，可手动清缓存目录 | 低优先级技术债，可与后续轮合并处理 |
+| ISSUE-024 | `antelopev2` 模型摘要未钉（`download_models.py` EXPECTED_SHA256 空串）；fail-closed 下无安全风险，属技术债（体检 N-7） | Open | Low | 无 | 需取真实模型包计算摘要后补钉 |
 
 > 注意：以下为**设计性/测试覆盖限制**，非缺陷，登记于表格供审计与 CI 规划参考。
 
