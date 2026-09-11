@@ -33,6 +33,10 @@ alembic==1.16.4
 # ---------- Configuration ----------
 pydantic==2.11.7
 pydantic-settings==2.10.1
+# platformdirs: default database/log path anchoring to the user data dir
+# (ADR-035). Explicit .env DATABASE_URL / LOG_DIRECTORY always take precedence;
+# the anchored defaults only replace the CWD-relative fallback paths.
+platformdirs==4.10.0
 
 # ---------- Networking ----------
 # certifi: CA bundle for the model downloader's TLS (P0-8 release blocker).

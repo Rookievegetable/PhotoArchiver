@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from platformdirs import user_data_dir, user_log_dir
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from photo_archiver.infrastructure.logging.configuration import (
-    DEFAULT_LOG_DIRECTORY,
     DEFAULT_LOG_LEVEL,
     LoggingConfig,
     normalize_log_level,
@@ -16,7 +16,19 @@ from photo_archiver.infrastructure.logging.configuration import (
 DEFAULT_APP_NAME = "PhotoArchiver"
 DEFAULT_APP_VERSION = "0.1.0"
 DEFAULT_ENVIRONMENT = "development"
-DEFAULT_DATABASE_URL = "sqlite:///data/photo_archiver.db"
+# Phase F F-2（ADR-035）：默认数据库/日志路径锚定用户数据目录——同一用户从
+# 任意目录启动都命中同一份库，不再随 CWD 分裂。显式 .env / 环境变量配置完全
+# 优先（零破坏）；测试可通过 monkeypatch 模块属性注入临时锚点。
+APP_DATA_DIR = Path(user_data_dir("PhotoArchiver", appauthor=False))
+APP_LOG_DIR = Path(user_log_dir("PhotoArchiver", appauthor=False))
+
+
+def default_database_url() -> str:
+    """Return the anchored default database URL (user data dir, not the CWD)."""
+    # Path() 防御：锚点常量可能被测试注入 str（stringly-typed monkeypatch）。
+    return f"sqlite:///{Path(APP_DATA_DIR) / 'photo_archiver.db'}"
+
+
 DEFAULT_MODEL_PATH = Path("resources/models")
 DEFAULT_MAX_WORKERS = 4
 MIN_MAX_WORKERS = 1
@@ -55,8 +67,8 @@ class AppSettings(BaseSettings):
     env: str = Field(default=DEFAULT_ENVIRONMENT)
     debug: bool = Field(default=False)
     log_level: str = Field(default=DEFAULT_LOG_LEVEL)
-    log_directory: Path = Field(default=DEFAULT_LOG_DIRECTORY)
-    database_url: str = Field(default=DEFAULT_DATABASE_URL)
+    log_directory: Path = Field(default_factory=lambda: APP_LOG_DIR)
+    database_url: str = Field(default_factory=default_database_url)
     model_path: Path = Field(default=DEFAULT_MODEL_PATH)
     photo_root: Path | None = Field(default=None)
     output_root: Path | None = Field(default=None)

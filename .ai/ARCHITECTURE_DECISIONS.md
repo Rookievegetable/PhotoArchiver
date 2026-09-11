@@ -357,6 +357,18 @@
 
 ---
 
+### ADR-035 — captured_at 回填通道 + 默认路径锚定 + platformdirs 依赖批准
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 2026-09-08「按建议方案执行」拍板，计划 `docs/development/phase-f-plan.md`） |
+| 决策 | 三项：(1) **`PhotoRepository.update_capture_time(photo_id, captured_at) -> int` 协议扩**（SQLite/InMemory 双实现，只 UPDATE captured_at 列，与 ADR-034 的 `update_metadata` 对称——供 Issue-019 后历史照片拍摄时刻一次性回填 CLI 使用，幂等返回受影响行数）；(2) **默认路径锚定**：`database_url` 与 `log_directory` 的**默认值**由 CWD 相对改为 `platformdirs.user_data_dir/user_log_dir("PhotoArchiver")` 锚定（显式 `.env` 配置完全优先，`model_fields_set` 判定；显式相对值保留既有 CWD 警告；旧 CWD 库首启检测仅打印迁移引导、不自动搬库）；(3) **platformdirs 依赖批准**（4.10.0，仅 `infrastructure/config` 层） |
+| 理由 | (1) Issue-019 修复后新扫描已正确，历史错误值需一次性纠错；`update_metadata` 有意保留快照列，回填需要对称的专用通道（最小写面）。(2) N4 实证 CWD 相对默认值导致换目录启动静默换库（真实用户库分裂风险，P1），锚定用户数据目录是三平台惯例且为 Phase D 形态二铺路；显式配置优先保证零破坏。(3) platformdirs 为 tox/black 生态标准库（venv 已有 4.10.0 传递安装），手写三平台路径惯例易错。 |
+| 影响范围 | `domain/repositories/photo_repository.py`（协议扩）、`infrastructure/database/sqlite_photo_repository.py` + `infrastructure/repositories/in_memory_photo_repository.py`（实现）、`infrastructure/config/settings.py`（默认值锚定 + 锚定常量）、`app/bootstrap.py`（旧库首启提示）、`requirements/base.txt`、`.ai/rules/dependency-rules.md` §13、`application/services/backfill_capture_time_service.py`（新建）、`main.py`（backfill-capture-time 子命令）、测试、用户指南。不变：显式 DATABASE_URL 语义、photos 表其余列、既有迁移链路。 |
+| 后续 | Phase D 形态二（P2-11）落地时复用锚定目录常量；旧 CWD 库自动迁移（migrate 子命令）如需要另行立项。 |
+
+---
+
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）
 
 > 权威审计方法论：`.ai/rules/audit-methodology.md`（迁移自废弃文档 `.ai/Consistency-Audit-2026-07-13.md` §8，2026-07-24 裁决2已物理删除该废弃文档）。本节仅列已裁决并执行的冲突处置。

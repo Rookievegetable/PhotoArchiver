@@ -32,7 +32,7 @@
 
 **Q：所有数据都存在哪里？如何备份？**
 
-业务数据集中在单文件 SQLite 数据库 `data/photo_archiver.db`（路径可由 `DATABASE_URL` 修改），停止应用后直接拷贝该文件即完成备份。缩略图缓存与导出产物位于输出目录，丢失可重建/重新导出。
+业务数据集中在单文件 SQLite 数据库。**未设置 `DATABASE_URL` 时**默认锚定在用户数据目录（Windows `%LOCALAPPDATA%\PhotoArchiver`、macOS `~/Library/Application Support/PhotoArchiver`、Linux `~/.local/share/PhotoArchiver`，v2.4.0 起），从任意目录启动都命中同一份库——不再随启动目录分裂。旧版本把默认库放在启动目录下的 `data/photo_archiver.db`；若检测到旧位置库而新锚定位置还没有库，启动时会打印迁移引导（不自动搬库——如需沿用旧数据，按引导把旧库文件移动到锚定位置，或在 `.env` 中将 `DATABASE_URL` 配置为指向旧库的绝对路径）。显式设置 `DATABASE_URL` 时完全遵循该值。停止应用后直接拷贝数据库文件即完成备份。缩略图缓存与导出产物位于输出目录，丢失可重建/重新导出。
 
 ## 平台相关
 

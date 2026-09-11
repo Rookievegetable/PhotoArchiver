@@ -112,4 +112,5 @@ python main.py prune-missing --execute    # 确认后移除这些登记
 | 扫描文件夹 | `python main.py scan <目录> [--no-recursive] [--name 显示名]` |
 | 归档（全量已通过） | `python main.py archive --archive-root <目录> [--dry-run] [--conflict-strategy ...]` |
 | 历史哈希回填 | `python main.py backfill-content-hash` |
+| 拍摄时刻回填 | `python main.py backfill-capture-time [--execute]`（默认 dry-run） |
 | 清理失联登记 | `python main.py prune-missing [--execute]`（默认 dry-run） |

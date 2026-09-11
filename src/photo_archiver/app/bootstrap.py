@@ -1,6 +1,7 @@
 """Application startup and dependency assembly."""
 
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 import sqlite3
 
 from loguru import logger
@@ -73,6 +74,33 @@ def cwd_dependent_path_warnings(settings: AppSettings) -> list[str]:
     return warnings
 
 
+def legacy_database_migration_hints(settings: AppSettings) -> list[str]:
+    """Detect a legacy CWD database when the anchored default takes over.
+
+    Phase F F-2（ADR-035）：默认数据库已锚定用户数据目录。仅在 ``database_url``
+    未被显式配置（init/env/.env 均未提供，经 ``model_fields_set`` 判定）时
+    检查：若启动目录下存在旧默认位置的库而锚定位置还没有库 → 打印迁移引导。
+    **绝不自动搬库**（数据安全原则——搬迁由用户手动完成或后续 migrate 子命令）。
+
+    Returns:
+        One human-readable Chinese hint when a legacy database is detected.
+    """
+    if "database_url" in settings.model_fields_set:
+        return []
+    anchored = settings.database_path
+    if str(anchored) == ":memory:" or anchored.is_file():
+        return []
+    legacy = Path.cwd() / "data" / "photo_archiver.db"
+    if not legacy.is_file():
+        return []
+    return [
+        f"检测到旧版启动目录下的数据库：{legacy}。"
+        f"自 v2.4.0 起默认数据库已锚定到用户数据目录：{anchored}。"
+        "如需沿用旧数据，请关闭程序后将上述旧库文件移动到锚定位置，"
+        "或在 .env 中将 DATABASE_URL 配置为指向旧库的绝对路径。"
+    ]
+
+
 def bootstrap_application(settings: AppSettings | None = None) -> ApplicationContext:
     """Load settings, initialize logging, and build the application context.
 
@@ -94,6 +122,10 @@ def bootstrap_application(settings: AppSettings | None = None) -> ApplicationCon
     # 的数据位置风险可见（尤其是数据库：换目录启动会静默换库）。
     for path_warning in cwd_dependent_path_warnings(resolved_settings):
         logger.warning(path_warning)
+    # Phase F F-2（ADR-035）：默认路径已锚定用户数据目录——检测旧 CWD 库并
+    # 打印迁移引导（不自动搬库，数据安全原则）。
+    for migration_hint in legacy_database_migration_hints(resolved_settings):
+        logger.warning(migration_hint)
     try:
         # P0-6（D-B4）：损坏库在任何写入/迁移路径之前快速失败——只读
         # quick_check，绝不重建/换库；分类见 infrastructure.database.integrity。

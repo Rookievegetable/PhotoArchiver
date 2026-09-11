@@ -7,13 +7,18 @@ the real bootstrap wiring is verified through the real log file.
 
 from pathlib import Path
 
+import pytest
+
 from photo_archiver.app.bootstrap import bootstrap_application, cwd_dependent_path_warnings
 from photo_archiver.infrastructure.config import AppSettings
 
 
 def test_relative_default_paths_produce_warnings() -> None:
-    """The shipped defaults (CWD-relative db/model/logs) must warn."""
-    settings = AppSettings(database_url="sqlite:///data/photo_archiver.db")
+    """显式相对配置（数据库/日志/模型）必须警告——锚定默认值不受影响。"""
+    settings = AppSettings(
+        database_url="sqlite:///data/photo_archiver.db",
+        log_directory=Path("logs"),  # Phase F F-2：默认已锚定，显式相对仍警告
+    )
 
     warnings = cwd_dependent_path_warnings(settings)
 
@@ -23,6 +28,28 @@ def test_relative_default_paths_produce_warnings() -> None:
     assert "绝对路径" in database_warnings[0]
     assert any("模型目录" in w for w in warnings)
     assert any("日志目录" in w for w in warnings)
+
+
+def test_anchored_defaults_produce_no_warnings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Phase F F-2：锚定默认值是绝对路径——不产生 CWD 警告（注入临时锚点）。"""
+    import photo_archiver.infrastructure.config.settings as settings_module
+
+    monkeypatch.setattr(settings_module, "APP_DATA_DIR", tmp_path / "anchor-data")
+    monkeypatch.setattr(settings_module, "APP_LOG_DIR", tmp_path / "anchor-logs")
+
+    settings = AppSettings(_env_file=None)
+
+    assert settings.database_path == tmp_path / "anchor-data" / "photo_archiver.db"
+    assert settings.database_path.is_absolute()
+    assert settings.log_directory == tmp_path / "anchor-logs"
+    # 锚定生效：数据库与日志目录不再产生 CWD 警告；模型目录未锚定（ADR-035
+    # 只锚定 database/log）——其相对默认值警告按设计保留。
+    warnings = cwd_dependent_path_warnings(settings)
+    assert not any("数据库路径" in w for w in warnings)
+    assert not any("日志目录" in w for w in warnings)
+    assert any("模型目录" in w for w in warnings)
 
 
 def test_absolute_paths_produce_no_warnings(tmp_path: Path) -> None:
@@ -59,10 +86,14 @@ def test_optional_unset_roots_are_skipped() -> None:
 def test_bootstrap_logs_cwd_warnings_to_the_log_file(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """The real bootstrap writes the warnings into the real log file."""
-    monkeypatch.chdir(tmp_path)  # keep the relative-default DB out of the dev tree
+    """显式相对路径时 bootstrap 仍将 CWD 警告写入真实日志（向后兼容）。"""
+    monkeypatch.chdir(tmp_path)  # keep the relative DB out of the dev tree
 
-    bootstrap_application(AppSettings())  # shipped defaults: relative db/model/logs
+    bootstrap_application(AppSettings(
+        _env_file=None,
+        database_url="sqlite:///data/photo_archiver.db",
+        log_directory=Path("logs"),
+    ))
 
     log_text = (tmp_path / "logs" / "photo_archiver.log").read_text(encoding="utf-8")
     assert "数据库路径随启动目录变化" in log_text

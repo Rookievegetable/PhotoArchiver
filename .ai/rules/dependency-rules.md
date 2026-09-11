@@ -361,6 +361,7 @@ Approved libraries:
 * SQLAlchemy (Infrastructure database layer only) — 已投入使用：Alembic 迁移体系（`alembic_runner.py`）依赖 SQLAlchemy Engine 连接到 SQLite。仓储层仍使用 raw sqlite3（ORM 未引入），SQLAlchemy 仅被 Alembic 使用。MUST NOT leak into Application or Domain.
 * alembic (Infrastructure database migrations only) — 已投入使用：Schema 迁移管理（`alembic/` 目录 + `alembic.ini`）。每次启动由 `alembic_runner.run_alembic_migrations()` 自动 upgrade head。
 * watchdog — 已批准未使用：filesystem watcher 用途预留，当前零 import。若未来启用须落 Infrastructure filesystem 层并补本节层归属注。
+* platformdirs (Infrastructure config layer only) — 已投入使用（ADR-035）：默认数据库/日志路径锚定用户数据目录（`settings.py` 的 `default_database_url` / `default_log_directory`）。MUST NOT leak into Domain, Application or Presentation.
 * pytest-qt (dev-only, UI smoke tests)
 
 ONNX Runtime is approved as the AI model runtime when InsightFace models require it; it MUST remain inside the `ai/` layer or `infrastructure/` adapters and MUST NOT leak into Domain or Presentation.
