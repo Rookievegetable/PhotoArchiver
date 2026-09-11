@@ -302,3 +302,7 @@ Desktop.ini
 /presentation
 ⚠️
 **本文档是*
+
+# AI/session tool caches (not source, never commit).
+/.mypy_cache_run/
+/.workbuddy/
