@@ -369,6 +369,18 @@
 
 ---
 
+### ADR-036 — Phase F 正确性收口：Windows 文件名净化 + 扫描链接防护 + 查询/取消/CLI 裁决
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 2026-09-12 按建议批准计划裁决点 D4–D9，计划 `docs/development/phase-f-correctness-plan.md`；依据 2026-09-10 体检 P0-2/P1 项） |
+| 决策 | 五项：(1) **Windows 文件名净化（D4）**：Domain `ArchivePath` 段净化为纯字符串逻辑——非法字符 `: * ? " < > \|` 与控制字符替换为 `_`、尾点/尾空格去除、保留设备名（去扩展名后匹配 CON/PRN/AUX/NUL/COM1-9/LPT1-9，大小写不敏感）前缀 `_`；静默替换 + loguru 审计，不拒绝（不把平台限制转嫁给用户）；仅影响新归档，存量 `archive_records` 不动。(2) **扫描链接环防护（D5）**：扫描器改迭代式 `os.scandir` + visited realpath 环检测 + 可配深度上限（默认 32），不跟随链接目录——同时覆盖 symlink 与 Windows junction（junction 的 `is_symlink()` 为 False，仅跳 symlink 防不住）。(3) **"未匹配"哨兵实现（D6）**：`PhotoSearchCriteria.match_status` 接受 `UNMATCHED` 哨兵（Domain 值对象导出），SQLite 走 `LEFT JOIN ... IS NULL`，识别轴 JOIN 加 `DISTINCT` 消除一照片多识别行的重复行；InMemory 按"recognition 依赖轴返回空"既有惯例。(4) **导出取消通道（D7）**：任务边界粒度（LIMIT-002 同型），import 任务补 cancelled 接线对齐 scan。(5) **CLI 启动备份对齐 GUI（D8）**：修订 `docs/development/configuration.md` 既定"CLI 不生成启动备份"行为，CLI 写库子命令与 GUI 同样生成 `VACUUM INTO` 快照。D8' 语言占位控件标注 Out-of-Scope 不实装；D9 本阶段发版 **v2.5.0**。 |
+| 理由 | 体检 Release Candidate 差距四项中三项（F-10/F-13/N-2）+ P1-3/P1-4 属本阶段；净化为静默替换而非 ValidationError，避免"人名叫 con"这类合法输入持续 FAILED；环检测用 realpath 集合而非 reparse tag 平台特判，跨平台可维护；哨兵实现成本低于改写文档承诺的沟通成本；CLI 与 GUI 同样写库（scan / prune-missing / backfill），风险面同量级，备份应一致。 |
+| 影响范围 | `domain/value_objects/archive_path.py`（段净化，纯字符串，零文件系统调用）、`infrastructure/filesystem/local_photo_file_scanner.py`（遍历重写）、`domain/value_objects/photo_search_criteria.py` + `domain/repositories/photo_repository.py`（协议 docstring）、`infrastructure/database/sqlite_photo_repository.py` + `infrastructure/repositories/in_memory_photo_repository.py`（DISTINCT + LEFT JOIN）、`presentation`（import cancelled 接线、导出取消、空态、审核行可读性、.xlsm 过滤器）、`application`/`main.py`（导出取消通道、CLI 备份、import-people/export 子命令）、`requirements/dev.txt`（pytest-cov，dev-only）、`docs/development/configuration.md`（D8 行为修订）、README（N-2 修订）。不变：Schema、既有归档记录、磁盘文件零触碰不变量、识别管线（ADR-032/033）、显式配置语义。 |
+| 后续 | N-1 插件可见性、F-8 并行匹配分片 flush、N-5 去重键、N-8 孤儿缓存不在本 ADR 范围（见 KNOWN_ISSUES ISSUE-020..023）。 |
+
+---
+
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）
 
 > 权威审计方法论：`.ai/rules/audit-methodology.md`（迁移自废弃文档 `.ai/Consistency-Audit-2026-07-13.md` §8，2026-07-24 裁决2已物理删除该废弃文档）。本节仅列已裁决并执行的冲突处置。
