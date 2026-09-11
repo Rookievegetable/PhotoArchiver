@@ -26,16 +26,15 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 ## 2. Current Step（当前开发阶段）
 
-**v2.4.0 已发布（Phase E 库管理收官，2026-09-08）**——tag `v2.4.0` → `93b7a15`，CI 三平台绿（macOS LIMIT-006 darwin skip 4 用例生效后通过），Phase E 全部六期（E-1~E-6）实施完成。**待 owner 完成收尾两步**：① 核对 GitHub Release 页面（tag `v2.4.0` 触发的 workflow 应已附 `dist-*` 构建产物；release.yml 不跑 pytest，macOS 测试面问题不影响资产）；② 将 `CHANGELOG.md` 第 9–54 行 `[2.4.0]` 段粘贴进 Release body（`generate_release_notes` 只自动生成贡献者/提交摘要）后签核。
+**v2.4.0 已发布（Phase E 库管理收官，2026-09-08）**——tag `v2.4.0` → `93b7a15`，CI 三平台绿。**待 owner 收尾 v2.4.0**：核对 GitHub Release 资产 + 粘贴 `CHANGELOG.md` 第 9–54 行 `[2.4.0]` 段进 body 后签核。
 
-本版本为新增能力 minor 版（库管理 P2-1/P2-2/P2-3）：
+**Phase F（数据正确性与长期运营收尾）三候选已实施完成（ADR-035 登记，2026-09-08）**，全量回归 **728 passed / 3 skipped / 0 failed**：
 
-- **删除登记**（照片，D1/D3）：照片墙多选 → 确认对话框（级联计数：识别/归档随删）→ 事务内幂等移除；磁盘文件一律不动。
-- **删除人员**（D2/D3）：下拉选人实时预览（嵌入随删、识别归属置空为"未知人员"、照片全保留）→ 确认执行。
-- **重复照片处置**（D6）：重复报告「按建议处置」——每组保留最早注册一张（同刻 id 决胜），执行端逐项复核防误删。
-- **重扫对账**（D5）：内容变化（hash 强比对 / mtime+size 弱退化）自动刷新元数据（`update_metadata` 只刷 metadata 列，captured_at 快照保留）；`updated=` 计数进结果 DTO 与 scan CLI 输出。
-- **prune-missing CLI**（D5）：失联登记 dry-run 默认列出（含期望路径），`--execute` 才清理；扫描绝不自动删库。
-- 全量删除操作走确认流 + loguru 审计行 + Phase B 启动备份兜底。
+- **F-1 captured_at 回填 CLI**：Issue-019 后历史照片拍摄时刻一次性纠错——`PhotoRepository.update_capture_time`（只动快照列）+ `BackfillCaptureTimeService`（全量重读对齐，dry-run 默认、幂等、异常降级）+ `backfill-capture-time` 子命令。
+- **F-2 默认路径锚定 P1**：数据库/日志默认值由 CWD 相对改为 platformdirs 用户数据目录锚定（显式 `.env`/env 完全优先、零破坏）；bootstrap 增旧 CWD 库首启迁移引导（不自动搬库）；N4b 进程级反向实证（陌生 CWD + 无显式配置 → 库落锚定目录）。
+- **F-3 LIMIT-006 D-1**：CI macOS job 崩溃时自动收集 `.ips` crash report 为 artifact（追查从被动变主动）；D-2 复现与 D-3 修复待 macOS 调试手段立项。
+
+以上变更（含依赖批准 platformdirs 与默认行为变化）未发版——是否 prepare v2.5.0 由 owner 决定。
 
 ### 历史发版锚点
 
@@ -45,6 +44,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | v2.3.1 | `90c46db` | 桌面 UI 中文化 + 工具栏纯化 + 人员筛选智能搜索（owner 裁决多轮折入单一发布；tag 二次重打至 CI 绿树） |
 | v2.3.2 | `2aadcee` | 桌面复验修复：EXIF 拍摄时刻 + 照片墙 + 占位 |
 | v2.4.0 | `93b7a15` | 库管理：删除登记 / 删除人员 / 重复处置 / 重扫对账 / prune-missing CLI（Phase E） |
+| （未发版） | — | Phase F：captured_at 回填 CLI + 默认路径锚定 + CI macOS 崩溃诊断（是否 v2.5.0 待 owner） |
 
 更早锚点：v1.0.0→`49b2ac6`、v2.0.0→`ba3ad02`、v2.1.0→`bd52fbb`、v2.2.0→`f9fb8c5`。
 
@@ -56,7 +56,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 |---|---|---|
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
 | 版本链 | ✅ | v2.4.0 三处一致（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08`）；历史锚点 v2.3.2 保留。 |
-| CI | ✅ | 三平台绿（macOS LIMIT-006 darwin skip 4 个真实执行器压力用例生效后通过——skip 为测试面处置，非产品缺陷，见 KNOWN_ISSUES）；Windows/Linux 全量 710/3/0 本地实证。 |
+| CI | ✅ | 三平台绿（macOS LIMIT-006 darwin skip 4 个真实执行器压力用例生效后通过——skip 为测试面处置，非产品缺陷）；Windows/Linux 全量 728/3/0 本地实证；Phase F 增 CI macOS 崩溃诊断收集（LIMIT-006 D-1）。 |
 | 桌面复验 | ✅ | 机制项（N1–N4 自动化：1200 行导入闭环/取消一致性/备份恢复演练/换目录子进程）+ 感知项（J1–J7 owner 逐项判定）全部通过。 |
 | 未决问题 | ✅ 清零 | ISSUE-019 已修复并经真机终验关闭（条目同提交删除）。 |
 | Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消为任务边界粒度，设计特征）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS CI runner 压力扫描段错误，darwin skip），均 Low、不阻塞。 |
@@ -89,22 +89,19 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 |---|---|
 | 时间 | 2026-09-08（本地） |
 | 生成者 | Cline |
-| 会话范围 | 交接恢复 → **E-2 收尾** → **E-3 实施** → **E-4 实施** → **E-5 实施** → **E-6 收尾发版** → **v2.4.0 发布收官**（macOS CI 段错误处置）。 |
-| 关键产出 | ① E-2：级联矩阵测试 4 用例；② E-3：四删除/对账 UseCase + 预览 DTO + 审计 + 装配 + 14 测试；③ E-4：UI 删除入口三处 + 确认流 + 8 测试；④ E-5：重扫对账（update_metadata 双实现 + 变更检测）+ prune-missing CLI + 12 测试；⑤ E-6：用户指南补章 + 版本链 bump 2.4.0 + CHANGELOG `[2.4.0]` 段 + 发版前回归 710/3/0；⑥ **macOS CI 段错误处置**：N3 两用例 darwin skip 扩展（LIMIT-006 第三形态：worker 于 pathlib.is_file/stat，与产品代码无因果，完整栈分析见 KNOWN_ISSUES），push 后 CI 三平台绿验证；⑦ 质量门全绿：ruff 0 / mypy 189 files 0 / pip check 通过。 |
-| 当前质量门 | `ruff check .` 通过；`mypy src` 189 个源文件无问题；pytest 全量 **710 passed / 3 skipped / 0 failed**（本地；CI 三平台绿，macOS skip 4 压力用例）。 |
-| 工作区 | 本轮提交已全部 push（origin/main == 本地 HEAD），工作树全净；tag `v2.4.0` = `93b7a15`。 |
-| Remaining | owner 收尾两步：① 核对 GitHub Release 页面资产；② 粘贴 CHANGELOG `[2.4.0]` 段进 body 后签核。下一轮候选（均需 owner 另行立项）：历史照片 captured_at 回填 CLI、LIMIT-006 macOS 原生崩溃追查（需 macOS 调试手段）、完整路径锚定 P1。 |
+| 会话范围 | 交接恢复 → **E-2 收尾** → **E-3 实施** → **E-4 实施** → **E-5 实施** → **E-6 收尾发版** → **v2.4.0 发布收官**（macOS CI 段错误处置）→ **Phase F 三候选实施**（captured_at 回填 + 路径锚定 + CI 崩溃诊断）。 |
+| 关键产出 | ① E-2~E-6：Phase E 全部完成（追加 38 测试）；② v2.4.0 发布 + macOS CI 段错误 darwin skip 扩展（LIMIT-006 第三形态，产品代码无因果）；③ **Phase F-1**：`update_capture_time` 协议/双实现 + `BackfillCaptureTimeService`（dry-run 默认）+ `backfill-capture-time` CLI + 11 测试；④ **Phase F-2**：默认路径锚定用户数据目录（platformdirs，显式配置优先）+ 旧 CWD 库首启引导 + N4b 反向实证 + 7 测试；⑤ **Phase F-3**：CI macOS 崩溃报告收集（D-1）；⑥ ADR-035 登记（回填通道 + 锚定 + platformdirs 批准）+ dependency-rules §13 + base.txt；⑦ 质量门全绿：ruff 0 / mypy 191 files 0 / pytest **728 passed / 3 skipped / 0 failed**。 |
+| 当前质量门 | `ruff check .` 通过；`mypy src` 191 个源文件无问题；pytest 全量 **728 passed / 3 skipped / 0 failed**（本地实测）。 |
+| 工作区 | Phase F 三 commit 本地完成（`7707bc1` 为最新），待 owner push；此前提交已同步 origin；tag `v2.4.0` = `93b7a15`。 |
+| Remaining | v2.4.0 签核（owner：Release 资产核对 + body 粘贴）· Phase F 是否发版 v2.5.0（owner 决定）· LIMIT-006 D-2/D-3（需 macOS 调试手段立项）。 |
 
 ---
 
 ## 6. Next Step（下一步开发计划）
 
-**v2.3.2 已签核收官**（2026-09-06）；Phase E 实施中（D1–D6 已拍板，E-1/E-2 完成）。可选后续候选（均需 owner 另行立项）：
-- 历史照片 `captured_at` 回填 CLI（参照 backfill-content-hash 先例）；
-- LIMIT-006 macOS 原生崩溃追查（需 macOS 调试手段）；
-- 完整路径锚定 P1（用户目录/注册表定位）。
+v2.4.0 已发布待签核；Phase F（captured_at 回填 + 路径锚定 + CI 崩溃诊断）三候选已实施完成。可选后续（均需 owner 另行立项）：
 
-| Next Step | **v2.4.0 签核（owner 手工项）**：核对 GitHub Release 页面资产 + 粘贴 CHANGELOG `[2.4.0]` 段进 body + 签核。开发侧无未竟项；下一轮候选均需 owner 另行立项。 |
+| Next Step | **owner 汇总决策**：① v2.4.0 签核（Release 资产核对 + body 粘贴）；② Phase F 是否合入发版 prepare **v2.5.0**（新增能力 minor + 默认路径行为变化——需 CHANGELOG `[2.5.0]` 段 + 指南已补章）；③ **LIMIT-006 D-2/D-3**（macOS 追查：需 macOS 调试手段；plant 候选 `os.scandir` 重写 scanner——既收窄竞态窗口又省 N 次 stat）；④ 下一候选立项（如：旧 CWD 库自动迁移 `migrate` 子命令、CURRENT_BATCH 导出 P2-4）。 |
 
 ---
 
