@@ -13,7 +13,6 @@ Two layers, mirroring the MatchPersonsController test split:
   main thread) — never ``waitSignal`` + immediate assert (racy).
 """
 
-import sys
 
 import pytest
 

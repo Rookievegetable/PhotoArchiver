@@ -16,7 +16,6 @@ WorkerTask.run() **边界**生效（KNOWN_ISSUES LIMIT-002/006）——"提交�
 """
 
 import pytest
-import sys
 
 pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")

@@ -18,7 +18,6 @@ Cancellation granularity is the task boundary (LIMIT-002 design analog):
 the use case finishes its current batch, then the task reports cancelled.
 """
 
-import sys
 
 import pytest
 
