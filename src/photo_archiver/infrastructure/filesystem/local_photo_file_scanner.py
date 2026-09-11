@@ -1,11 +1,15 @@
 """Local filesystem implementation of the photo file scanner port."""
 
 import os
-import stat
 from pathlib import Path
 
 from photo_archiver.application.dtos import PhotoScanItem
 from photo_archiver.application.ports import DEFAULT_SCAN_MAX_DEPTH, PhotoFileScanner
+
+# IO_REPARSE_TAG_MOUNT_POINT（ntioapi.h，稳定文档值）。`stat` 模块仅在
+# Windows 上导出该常量——硬编码以保持模块在 Linux/macOS 可导入、可静态检查
+# （CI 的 mypy 在三平台原生运行；本地 Windows 开发曾掩盖此差异）。
+_IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003
 
 
 def _is_junction(entry: os.DirEntry) -> bool:
@@ -13,11 +17,12 @@ def _is_junction(entry: os.DirEntry) -> bool:
 
     junction 的 ``lstat`` 仍带目录位（``is_dir(follow_symlinks=False)`` 为
     True 且 ``is_symlink()`` 为 False），因此必须显式查 reparse tag 才能识别
-    （Python 3.11 无 ``DirEntry.is_junction``，3.12 才加入）。
+    （Python 3.11 无 ``DirEntry.is_junction``，3.12 才加入）。非 Windows 平台
+    的 ``st_reparse_tag`` 属性不存在，getattr 回退 0 恒为 False。
     """
     return (
         getattr(entry.stat(follow_symlinks=False), "st_reparse_tag", 0)
-        == stat.IO_REPARSE_TAG_MOUNT_POINT
+        == _IO_REPARSE_TAG_MOUNT_POINT
     )
 
 
