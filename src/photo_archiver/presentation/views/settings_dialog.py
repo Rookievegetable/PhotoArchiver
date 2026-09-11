@@ -55,8 +55,10 @@ from photo_archiver.presentation.controllers.settings_controller import Settings
 from photo_archiver.presentation.ui_text import (
     SETTINGS_BROWSE_BUTTON,
     SETTINGS_DIALOG_TITLE,
+    SETTINGS_ARCHIVE_ROOT_LABEL,
     SETTINGS_EXPORT_PATH_LABEL,
     SETTINGS_IMPORT_PATH_LABEL,
+    SETTINGS_SELECT_ARCHIVE_FOLDER,
     SETTINGS_INVALID_TITLE,
     SETTINGS_LANGUAGE_CHOICES,
     SETTINGS_LANGUAGE_LABEL,
@@ -143,6 +145,12 @@ class SettingsDialog(QDialog):
         self._export_browse = QPushButton(SETTINGS_BROWSE_BUTTON, self)
         self._export_browse.clicked.connect(self._on_export_browse)
 
+        # G-2（FEAT-14 收尾）：归档根目录——None 时归档回落 AppSettings。
+        self._archive_root_edit = QLineEdit(self)
+        self._archive_root_edit.setPlaceholderText(SETTINGS_USE_SYSTEM_DEFAULT)
+        self._archive_browse = QPushButton(SETTINGS_BROWSE_BUTTON, self)
+        self._archive_browse.clicked.connect(self._on_archive_browse)
+
         self._threshold_spin = QDoubleSpinBox(self)
         self._threshold_spin.setRange(MIN_MATCH_THRESHOLD, MAX_MATCH_THRESHOLD)
         self._threshold_spin.setDecimals(_THRESHOLD_DECIMALS)
@@ -157,6 +165,7 @@ class SettingsDialog(QDialog):
         form.addRow(self._language_hint)
         form.addRow(SETTINGS_IMPORT_PATH_LABEL, self._import_path_layout())
         form.addRow(SETTINGS_EXPORT_PATH_LABEL, self._export_path_layout())
+        form.addRow(SETTINGS_ARCHIVE_ROOT_LABEL, self._archive_root_layout())
         form.addRow(SETTINGS_THRESHOLD_LABEL, self._threshold_spin)
         form.addRow(SETTINGS_MAX_WORKERS_LABEL, self._workers_spin)
 
@@ -191,6 +200,15 @@ class SettingsDialog(QDialog):
         row.addWidget(self._export_browse, 0)
         return wrapper
 
+    def _archive_root_layout(self) -> QWidget:
+        """Wrap the archive-root edit + browse button in a single horizontal row."""
+        wrapper = QWidget(self)
+        row = QHBoxLayout(wrapper)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self._archive_root_edit, 1)
+        row.addWidget(self._archive_browse, 0)
+        return wrapper
+
     def _populate_from_preferences(self, preferences: UserPreferences) -> None:
         """Set each widget value from the loaded UserPreferences."""
         # findData 按 userData（契约值）回填；值不在选项域时回退首项——
@@ -204,6 +222,9 @@ class SettingsDialog(QDialog):
         )
         self._export_path_edit.setText(
             str(preferences.default_export_path) if preferences.default_export_path is not None else ""
+        )
+        self._archive_root_edit.setText(
+            str(preferences.archive_root) if preferences.archive_root is not None else ""
         )
         self._threshold_spin.setValue(preferences.match_threshold)
         self._workers_spin.setValue(preferences.max_workers)
@@ -220,6 +241,12 @@ class SettingsDialog(QDialog):
         if folder:
             self._export_path_edit.setText(folder)
 
+    def _on_archive_browse(self) -> None:
+        """Open a folder picker and write the selected path into the archive edit."""
+        folder = QFileDialog.getExistingDirectory(self, SETTINGS_SELECT_ARCHIVE_FOLDER)
+        if folder:
+            self._archive_root_edit.setText(folder)
+
     def _collect_preferences(self) -> UserPreferences:
         """Read every widget value into a fresh UserPreferences value object."""
         import_text = self._import_path_edit.text().strip()
@@ -233,6 +260,7 @@ class SettingsDialog(QDialog):
             language=language_data if isinstance(language_data, str) else VALID_LANGUAGES[0],
             default_import_path=Path(import_text) if import_text else None,
             default_export_path=Path(export_text) if export_text else None,
+            archive_root=Path(self._archive_root_edit.text().strip()) if self._archive_root_edit.text().strip() else None,
             match_threshold=self._threshold_spin.value(),
             max_workers=self._workers_spin.value(),
         )

@@ -39,6 +39,7 @@ _KEY_THEME = "pref_theme"
 _KEY_LANGUAGE = "pref_language"
 _KEY_DEFAULT_IMPORT_PATH = "pref_default_import_path"
 _KEY_DEFAULT_EXPORT_PATH = "pref_default_export_path"
+_KEY_ARCHIVE_ROOT = "pref_archive_root"
 _KEY_MATCH_THRESHOLD = "pref_match_threshold"
 _KEY_MAX_WORKERS = "pref_max_workers"
 # Explicit "__set" sibling keys carry whether the user ever persisted the
@@ -89,6 +90,10 @@ class QSettingsUserSettingsStore(UserSettingsStore):
                 self._settings.value(_KEY_DEFAULT_EXPORT_PATH, defaultValue="", type=str),
                 "",
             )
+            archive_root_str = _str_or_default(
+                self._settings.value(_KEY_ARCHIVE_ROOT, defaultValue="", type=str),
+                "",
+            )
             threshold = _scalar_or_default(
                 self._settings,
                 _KEY_MATCH_THRESHOLD,
@@ -113,6 +118,7 @@ class QSettingsUserSettingsStore(UserSettingsStore):
             language=language,
             default_import_path=_path_or_none(import_path_str),
             default_export_path=_path_or_none(export_path_str),
+            archive_root=_path_or_none(archive_root_str),
             match_threshold=threshold,
             max_workers=workers,
         )
@@ -130,6 +136,10 @@ class QSettingsUserSettingsStore(UserSettingsStore):
             self._settings.setValue(
                 _KEY_DEFAULT_EXPORT_PATH,
                 _path_str(preferences.default_export_path),
+            )
+            self._settings.setValue(
+                _KEY_ARCHIVE_ROOT,
+                _path_str(preferences.archive_root),
             )
             self._settings.setValue(_KEY_MATCH_THRESHOLD, float(preferences.match_threshold))
             self._settings.setValue(_KEY_MATCH_THRESHOLD_SET, True)

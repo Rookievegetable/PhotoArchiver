@@ -104,3 +104,40 @@ def test_settings_dialog_shows_language_out_of_scope_hint(qtbot) -> None:
     qtbot.waitExposed(dialog)
     assert dialog._language_hint.text() == SETTINGS_LANGUAGE_HINT
     dialog.close()
+
+
+def test_settings_dialog_archive_root_round_trips(qtbot, tmp_path, monkeypatch) -> None:
+    """G-2: the archive root field loads, collects, and browses like the path fields."""
+    from PySide6.QtWidgets import QFileDialog
+
+    persisted = UserPreferences(archive_root=tmp_path)
+    service = SettingsService(InMemoryUserSettingsStore(persisted), None)
+    dialog = SettingsDialog(SettingsController(service))
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitExposed(dialog)
+    assert dialog._archive_root_edit.text() == str(tmp_path)
+
+    monkeypatch.setattr(
+        QFileDialog,
+        "getExistingDirectory",
+        staticmethod(lambda *args, **kwargs: str(tmp_path / "elsewhere")),
+    )
+    dialog._on_archive_browse()
+    assert dialog._archive_root_edit.text() == str(tmp_path / "elsewhere")
+
+    collected = dialog._collect_preferences()
+    assert collected.archive_root == tmp_path / "elsewhere"
+    dialog.close()
+
+
+def test_settings_dialog_archive_root_collects_empty_as_none(qtbot) -> None:
+    persisted = UserPreferences()
+    service = SettingsService(InMemoryUserSettingsStore(persisted), None)
+    dialog = SettingsDialog(SettingsController(service))
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitExposed(dialog)
+    assert dialog._archive_root_edit.text() == ""
+    assert dialog._collect_preferences().archive_root is None
+    dialog.close()

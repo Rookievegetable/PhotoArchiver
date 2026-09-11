@@ -36,6 +36,9 @@ class UserPreferences:
     language: str = DEFAULT_LANGUAGE
     default_import_path: Path | None = None
     default_export_path: Path | None = None
+    # G-2（FEAT-14 收尾）：归档根目录进设置 UI——None 时归档回落 AppSettings
+    # 的 ARCHIVE_ROOT（.env/锚定默认），显式配置优先。
+    archive_root: Path | None = None
     match_threshold: float = DEFAULT_MATCH_THRESHOLD
     max_workers: int = DEFAULT_MAX_WORKERS
 
@@ -89,5 +92,6 @@ def validate_preferences(preferences: UserPreferences) -> None:
         )
     violations.extend(_validate_path("default_import_path", preferences.default_import_path))
     violations.extend(_validate_path("default_export_path", preferences.default_export_path))
+    violations.extend(_validate_path("archive_root", preferences.archive_root))
     if violations:
         raise InvalidPreferencesError("; ".join(violations))

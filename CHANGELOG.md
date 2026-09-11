@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [Unreleased]
+
+### Added
+
+- **`recognize` CLI**: headless face detection/recognition/matching over
+  registered photos — same resume semantics as the UI (only photos without a
+  recognition result by default; `--all` re-matches, `--limit` caps the
+  batch), friendly guidance when the model pack is missing. The CLI now
+  covers the entire pipeline: import-people → scan → recognize → review →
+  archive → export.
+- **Archive root in Settings**（归档根目录进设置）: the settings dialog
+  gains an archive-root field (folder picker); a saved preference overrides
+  `ARCHIVE_ROOT` from `.env`, and when neither is set the archive entry keeps
+  its honest "not configured" guidance. FEAT-14's last real gap closed.
+
 ## [2.6.0] - 2026-09-12
 
 Post-release hardening round: the audit backlog closed completely (plugins

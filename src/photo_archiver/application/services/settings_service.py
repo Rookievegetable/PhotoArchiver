@@ -92,6 +92,7 @@ class SettingsService(SettingsUseCase):
             language=persisted.language,
             default_import_path=persisted.default_import_path,
             default_export_path=persisted.default_export_path,
+            archive_root=persisted.archive_root,
             match_threshold=effective_threshold,
             max_workers=effective_workers,
         )

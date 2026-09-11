@@ -601,7 +601,7 @@ class MainWindow(QMainWindow):
         用户多选的 photos 直下推 plan 过滤。无选中时 photo_ids=() 走原路径
         （全部 APPROVED 照片），向后兼容。
         """
-        archive_root = self._context.settings.archive_root
+        archive_root = self._effective_archive_root()
         if archive_root is None:
             QMessageBox.warning(
                 self,
@@ -631,6 +631,20 @@ class MainWindow(QMainWindow):
             dry_run=dialog.dry_run,
         )
         self._connect_task_signals(runnable)
+
+    def _effective_archive_root(self) -> Path | None:
+        """Resolve the archive root: user preference (设置 UI) overrides .env.
+
+        G-2（FEAT-14 收尾）: the settings dialog can persist an archive root
+        via UserPreferences; when unset, AppSettings.ARCHIVE_ROOT (env /
+        anchored default) applies — the pre-existing contract. A preference
+        set to a path always wins, matching the import/export path fields'
+        semantics.
+        """
+        preferences = self._settings_controller.load()
+        if preferences.archive_root is not None:
+            return preferences.archive_root
+        return self._context.settings.archive_root
 
     def _collect_selected_photo_ids(self) -> tuple[UUID, ...]:
         """Read the QListView current selection and return their photo ids.

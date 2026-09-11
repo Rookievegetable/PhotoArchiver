@@ -118,4 +118,5 @@ python main.py prune-missing --execute    # 确认后移除这些登记
 | 导出数据 | `python main.py export <输出> [--format xlsx/csv/html] [--scope filtered --status ... --person ...]` |
 | 缩略图缓存清理 | `python main.py cleanup-thumbnails [--execute]`（默认 dry-run） |
 | 旧库迁移 | `python main.py migrate [--execute]`（默认 dry-run；复制不搬移） |
+| 人脸识别（无界面） | `python main.py recognize [--all] [--limit N]`（默认只跑未识别照片） |
 | 捕捉时刻纠错 | `python main.py backfill-capture-time [--execute]` |

@@ -76,6 +76,7 @@ python main.py
 | `python main.py export <输出文件>` | 导出库数据（xlsx/csv/html 按后缀自动识别；`--scope filtered` 配合 `--status/--person/--captured-from/--captured-to` 筛选） |
 | `python main.py cleanup-thumbnails` | 清理缩略图缓存孤儿条目（默认 dry-run 预览，`--execute` 才删除；缩略图为派生数据，删除后按需重新生成） |
 | `python main.py migrate` | 将旧版启动目录下的数据库（`data/photo_archiver.db`）一致性快照复制到锚定的用户数据目录（默认 dry-run 预览，`--execute` 才复制；旧库原地保留不搬移） |
+| `python main.py recognize` | 对已注册照片执行人脸识别/匹配（默认续跑未识别照片，`--all` 全量重跑、`--limit N` 限量；需先下载模型包） |
 
 ## 6. 数据与日志位置
 
