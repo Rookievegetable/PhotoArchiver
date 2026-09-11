@@ -185,9 +185,15 @@ Behavior notes:
 ### Loading a Plugin into the UI
 
 The production toolbar does not auto-load `examples/plugins/` — the plugin
-registry is an external extension point. To surface a plugin's actions in the
-main window, load it explicitly through the public chain (the same path the
-UI-loading tests drive):
+**Production loading (ADR-038)**: set the `PLUGINS_DIRECTORY` environment
+variable to a directory of plugin modules — at startup the main window runs
+the full chain (`load_from_path → enable_all → _add_plugin_actions`) and
+mounts one toolbar QAction per plugin action. Without the variable no plugins
+load. The bundled examples in `examples/plugins/` are demo code and are never
+auto-loaded.
+
+For tests and manual exploration the same chain is driveable directly (the
+UI-loading tests use this path):
 
 ```python
 window._plugin_registry.load_from_path(Path("examples/plugins"))
@@ -195,8 +201,9 @@ window._plugin_registry.enable_all()
 window._add_plugin_actions()   # one QAction per plugin action on the toolbar
 ```
 
-`load_from_path` accepts any plugin directory, so a deployment can point it at
-its own plugin folder.
+`load_from_path` accepts any plugin directory. A plugin module that fails to
+import or enable is logged and skipped — the host keeps running (ADR-026
+error isolation).
 
 Run the plugin loader unit tests:
 

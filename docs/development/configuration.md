@@ -44,6 +44,7 @@ copy .env.example .env
 | `OUTPUT_ROOT`   | 空                                 | 默认输出目录，可留空。                     |
 | `MAX_WORKERS`   | `4`                                | 后台任务最大 Worker 数量。                 |
 | `ARCHIVE_ROOT`  | 空                                 | 归档根目录（独立配置，ADR-022，Step 11 新增）。 |
+| `PLUGINS_DIRECTORY` | 空（不加载）                     | 插件目录——指向含 `.py` 插件模块的目录，启动自动加载并把动作挂载到工具栏（ADR-038，opt-in：插件为受信 Python 代码）。 |
 | `ARCHIVE_CONFLICT_STRATEGY` | `skip`                | 归档冲突策略：skip / overwrite / rename（ADR-022）。 |
 | `MATCH_THRESHOLD` | `0.40`                             | 人脸匹配置信度阈值，范围 `[0.0, 1.0]`（Step 10 新增）。低于此值的候选不视为匹配。 |
 

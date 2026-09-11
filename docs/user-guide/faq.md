@@ -48,4 +48,4 @@ macOS 是官方目标平台之一，持续集成已在三操作系统矩阵上�
 
 **Q：插件功能怎么用？可以自己写吗？**
 
-插件机制保留为外部扩展点：加载器支持从任意目录加载插件并渲染到工具栏，加载失败的插件会被自动跳过，不影响主程序。仓库自带的示例插件（`examples/plugins/`）默认**不**自动加载，可作为开发参考；开发自有插件请参阅 [`docs/development/plugin-guide.md`](../development/plugin-guide.md)。
+插件通过环境变量 `PLUGINS_DIRECTORY` 启用：把它指向你的插件目录（含一个或多个 `.py` 插件文件），启动时会自动加载、启用并把插件动作挂载到主工具栏；不配置则不加载任何插件。加载失败的插件会被自动跳过，不影响主程序。仓库自带的示例插件（`examples/plugins/`）默认**不**自动加载，可作为开发参考；开发自有插件请参阅 [`docs/development/plugin-guide.md`](../development/plugin-guide.md)。

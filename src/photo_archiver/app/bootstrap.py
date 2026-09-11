@@ -66,6 +66,7 @@ def cwd_dependent_path_warnings(settings: AppSettings) -> list[str]:
         ("照片根目录", settings.photo_root),
         ("归档根目录", settings.archive_root),
         ("日志目录", settings.log_directory),
+        ("插件目录", settings.plugins_directory),
     ):
         if value is not None and not value.is_absolute():
             warnings.append(

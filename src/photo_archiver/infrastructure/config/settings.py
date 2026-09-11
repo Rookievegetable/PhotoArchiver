@@ -73,6 +73,10 @@ class AppSettings(BaseSettings):
     photo_root: Path | None = Field(default=None)
     output_root: Path | None = Field(default=None)
     archive_root: Path | None = Field(default=None)
+    # ADR-038：插件目录——显式配置才加载（None = 不加载，与既有"示例插件
+    # 不自动加载"决策零破坏）。插件是 Python 代码，默认目录自动执行会引入
+    # 供应链风险，因此本字段是有意的 opt-in。
+    plugins_directory: Path | None = Field(default=None)
     archive_conflict_strategy: str = Field(default=DEFAULT_ARCHIVE_CONFLICT_STRATEGY)
     max_workers: int = Field(default=DEFAULT_MAX_WORKERS)
     match_threshold: float = Field(default=DEFAULT_MATCH_THRESHOLD)
@@ -96,7 +100,7 @@ class AppSettings(BaseSettings):
             raise ValueError("Path configuration values must not be empty")
         return Path(str(value))
 
-    @field_validator("photo_root", "output_root", "archive_root", mode="before")
+    @field_validator("photo_root", "output_root", "archive_root", "plugins_directory", mode="before")
     @classmethod
     def validate_optional_path(cls, value: object) -> Path | None:
         """Convert optional path values, treating blank values as unset."""

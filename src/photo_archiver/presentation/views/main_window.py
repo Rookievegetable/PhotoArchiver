@@ -255,17 +255,33 @@ class MainWindow(QMainWindow):
         self._plugin_actions: list[QAction] = []
 
     def _load_plugins(self) -> None:
-        """Construct the plugin registry (kept as an external extension point).
+        """Construct the plugin registry and load the configured plugin directory.
 
-        示例插件（``examples/plugins/``）不再自动加载进生产工具栏——它们是
-        开发者文档（plugin-guide / ADR-026 / ADR-028 的演示代码），不是产品
-        功能；自动加载曾使 Say Hello / Import People (Demo) / Stats Report
-        三个演示动作混入发布工具栏。插件机制本身完整保留：注册表 +
-        ``load_from_path`` + ``enable_all`` + ``_add_plugin_actions`` 构成
-        外部插件源的加载链（tests 驱动同一公开链路验证），未来接入真实
-        插件目录时在此挂载即可。
+        ADR-038（ISSUE-020 裁决①，恢复对外承诺）：设置 ``PLUGINS_DIRECTORY``
+        指向插件目录时，启动即 ``load_from_path → enable_all →
+        _add_plugin_actions``，插件动作挂载到主工具栏；未配置（默认）则保持
+        零加载——示例插件（``examples/plugins/``）仍不自动加载，它们是
+        plugin-guide / ADR-026 / ADR-028 的演示代码。加载/启用失败由
+        PluginRegistry 错误隔离兜底（坏插件跳过、宿主续运行，ADR-026），
+        本方法自身不抛异常。
         """
         self._plugin_registry = PluginRegistry(self._context.plugin_context)
+        plugins_directory = self._context.settings.plugins_directory
+        if plugins_directory is None:
+            logger.info("No PLUGINS_DIRECTORY configured — plugins not loaded")
+            return
+        self._plugin_registry.load_from_path(plugins_directory)
+        self._plugin_registry.enable_all()
+        self._add_plugin_actions()
+        enabled = len(self._plugin_registry.enabled_plugins)
+        errors = len(self._plugin_registry.errors)
+        logger.info(
+            "Plugins loaded from {}: {} enabled, {} error(s), {} toolbar action(s)",
+            plugins_directory,
+            enabled,
+            errors,
+            len(self._plugin_actions),
+        )
 
     def _add_plugin_actions(self) -> None:
         """Add one QAction per plugin action item to the main toolbar."""

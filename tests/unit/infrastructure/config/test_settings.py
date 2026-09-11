@@ -150,3 +150,26 @@ def test_ensure_runtime_directories_creates_expected_paths(
     # (P2-b): InsightFaceLoader / download_models.py own it.
     assert not (tmp_path / "models").exists()
     assert (tmp_path / "exports").is_dir()
+
+
+def test_plugins_directory_env_var_parses_to_path(isolated_env: None, monkeypatch) -> None:
+    """ADR-038: PLUGINS_DIRECTORY env var maps to the plugins_directory field."""
+    import pathlib
+
+    monkeypatch.setenv("PLUGINS_DIRECTORY", str(pathlib.Path("/opt") / "pa-plugins"))
+    settings = AppSettings()
+    assert settings.plugins_directory == pathlib.Path("/opt") / "pa-plugins"
+
+
+def test_plugins_directory_unset_defaults_to_none(isolated_env: None, monkeypatch) -> None:
+    """Default is None (no loading) — the opt-in contract keeps zero behavior change."""
+    monkeypatch.delenv("PLUGINS_DIRECTORY", raising=False)
+    settings = AppSettings()
+    assert settings.plugins_directory is None
+
+
+def test_plugins_directory_blank_value_is_unset(isolated_env: None, monkeypatch) -> None:
+    """Blank env values are treated as unset (same as other optional paths)."""
+    monkeypatch.setenv("PLUGINS_DIRECTORY", "   ")
+    settings = AppSettings()
+    assert settings.plugins_directory is None

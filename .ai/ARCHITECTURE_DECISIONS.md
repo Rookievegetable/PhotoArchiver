@@ -392,6 +392,17 @@
 
 ---
 
+### ADR-038 — 插件目录生产接线（ISSUE-020 裁决①：恢复对外承诺）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 2026-09-12 二选一裁决：① 接入可配置插件目录并调用 `_add_plugin_actions()`） |
+| 决策 | 新增设置 `PLUGINS_DIRECTORY`（`plugins_directory: Path \| None = None`，显式 opt-in）——配置后启动链 `load_from_path(directory) → enable_all() → _add_plugin_actions()` 自动执行，插件动作挂载主工具栏；未配置（默认）零加载，示例插件仍不自动加载（与既有决策零破坏）。加载/启用失败由 PluginRegistry 既有错误隔离兜底（坏插件记 error 跳过、宿主续运行，ADR-026）。 |
+| 理由 | 体检 N-1：插件机制完整但 `_add_plugin_actions()` 生产零调用，对外宣称与用户可见性名实不符。owner 裁决恢复承诺而非收回宣称。**opt-in 而非默认目录**：插件是启动即执行的 Python 代码，默认 CWD/锚定目录自动执行会引入供应链风险；显式配置 = 用户明确信任该目录（安全模型与浏览器扩展一致）。 |
+| 影响范围 | `infrastructure/config/settings.py`（新字段 + optional-path validator 组）、`app/bootstrap.py`（cwd 相对警告清单加插件目录）、`presentation/views/main_window.py`（`_load_plugins` 挂载全链 + 加载摘要日志）、`docs/`（configuration.md 环境变量表 / plugin-guide / FAQ / README）、`tests/`（settings 3 项 + 集成 4 项：标准加载/未配置/目录缺失/坏插件隔离）、`KNOWN_ISSUES.md`（ISSUE-020 同提交删除）。不变：Plugin 协议、PluginContext、错误隔离语义、示例插件不自动加载。 |
+
+---
+
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）
 
 > 权威审计方法论：`.ai/rules/audit-methodology.md`（迁移自废弃文档 `.ai/Consistency-Audit-2026-07-13.md` §8，2026-07-24 裁决2已物理删除该废弃文档）。本节仅列已裁决并执行的冲突处置。
