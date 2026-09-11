@@ -555,3 +555,160 @@ def test_main_migrate_refuses_non_empty_target(monkeypatch, capsys, tmp_path) ->
     captured = capsys.readouterr()
     assert "already exists and holds data" in captured.err
     assert legacy.exists()  # 任何分支都不动旧库
+
+
+class StubMatchServiceForCli:
+    """Capture recognize commands; optionally raise ModelPackMissing."""
+
+    def __init__(self, results, error=None, with_reporter=True) -> None:
+        import contextlib
+
+        self._results = results
+        self._error = error
+        self._with_reporter = with_reporter
+        self._reporter = None
+        self.commands: list = []
+        self._ctx = contextlib
+
+    def bind_progress_reporter(self, reporter):  # noqa: ANN001
+        self._reporter = reporter
+        return self._ctx.nullcontext()
+
+    def execute(self, command):  # noqa: ANN001
+        self.commands.append(command)
+        if self._error is not None:
+            raise self._error
+        if self._with_reporter and self._reporter is not None:
+            for index in range(1, len(command.photo_ids) + 1):
+                self._reporter.report(index, len(command.photo_ids), "Matched photo")
+        return self._results
+
+
+def _match_cli_context(monkeypatch, tmp_path, *, people=1, photos=3, already_matched=0):
+    """Build a CLI context with N people, M photos, K pre-matched photos."""
+    from datetime import datetime
+
+    from photo_archiver.domain import Folder, MatchStatus, Person, Photo, PhotoPath
+
+    people_rows = [Person(name=f"Person{i}") for i in range(people)]
+    folder = Folder(path=PhotoPath("photos"), total_photos=photos)
+    photo_rows = []
+    for index in range(photos):
+        photo_rows.append(
+            Photo(
+                path=PhotoPath(f"photos/p{index}.jpg"),
+                folder_id=folder.id,
+                original_name=f"p{index}.jpg",
+                captured_at=datetime(2024, 1, 1, 8, 0, 0),
+            )
+        )
+    matched = {photo_rows[i].id: "sentinel" for i in range(already_matched)}
+    repositories = SimpleNamespace(
+        people=SimpleNamespace(list_all=lambda: people_rows),
+        photos=SimpleNamespace(list_all=lambda: photo_rows),
+        recognition=SimpleNamespace(list_first_by_photo_ids=lambda ids: dict(matched)),
+    )
+    return repositories, photo_rows, MatchStatus
+
+
+def test_main_recognize_resumes_unmatched_photos_only(monkeypatch, capsys, tmp_path) -> None:
+    from photo_archiver.application.dtos import MatchResult
+    from photo_archiver.domain import FaceBox
+
+    repositories, photo_rows, _ = _match_cli_context(
+        monkeypatch, tmp_path, photos=3, already_matched=1
+    )
+    results = tuple(
+        MatchResult(photo_id=photo.id, box=FaceBox(x1=0, y1=0, x2=10, y2=10))
+        for photo in photo_rows[1:]
+    )
+    service = StubMatchServiceForCli(results)
+    context = SimpleNamespace(services=SimpleNamespace(match_persons=service), repositories=repositories)
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["recognize"])
+
+    assert exit_code == 0
+    command = service.commands[0]
+    unmatched = {photo_rows[1].id, photo_rows[2].id}
+    assert set(command.photo_ids) == unmatched
+    assert len(command.images) == 2
+    captured = capsys.readouterr()
+    assert "processed=2" in captured.out
+    assert "faces_found=2" in captured.out
+    assert "  [1/2]" in captured.out  # 进度行
+
+
+def test_main_recognize_all_flag_reruns_every_photo(monkeypatch, capsys, tmp_path) -> None:
+    from photo_archiver.application.dtos import MatchResult
+
+    repositories, photo_rows, _ = _match_cli_context(
+        monkeypatch, tmp_path, photos=3, already_matched=1
+    )
+    results = tuple(MatchResult(photo_id=photo.id, box=None) for photo in photo_rows)
+    service = StubMatchServiceForCli(results)
+    context = SimpleNamespace(services=SimpleNamespace(match_persons=service), repositories=repositories)
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["recognize", "--all"])
+
+    assert exit_code == 0
+    assert len(service.commands[0].photo_ids) == 3
+    captured = capsys.readouterr()
+    assert "no_face=3" in captured.out
+
+
+def test_main_recognize_limit_caps_batch(monkeypatch, tmp_path) -> None:
+    from photo_archiver.application.dtos import MatchResult
+
+    repositories, photo_rows, _ = _match_cli_context(monkeypatch, tmp_path, photos=3)
+    results = tuple(MatchResult(photo_id=photo.id, box=None) for photo in photo_rows)
+    service = StubMatchServiceForCli(results)
+    context = SimpleNamespace(services=SimpleNamespace(match_persons=service), repositories=repositories)
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["recognize", "--limit", "2"])
+
+    assert exit_code == 0
+    assert len(service.commands[0].photo_ids) == 2
+
+
+def test_main_recognize_refuses_without_people(monkeypatch, capsys, tmp_path) -> None:
+    repositories, _, _ = _match_cli_context(monkeypatch, tmp_path, people=0)
+    service = StubMatchServiceForCli(())
+    context = SimpleNamespace(services=SimpleNamespace(match_persons=service), repositories=repositories)
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["recognize"])
+
+    assert exit_code == 2
+    assert "no persons registered" in capsys.readouterr().err
+
+
+def test_main_recognize_reports_everything_matched(monkeypatch, capsys, tmp_path) -> None:
+    repositories, photo_rows, _ = _match_cli_context(
+        monkeypatch, tmp_path, photos=2, already_matched=2
+    )
+    service = StubMatchServiceForCli(())
+    context = SimpleNamespace(services=SimpleNamespace(match_persons=service), repositories=repositories)
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["recognize"])
+
+    assert exit_code == 0
+    assert service.commands == []
+    assert "already has a recognition result" in capsys.readouterr().out
+
+
+def test_main_recognize_surfaces_missing_model_pack(monkeypatch, capsys, tmp_path) -> None:
+    repositories, _, _ = _match_cli_context(monkeypatch, tmp_path, photos=2)
+    service = StubMatchServiceForCli((), error=main_module.ModelPackMissing("buffalo_l absent"))
+    context = SimpleNamespace(services=SimpleNamespace(match_persons=service), repositories=repositories)
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["recognize"])
+
+    assert exit_code == 2
+    captured = capsys.readouterr()
+    assert "model pack is missing" in captured.err
+    assert "download_models" in captured.err

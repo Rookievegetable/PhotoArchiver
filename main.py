@@ -19,6 +19,8 @@ from photo_archiver.application import (  # noqa: E402  # sys.path injection abo
     PruneMissingCommand,
     ScanAndRegisterPhotosCommand,
 )
+from photo_archiver.application.commands import MatchPersonsCommand  # noqa: E402
+from photo_archiver.app.services import ModelPackMissing  # noqa: E402
 from photo_archiver.application.dtos.export import ExportScope  # noqa: E402
 from photo_archiver.domain import MatchStatus, PhotoSearchCriteria  # noqa: E402
 from photo_archiver.infrastructure.exporters import (  # noqa: E402
@@ -167,6 +169,22 @@ def build_argument_parser() -> ArgumentParser:
         "--execute",
         action="store_true",
         help="really perform the copy (default: dry-run plan only)",
+    )
+
+    recognize_parser = subparsers.add_parser(
+        "recognize",
+        help="run face detection/recognition/matching on registered photos (requires the model pack)",
+    )
+    recognize_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="re-match every registered photo (default: only photos without any recognition result)",
+    )
+    recognize_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="cap the number of photos processed this run",
     )
 
     cleanup_parser = subparsers.add_parser(
@@ -586,6 +604,88 @@ def run_migrate_command(arguments: Namespace) -> int:
     return 0
 
 
+class _CliProgressReporter:
+    """Print first/last/every-10th progress events from the service cadence."""
+
+    def __init__(self, total: int) -> None:
+        self._total = total
+        self._last_reported = 0
+
+    def report(self, current: int, total: int, message: str) -> None:
+        if current - self._last_reported < 25 and current not in (1, total):
+            return
+        self._last_reported = current
+        sys.stdout.write(f"  [{current}/{total}] {message}\n")
+
+
+def run_recognize_command(arguments: Namespace) -> int:
+    """Run the face-recognition pipeline over registered photos (G-1, FEAT-15).
+
+    Mirrors the UI resume semantics: by default only photos without any
+    recognition result are submitted, so an interrupted run resumes the
+    remainder instead of duplicating results. ``--all`` re-matches everything;
+    ``--limit`` caps the batch.
+    """
+    context = _bootstrap_for_cli()
+    if context is None:
+        return 2
+    repositories = context.repositories
+    if not repositories.people.list_all():
+        sys.stderr.write(
+            "Error: no persons registered — import people first (import-people).\n"
+        )
+        return 2
+    photos = repositories.photos.list_all()
+    if not photos:
+        sys.stderr.write(
+            "Error: no photos registered — scan a folder first (scan).\n"
+        )
+        return 2
+    photo_ids = tuple(photo.id for photo in photos if photo.id is not None)
+    if arguments.all:
+        pending = photo_ids
+    else:
+        already_matched = repositories.recognition.list_first_by_photo_ids(photo_ids)
+        pending = tuple(pid for pid in photo_ids if pid not in already_matched)
+    if not pending:
+        sys.stdout.write(
+            "Recognize: every registered photo already has a recognition result "
+            "(use --all to re-match).\n"
+        )
+        return 0
+    if arguments.limit is not None:
+        if arguments.limit < 0:
+            sys.stderr.write("Error: --limit must be >= 0.\n")
+            return 2
+        pending = pending[: arguments.limit]
+    pending_set = set(pending)
+    command = MatchPersonsCommand(
+        photo_ids=pending,
+        images=tuple(photo.path.raw_path for photo in photos if photo.id in pending_set),
+    )
+    try:
+        with context.services.match_persons.bind_progress_reporter(
+            _CliProgressReporter(total=len(pending))
+        ):
+            results = context.services.match_persons.execute(command)
+    except ModelPackMissing as error:
+        sys.stderr.write(
+            f"Error: face recognition model pack is missing or incomplete: {error}\n"
+            "Run scripts/download_models.py first "
+            "(see docs/user-guide/installation.md).\n"
+        )
+        return 2
+    faces = sum(1 for result in results if result.box is not None)
+    sys.stdout.write(
+        "Recognize complete: "
+        f"processed={len(results)}, "
+        f"faces_found={faces}, "
+        f"no_face={len(results) - faces}\n"
+        "Review the results in the app (审核) or export them (export).\n"
+    )
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run the PhotoArchiver desktop application.
 
@@ -612,6 +712,8 @@ def main(arguments: list[str] | None = None) -> int:
         return run_cleanup_thumbnails_command(parsed_arguments)
     if parsed_arguments.command == "migrate":
         return run_migrate_command(parsed_arguments)
+    if parsed_arguments.command == "recognize":
+        return run_recognize_command(parsed_arguments)
 
     try:
         context = bootstrap_application()
