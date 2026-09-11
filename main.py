@@ -26,7 +26,12 @@ from photo_archiver.infrastructure.exporters import (  # noqa: E402
     ExcelExporter,
     HtmlExporter,
 )
-from photo_archiver.infrastructure.database.backup import backup_database  # noqa: E402
+from photo_archiver.infrastructure.config import AppSettings  # noqa: E402
+from photo_archiver.infrastructure.config.settings import (  # noqa: E402
+    default_database_path,
+    default_database_url,
+)
+from photo_archiver.infrastructure.database.backup import backup_database, copy_database  # noqa: E402
 from photo_archiver.infrastructure.database.integrity import (  # noqa: E402
     BACKUP_DIRECTORY_NAME,
     CorruptedDatabaseError,
@@ -152,6 +157,16 @@ def build_argument_parser() -> ArgumentParser:
     import_parser.add_argument(
         "--sheet-name",
         help="Excel sheet name for xlsx/xlsm sources (default: first sheet)",
+    )
+
+    migrate_parser = subparsers.add_parser(
+        "migrate",
+        help="copy a legacy CWD database (data/photo_archiver.db) into the anchored user-data location",
+    )
+    migrate_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="really perform the copy (default: dry-run plan only)",
     )
 
     cleanup_parser = subparsers.add_parser(
@@ -468,6 +483,109 @@ def run_cleanup_thumbnails_command(arguments: Namespace) -> int:
     return 0
 
 
+_LEGACY_CWD_DATABASE = Path("data") / "photo_archiver.db"
+_MIGRATION_EMPTY_DB_TABLES = ("photos", "people", "folders")
+
+
+def _is_empty_archiver_database(path: Path) -> bool:
+    """Return whether the database exists but holds no user data (ADR-039).
+
+    A fresh bootstrap creates the anchored database with the full schema and
+    zero rows; such a file is safe to take over during migration (the startup
+    backup in ``backups/`` already snapshots it). Unreadable/foreign files are
+    conservatively treated as non-empty.
+    """
+    import sqlite3
+
+    try:
+        connection = sqlite3.connect(path)
+        try:
+            for table in _MIGRATION_EMPTY_DB_TABLES:
+                count = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                if count:
+                    return False
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        return False
+    return True
+
+
+def _resolve_migration_paths(settings) -> tuple[Path, Path] | None:
+    """Return (legacy source, anchored target) for the migrate command.
+
+    ``None`` when migration does not apply: the effective DATABASE_URL is an
+    explicit user configuration (migrate only serves the anchored-default
+    takeover), or the legacy CWD database does not exist.
+    """
+    if settings.database_url != default_database_url():
+        return None
+    legacy = _LEGACY_CWD_DATABASE
+    if not legacy.exists():
+        return None
+    return legacy, default_database_path()
+
+
+def run_migrate_command(arguments: Namespace) -> int:
+    """Copy the legacy CWD database into the anchored location (ADR-039).
+
+    Copy, never move (D3): the legacy file is left untouched. Dry-run by
+    default; ``--execute`` performs the copy. A bootstrap-created empty
+    anchored database is taken over (its startup backup already snapshots
+    it); a non-empty target is refused.
+    """
+    settings = AppSettings()
+    resolved = _resolve_migration_paths(settings)
+    if resolved is None:
+        if settings.database_url != default_database_url():
+            sys.stderr.write(
+                "Migrate only applies when DATABASE_URL is at its anchored default "
+                f"({default_database_url()}); the effective value is an explicit "
+                "configuration — nothing to migrate.\n"
+            )
+        else:
+            sys.stderr.write(
+                f"No legacy database found at {_LEGACY_CWD_DATABASE} — nothing to migrate.\n"
+            )
+        return 2
+    source, target = resolved
+    target_exists = target.exists()
+    target_state = "absent"
+    if target_exists:
+        target_state = "empty (safe to take over)" if _is_empty_archiver_database(target) else "non-empty"
+    sys.stdout.write(
+        "Migration plan (dry-run):\n"
+        f"  source: {source.resolve()}\n"
+        f"  target: {target}\n"
+        f"  target state: {target_state}\n"
+        "  method: VACUUM INTO consistent snapshot; the legacy file is NOT moved.\n"
+    )
+    if not arguments.execute:
+        sys.stdout.write(
+            "Dry-run: nothing copied. Re-run with --execute to perform the migration.\n"
+        )
+        return 0
+    if target_exists and target_state != "empty (safe to take over)":
+        sys.stderr.write(
+            f"Error: migration target already exists and holds data: {target}\n"
+            "Move it aside manually (or point DATABASE_URL at the legacy file) and re-run.\n"
+        )
+        return 2
+    try:
+        if target_exists:
+            target.unlink()  # 空库接管：bootstrap 的启动备份已留有快照
+        copy_database(source, target)
+    except (OSError, RuntimeError) as error:
+        sys.stderr.write(f"Error: migration failed: {error}\n")
+        return 1
+    sys.stdout.write(
+        f"Migration complete: {target}\n"
+        f"The legacy database at {source.resolve()} was left in place; "
+        "archive or delete it manually once the app verifies the data.\n"
+    )
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run the PhotoArchiver desktop application.
 
@@ -492,6 +610,8 @@ def main(arguments: list[str] | None = None) -> int:
         return run_export_command(parsed_arguments)
     if parsed_arguments.command == "cleanup-thumbnails":
         return run_cleanup_thumbnails_command(parsed_arguments)
+    if parsed_arguments.command == "migrate":
+        return run_migrate_command(parsed_arguments)
 
     try:
         context = bootstrap_application()

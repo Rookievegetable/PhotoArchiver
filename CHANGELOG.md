@@ -61,6 +61,20 @@ including the same startup-backup safety net.
 - The settings language dropdown is annotated as Out-of-Scope instead of
   silently doing nothing.
 
+## [Unreleased]
+
+### Added
+
+- **"未匹配" filter**（未匹配筛选）: the status filter now offers an
+  `未匹配` option backed by the ADR-036 D6 sentinel — the photo wall shows
+  only photos that have no recognition results yet (real SQL LEFT JOIN …
+  IS NULL push-down).
+- **`migrate` CLI**: copies a legacy CWD database (`data/photo_archiver.db`)
+  into the anchored user-data location via a `VACUUM INTO` consistent
+  snapshot — dry-run by default, copy-not-move, and it safely takes over a
+  bootstrap-created empty target. The startup migration hint now points at
+  it.
+
 ## [2.4.0] - 2026-09-08
 
 Library management (Phase E, ADR-034): the photo library is no longer

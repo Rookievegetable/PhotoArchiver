@@ -117,4 +117,5 @@ python main.py prune-missing --execute    # 确认后移除这些登记
 | 导入人员 | `python main.py import-people <文件> [--no-header] [--sheet-name ...]` |
 | 导出数据 | `python main.py export <输出> [--format xlsx/csv/html] [--scope filtered --status ... --person ...]` |
 | 缩略图缓存清理 | `python main.py cleanup-thumbnails [--execute]`（默认 dry-run） |
+| 旧库迁移 | `python main.py migrate [--execute]`（默认 dry-run；复制不搬移） |
 | 捕捉时刻纠错 | `python main.py backfill-capture-time [--execute]` |

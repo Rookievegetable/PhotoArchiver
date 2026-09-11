@@ -418,3 +418,140 @@ def test_main_cleanup_thumbnails_execute_removes(monkeypatch, capsys) -> None:
     captured = capsys.readouterr()
     assert "removed=3" in captured.out
     assert "Dry-run" not in captured.out
+
+
+def _make_sqlite_db(path, with_row: bool = False) -> None:
+    """Create a minimal PhotoArchiver-shaped database (photos/people/folders)."""
+    import sqlite3
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(path)
+    try:
+        for table in ("photos", "people", "folders"):
+            connection.execute(f"CREATE TABLE {table} (id TEXT PRIMARY KEY)")
+        if with_row:
+            connection.execute("INSERT INTO people (id) VALUES ('legacy-person')")
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _patch_migrate_env(monkeypatch, tmp_path) -> None:
+    """Pin the anchored-default paths and settings inside the migrate runner."""
+    anchored_dir = tmp_path / "anchored"
+    monkeypatch.setattr(
+        main_module, "default_database_url",
+        lambda: f"sqlite:///{anchored_dir / 'photo_archiver.db'}",
+    )
+    monkeypatch.setattr(
+        main_module, "default_database_path",
+        lambda: anchored_dir / "photo_archiver.db",
+    )
+    monkeypatch.setattr(
+        main_module, "AppSettings",
+        lambda: SimpleNamespace(
+            database_url=f"sqlite:///{anchored_dir / 'photo_archiver.db'}"
+        ),
+    )
+
+
+def test_main_migrate_refuses_when_database_url_is_explicit(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    """migrate only serves the anchored-default takeover scenario."""
+    monkeypatch.setattr(
+        main_module, "default_database_url", lambda: "sqlite:///anchored.db"
+    )
+    monkeypatch.setattr(
+        main_module, "AppSettings",
+        lambda: SimpleNamespace(database_url="sqlite:///explicit.db"),
+    )
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main_module.main(["migrate"])
+
+    assert exit_code == 2
+    captured = capsys.readouterr()
+    assert "explicit" in captured.err
+
+
+def test_main_migrate_reports_missing_legacy_database(monkeypatch, capsys, tmp_path) -> None:
+    _patch_migrate_env(monkeypatch, tmp_path)
+    monkeypatch.chdir(tmp_path)  # no data/photo_archiver.db here
+
+    exit_code = main_module.main(["migrate"])
+
+    assert exit_code == 2
+    captured = capsys.readouterr()
+    assert "No legacy database found" in captured.err
+
+
+def test_main_migrate_dry_run_plans_without_copying(monkeypatch, capsys, tmp_path) -> None:
+    _patch_migrate_env(monkeypatch, tmp_path)
+    legacy = tmp_path / "data" / "photo_archiver.db"
+    _make_sqlite_db(legacy, with_row=True)
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main_module.main(["migrate"])
+
+    assert exit_code == 0
+    assert not (tmp_path / "anchored" / "photo_archiver.db").exists()
+    captured = capsys.readouterr()
+    assert "Migration plan (dry-run)" in captured.out
+    assert "nothing copied" in captured.out
+
+
+def test_main_migrate_execute_copies_and_leaves_legacy_in_place(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    import sqlite3
+
+    _patch_migrate_env(monkeypatch, tmp_path)
+    legacy = tmp_path / "data" / "photo_archiver.db"
+    _make_sqlite_db(legacy, with_row=True)
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = main_module.main(["migrate", "--execute"])
+
+    assert exit_code == 0
+    target = tmp_path / "anchored" / "photo_archiver.db"
+    assert target.exists()
+    connection = sqlite3.connect(target)
+    try:
+        rows = connection.execute("SELECT COUNT(*) FROM people").fetchone()[0]
+    finally:
+        connection.close()
+    assert rows == 1  # 数据随快照迁移
+    assert legacy.exists()  # copy-not-move：原库原地保留
+
+
+def test_main_migrate_execute_takes_over_empty_anchored_target(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    """bootstrap 已创建的空锚定库可被安全接管（启动备份已留快照）。"""
+    _patch_migrate_env(monkeypatch, tmp_path)
+    legacy = tmp_path / "data" / "photo_archiver.db"
+    _make_sqlite_db(legacy, with_row=True)
+    monkeypatch.chdir(tmp_path)
+    _make_sqlite_db(tmp_path / "anchored" / "photo_archiver.db", with_row=False)
+
+    exit_code = main_module.main(["migrate", "--execute"])
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "Migration complete" in captured.out
+
+
+def test_main_migrate_refuses_non_empty_target(monkeypatch, capsys, tmp_path) -> None:
+    _patch_migrate_env(monkeypatch, tmp_path)
+    legacy = tmp_path / "data" / "photo_archiver.db"
+    _make_sqlite_db(legacy, with_row=True)
+    monkeypatch.chdir(tmp_path)
+    _make_sqlite_db(tmp_path / "anchored" / "photo_archiver.db", with_row=True)
+
+    exit_code = main_module.main(["migrate", "--execute"])
+
+    assert exit_code == 2
+    captured = capsys.readouterr()
+    assert "already exists and holds data" in captured.err
+    assert legacy.exists()  # 任何分支都不动旧库

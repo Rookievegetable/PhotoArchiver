@@ -403,6 +403,17 @@
 
 ---
 
+### ADR-039 — 旧 CWD 库迁移子命令 `migrate`（落地 ADR-035"后续"项）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 2026-09-12 指示继续候选清单；承接 ADR-035 后续注记与 Phase F 计划 D3"不自动搬移"原则） |
+| 决策 | 新增 CLI 子命令 `migrate`：将旧版启动目录下的数据库（CWD `data/photo_archiver.db`）经 `VACUUM INTO` 一致性快照**复制**到锚定默认库路径。dry-run 默认（只打印计划），`--execute` 才复制；**复制不搬移**——旧库原地保留。仅适用于"DATABASE_URL 未显式配置（锚定默认接管）"场景；bootstrap 已创建的空锚定库（六业务表零行，启动备份已留快照）可被安全接管，非空目标拒绝并指引手动处置。 |
+| 理由 | ADR-035 路径锚定落地后，旧版用户的库仍在 CWD，bootstrap 只打印迁移指引无可执行动作——`migrate` 补齐该闭环。VACUUM INTO 复制对 WAL 库事务一致；空库接管安全（bootstrap 每次启动已对锚定库做 VACUUM INTO 备份）。 |
+| 影响范围 | `infrastructure/database/backup.py`（`copy_database` 原语，拒绝覆盖既有目标）、`infrastructure/config/settings.py`（`default_database_path()` 助手）、`main.py`（migrate 子命令 + 空库判定）、`app/bootstrap.py`（迁移提示文本补 migrate 指引）、user-guide 两表、tests（CLI 壳 6 项）。不变：bootstrap 启动链、显式 DATABASE_URL 语义、旧库文件零触碰。 |
+
+---
+
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）
 
 > 权威审计方法论：`.ai/rules/audit-methodology.md`（迁移自废弃文档 `.ai/Consistency-Audit-2026-07-13.md` §8，2026-07-24 裁决2已物理删除该废弃文档）。本节仅列已裁决并执行的冲突处置。

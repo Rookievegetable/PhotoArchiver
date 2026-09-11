@@ -30,7 +30,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from photo_archiver.domain import MatchStatus, Person, PhotoSearchCriteria
+from photo_archiver.domain import (
+    MatchStatus,
+    Person,
+    PhotoSearchCriteria,
+    UNMATCHED,
+)
 from photo_archiver.presentation.person_matcher import rank_person_names
 from photo_archiver.presentation.ui_text import (
     FILTER_ALL_PERSONS,
@@ -45,6 +50,7 @@ from photo_archiver.presentation.ui_text import (
     FILTER_STATUS_PENDING,
     FILTER_STATUS_PLACEHOLDER_TOOLTIP,
     FILTER_STATUS_REJECTED,
+    FILTER_STATUS_UNMATCHED,
     FILTER_TO_CHECK,
     FILTER_TO_TOOLTIP,
 )
@@ -119,6 +125,8 @@ class FilterBar(QWidget):
         self._status_combo.addItem(FILTER_STATUS_PENDING, "pending")
         self._status_combo.addItem(FILTER_STATUS_APPROVED, "approved")
         self._status_combo.addItem(FILTER_STATUS_REJECTED, "rejected")
+        # ADR-036 D6：哨兵项——反向选择"完全没有识别结果"的照片。
+        self._status_combo.addItem(FILTER_STATUS_UNMATCHED, "unmatched")
         self._status_combo.setCurrentIndex(-1)
         layout.addWidget(self._status_combo)
 
@@ -264,7 +272,8 @@ class FilterBar(QWidget):
             return
         match_status = None
         if status_value is not None:
-            match_status = MatchStatus(status_value)
+            # "unmatched" 是哨兵（完全无识别结果），不是 MatchStatus 枚举值。
+            match_status = UNMATCHED if status_value == "unmatched" else MatchStatus(status_value)
         criteria = PhotoSearchCriteria(
             person_id=person_id,
             match_status=match_status,

@@ -97,7 +97,9 @@ def legacy_database_migration_hints(settings: AppSettings) -> list[str]:
     return [
         f"检测到旧版启动目录下的数据库：{legacy}。"
         f"自 v2.4.0 起默认数据库已锚定到用户数据目录：{anchored}。"
-        "如需沿用旧数据，请关闭程序后将上述旧库文件移动到锚定位置，"
+        "如需沿用旧数据，请关闭程序后运行 `python main.py migrate` 一键迁移"
+        "（一致性快照复制，旧库原地保留），"
+        "或将上述旧库文件移动到锚定位置，"
         "或在 .env 中将 DATABASE_URL 配置为指向旧库的绝对路径。"
     ]
 

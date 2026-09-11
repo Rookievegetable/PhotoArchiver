@@ -23,6 +23,11 @@ APP_DATA_DIR = Path(user_data_dir("PhotoArchiver", appauthor=False))
 APP_LOG_DIR = Path(user_log_dir("PhotoArchiver", appauthor=False))
 
 
+def default_database_path() -> Path:
+    """Return the anchored default database file path (ADR-035/039)."""
+    return Path(APP_DATA_DIR) / "photo_archiver.db"
+
+
 def default_database_url() -> str:
     """Return the anchored default database URL (user data dir, not the CWD)."""
     # Path() 防御：锚点常量可能被测试注入 str（stringly-typed monkeypatch）。

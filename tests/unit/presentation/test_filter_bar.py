@@ -309,3 +309,54 @@ def test_clear_resets_person_axis_too(qtbot) -> None:
     assert recorder.last is None
     assert bar._person_combo.currentIndex() == -1
     assert bar._status_combo.currentIndex() == -1
+
+
+def test_unmatched_option_emits_sentinel_criteria(qtbot) -> None:
+    """ADR-036 D6：状态轴"未匹配"项发 UNMATCHED 哨兵（非 MatchStatus 枚举）。"""
+    from photo_archiver.domain import UNMATCHED
+
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+
+    index = bar._status_combo.findData("unmatched")
+    assert index >= 0, "未匹配项必须在状态下拉中"
+    bar._status_combo.setCurrentIndex(index)
+
+    assert recorder.last is not None
+    assert recorder.last.match_status == UNMATCHED
+    assert not isinstance(recorder.last.match_status, MatchStatus)
+
+
+def test_unmatched_combines_with_person_axis(qtbot) -> None:
+    """哨兵与人员轴 AND 组合（语义上恒空，但组合本身合法透传）。"""
+    from uuid import uuid4
+
+    from photo_archiver.domain import UNMATCHED
+
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+
+    person_id = uuid4()
+    bar.set_persons([])
+    bar._person_combo.addItem("Alice", str(person_id))
+    bar._person_combo.setCurrentIndex(0)
+    index = bar._status_combo.findData("unmatched")
+    bar._status_combo.setCurrentIndex(index)
+
+    assert recorder.last is not None
+    assert recorder.last.person_id == person_id
+    assert recorder.last.match_status == UNMATCHED
+
+
+def test_clear_resets_unmatched_back_to_unset(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+
+    index = bar._status_combo.findData("unmatched")
+    bar._status_combo.setCurrentIndex(index)
+    assert recorder.last is not None
+    bar.clear()
+    assert recorder.last is None
