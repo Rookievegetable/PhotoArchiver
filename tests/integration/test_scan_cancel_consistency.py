@@ -67,12 +67,6 @@ def _scan_to_completion(window: MainWindow, photo_dir: Path, qtbot) -> None:
     )
 
 
-@pytest.mark.skipif(
-    sys.platform == "darwin",
-    reason="LIMIT-006: macOS runner native segfault (signal 11) in the scan worker "
-    "(pathlib.is_file/stat) during real-executor stress scans with qtbot.waitUntil; "
-    "win/linux unaffected — see KNOWN_ISSUES",
-)
 def test_cancel_request_leaves_consistent_store_and_rescan_completes(
     qtbot, tmp_path: Path
 ) -> None:
@@ -122,12 +116,6 @@ def test_cancel_request_leaves_consistent_store_and_rescan_completes(
     assert subset_paths <= _registered_paths(window)
 
 
-@pytest.mark.skipif(
-    sys.platform == "darwin",
-    reason="LIMIT-006: macOS runner native segfault (signal 11) in the scan worker "
-    "(pathlib.is_file/stat) during real-executor stress scans with qtbot.waitUntil; "
-    "win/linux unaffected — see KNOWN_ISSUES",
-)
 def test_rescan_grows_superset_idempotently(qtbot, tmp_path: Path) -> None:
     """部分文件扫描 → 追加文件 → 重扫：增量补齐、原有照片原样保留、无重复。"""
     window = _make_window(qtbot, tmp_path)

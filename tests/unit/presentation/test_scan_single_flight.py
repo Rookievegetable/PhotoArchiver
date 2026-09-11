@@ -134,11 +134,6 @@ def test_terminal_from_stale_runnable_does_not_release_new_guard() -> None:
     assert controller.is_running  # stale terminal must not clear the fresh guard
 
 
-@pytest.mark.skipif(
-    sys.platform == "darwin",
-    reason="LIMIT-006: macOS runner native segfault (exit 139) in the scan worker "
-    "during real-executor 2000-file stress; win/linux unaffected — see KNOWN_ISSUES",
-)
 def test_real_executor_refuses_second_scan_mid_flight_and_recovers(qtbot, tmp_path: Path) -> None:
     """Real QThreadPool + real SQLite: refusal mid-flight, recovery after."""
     folder = tmp_path / "photos"
