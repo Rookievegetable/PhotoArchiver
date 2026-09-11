@@ -78,6 +78,25 @@ jobs:
       - name: Pytest
         run: pytest -v --tb=short
 
+      # Phase F F-3（LIMIT-006 D-1）：macOS runner 原生段错误时自动收集 .ips
+      # crash report 为 artifact——下次（若有）崩溃即可从原生栈定位落点
+      # （libsystem_kernel / Qt GC / Python C-API），把"追查"从被动变主动。
+      # 仅在 Pytest 步骤失败时执行；upload 对空目录宽容（if-no-files-found: ignore）。
+      - name: Collect macOS crash reports
+        if: runner.os == 'macOS' && failure()
+        shell: bash
+        run: |
+          mkdir -p crash-reports
+          cp -R "$HOME/Library/Logs/DiagnosticReports/" crash-reports/ 2>/dev/null || echo "no .ips crash reports found"
+          ls -la crash-reports/
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS' && failure()
+        with:
+          name: crash-reports-macos
+          path: crash-reports/
+          if-no-files-found: ignore
+
       # R-4 遗漏修复：ISSUE-008 关闭判据要求 8 条 AI 集成测试 passed 非 skipped。
       # 全量 pytest exit 0 不保证这一点（模型若中途失效 pytest 仍绿）——
       # 此步断言 tests/integration/face_detection/ 两文件无 skipped 行。
