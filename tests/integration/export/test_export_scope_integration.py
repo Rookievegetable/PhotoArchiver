@@ -67,7 +67,6 @@ pytest.importorskip("PySide6")
 from csv import reader as csv_reader
 from pathlib import Path
 
-from photo_archiver.app import bootstrap_application
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.domain import (
     ArchiveStatus,
@@ -80,7 +79,6 @@ from photo_archiver.domain import (
     RecognitionResult,
 )
 from photo_archiver.domain.entities.archive import ArchiveRecord
-from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.infrastructure.exporters import CsvExporter, ExcelExporter
 from photo_archiver.presentation.views import main_window as main_window_module
 from photo_archiver.presentation.views.main_window import MainWindow
@@ -166,11 +164,9 @@ def _seed_scope_database(repositories) -> dict:
     }
 
 
-def _make_context(tmp_path: Path):
+def _make_context(make_sqlite_context):
     """Bootstrap a real application context over a real tmp SQLite database."""
-    settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'scope_export.db'}")
-    settings.ensure_runtime_directories()
-    context = bootstrap_application(settings)
+    context = make_sqlite_context("scope_export.db")
     seeded = _seed_scope_database(context.repositories)
     return context, seeded
 
@@ -281,7 +277,7 @@ class TestFilteredCsv:
     """FILTERED scope through the real MainWindow → controller → task chain."""
 
     def test_filtered_csv_ui_chain_exports_only_criteria_matched_data(
-        self, qtbot, tmp_path, monkeypatch,
+        self, qtbot, make_sqlite_context, tmp_path, monkeypatch,
     ) -> None:
         """FILTERED + held criteria exports exactly the criteria main set.
 
@@ -289,9 +285,7 @@ class TestFilteredCsv:
         point → dialog ``active_criteria`` → controller → task → service →
         ``PhotoRepository.search`` (real SQL) → derived sections → real CSV.
         """
-        settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'filtered_csv.db'}")
-        settings.ensure_runtime_directories()
-        context = bootstrap_application(settings)
+        context = make_sqlite_context("filtered_csv.db")
         seeded = _seed_scope_database(context.repositories)
         window = MainWindow(context)
         qtbot.addWidget(window)
@@ -366,7 +360,7 @@ class TestFilteredXlsx:
     """FILTERED scope through the real headless task chain (no Qt boundary)."""
 
     def test_filtered_xlsx_real_task_chain_produces_openable_workbook(
-        self, tmp_path,
+        self, make_sqlite_context, tmp_path,
     ) -> None:
         """ExportTask.execute → ExportService → real SQLite → ExcelExporter → file.
 
@@ -375,7 +369,7 @@ class TestFilteredXlsx:
         """
         from openpyxl import load_workbook
 
-        context, seeded = _make_context(tmp_path)
+        context, seeded = _make_context(make_sqlite_context)
         output_path = tmp_path / "filtered.xlsx"
         task = ExportTask(
             service=context.services.export,
@@ -451,10 +445,10 @@ class TestCurrentBatchRejection:
     """CURRENT_BATCH is deferred (contract §2/D4): honest rejection everywhere."""
 
     def test_current_batch_rejected_by_real_task_with_contract_message(
-        self, tmp_path,
+        self, make_sqlite_context, tmp_path,
     ) -> None:
         """Real ExportTask → ExportService raises the §2/D4 contract ValueError."""
-        context, _ = _make_context(tmp_path)
+        context, _ = _make_context(make_sqlite_context)
         output_path = tmp_path / "current_batch.csv"
         task = ExportTask(
             service=context.services.export,
@@ -474,7 +468,7 @@ class TestCurrentBatchRejection:
         assert not output_path.exists()
 
     def test_current_batch_rejected_through_real_ui_chain(
-        self, qtbot, tmp_path, monkeypatch,
+        self, qtbot, make_sqlite_context, tmp_path, monkeypatch,
     ) -> None:
         """UI-bypassed CURRENT_BATCH: real chain fails honestly, no fallback file.
 
@@ -482,9 +476,7 @@ class TestCurrentBatchRejection:
         double bypasses it to prove the deeper Task → Service guard is
         reachable and produces no export file and no silent ALL/FILTERED run.
         """
-        settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'current_batch.db'}")
-        settings.ensure_runtime_directories()
-        context = bootstrap_application(settings)
+        context = make_sqlite_context("current_batch.db")
         _seed_scope_database(context.repositories)
         window = MainWindow(context)
         qtbot.addWidget(window)
@@ -521,10 +513,10 @@ class TestFilteredWithoutCriteriaRejection:
     """FILTERED without a criteria snapshot is rejected (contract §3/F3/F6)."""
 
     def test_filtered_without_criteria_rejected_by_real_task(
-        self, tmp_path,
+        self, make_sqlite_context, tmp_path,
     ) -> None:
         """Real ExportTask(scope=FILTERED, criteria=None) raises the §3 ValueError."""
-        context, _ = _make_context(tmp_path)
+        context, _ = _make_context(make_sqlite_context)
         output_path = tmp_path / "filtered_none.csv"
         task = ExportTask(
             service=context.services.export,
@@ -543,7 +535,7 @@ class TestFilteredWithoutCriteriaRejection:
         assert not output_path.exists()
 
     def test_filtered_without_criteria_rejected_through_real_ui_chain(
-        self, qtbot, tmp_path, monkeypatch,
+        self, qtbot, make_sqlite_context, tmp_path, monkeypatch,
     ) -> None:
         """UI chain with no held filter: controller forwards None → honest failure.
 
@@ -552,9 +544,7 @@ class TestFilteredWithoutCriteriaRejection:
         ``criteria=None`` per F5, and the Service's second invariant layer
         rejects — proving the guard is a real application-chain invariant.
         """
-        settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'filtered_none.db'}")
-        settings.ensure_runtime_directories()
-        context = bootstrap_application(settings)
+        context = make_sqlite_context("filtered_none.db")
         _seed_scope_database(context.repositories)
         window = MainWindow(context)
         qtbot.addWidget(window)
@@ -589,14 +579,14 @@ class TestFilteredWithoutCriteriaRejection:
 class TestAllScopeRegression:
     """ALL scope on real SQLite keeps the exact pre-FEATURE-004 behavior."""
 
-    def test_all_scope_regression_on_real_sqlite_unchanged(self, tmp_path) -> None:
+    def test_all_scope_regression_on_real_sqlite_unchanged(self, make_sqlite_context, tmp_path) -> None:
         """Real Task → Service → SQLite → CsvExporter → file, ALL semantics.
 
         Same seeded database as the FILTERED tests: ALL must still gather the
         full catalog with approved-only matches (pending excluded) — proving
         Commits 2/3 changed nothing about the ALL path (contract §6/AC-1).
         """
-        context, seeded = _make_context(tmp_path)
+        context, seeded = _make_context(make_sqlite_context)
         output_path = tmp_path / "all.csv"
         task = ExportTask(
             service=context.services.export,

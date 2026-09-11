@@ -25,7 +25,6 @@ photo set is asserted per combination.
 from datetime import datetime
 from pathlib import Path
 
-from photo_archiver.app import bootstrap_application
 from photo_archiver.application.services import SearchPhotosService
 from photo_archiver.domain import (
     ArchiveStatus,
@@ -38,7 +37,6 @@ from photo_archiver.domain import (
     RecognitionResult,
     UNMATCHED,
 )
-from photo_archiver.infrastructure.config import AppSettings
 
 _FROM_2023 = datetime(2023, 1, 1, 0, 0, 0)
 _TO_2023 = datetime(2023, 12, 31, 23, 59, 59)
@@ -46,11 +44,9 @@ _FROM_2024 = datetime(2024, 1, 1, 0, 0, 0)
 _TO_2024 = datetime(2024, 12, 31, 23, 59, 59)
 
 
-def _seed(tmp_path: Path):
-    """Seed the real SQLite database; return (service, ids) for the matrix."""
-    settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'filter_matrix.db'}")
-    settings.ensure_runtime_directories()
-    context = bootstrap_application(settings)
+def _seed(make_sqlite_context, tmp_path: Path):
+    """Seed the real SQLite database; return (context, ids) for the matrix."""
+    context = make_sqlite_context("filter_matrix.db")
     repositories = context.repositories
 
     folder = Folder(path=PhotoPath("photos"), total_photos=3)
@@ -126,8 +122,8 @@ def _paths(result, ids) -> set:
     return {photo.original_name for photo in result}
 
 
-def test_empty_criteria_and_list_all_return_everything(tmp_path) -> None:
-    context, ids = _seed(tmp_path)
+def test_empty_criteria_and_list_all_return_everything(make_sqlite_context, tmp_path) -> None:
+    context, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     all_names = {"alice_portrait.jpg", "bob_candid.jpg", "alice_party.jpg"}
     # All-None criteria object: matches everything per the search contract.
@@ -135,8 +131,8 @@ def test_empty_criteria_and_list_all_return_everything(tmp_path) -> None:
     assert _paths(context.repositories.photos.list_all(), ids) == all_names
 
 
-def test_status_axis_single_combinations(tmp_path) -> None:
-    _, ids = _seed(tmp_path)
+def test_status_axis_single_combinations(make_sqlite_context, tmp_path) -> None:
+    _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     assert _paths(
         service.execute(PhotoSearchCriteria(match_status=MatchStatus.PENDING)), ids
@@ -149,8 +145,8 @@ def test_status_axis_single_combinations(tmp_path) -> None:
     ) == {"alice_party.jpg"}
 
 
-def test_person_axis_single_combination(tmp_path) -> None:
-    _, ids = _seed(tmp_path)
+def test_person_axis_single_combination(make_sqlite_context, tmp_path) -> None:
+    _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     assert _paths(
         service.execute(PhotoSearchCriteria(person_id=ids["alice"].id)), ids
@@ -160,8 +156,8 @@ def test_person_axis_single_combination(tmp_path) -> None:
     ) == {"bob_candid.jpg"}
 
 
-def test_date_axis_single_combinations(tmp_path) -> None:
-    _, ids = _seed(tmp_path)
+def test_date_axis_single_combinations(make_sqlite_context, tmp_path) -> None:
+    _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     assert _paths(
         service.execute(PhotoSearchCriteria(captured_from=_FROM_2023, captured_to=_TO_2023)), ids
@@ -171,8 +167,8 @@ def test_date_axis_single_combinations(tmp_path) -> None:
     ) == {"bob_candid.jpg", "alice_party.jpg"}
 
 
-def test_person_and_date_double_combination(tmp_path) -> None:
-    _, ids = _seed(tmp_path)
+def test_person_and_date_double_combination(make_sqlite_context, tmp_path) -> None:
+    _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     assert _paths(
         service.execute(
@@ -182,8 +178,8 @@ def test_person_and_date_double_combination(tmp_path) -> None:
     ) == {"alice_party.jpg"}
 
 
-def test_person_and_status_double_combination(tmp_path) -> None:
-    _, ids = _seed(tmp_path)
+def test_person_and_status_double_combination(make_sqlite_context, tmp_path) -> None:
+    _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     assert _paths(
         service.execute(
@@ -199,8 +195,8 @@ def test_person_and_status_double_combination(tmp_path) -> None:
     ) == set()  # Bob has no pending recognition — honest empty
 
 
-def test_date_and_status_double_combination(tmp_path) -> None:
-    _, ids = _seed(tmp_path)
+def test_date_and_status_double_combination(make_sqlite_context, tmp_path) -> None:
+    _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     assert _paths(
         service.execute(
@@ -210,8 +206,8 @@ def test_date_and_status_double_combination(tmp_path) -> None:
     ) == {"bob_candid.jpg"}
 
 
-def test_person_date_status_triple_combination(tmp_path) -> None:
-    _, ids = _seed(tmp_path)
+def test_person_date_status_triple_combination(make_sqlite_context, tmp_path) -> None:
+    _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     assert _paths(
         service.execute(
@@ -238,9 +234,9 @@ def test_person_date_status_triple_combination(tmp_path) -> None:
     ) == set()
 
 
-def test_no_match_and_inverted_range_return_empty_without_error(tmp_path) -> None:
+def test_no_match_and_inverted_range_return_empty_without_error(make_sqlite_context, tmp_path) -> None:
     """No-hit ranges and from>to both yield the honest empty result."""
-    _, ids = _seed(tmp_path)
+    _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     inverted = service.execute(
         PhotoSearchCriteria(captured_from=_TO_2024, captured_to=_FROM_2023)
@@ -248,8 +244,8 @@ def test_no_match_and_inverted_range_return_empty_without_error(tmp_path) -> Non
     assert _paths(inverted, ids) == set()  # from > to — passed through, matches nothing
 
 
-def test_boundary_dates_are_inclusive(tmp_path) -> None:
-    _, ids = _seed(tmp_path)
+def test_boundary_dates_are_inclusive(make_sqlite_context, tmp_path) -> None:
+    _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     # Bounds exactly equal to B's and C's captured_at → both included.
     exact = service.execute(
@@ -261,7 +257,7 @@ def test_boundary_dates_are_inclusive(tmp_path) -> None:
     assert _paths(exact, ids) == {"bob_candid.jpg", "alice_party.jpg"}
 
 
-def test_multi_recognition_rows_yield_photo_exactly_once(tmp_path) -> None:
+def test_multi_recognition_rows_yield_photo_exactly_once(make_sqlite_context, tmp_path) -> None:
     """ADR-036 D6: photos with several recognition rows appear exactly once.
 
     The seed gives photo A two Alice rows (PENDING + APPROVED) and photo C two
@@ -270,7 +266,7 @@ def test_multi_recognition_rows_yield_photo_exactly_once(tmp_path) -> None:
     comparisons in the matrix above cannot see duplicates, so these list-level
     length assertions lock the dedupe.
     """
-    _, ids = _seed(tmp_path)
+    _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     assert len(service.execute(PhotoSearchCriteria(person_id=ids["alice"].id))) == 2
     assert len(service.execute(PhotoSearchCriteria(match_status=MatchStatus.PENDING))) == 2
@@ -287,13 +283,13 @@ def test_multi_recognition_rows_yield_photo_exactly_once(tmp_path) -> None:
     assert sorted(names) == ["alice_party.jpg", "alice_portrait.jpg"]
 
 
-def test_unmatched_sentinel_selects_photos_without_recognition_results(tmp_path) -> None:
+def test_unmatched_sentinel_selects_photos_without_recognition_results(make_sqlite_context, tmp_path) -> None:
     """ADR-036 D6: match_status=UNMATCHED returns photos with no recognition rows.
 
     Every seeded photo carries recognition rows, so a fresh photo D is
     registered without any — it is the only "not yet recognized" photo.
     """
-    context, ids = _seed(tmp_path)
+    context, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
     photo_d = Photo(
         path=PhotoPath("photos/dave_unrecognized.jpg"),

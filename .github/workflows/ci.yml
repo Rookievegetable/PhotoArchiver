@@ -75,8 +75,14 @@ jobs:
       - name: MyPy
         run: mypy src
 
+      # F-5（体检 T-5）：主 pytest 步骤落盘运行期输出供下方 no-skip 守卫解析。
+      # 守卫不再用收集期 `pytest --co -q`（importorskip 的运行期 skip 不产生
+      # 收集期 SKIPPED 行，守卫效力存疑）——改为 grep 运行期 `-rs` SKIPPED 行。
       - name: Pytest
-        run: pytest -v --tb=short
+        shell: bash
+        run: |
+          set -o pipefail
+          pytest -v --tb=short -rs 2>&1 | tee pytest-output.txt
 
       # Phase F F-3（LIMIT-006 D-1）：macOS runner 原生段错误时自动收集 .ips
       # crash report 为 artifact——下次（若有）崩溃即可从原生栈定位落点
@@ -103,12 +109,12 @@ jobs:
       - name: Assert AI integration tests ran not skipped (R-4 close ISSUE-008)
         shell: bash
         run: |
-          SKIPPED=$(pytest --co -q tests/integration/face_detection/ 2>/dev/null | grep -c "SKIPPED" || true)
+          SKIPPED=$(grep -cE "^SKIPPED.*tests[/\]integration[/\]face_detection[/\]" pytest-output.txt || true)
           if [ "$SKIPPED" -gt 0 ]; then
-            echo "::error::${SKIPPED} AI integration test(s) skipped — ISSUE-008 not truly closed (model pack failed during run)"
+            echo "::error::${SKIPPED} AI integration test(s) skipped at runtime — ISSUE-008 not truly closed (model pack failed during run)"
             exit 1
           fi
-          echo "All AI integration tests collected without skip — ISSUE-008 closure verified"
+          echo "All AI integration tests ran without runtime skip — ISSUE-008 closure verified"
 
       # ISSUE-009 关闭判据：dev.txt 装齐后 presentation 测试必须真实运行。
       # importorskip 零默 skip 不使 pytest 变红——此步断言收集结果无 SKIPPED 行。
@@ -116,9 +122,9 @@ jobs:
       - name: Assert UI tests ran not skipped (close ISSUE-009)
         shell: bash
         run: |
-          SKIPPED=$(pytest --co -q tests/unit/presentation/ 2>/dev/null | grep -c "SKIPPED" || true)
+          SKIPPED=$(grep -cE "^SKIPPED.*tests[/\]unit[/\]presentation[/\]" pytest-output.txt || true)
           if [ "$SKIPPED" -gt 0 ]; then
-            echo "::error::${SKIPPED} UI test(s) skipped — ISSUE-009 not truly closed (PySide6/pytest-qt missing on runner)"
+            echo "::error::${SKIPPED} UI test(s) skipped at runtime — ISSUE-009 not truly closed (PySide6/pytest-qt missing on runner)"
             exit 1
           fi
-          echo "All UI tests collected without skip — ISSUE-009 closure verified"
+          echo "All UI tests ran without runtime skip — ISSUE-009 closure verified"

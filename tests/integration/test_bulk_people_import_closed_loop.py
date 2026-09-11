@@ -24,8 +24,6 @@ from PySide6.QtWidgets import QToolBar
 # Import the app package first so its __init__ finishes initializing before
 # MainWindow pulls app.context.ApplicationContext during its own import
 # (same ordering note as test_main_window_smoke.py).
-from photo_archiver.app import bootstrap_application
-from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.presentation.views import main_window as main_window_module
 from photo_archiver.presentation.views.main_window import MainWindow
 
@@ -85,13 +83,11 @@ def _trigger_import(window: MainWindow, path: Path, monkeypatch) -> list:
 
 
 def test_bulk_import_1200_rows_persists_refreshes_and_dedupes(
-    qtbot, tmp_path: Path, monkeypatch
+    qtbot, make_sqlite_context, tmp_path: Path, monkeypatch
 ) -> None:
     """B13/B14：1200 行真实导入 + 二次导入跨批幂等全跳。"""
     people_txt = _write_people_txt(tmp_path / "people_1200.txt")
-    settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'bulk.db'}")
-    settings.ensure_runtime_directories()
-    context = bootstrap_application(settings)
+    context = make_sqlite_context("bulk.db")
     window = MainWindow(context)
     qtbot.addWidget(window)
     people_repository = context.repositories.people
