@@ -39,6 +39,11 @@ from photo_archiver.domain import (
 # Report progress at most every N items to avoid flooding the event stream.
 _PROGRESS_REPORT_INTERVAL = 10
 
+# ADR-037：并行路径持久化分片尺寸——每消费 N 个识别聚合 flush 一次
+# ``add_many``（ISSUE-021 / 体检 F-8：原先全程收集、末尾单次 add_many，
+# 进程崩溃丢整批；分片后崩溃丢失窗口 ≤ N-1 条，批量下推性能不变）。
+_PARALLEL_FLUSH_SIZE = 50
+
 
 class MatchPersonsService(MatchPersonsUseCase):
     """Orchestrate the face matching pipeline for a batch of photos."""
@@ -215,9 +220,12 @@ class MatchPersonsService(MatchPersonsUseCase):
         Progress contract (A-4): the sequential reporting cadence (first /
         every ``_PROGRESS_REPORT_INTERVAL`` / last, same message format) is
         emitted from the consuming loop on the calling thread, so the reporter
-        never sees concurrent calls. Persistence (A-3): recognition aggregates
-        are collected and flushed with ONE ``add_many`` push-down instead of
-        per-photo ``add`` calls.
+        never sees concurrent calls. Persistence (A-3, revised by ADR-037):
+        recognition aggregates flush through ``add_many`` every
+        ``_PARALLEL_FLUSH_SIZE`` consumed results — the batch push-down
+        (ADR-029-style single-transaction insert) is preserved while a process
+        crash mid-run can lose at most ``_PARALLEL_FLUSH_SIZE - 1`` computed
+        results instead of the whole batch.
         """
         logger.info(
             "MatchPersonsService using {} worker thread(s) for {} photo(s)",
@@ -230,16 +238,28 @@ class MatchPersonsService(MatchPersonsUseCase):
                 for photo_id, image in zip(command.photo_ids, command.images)
             ]
             results: list[MatchResult] = []
-            recognitions: list[RecognitionResult] = []
+            pending: list[RecognitionResult] = []
+            flushed = 0
             for index, future in enumerate(futures, start=1):
                 match_result, recognition = future.result()
                 results.append(match_result)
                 if recognition is not None:
-                    recognitions.append(recognition)
+                    pending.append(recognition)
                 photo_id = command.photo_ids[index - 1]
+                if len(pending) >= _PARALLEL_FLUSH_SIZE:
+                    self._recognition_repository.add_many(pending)
+                    flushed += len(pending)
+                    pending.clear()
                 self._report(index, total, f"Matched photo {photo_id}")
 
-        self._recognition_repository.add_many(recognitions)
+            if pending:
+                self._recognition_repository.add_many(pending)
+                flushed += len(pending)
+        logger.info(
+            "MatchPersonsService persisted {} recognition result(s) in shard flushes of {}",
+            flushed,
+            _PARALLEL_FLUSH_SIZE,
+        )
         logger.info(
             "MatchPersonsService processed {} photo(s) against {} candidate(s)",
             total,

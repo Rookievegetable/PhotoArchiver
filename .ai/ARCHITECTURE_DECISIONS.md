@@ -381,6 +381,17 @@
 
 ---
 
+### ADR-037 — 并行匹配持久化分片 flush（修订 phase6 裁决 A-3 的"末尾单次 add_many"）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（2026-09-12，ISSUE-021 / 2026-09-10 体检 F-8 修复，owner 既有"下一轮处理"指示） |
+| 决策 | `MatchPersonsService._execute_parallel` 的持久化由"全程收集、末尾单次 `add_many`"改为**每消费 `_PARALLEL_FLUSH_SIZE=50` 个识别聚合 flush 一次**（余片收尾 flush）。批量下推（ADR-029 单事务 insert）保留；flush 全部发生在消费循环所在线程，线程画像不变。 |
+| 理由 | 体检 F-8：`max_workers>1` 时崩溃丢整批（2600 张 × 332s 计算结果全部丢失，仅默认 `max_workers=1` 规避）。分片后崩溃丢失窗口 ≤ 49 条；50 条/批的额外事务开销相对 11.22 photos/s 推理耗时可忽略。 |
+| 影响范围 | `application/services/match_persons_service.py`（分片 flush + 日志）、`tests/unit/application/test_match_persons_service.py`（分片边界 [2,2,1] 矩阵 + 小批单次 flush 契约）、`KNOWN_ISSUES.md`（ISSUE-021 同提交删除）。不变：A-4 顺序/进度契约、识别管线推理路径（ADR-032/033）、Repository 协议（`add_many` 语义不变，仅调用时机分片）。 |
+
+---
+
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）
 
 > 权威审计方法论：`.ai/rules/audit-methodology.md`（迁移自废弃文档 `.ai/Consistency-Audit-2026-07-13.md` §8，2026-07-24 裁决2已物理删除该废弃文档）。本节仅列已裁决并执行的冲突处置。

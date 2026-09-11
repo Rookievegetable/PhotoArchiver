@@ -93,6 +93,19 @@ class _StubRecognitionRepository(RecognitionRepository):
         raise NotImplementedError
 
 
+class _ShardRecordingRepo(_StubRecognitionRepository):
+    """Record add_many shard sizes on top of the accumulating stub."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.shards: list[int] = []
+
+    def add_many(self, results) -> None:  # noqa: ANN001
+        self.shards.append(len(results))
+        for result in results:
+            self.add(result)
+
+
 def _build_service(
     detector_pairs: dict[Path, list],
     embedding: FaceEmbedding,
@@ -363,3 +376,82 @@ def test_match_service_isolates_detector_failure(tmp_path: Path, max_workers: in
     assert results[1].box is None, "失败照片降级为无脸结果"
     # 好照片（检出一脸、无候选→pending）产生唯一识别记录；失败照片零记录
     assert [r.photo_id for r in recognition_repo.added] == [id_good], "仅未受影响照片产生识别记录"
+
+
+def test_match_service_parallel_shard_flushes_bound_crash_window(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """ADR-037（ISSUE-021 / 体检 F-8）：并行路径分片持久化.
+
+    原实现全程收集、末尾单次 ``add_many``——进程崩溃丢整批。分片 flush 后
+    每消费 N 个聚合落一批：本测试把分片尺寸缩到 2，5 张全匹配照片应产生
+    [2, 2, 1] 三次 ``add_many``（含末尾余片 flush），总量不丢、顺序不乱。
+    """
+    import photo_archiver.application.services.match_persons_service as match_module
+
+    monkeypatch.setattr(match_module, "_PARALLEL_FLUSH_SIZE", 2)
+    box = FaceBox(x1=0, y1=0, x2=10, y2=10)
+    embedding = FaceEmbedding((0.5,))
+    person_id = uuid4()
+    ids: list = []
+    images_list: list[Path] = []
+    pairs: dict[Path, list] = {}
+    for index in range(5):
+        image = tmp_path / f"shard{index}.jpg"
+        image.write_bytes(b"")
+        ids.append(uuid4())
+        images_list.append(image)
+        pairs[image] = [FaceBoxEmbedding(box=box, embedding=embedding)]
+    detector = _StubDetector(pairs)
+    embedding_repo = _StubFaceEmbeddingRepository({uuid4(): embedding})
+    recognition_repo = _ShardRecordingRepo()
+    service = MatchPersonsService(
+        detector=detector,
+        recognizer=_StubRecognizer(embedding),
+        matcher=_StubMatcher((person_id, 0.8)),
+        face_embedding_repository=embedding_repo,
+        recognition_repository=recognition_repo,
+        max_workers=4,
+    )
+    command = MatchPersonsCommand(photo_ids=tuple(ids), images=tuple(images_list))
+
+    results = service.execute(command)
+
+    assert [r.photo_id for r in results] == ids, "A-4 顺序契约不受分片影响"
+    assert recognition_repo.shards == [2, 2, 1], "每 2 个聚合 flush 一次，余片收尾"
+    assert len(recognition_repo.added) == 5, "分片不丢不重"
+    assert all(r.person_id == person_id for r in recognition_repo.added)
+
+
+def test_match_service_parallel_small_batch_single_final_flush(tmp_path: Path) -> None:
+    """小于分片尺寸的批次行为不变：仅末尾一次 add_many（A-3 原语义保持）。"""
+    box = FaceBox(x1=0, y1=0, x2=10, y2=10)
+    embedding = FaceEmbedding((0.5,))
+    person_id = uuid4()
+    ids: list = []
+    images_list: list[Path] = []
+    pairs: dict[Path, list] = {}
+    for index in range(3):
+        image = tmp_path / f"small{index}.jpg"
+        image.write_bytes(b"")
+        ids.append(uuid4())
+        images_list.append(image)
+        pairs[image] = [FaceBoxEmbedding(box=box, embedding=embedding)]
+    detector = _StubDetector(pairs)
+    embedding_repo = _StubFaceEmbeddingRepository({uuid4(): embedding})
+    recognition_repo = _ShardRecordingRepo()
+    service = MatchPersonsService(
+        detector=detector,
+        recognizer=_StubRecognizer(embedding),
+        matcher=_StubMatcher((person_id, 0.8)),
+        face_embedding_repository=embedding_repo,
+        recognition_repository=recognition_repo,
+        max_workers=4,
+    )
+    results = service.execute(
+        MatchPersonsCommand(photo_ids=tuple(ids), images=tuple(images_list))
+    )
+
+    assert len(results) == 3
+    assert recognition_repo.shards == [3]
+    assert len(recognition_repo.added) == 3
