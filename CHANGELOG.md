@@ -6,6 +6,50 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [2.6.0] - 2026-09-12
+
+Post-release hardening round: the audit backlog closed completely (plugins
+reach users, parallel matching stops losing batches on crashes, thumbnail
+cache and model-digest debt cleared) and two operator-facing capabilities
+land — the "未匹配" filter and a legacy-database migration command.
+
+### Added
+
+- **Plugin directory loading**（插件目录生产接线，ADR-038）: set
+  `PLUGINS_DIRECTORY` to a folder of plugin modules and startup runs the full
+  chain — discover, enable, mount one toolbar action per plugin action.
+  Opt-in by design (plugins are trusted Python code); load/enable failures
+  are isolated per plugin and never block the app.
+- **`migrate` CLI**: copies a legacy CWD database (`data/photo_archiver.db`)
+  into the anchored user-data location via a `VACUUM INTO` consistent
+  snapshot — dry-run by default, copy-not-move, and it safely takes over a
+  bootstrap-created empty target. The startup migration hint now points at
+  it.
+- **`cleanup-thumbnails` CLI**: removes orphaned thumbnail cache entries
+  (content-addressed entries only — foreign files are never touched);
+  dry-run by default.
+- **"未匹配" filter**（未匹配筛选）: the status filter now offers an
+  `未匹配` option backed by the ADR-036 D6 sentinel — the photo wall shows
+  only photos that have no recognition results yet (real SQL LEFT JOIN …
+  IS NULL push-down).
+
+### Fixed
+
+- **Parallel matching no longer loses the whole batch on a crash**（ADR-037）:
+  recognition results flush every 50 aggregates instead of one giant
+  end-of-run write — the crash window shrinks from the full batch to at most
+  49 computed results (closes the last 2026-09-10 health-check finding
+  affecting the recognition pipeline).
+- **antelopev2 model digest pinned**: the fail-closed download script now
+  verifies the alternate pack against a digest computed from the canonical
+  release archive (previously only buffalo_l was pinned).
+
+### Internal
+
+- Layer boundaries are enforced by permanent AST-based tests on every push
+  (health-check T-1); shared SQLite test fixture; Linux CI one-off native
+  crash (run #65) was a runner flake — re-run green.
+
 ## [2.5.0] - 2026-09-12
 
 Phase F correctness closeout (ADR-035/036): the library survives hostile
@@ -60,20 +104,6 @@ including the same startup-backup safety net.
   filter) has no rows.
 - The settings language dropdown is annotated as Out-of-Scope instead of
   silently doing nothing.
-
-## [Unreleased]
-
-### Added
-
-- **"未匹配" filter**（未匹配筛选）: the status filter now offers an
-  `未匹配` option backed by the ADR-036 D6 sentinel — the photo wall shows
-  only photos that have no recognition results yet (real SQL LEFT JOIN …
-  IS NULL push-down).
-- **`migrate` CLI**: copies a legacy CWD database (`data/photo_archiver.db`)
-  into the anchored user-data location via a `VACUUM INTO` consistent
-  snapshot — dry-run by default, copy-not-move, and it safely takes over a
-  bootstrap-created empty target. The startup migration hint now points at
-  it.
 
 ## [2.4.0] - 2026-09-08
 
