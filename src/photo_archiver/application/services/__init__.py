@@ -15,6 +15,9 @@ from photo_archiver.application.services.import_people_service import ImportPeop
 from photo_archiver.application.services.list_persons_service import ListPersonsService
 from photo_archiver.application.services.match_persons_service import MatchPersonsService
 from photo_archiver.application.services.plugin_context_service import PluginContextService
+from photo_archiver.application.services.cleanup_thumbnail_cache_service import (
+    CleanupThumbnailCacheService,
+)
 from photo_archiver.application.services.prune_missing_photos_service import PruneMissingPhotosService
 from photo_archiver.application.services.register_photo_service import RegisterPhotoService
 from photo_archiver.application.services.review_recognition_service import ReviewRecognitionService
@@ -39,6 +42,7 @@ __all__ = [
     "ListPersonsService",
     "MatchPersonsService",
     "PluginContextService",
+    "CleanupThumbnailCacheService",
     "PruneMissingPhotosService",
     "RegisterPhotoService",
     "ReviewRecognitionService",

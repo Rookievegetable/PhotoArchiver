@@ -154,6 +154,16 @@ def build_argument_parser() -> ArgumentParser:
         help="Excel sheet name for xlsx/xlsm sources (default: first sheet)",
     )
 
+    cleanup_parser = subparsers.add_parser(
+        "cleanup-thumbnails",
+        help="remove orphaned thumbnail cache entries (dry-run by default)",
+    )
+    cleanup_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="really remove the orphans (default: dry-run preview only)",
+    )
+
     export_parser = subparsers.add_parser(
         "export",
         help="export the library to Excel/CSV/HTML (ALL scope by default)",
@@ -438,6 +448,26 @@ def run_export_command(arguments: Namespace) -> int:
     return 0
 
 
+def run_cleanup_thumbnails_command(arguments: Namespace) -> int:
+    """Remove orphaned thumbnail cache entries (ISSUE-023; dry-run default)."""
+    context = _bootstrap_for_cli()
+    if context is None:
+        return 2
+    result = context.services.cleanup_thumbnails.execute(dry_run=not arguments.execute)
+    label = "would_remove" if result.dry_run else "removed"
+    sys.stdout.write(
+        "Thumbnail cache cleanup: "
+        f"{label}={result.removed}, "
+        f"retained={result.retained}\n"
+    )
+    if result.dry_run:
+        sys.stdout.write(
+            "Dry-run: nothing deleted. Re-run with --execute to remove the orphans "
+            "(thumbnails are derived data — they regenerate on demand).\n"
+        )
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run the PhotoArchiver desktop application.
 
@@ -460,6 +490,8 @@ def main(arguments: list[str] | None = None) -> int:
         return run_import_people_command(parsed_arguments)
     if parsed_arguments.command == "export":
         return run_export_command(parsed_arguments)
+    if parsed_arguments.command == "cleanup-thumbnails":
+        return run_cleanup_thumbnails_command(parsed_arguments)
 
     try:
         context = bootstrap_application()

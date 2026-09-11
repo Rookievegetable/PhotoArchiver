@@ -374,3 +374,47 @@ def test_main_export_unknown_person_fails_cleanly(monkeypatch, capsys, tmp_path)
     assert service.calls == []
     captured = capsys.readouterr()
     assert "person not found: 'Nobody'" in captured.err
+
+
+class StubCleanupThumbnailsService:
+    """Capture dry-run flags and echo a configured cleanup result."""
+
+    def __init__(self) -> None:
+        self.calls: list[bool] = []
+
+    def execute(self, *, dry_run: bool):
+        from photo_archiver.application.services.cleanup_thumbnail_cache_service import (
+            ThumbnailCacheCleanupResult,
+        )
+
+        self.calls.append(dry_run)
+        return ThumbnailCacheCleanupResult(removed=3, retained=9, dry_run=dry_run)
+
+
+def test_main_cleanup_thumbnails_dry_run_by_default(monkeypatch, capsys) -> None:
+    """ADR-036 收口（ISSUE-023）：cleanup-thumbnails 默认 dry-run。"""
+    service = StubCleanupThumbnailsService()
+    context = SimpleNamespace(services=SimpleNamespace(cleanup_thumbnails=service))
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["cleanup-thumbnails"])
+
+    assert exit_code == 0
+    assert service.calls == [True]
+    captured = capsys.readouterr()
+    assert "would_remove=3" in captured.out
+    assert "Dry-run" in captured.out
+
+
+def test_main_cleanup_thumbnails_execute_removes(monkeypatch, capsys) -> None:
+    service = StubCleanupThumbnailsService()
+    context = SimpleNamespace(services=SimpleNamespace(cleanup_thumbnails=service))
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["cleanup-thumbnails", "--execute"])
+
+    assert exit_code == 0
+    assert service.calls == [False]
+    captured = capsys.readouterr()
+    assert "removed=3" in captured.out
+    assert "Dry-run" not in captured.out

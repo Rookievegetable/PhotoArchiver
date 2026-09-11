@@ -243,3 +243,53 @@ def test_service_without_uow_persists_bare_rows(provider: SQLiteConnectionProvid
 
     assert result.imported_count == 2
     assert len(repository.list_all()) == 2
+
+
+def test_same_name_department_with_distinct_identities_both_import(
+    provider: SQLiteConnectionProvider,
+) -> None:
+    """ISSUE-022 证伪锁定：有 identity 的同名同部门行按 identity 查重.
+
+    2026-09-10 体检 N-5 曾声称"同名同部门但不同 identity 的两名真实人员
+    会被误判重复跳过"——实证不复现：name+department 去重是 identity 分支
+    的 ``elif``，仅对无 identity 行生效（D-B2 保守语义）。本测试锁定该行为，
+    防止未来把 identity 查重改成 name+department 全局查重的回归。
+    """
+    repository = SQLitePersonRepository(provider)
+    service = _make_service(provider, repository=repository)
+
+    result = service.import_rows(
+        [
+            _row("张三", identity="T001", department="研发部", row_number=1),
+            _row("张三", identity="T002", department="研发部", row_number=2),
+        ]
+    )
+
+    assert result.imported_count == 2
+    assert result.skipped_count == 0
+    identities = sorted(p.identity.value for p in repository.list_all())
+    assert identities == ["T001", "T002"]
+
+
+def test_identityless_row_skips_on_name_department_match_but_new_identity_imports(
+    provider: SQLiteConnectionProvider,
+) -> None:
+    """D-B2 边界：无 identity 行与既有 person 同名同部门 → 保守跳过；
+
+    但随后同名的有 identity 行（不同人）仍正常导入——无 identity 的保守
+    跳过不污染后续导入。
+    """
+    repository = SQLitePersonRepository(provider)
+    service = _make_service(provider, repository=repository)
+
+    result = service.import_rows(
+        [
+            _row("张三", identity="T001", department="研发部", row_number=1),
+            _row("张三", department="研发部", row_number=2),  # 无 identity → 保守跳过
+            _row("张三", identity="T002", department="研发部", row_number=3),
+        ]
+    )
+
+    assert result.imported_count == 2
+    assert result.skipped_count == 1
+    assert sorted(p.identity.value for p in repository.list_all()) == ["T001", "T002"]

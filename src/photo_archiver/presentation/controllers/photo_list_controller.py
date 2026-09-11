@@ -19,7 +19,9 @@ if TYPE_CHECKING:
     from photo_archiver.application.services import SearchPhotosService
 
 # Default thumbnail bounding box size matches ThumbnailGenerator.generate default.
-_DEFAULT_THUMBNAIL_SIZE = 256
+from photo_archiver.application.ports.thumbnail_cache import (
+    DEFAULT_THUMBNAIL_SIZE as _DEFAULT_THUMBNAIL_SIZE,
+)
 
 
 class _ThumbnailJob(QRunnable):

@@ -67,17 +67,30 @@ def test_verify_integrity_unpinned_refuses_by_default(tmp_path: Path) -> None:
     assert not dm.verify_integrity(f, "buffalo_l", None, allow_unverified=False)
 
 
-def test_verify_integrity_unpinned_allows_first_bootstrap(tmp_path: Path) -> None:
+def test_verify_integrity_unpinned_allows_first_bootstrap(
+    tmp_path: Path, monkeypatch
+) -> None:
     """No pinned digest + --allow-unverified -> permitted first bootstrap.
 
-    Uses ``antelopev2`` (still unpinned) — buffalo_l is pinned since P0-8 and
-    now fails closed on unverified archives.
+    Uses a fake pack name — antelopev2 is pinned since ISSUE-024 (2026-09-12)
+    and buffalo_l since P0-8; both now fail closed on unverified archives.
     """
     dm = _load_script()
     f = tmp_path / "pack.zip"
     f.write_bytes(b"unverified payload")
+    monkeypatch.setitem(dm.EXPECTED_SHA256, "future_pack", "")
 
-    assert dm.verify_integrity(f, "antelopev2", None, allow_unverified=True)
+    assert dm.verify_integrity(f, "future_pack", None, allow_unverified=True)
+
+
+def test_verify_integrity_antelopev2_now_pinned(tmp_path: Path) -> None:
+    """ISSUE-024: antelopev2 carries a pinned digest and fails closed unverified."""
+    dm = _load_script()
+    f = tmp_path / "pack.zip"
+    f.write_bytes(b"unverified payload")
+
+    assert dm.EXPECTED_SHA256["antelopev2"] != ""
+    assert not dm.verify_integrity(f, "antelopev2", None, allow_unverified=False)
 
 
 def test_verify_integrity_falls_back_to_expected_sha256_map(

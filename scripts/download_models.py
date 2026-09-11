@@ -57,7 +57,10 @@ EXPECTED_SHA256: dict[str, str] = {
     # third-party LFS mirrors of the same asset and against the extracted
     # pack that CI has been running the AI suite with.
     "buffalo_l": "80ffe37d8a5940d59a7384c201a2a38d4741f2f3c51eef46ebb28218a7b0ca2f",
-    "antelopev2": "",
+    # ISSUE-024 (体检 N-7) 2026-09-12: antelopev2 pinned. Digest computed from
+    # the canonical release asset (v0.7, 360662982 bytes; zip integrity
+    # verified with zipfile.testzip before hashing).
+    "antelopev2": "8e182f14fc6e80b3bfa375b33eb6cff7ee05d8ef7633e738d1c89021dcf0c5c5",
 }
 
 

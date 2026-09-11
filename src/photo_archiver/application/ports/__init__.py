@@ -13,7 +13,10 @@ from photo_archiver.application.ports.photo_metadata_reader import PhotoMetadata
 from photo_archiver.application.ports.plugin_context import PluginContext
 from photo_archiver.application.ports.progress_reporter import ProgressReporter
 from photo_archiver.application.ports.system_settings import SystemSettings
-from photo_archiver.application.ports.thumbnail_cache import ThumbnailCache
+from photo_archiver.application.ports.thumbnail_cache import (
+    DEFAULT_THUMBNAIL_SIZE,
+    ThumbnailCache,
+)
 from photo_archiver.application.ports.thumbnail_generator import ThumbnailGenerator
 from photo_archiver.application.ports.unit_of_work import UnitOfWork
 from photo_archiver.application.ports.user_settings_store import UserSettingsStore
@@ -30,6 +33,7 @@ __all__ = [
     "PluginContext",
     "ProgressReporter",
     "SystemSettings",
+    "DEFAULT_THUMBNAIL_SIZE",
     "ThumbnailCache",
     "ThumbnailGenerator",
     "UnitOfWork",

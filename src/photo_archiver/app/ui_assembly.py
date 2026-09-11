@@ -14,12 +14,11 @@ CLI / CI / unit tests working without a Qt runtime.
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from PySide6.QtCore import QSettings
 
 from photo_archiver.app.repositories import ApplicationRepositories
-from photo_archiver.app.services import ApplicationServices
+from photo_archiver.app.services import ApplicationServices, thumbnail_cache_root
 from photo_archiver.application import SettingsService
 from photo_archiver.application.ports.system_settings import SystemSettings
 from photo_archiver.infrastructure.config import AppSettings
@@ -106,12 +105,7 @@ def build_ui_controllers(
     location. The service instance identity is preserved so any caller that
     already captured ``services.settings`` sees the rebound store.
     """
-    thumbnail_root = (
-        settings.output_root / "thumbnails"
-        if settings.output_root is not None
-        else Path.home() / ".photo_archiver" / "thumbnails"
-    )
-    thumbnail_cache = ThumbnailCache(thumbnail_root)
+    thumbnail_cache = ThumbnailCache(thumbnail_cache_root(settings))
     thumbnail_generator = PillowThumbnailGenerator(
         thumbnail_cache,
         # P2-002 fix: keep the decompression-bomb guard enabled for UI-side

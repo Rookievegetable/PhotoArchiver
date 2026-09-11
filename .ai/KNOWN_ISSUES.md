@@ -41,13 +41,10 @@
 | ID | Description | Status | Impact | Temporary Workaround | Planned Resolution |
 |---|---|---|---|---|---|
 
-_ISSUE-019（EXIF 子 IFD 拍摄时刻）已于 2026-09-06 修复终验关闭。以下条目来自 2026-09-10 全项目体检（`docs/health-check/PROJECT_HEALTH_CHECK_2026-09-10.md` §15.2）经 owner 决策登记（2026-09-12）；ISSUE-020/ISSUE-021 已于 2026-09-12 分别经 ADR-038（插件目录生产接线）与 ADR-037（并行匹配分片 flush）修复关闭；体检其余发现（F-10/F-11/F-13/N-2/N-3/N-4/N-6/N-9）已立项 Phase F 正确性收口（`docs/development/phase-f-correctness-plan.md`，ADR-036），随修复同提交删除、不再预登记。_
+_当前无未决问题条目（2026-09-12）：ISSUE-019（EXIF 子 IFD 拍摄时刻）2026-09-06 修复终验关闭。以下条目曾来自 2026-09-10 全项目体检（`docs/health-check/PROJECT_HEALTH_CHECK_2026-09-10.md` §15.2）经 owner 决策登记（2026-09-12）；ISSUE-020/021 已于 2026-09-12 分别经 ADR-038（插件目录生产接线）与 ADR-037（并行匹配分片 flush）修复关闭；ISSUE-022 实证不复现（name+department 去重仅对无 identity 行生效，D-B2 保守语义，已加测试锁定）删除；ISSUE-023 经 `cleanup-thumbnails` CLI + 缓存端口 cleanup 修复关闭；ISSUE-024 经真实模型包（v0.7 release，360662982 字节，zip 校验后）计算摘要补钉关闭；体检其余发现（F-10/F-11/F-13/N-2/N-3/N-4/N-6/N-9）已立项 Phase F 正确性收口（`docs/development/phase-f-correctness-plan.md`，ADR-036），随修复同提交删除、不再预登记。_
 
 | ID | Description | Status | Impact | Temporary Workaround | Planned Resolution |
 |---|---|---|---|---|---|
-| ISSUE-022 | 导入去重按 name+department：同名同部门但不同 identity 的两名真实人员会被误判重复而跳过（体检 N-5） | Open | Low | 数据侧避免同名同部门 | 影响面评估后单独立项 |
-| ISSUE-023 | 缩略图孤儿缓存无清理：内容寻址缓存只增不减（体检 N-8） | Open | Low | 磁盘占用缓慢增长，可手动清缓存目录 | 低优先级技术债，可与后续轮合并处理 |
-| ISSUE-024 | `antelopev2` 模型摘要未钉（`download_models.py` EXPECTED_SHA256 空串）；fail-closed 下无安全风险，属技术债（体检 N-7） | Open | Low | 无 | 需取真实模型包计算摘要后补钉 |
 
 > 注意：以下为**设计性/测试覆盖限制**，非缺陷，登记于表格供审计与 CI 规划参考。
 

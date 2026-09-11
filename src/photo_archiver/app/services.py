@@ -1,6 +1,7 @@
 """Application-level service assembly."""
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from photo_archiver.app.repositories import ApplicationRepositories
 from photo_archiver.application import (
@@ -10,6 +11,7 @@ from photo_archiver.application import (
     ArchivePlanner,
     BackfillCaptureTimeService,
     BackfillContentHashService,
+    CleanupThumbnailCacheService,
     DeletePersonService,
     DeletePhotosService,
     DetectDuplicatesService,
@@ -36,7 +38,7 @@ from photo_archiver.infrastructure import (
     TxtPersonImportReader,
 )
 from photo_archiver.infrastructure.config import AppSettings
-from photo_archiver.infrastructure.image import ContentHashCalculator
+from photo_archiver.infrastructure.image import ContentHashCalculator, ThumbnailCache
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +63,20 @@ class ApplicationServices:
     delete_person: DeletePersonService
     prune_missing_photos: PruneMissingPhotosService
     dispose_duplicates: DisposeDuplicatesService
+    cleanup_thumbnails: CleanupThumbnailCacheService
+
+
+def thumbnail_cache_root(settings: AppSettings) -> Path:
+    """Derive the thumbnail cache root (shared by UI assembly and CLI cleanup).
+
+    ui_assembly renders through the same root — one derivation point keeps
+    the cleanup service and the UI cache from drifting apart (ISSUE-023).
+    """
+    return (
+        settings.output_root / "thumbnails"
+        if settings.output_root is not None
+        else Path.home() / ".photo_archiver" / "thumbnails"
+    )
 
 
 def build_application_services(
@@ -218,6 +234,10 @@ def build_application_services(
         delete_person=delete_person_service,
         prune_missing_photos=prune_missing_photos_service,
         dispose_duplicates=dispose_duplicates_service,
+        cleanup_thumbnails=CleanupThumbnailCacheService(
+            repositories.photos,
+            ThumbnailCache(thumbnail_cache_root(settings)),
+        ),
     )
 
 

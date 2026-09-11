@@ -260,7 +260,7 @@ Infrastructure
 - application/ Command、DTO、Use Case 协议和应用服务。
 - 人员 TXT + Excel 导入、照片目录扫描、注册、缩略图生成、AI 人脸检测/识别/匹配、用户复核、归档组织、导出全闭环。
 - SQLite + Alembic 迁移管理（ADR-024）。
-- Plugins 插件系统（Plugin interface + loader + 示例插件 + MainWindow 注册）。
+- Plugins 插件系统（Plugin interface + loader；配置 `PLUGINS_DIRECTORY` 后启动自动加载并把插件动作挂载到主工具栏，错误隔离——坏插件跳过不影响主程序，ADR-038）。
 - Workers 通用执行器框架（QtWorkerExecutor）。
 - Settings 闭环（QSettings/InMemory 双适配器）。
 - 库管理（v2.4.0）：删除登记 / 删除人员 / 重复处置 / 重扫对账 / prune-missing CLI。

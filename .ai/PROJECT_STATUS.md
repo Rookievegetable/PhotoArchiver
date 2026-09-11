@@ -53,7 +53,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | 版本链 | ✅ | v2.4.0 三处一致（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08`）；历史锚点 v2.3.2 保留。 |
 | CI | ✅ | 三平台绿；本地全量 783/4/0 实证；CI no-skip 守卫改为运行期统计（F-5/体检 T-5）；macOS 崩溃报告收集在位（LIMIT-006 D-1）。 |
 | 桌面复验 | ✅ | 机制项（N1–N4 自动化：1200 行导入闭环/取消一致性/备份恢复演练/换目录子进程）+ 感知项（J1–J7 owner 逐项判定）全部通过。 |
-| 未决问题 | 5 项登记 | ISSUE-020..024（体检 N-1/F-8/N-5/N-8/N-7，均为 Low/Medium 非阻塞；2026-09-10 体检其余发现已随 Phase F 正确性收口修复）。 |
+| 未决问题 | ✅ 清零 | 体检 N-1~N-9 全部处置：N-1 插件接线（ADR-038）、N-3/N-2/F-10/F-11/F-13 随 Phase F 修复、N-5 实证不复现（测试锁定）、N-7/N-8 技术债修复（摘要补钉 + cleanup-thumbnails CLI）。仅余 LIMIT-* 设计/环境限制。 |
 | Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消为任务边界粒度，设计特征）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS CI runner 压力扫描段错误，darwin skip），均 Low、不阻塞。 |
 | Release body | ⏳ 待 owner | GitHub Release 已由 tag `v2.4.0` 触发生成（`generate_release_notes` 自动摘要 + `dist-*` 资产）；`CHANGELOG.md` 第 9–54 行 `[2.4.0]` 段需 owner 粘贴进 body 后签核（v2.3.2 同流程）。 |
 
@@ -84,10 +84,10 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 |---|---|
 | 时间 | 2026-09-12（本地） |
 | 会话范围 | 交接恢复 → 体检报告核验 → Phase F 正确性收口实施（F-2/F-5/F-1/F-3/F-6/F-7，ADR-036）→ v2.5.0 发版 + 签核 → CI 双修复（stat 常量平台性 + LIMIT-006 守卫白名单）→ **ISSUE-021 分片 flush（ADR-037）** → **LIMIT-006 D-2 解除实验**（os.scandir 下段错误仍复现，已回退并登记证据）。 |
-| 关键产出 | ① **F-2**：识别轴 JOIN DISTINCT 去重 + `UNMATCHED` 哨兵（LEFT JOIN IS NULL，Domain 导出）；② **F-5**：`tests/conftest.py` 共享 SQLite 工厂 fixture（3 模块重构采用）+ pytest-cov 7.1.0（覆盖率基线 92%）+ CI no-skip 守卫运行期化；③ **F-1**：`sanitize_windows_filename` Domain 净化（保留设备名矩阵/非法字符/尾点尾空格）+ builder 审计日志 + 扫描器迭代式 os.scandir 重写（realpath 环检测 + 深度上限 + junction reparse-tag 识别，2000 文件 0.037s vs glob 0.218s）；④ **F-3**：import cancelled 接线 + 导出取消通道 + 照片墙空态占位 + 审核行姓名化 + 语言占位标注 + .xlsm 过滤器 + `_active_runnable` 终态清零；⑤ **F-6**：CLI `import-people`/`export` 子命令 + CLI 启动备份对齐（D8）；⑥ **F-7**：README 矛盾段删除 + user-guide 新命令表 + 配置默认路径文档修正 + v2.5.0 发版。 |
+| 关键产出 | **v2.5.0 后续轮（ADR-037/038 + 技术债清零）**：⑦ **ISSUE-021**：并行匹配持久化分片 flush（每 50 条 add_many，崩溃丢失窗口 ≤49 条，ADR-037）；⑧ **ISSUE-020**：`PLUGINS_DIRECTORY` 生产接线（ADR-038，opt-in 加载 + 工具栏挂载 + 错误隔离）；⑨ **LIMIT-006 D-2**：darwin skip 解除实验——os.scandir 下段错误仍复现（CI exit 139），崩溃面非 pathlib glob，已回退留证；⑩ **ISSUE-022**：N-5 证伪（elif 分支误读，测试锁定）；⑪ **ISSUE-023**：`cleanup-thumbnails` CLI（端口扩 compute_key/cleanup，dry-run 默认）；⑫ **ISSUE-024**：antelopev2 摘要补钉（真实包校验后钉定）。原 v2.5.0 轮产出：① **F-2**：识别轴 JOIN DISTINCT 去重 + `UNMATCHED` 哨兵（LEFT JOIN IS NULL，Domain 导出）；② **F-5**：`tests/conftest.py` 共享 SQLite 工厂 fixture（3 模块重构采用）+ pytest-cov 7.1.0（覆盖率基线 92%）+ CI no-skip 守卫运行期化；③ **F-1**：`sanitize_windows_filename` Domain 净化（保留设备名矩阵/非法字符/尾点尾空格）+ builder 审计日志 + 扫描器迭代式 os.scandir 重写（realpath 环检测 + 深度上限 + junction reparse-tag 识别，2000 文件 0.037s vs glob 0.218s）；④ **F-3**：import cancelled 接线 + 导出取消通道 + 照片墙空态占位 + 审核行姓名化 + 语言占位标注 + .xlsm 过滤器 + `_active_runnable` 终态清零；⑤ **F-6**：CLI `import-people`/`export` 子命令 + CLI 启动备份对齐（D8）；⑥ **F-7**：README 矛盾段删除 + user-guide 新命令表 + 配置默认路径文档修正 + v2.5.0 发版。 |
 | 当前质量门 | ruff 0 / mypy 191 files 0 / pytest **783 passed / 4 skipped / 0 failed** / pip check 通过（本地实测）。 |
 | 工作区 | Phase F 正确性收口 + v2.5.0 发版提交完成并 push。 |
-| Remaining | ISSUE-022/023/024 技术债排期 · LIMIT-006 D-3（macOS 调试手段立项；D-2 已实证非 pathlib glob）· 下一候选立项（旧 CWD 库自动迁移 `migrate` 子命令、CURRENT_BATCH 导出 P2-4、"未匹配"筛选 UI 暴露）。 |
+| Remaining | LIMIT-006 D-3（macOS 调试手段立项；D-2 已实证非 pathlib glob）· 下一候选立项（旧 CWD 库自动迁移 `migrate` 子命令、CURRENT_BATCH 导出 P2-4、"未匹配"筛选 UI 暴露）· Linux CI 偶发 SIGSEGV（run #65，单次，重跑绿）观察。 |
 
 ---
 

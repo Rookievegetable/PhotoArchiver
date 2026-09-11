@@ -74,6 +74,7 @@ python main.py
 | `python main.py backfill-content-hash` | 为历史数据一次性补齐内容哈希（幂等，重复执行无副作用） |
 | `python main.py import-people <人员文件>` | 导入人员（.txt/.csv/.xlsx/.xlsm，与界面导入同一管线；`--no-header` 无表头、`--sheet-name` 指定工作表） |
 | `python main.py export <输出文件>` | 导出库数据（xlsx/csv/html 按后缀自动识别；`--scope filtered` 配合 `--status/--person/--captured-from/--captured-to` 筛选） |
+| `python main.py cleanup-thumbnails` | 清理缩略图缓存孤儿条目（默认 dry-run 预览，`--execute` 才删除；缩略图为派生数据，删除后按需重新生成） |
 
 ## 6. 数据与日志位置
 
