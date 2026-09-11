@@ -45,7 +45,7 @@ STATUS_PENDING_REVIEW_COUNT = "{count} 条识别结果待审核"
 # ---- 主窗口 · 对话框与流程提示 ----
 DIALOG_SELECT_PHOTO_FOLDER = "选择照片文件夹"
 DIALOG_SELECT_PEOPLE_FILE = "选择人员文件"
-PEOPLE_FILE_FILTER = "人员文件 (*.txt *.csv *.xlsx)"
+PEOPLE_FILE_FILTER = "人员文件 (*.txt *.csv *.xlsx *.xlsm)"
 STATUS_SCANNING_FOLDER = "正在扫描 {folder} …"
 STATUS_IMPORTING_FILE = "正在导入 {path} …"
 STATUS_ARCHIVING = "正在归档…"
@@ -94,7 +94,10 @@ REVIEW_APPROVE_ALL = "全部通过"
 REVIEW_STATUS_LINE = (
     "待审核 {count} 条。选择记录后点「通过所选」或「拒绝所选」，或点「全部通过」完成整批。"
 )
-REVIEW_ROW_FORMAT = "照片={photo_id} 人员={person_id} 置信度={confidence:.2f}"
+REVIEW_ROW_FORMAT = "照片={photo_label} 人员={person_label} 置信度={confidence:.2f}"
+REVIEW_PERSON_UNKNOWN = "未知人员"
+STATUS_PHOTO_LIST_EMPTY = "暂无照片——请先扫描照片文件夹"
+SETTINGS_LANGUAGE_HINT = "（语言切换暂未实装，i18n 为 Out-of-Scope，见 roadmap §13.7）"
 
 # ---- 设置对话框（SettingsDialog） ----
 SETTINGS_DIALOG_TITLE = "设置"

@@ -14,7 +14,13 @@ from uuid import UUID
 from PySide6.QtCore import QObject
 
 from photo_archiver.application import ReviewRecognitionUseCase
-from photo_archiver.domain import RecognitionRepository, RecognitionResult
+from photo_archiver.domain import (
+    PersonRepository,
+    PhotoRepository,
+    RecognitionRepository,
+    RecognitionResult,
+)
+from photo_archiver.presentation.ui_text import REVIEW_PERSON_UNKNOWN
 
 
 class ReviewController(QObject):
@@ -29,6 +35,8 @@ class ReviewController(QObject):
         self,
         use_case: ReviewRecognitionUseCase,
         recognition_repository: RecognitionRepository,
+        photo_repository: PhotoRepository | None = None,
+        person_repository: PersonRepository | None = None,
         parent: QObject | None = None,
     ) -> None:
         """Initialize the controller with its use case and read-side repository.
@@ -36,10 +44,34 @@ class ReviewController(QObject):
         Args:
             use_case: approve/reject/bulk_* mutations.
             recognition_repository: read-side for list_pending (not in UseCase).
+            photo_repository: optional read-side resolving human-readable photo
+                labels for review rows (ADR-036: names instead of bare UUIDs).
+            person_repository: optional read-side resolving person display names.
         """
         super().__init__(parent)
         self._use_case = use_case
         self._recognition_repository = recognition_repository
+        self._photo_repository = photo_repository
+        self._person_repository = person_repository
+
+    def resolve_row_labels(self, result: RecognitionResult) -> tuple[str, str]:
+        """Return (photo label, person label) for a review row.
+
+        Falls back to the raw UUIDs when the entity is gone or no lookup
+        repository was injected; a deleted person renders as 未知人员
+        (matching the v2.4.0 deletion semantics: person_id SET NULL).
+        """
+        photo_label = str(result.photo_id)
+        if self._photo_repository is not None:
+            photo = self._photo_repository.find_by_id(result.photo_id)
+            if photo is not None:
+                photo_label = photo.original_name or photo.path.raw_path.name
+        person_label = str(result.person_id) if result.person_id is not None else REVIEW_PERSON_UNKNOWN
+        if self._person_repository is not None and result.person_id is not None:
+            person = self._person_repository.find_by_id(result.person_id)
+            if person is not None:
+                person_label = person.name
+        return photo_label, person_label
 
     def list_pending(self) -> list[RecognitionResult]:
         """Return all recognition results awaiting user review."""

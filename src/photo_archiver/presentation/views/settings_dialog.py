@@ -68,6 +68,7 @@ from photo_archiver.presentation.ui_text import (
     SETTINGS_THEME_LABEL,
     SETTINGS_THRESHOLD_LABEL,
     SETTINGS_USE_SYSTEM_DEFAULT,
+    SETTINGS_LANGUAGE_HINT,
 )
 
 # Threshold spin box decimal precision — match_threshold is a similarity ratio
@@ -127,6 +128,10 @@ class SettingsDialog(QDialog):
         self._language_combo = QComboBox(self)
         for label, value in SETTINGS_LANGUAGE_CHOICES:
             self._language_combo.addItem(label, value)
+        # ADR-036 D8'：语言占位控件保留但不实装——明示 Out-of-Scope，避免
+        # 用户误以为切换即时生效（translations.py 仅装中文基础翻译）。
+        self._language_hint = QLabel(SETTINGS_LANGUAGE_HINT, self)
+        self._language_hint.setWordWrap(True)
 
         self._import_path_edit = QLineEdit(self)
         self._import_path_edit.setPlaceholderText(SETTINGS_USE_SYSTEM_DEFAULT)
@@ -149,6 +154,7 @@ class SettingsDialog(QDialog):
         form = QFormLayout()
         form.addRow(SETTINGS_THEME_LABEL, self._theme_combo)
         form.addRow(SETTINGS_LANGUAGE_LABEL, self._language_combo)
+        form.addRow(self._language_hint)
         form.addRow(SETTINGS_IMPORT_PATH_LABEL, self._import_path_layout())
         form.addRow(SETTINGS_EXPORT_PATH_LABEL, self._export_path_layout())
         form.addRow(SETTINGS_THRESHOLD_LABEL, self._threshold_spin)

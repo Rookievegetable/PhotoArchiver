@@ -11,7 +11,7 @@ Status:  progress bar + status label
 from pathlib import Path
 from uuid import UUID
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QProgressBar,
+    QStackedWidget,
     QStatusBar,
     QToolBar,
     QListView,
@@ -77,6 +78,7 @@ from photo_archiver.presentation.ui_text import (
     STATUS_MATCH_UNAVAILABLE,
     STATUS_PENDING_REVIEW_COUNT,
     STATUS_READY,
+    STATUS_PHOTO_LIST_EMPTY,
     STATUS_SCAN_UNAVAILABLE,
     STATUS_SCANNING_FOLDER,
     STATUS_TASK_CANCELLED,
@@ -353,18 +355,38 @@ class MainWindow(QMainWindow):
         # Without it the default delegate renders filenames only, leaving the
         # entire thumbnail pipeline invisible to the user.
         self._photo_list.setItemDelegate(PhotoThumbnailDelegate(self._photo_list))
-        layout.addWidget(self._photo_list)
+        # ADR-036：空态占位——库内无照片（或筛选无结果）时给出行动指引，
+        # 避免纯白区域让用户误判为故障。
+        self._photo_list_stack = QStackedWidget(self)
+        self._photo_list_stack.addWidget(self._photo_list)  # index 0: 照片墙
+        self._photo_empty_label = QLabel(STATUS_PHOTO_LIST_EMPTY, self)
+        self._photo_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._photo_list_stack.addWidget(self._photo_empty_label)  # index 1: 空态
+        layout.addWidget(self._photo_list_stack)
 
         self.setCentralWidget(central)
         # Wire thumbnail loads → model now that _photo_list_model exists.
         self._photo_list_controller.thumbnail_loaded.connect(
             self._photo_list_model.set_thumbnail,
         )
+        # 空态随模型行数联动（load_photos 走 model reset，删除/导入走行增删）。
+        for signal in (
+            self._photo_list_model.modelReset,
+            self._photo_list_model.rowsInserted,
+            self._photo_list_model.rowsRemoved,
+        ):
+            signal.connect(self._update_photo_empty_state)
+        self._update_photo_empty_state()
         # Phase 9 FEAT-P9-2: feed the person axis from the Application layer.
         # Deliberately last: set_persons re-emits criteria, and the photo-list
         # refresh it triggers requires _photo_list_model to exist. Re-populated
         # after each people import completes (see _on_completed).
         self._refresh_filter_persons()
+
+    def _update_photo_empty_state(self) -> None:
+        """Show the empty-state placeholder when the photo wall has no rows."""
+        empty = self._photo_list_model.rowCount() == 0
+        self._photo_list_stack.setCurrentIndex(1 if empty else 0)
 
     def _on_filter_changed(self, criteria: object) -> None:
         """Reload photos filtered by the supplied criteria, or all when None.
@@ -411,6 +433,7 @@ class MainWindow(QMainWindow):
             self._on_progress,  # type: ignore[arg-type]
             self._on_completed,  # type: ignore[arg-type]
             self._on_failed,  # type: ignore[arg-type]
+            cancelled=self._on_task_cancelled,  # type: ignore[arg-type]
         )
         runnable.replay_pending_terminal()
         self._cancel_action.setEnabled(True)
@@ -426,8 +449,19 @@ class MainWindow(QMainWindow):
         elif event.message:
             self._status_label.setText(event.message)
 
+    def _on_task_cancelled(self, event: TaskCancelled) -> None:
+        """Reset UI after a cancelled generic task (import; ADR-036 D7 wiring).
+
+        Without the wiring the UI stuck at "Cancelling …" with the Cancel
+        action dead (体检 N-3)."""
+        self._active_runnable = None
+        self._cancel_action.setEnabled(False)
+        self._progress.setValue(0)
+        self._status_label.setText(STATUS_TASK_CANCELLED.format(label=task_label(event.task_name)))
+
     def _on_completed(self, event: TaskCompleted) -> None:
         """Reflect task completion and refresh the photo list."""
+        self._active_runnable = None  # N-9: terminal events clear the tracking handle
         self._cancel_action.setEnabled(False)
         self._progress.setValue(_PROGRESS_RESOLUTION)
         self._status_label.setText(STATUS_TASK_COMPLETED.format(label=task_label(event.task_name)))
@@ -448,6 +482,7 @@ class MainWindow(QMainWindow):
 
     def _on_failed(self, event: TaskFailed) -> None:
         """Surface task failure with the concrete error message and reset progress."""
+        self._active_runnable = None  # N-9
         self._cancel_action.setEnabled(False)
         self._progress.setValue(0)
         self._status_label.setText(STATUS_TASK_FAILED.format(label=task_label(event.task_name)))
@@ -514,6 +549,7 @@ class MainWindow(QMainWindow):
 
     def _on_scan_cancelled(self, event: TaskCancelled) -> None:
         """Reset UI after a cancelled scan (P0-4: previously stuck at 'Cancelling ...')."""
+        self._active_runnable = None  # N-9
         self._cancel_action.setEnabled(False)
         self._progress.setValue(0)
         self._status_label.setText(STATUS_TASK_CANCELLED.format(label=task_label(event.task_name)))
@@ -764,6 +800,7 @@ class MainWindow(QMainWindow):
 
     def _on_match_cancelled(self, event: TaskCancelled) -> None:
         """Handle cooperative cancellation: reset progress and re-enable."""
+        self._active_runnable = None  # N-9
         self._cancel_action.setEnabled(False)
         self._progress.setValue(0)
         self._status_label.setText(STATUS_TASK_CANCELLED.format(label=task_label(event.task_name)))
@@ -780,10 +817,10 @@ class MainWindow(QMainWindow):
         path, then the runnable is submitted through the worker-backed
         ExportController (two-phase progress off the UI thread). The action is
         disabled while a run is in flight and re-enabled by every terminal
-        signal (completed / failed). ``connect_signals`` exposes exactly four
-        channels — there is no cancelled signal on ExportController (Phase 5
-        baseline contract), so no cancellation slot is fabricated; the Cancel
-        toolbar action stays untouched for export runs.
+        signal (completed / failed / cancelled). ADR-036 D7: exports are
+        cancellable cooperatively at task boundaries (LIMIT-002 granularity) —
+        the Cancel toolbar action is enabled for the run and the cancelled
+        terminal resets the UI and re-enables the export action.
         """
         dialog = ExportDialog(parent=self, active_criteria=self._current_criteria)
         if not dialog.exec():
@@ -807,12 +844,15 @@ class MainWindow(QMainWindow):
             format_name=dialog.format_name,
             criteria=criteria,
         )
+        self._active_runnable = runnable
+        self._cancel_action.setEnabled(True)
         self._export_controller.connect_signals(
             runnable,
             self._on_export_started,  # type: ignore[arg-type]  # Qt Slot vs Callable variance, existing convention
             self._on_export_progress,  # type: ignore[arg-type]
             self._on_export_completed,  # type: ignore[arg-type]
             self._on_export_failed,  # type: ignore[arg-type]
+            cancelled=self._on_export_cancelled,  # type: ignore[arg-type]
         )
 
     def _on_export_started(self, event: TaskStarted) -> None:
@@ -831,6 +871,14 @@ class MainWindow(QMainWindow):
     def _on_export_failed(self, event: TaskFailed) -> None:
         """Surface the failure via the shared slot and re-enable the action."""
         self._on_failed(event)
+        self._export_action.setEnabled(True)
+
+    def _on_export_cancelled(self, event: TaskCancelled) -> None:
+        """Reset UI after a cancelled export (ADR-036 D7)."""
+        self._active_runnable = None
+        self._cancel_action.setEnabled(False)
+        self._progress.setValue(0)
+        self._status_label.setText(STATUS_TASK_CANCELLED.format(label=task_label(event.task_name)))
         self._export_action.setEnabled(True)
 
     def _refresh_review_pending(self) -> None:

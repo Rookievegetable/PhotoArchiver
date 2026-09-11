@@ -63,10 +63,15 @@ def test_connect_signals_wires_four_slots() -> None:
         progress = Signal(object)
         completed = Signal(object)
         failed = Signal(object)
+        cancelled = Signal(object)
 
     class FakeRunnable:
         def __init__(self) -> None:
             self.signals = Signals()
+            self.replayed = False
+
+        def replay_pending_terminal(self) -> None:
+            self.replayed = True
 
     runnable = FakeRunnable()
     called: list = []
@@ -79,3 +84,36 @@ def test_connect_signals_wires_four_slots() -> None:
     )
     runnable.signals.progress.emit(None)
     assert called == ["p"]
+    assert runnable.replayed  # terminal replay guard wired (scan/match parity)
+
+
+def test_connect_signals_wires_cancelled_slot() -> None:
+    """ADR-036 D7: connect_signals wires the cancelled terminal when given."""
+    from PySide6.QtCore import QObject, Signal
+
+    class Signals(QObject):
+        started = Signal(object)
+        progress = Signal(object)
+        completed = Signal(object)
+        failed = Signal(object)
+        cancelled = Signal(object)
+
+    class FakeRunnable:
+        def __init__(self) -> None:
+            self.signals = Signals()
+
+        def replay_pending_terminal(self) -> None:
+            return None
+
+    runnable = FakeRunnable()
+    cancelled_events: list = []
+    ImportPeopleController.connect_signals(
+        runnable,
+        started=lambda e: None,
+        progress=lambda e: None,
+        completed=lambda e: None,
+        failed=lambda e: None,
+        cancelled=lambda e: cancelled_events.append(e),
+    )
+    runnable.signals.cancelled.emit("cancel-event")
+    assert cancelled_events == ["cancel-event"]

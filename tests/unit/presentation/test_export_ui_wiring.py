@@ -204,9 +204,10 @@ def test_accepted_dialog_submits_scope_format_and_disables_action(qtbot, tmp_pat
     assert window._export_action.isEnabled() is False  # in-flight lock
     assert window._progress.value() == 0
     assert window._status_label.text() == "正在导出…"
-    # The shared Cancel action stays untouched for export runs: the controller
-    # exposes no cancelled channel, so no cancellation surface is fabricated.
-    assert window._cancel_action.isEnabled() is False
+    # ADR-036 D7: exports are cooperatively cancellable at task boundaries —
+    # the Cancel action is enabled for the run and the cancelled terminal
+    # resets the UI (see _on_export_cancelled).
+    assert window._cancel_action.isEnabled() is True
 
 
 def test_started_signal_keeps_action_disabled_and_updates_status(qtbot, tmp_path, monkeypatch) -> None:

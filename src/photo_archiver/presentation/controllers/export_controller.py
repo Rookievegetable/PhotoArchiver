@@ -99,9 +99,18 @@ class ExportController(QObject):
         return exporter
 
     @staticmethod
-    def connect_signals(runnable, started: Slot, progress: Slot, completed: Slot, failed: Slot) -> None:
+    def connect_signals(
+        runnable,
+        started: Slot,
+        progress: Slot,
+        completed: Slot,
+        failed: Slot,
+        cancelled: Slot | None = None,
+    ) -> None:
         """Connect the runnable's task signals to the provided UI slots.
 
+        ``cancelled`` wires the cooperative-cancellation terminal (ADR-036 D7:
+        exports are cancellable at task boundaries — LIMIT-002 granularity).
         A terminal event that fired before this call is replayed so a
         fast-failing task cannot strand the UI (see QtWorkerRunnable.
         replay_pending_terminal — the macOS CI export race).
@@ -111,6 +120,8 @@ class ExportController(QObject):
         signals.progress.connect(progress)
         signals.completed.connect(completed)
         signals.failed.connect(failed)
+        if cancelled is not None:
+            signals.cancelled.connect(cancelled)
         # macOS CI race: a fast-failing task can terminate between submit()
         # and this wiring — without the replay its terminal event is lost
         # with no receivers and the UI never re-enables.

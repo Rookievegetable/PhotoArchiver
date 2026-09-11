@@ -125,6 +125,8 @@ def build_ui_controllers(
         review=ReviewController(
             services.review_recognition,  # type: ignore[arg-type]
             repositories.recognition,
+            photo_repository=repositories.photos,
+            person_repository=repositories.people,
         ),
         photo_list=PhotoListController(
             repositories.photos,

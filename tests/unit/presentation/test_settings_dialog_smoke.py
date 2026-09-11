@@ -89,3 +89,18 @@ def test_settings_dialog_collect_preferences_round_trips_fields(qtbot) -> None:
     collected = dialog._collect_preferences()
     assert collected == persisted
     dialog.close()
+
+
+
+def test_settings_dialog_shows_language_out_of_scope_hint(qtbot) -> None:
+    """ADR-036 D8': the language dropdown stays but is annotated Out-of-Scope."""
+    from photo_archiver.presentation.ui_text import SETTINGS_LANGUAGE_HINT
+
+    persisted = UserPreferences()
+    service = SettingsService(InMemoryUserSettingsStore(persisted), None)
+    dialog = SettingsDialog(SettingsController(service))
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitExposed(dialog)
+    assert dialog._language_hint.text() == SETTINGS_LANGUAGE_HINT
+    dialog.close()

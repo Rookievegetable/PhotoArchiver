@@ -105,13 +105,18 @@ class ReviewDialog(QDialog):
         if not pending:
             self.accept()
 
-    @staticmethod
-    def _make_row(result: RecognitionResult) -> QListWidgetItem:
-        """Build a list row carrying the recognition result id for retrieve on action."""
+    def _make_row(self, result: RecognitionResult) -> QListWidgetItem:
+        """Build a list row carrying the recognition result id for retrieve on action.
+
+        ADR-036: rows show human-readable photo file name and person name
+        (resolved through the controller's read-side lookups) instead of bare
+        UUIDs; unknown entities fall back to the UUID / 未知人员.
+        """
+        photo_label, person_label = self._controller.resolve_row_labels(result)
         item = QListWidgetItem(
             REVIEW_ROW_FORMAT.format(
-                photo_id=result.photo_id,
-                person_id=result.person_id,
+                photo_label=photo_label,
+                person_label=person_label,
                 confidence=result.confidence,
             )
         )

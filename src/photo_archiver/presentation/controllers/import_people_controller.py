@@ -48,14 +48,30 @@ class ImportPeopleController(QObject):
         return self._executor.submit(task)  # type: ignore[arg-type]  # WorkerTask[ImportPeopleResult] vs [object] generics variance
 
     @staticmethod
-    def connect_signals(runnable, started: Slot, progress: Slot, completed: Slot, failed: Slot) -> None:
+    def connect_signals(
+        runnable,
+        started: Slot,
+        progress: Slot,
+        completed: Slot,
+        failed: Slot,
+        cancelled: Slot | None = None,
+    ) -> None:
         """Connect the runnable's task signals to the provided UI slots.
 
         Reuses the same signal-shape as ScanController so MainWindow can
         dispatch with a single helper without per-controller adapters.
+        ``cancelled`` wires the cooperative-cancellation terminal (ADR-036 D7
+        parity with scan/match: the UI must reset instead of sticking at
+        "Cancelling …").
         """
         signals = runnable.signals
         signals.started.connect(started)
         signals.progress.connect(progress)
         signals.completed.connect(completed)
         signals.failed.connect(failed)
+        if cancelled is not None:
+            signals.cancelled.connect(cancelled)
+        # A terminal that fired before this wiring is replayed so a
+        # fast-failing/cancelled task cannot strand the UI (same guard as
+        # ScanController/MatchPersonsController).
+        runnable.replay_pending_terminal()
