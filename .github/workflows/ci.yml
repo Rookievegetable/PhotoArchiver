@@ -85,7 +85,13 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          pytest -v --tb=short -rs 2>&1 | tee pytest-output.txt
+          # 覆盖率门槛只在 Linux job 采集（F-5 风险缓解），基线 92-93%、
+          # 门槛 90% 防下滑；G-3b：PYTHONFAULTHANDLER 常开。
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            pytest -v --tb=short -rs --cov=photo_archiver --cov-report=term --cov-fail-under=90 2>&1 | tee pytest-output.txt
+          else
+            pytest -v --tb=short -rs 2>&1 | tee pytest-output.txt
+          fi
 
       # Phase F F-3（LIMIT-006 D-1）：macOS runner 原生段错误时自动收集 .ips
       # crash report 为 artifact——下次（若有）崩溃即可从原生栈定位落点
@@ -159,6 +165,13 @@ jobs:
 
       - name: Stress scan (direct + real QThreadPool, no qtbot)
         run: pytest -v tests/integration/test_scan_stress_no_qtbot.py
+
+      # D-3 实验二：带 faulthandler 直跑真正的崩溃用例（豁免 darwin skip）。
+      # 段错误若复现 → faulthandler/`.ips` 首次拿到 C 层栈；若通过 →
+      # LIMIT-006 可降级。失败是数据不是事故——continue-on-error 保持绿树。
+      - name: LIMIT-006 qtbot stress (evidence collection, may crash)
+        continue-on-error: true
+        run: PA_ALLOW_LIMIT_006=1 pytest -v tests/unit/presentation/test_scan_single_flight.py::test_real_executor_refuses_second_scan_mid_flight_and_recovers tests/unit/presentation/test_scan_cancellation.py::test_real_cancelled_scan_reports_cancelled_terminal_and_recovers tests/integration/test_scan_cancel_consistency.py
 
       - name: Collect macOS crash reports
         if: failure()

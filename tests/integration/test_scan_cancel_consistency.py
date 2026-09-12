@@ -16,6 +16,7 @@ WorkerTask.run() **边界**生效（KNOWN_ISSUES LIMIT-002/006）——"提交�
 """
 
 import pytest
+import os
 import sys
 
 pytest.importorskip("pytestqt")
@@ -68,7 +69,7 @@ def _scan_to_completion(window: MainWindow, photo_dir: Path, qtbot) -> None:
 
 
 @pytest.mark.skipif(
-    sys.platform == "darwin",
+    sys.platform == "darwin" and os.environ.get("PA_ALLOW_LIMIT_006") != "1",
     reason="LIMIT-006: macOS runner native segfault (signal 11) in the scan worker "
     "(pathlib.is_file/stat) during real-executor stress scans with qtbot.waitUntil; "
     "win/linux unaffected — see KNOWN_ISSUES",
@@ -123,7 +124,7 @@ def test_cancel_request_leaves_consistent_store_and_rescan_completes(
 
 
 @pytest.mark.skipif(
-    sys.platform == "darwin",
+    sys.platform == "darwin" and os.environ.get("PA_ALLOW_LIMIT_006") != "1",
     reason="LIMIT-006: macOS runner native segfault (signal 11) in the scan worker "
     "(pathlib.is_file/stat) during real-executor stress scans with qtbot.waitUntil; "
     "win/linux unaffected — see KNOWN_ISSUES",

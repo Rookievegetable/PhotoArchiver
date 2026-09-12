@@ -13,6 +13,7 @@ Two layers, mirroring the MatchPersonsController test split:
   main thread) — never ``waitSignal`` + immediate assert (racy).
 """
 
+import os
 import sys
 
 import pytest
@@ -135,7 +136,7 @@ def test_terminal_from_stale_runnable_does_not_release_new_guard() -> None:
 
 
 @pytest.mark.skipif(
-    sys.platform == "darwin",
+    sys.platform == "darwin" and os.environ.get("PA_ALLOW_LIMIT_006") != "1",
     reason="LIMIT-006: macOS runner native segfault (exit 139) in the scan worker "
     "during real-executor 2000-file stress; win/linux unaffected — see KNOWN_ISSUES",
 )
