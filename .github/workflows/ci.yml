@@ -84,18 +84,21 @@ jobs:
       - name: Pytest
         shell: bash
         run: |
-          set -o pipefail
           # 覆盖率门槛只在 Linux job 采集（F-5 风险缓解），基线 92-93%、
-          # 门槛 90% 防下滑；G-3b：PYTHONFAULTHANDLER 常开。
+          # 门槛 90% 防下滑。注意：job shell 带 `-e -o pipefail`——pytest 的
+          # 退出码必须先捕获，否则失败时脚本即刻退出，下方注解循环永远
+          # 不会执行（run #76 实证过这个取证盲区）。
+          set +e
           if [ "$RUNNER_OS" = "Linux" ]; then
             pytest -v --tb=short -rsf --cov=photo_archiver --cov-report=term --cov-fail-under=90 2>&1 | tee pytest-output.txt
           else
             pytest -v --tb=short -rsf 2>&1 | tee pytest-output.txt
           fi
-          # 失败用例名转 GitHub 注解——job log 匿名不可读，注解是唯一公开取证面。
-          grep "^FAILED" pytest-output.txt | while read -r line; do
+          PYTEST_EXIT=$?
+          grep -E "^FAILED|^ERROR" pytest-output.txt | while read -r line; do
             echo "::error::$line"
           done || true
+          exit "$PYTEST_EXIT"
 
       # Phase F F-3（LIMIT-006 D-1）：macOS runner 原生段错误时自动收集 .ips
       # crash report 为 artifact——下次（若有）崩溃即可从原生栈定位落点
