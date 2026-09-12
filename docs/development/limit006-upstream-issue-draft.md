@@ -14,7 +14,7 @@
 
 - OS: macOS 14/15, arm64 (GitHub Actions `macos-latest` runners, M-series)
 - Python: 3.11.9 (python.org framework build)
-- PySide6: 6.11.1 (shiboken6 6.11.1) — **not reproducible on 6.8.3 so far** (see "Version dependence")
+- PySide6: **reproduces on 6.11.1 and 6.8.3** (shiboken6 matching each)
 - pytest-qt 4.5.0, pytest 8.4.1
 - Other loaded extensions at crash time: numpy, scipy, PIL, sqlalchemy (cyextensions), charset_normalizer, google._upb._message (see full module list below)
 
@@ -76,7 +76,7 @@ Current thread 0x00000001eff52180 (most recent call first):
   thread waiting in the Qt event loop (plain `threading.Event` + sleep
   polling) → **no crash in 10+ runs** → the concurrent event loop on the
   main thread appears to be a necessary ingredient.
-- Pinned down to PySide6 6.11.1: downgrading to **PySide6 6.8.3** (same
+- **Version-independent** (reproduces on PySide6 6.11.1 and 6.8.3): downgrading to **PySide6 6.8.3** (same
   code, same suite, crash tests re-enabled) has been green so far —
   observation ongoing.
 
