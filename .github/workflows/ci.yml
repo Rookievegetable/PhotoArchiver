@@ -17,6 +17,9 @@ jobs:
         python: ["3.11"]
     env:
       QT_QPA_PLATFORM: offscreen   # pytest-qt 无头运行，三平台统一
+      # LIMIT-006 D-1 补强：原生段错误时把 C 层栈（faulthandler）打进 stderr
+      # 日志——本轮 .ips artifact 曾为空，faulthandler 是不依赖平台的兜底。
+      PYTHONFAULTHANDLER: 1
     steps:
       - uses: actions/checkout@v4
 
@@ -132,3 +135,42 @@ jobs:
             exit 1
           fi
           echo "All UI tests ran without unsanctioned runtime skip — ISSUE-009 closure verified (LIMIT-006 darwin skips allowlisted)"
+
+  # LIMIT-006 D-3（Phase G G-3）：非 qtbot 驱动的扫描压力实验 job——把
+  # "真实 QThreadPool + 大目录"与"qtbot.waitUntil 主线程等待"两个变量拆开。
+  # 仅 macOS（段错误观测平台）；跳过模型下载（扫描链不需要模型包）。
+  stress-macos:
+    name: macos stress (no qtbot)
+    runs-on: macos-latest
+    env:
+      PA_STRESS: "1"
+      PYTHONFAULTHANDLER: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements/*.txt
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements/dev.txt
+
+      - name: Stress scan (direct + real QThreadPool, no qtbot)
+        run: pytest -v tests/integration/test_scan_stress_no_qtbot.py
+
+      - name: Collect macOS crash reports
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p crash-reports
+          cp -R "$HOME/Library/Logs/DiagnosticReports/" crash-reports/ 2>/dev/null || echo "no .ips crash reports found"
+          ls -la crash-reports/
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: crash-reports-macos-stress
+          path: crash-reports/
+          if-no-files-found: ignore
