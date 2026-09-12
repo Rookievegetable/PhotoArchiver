@@ -68,7 +68,14 @@ def _evidence_outcomes() -> list[tuple[int, str]]:
 
 
 def main() -> int:
-    outcomes = _evidence_outcomes()
+    try:
+        outcomes = _evidence_outcomes()
+    except Exception as error:  # noqa: BLE001 - telemetry must never fail the job
+        import traceback
+
+        traceback.print_exc()
+        print(f"::warning::LIMIT-006 streak tracker API failure: {error}")
+        return 0
 
     # Current run first (the tracker runs after the evidence step inside the
     # same job — its outcome is still "in_progress" via the API, so the live

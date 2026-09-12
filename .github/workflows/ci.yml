@@ -98,6 +98,13 @@ jobs:
           grep -E "^FAILED|^ERROR" pytest-output.txt | while read -r line; do
             echo "::error::$line"
           done || true
+          # 139/134 类原生崩溃没有 FAILED 汇总——把输出尾部（含
+          # faulthandler 的 C 层栈）逐行转注解，匿名 API 可读。
+          if [ "$PYTEST_EXIT" -ne 0 ]; then
+            tail -n 40 pytest-output.txt | while read -r line; do
+              echo "::error::tail|$line"
+            done || true
+          fi
           exit "$PYTEST_EXIT"
 
       # Phase F F-3（LIMIT-006 D-1）：macOS runner 原生段错误时自动收集 .ips
@@ -188,6 +195,7 @@ jobs:
           fi
 
       - name: LIMIT-006 streak tracker
+        continue-on-error: true  # 遥测步骤：自身故障不得让 stress job 变红
         run: python scripts/limit006_streak.py
 
       - name: Collect macOS crash reports
