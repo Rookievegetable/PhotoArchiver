@@ -9,6 +9,8 @@
 不沉 Worker；若万级照片实测慢再下沉（WRK-001）。
 """
 
+from typing import cast
+
 from PySide6.QtCore import QObject, Slot
 from PySide6.QtWidgets import QMessageBox, QWidget
 
@@ -80,7 +82,7 @@ class DetectDuplicatesController(QObject):
             parent_widget = self.parent()
             target = parent_widget if isinstance(parent_widget, QWidget) else None
             QMessageBox.critical(
-                target,
+                self._target(target),
                 DUPLICATE_FAILED_TITLE,
                 DUPLICATE_FAILED_MESSAGE.format(detail=exc),
             )
@@ -131,6 +133,12 @@ class DetectDuplicatesController(QObject):
         )
 
     @staticmethod
-    def _target(qt_parent: QWidget | None) -> QWidget | None:
-        """Return the message-box parent widget as-is (typed helper)."""
-        return qt_parent
+    def _target(qt_parent: QWidget | None) -> QWidget:
+        """Return the message-box parent widget for QMessageBox static calls.
+
+        PySide6 6.8.3 stubs type the static-method parent as a non-optional
+        ``QWidget`` even though Qt accepts a null parent at runtime; the cast
+        keeps the documented "parent may be absent" behaviour type-honest
+        under those stubs.
+        """
+        return cast(QWidget, qt_parent)

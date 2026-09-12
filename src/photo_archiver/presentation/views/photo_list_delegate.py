@@ -50,14 +50,14 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
             return
 
         # Keep the platform selection/hover styling for the row background.
-        widget = option.widget
+        widget = option.widget  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
         style = widget.style() if widget is not None else QApplication.style()
         style.drawPrimitive(
             QStyle.PrimitiveElement.PE_PanelItemViewItem, option, painter, widget
         )
 
         painter.save()
-        rect = option.rect
+        rect = option.rect  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
         image_box = QRect(
             rect.left(),
             rect.top(),
@@ -78,7 +78,7 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
         # G-4：状态角标——识别状态 · 归档，右上角半透明小签（主题无关）。
         badge = index.data(STATUS_BADGE_ROLE)
         if badge:
-            metrics = QFontMetrics(option.font)
+            metrics = QFontMetrics(option.font)  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
             badge_text = str(badge)
             chip_width = metrics.horizontalAdvance(badge_text) + 2 * _PADDING
             chip_height = metrics.height() + 4
@@ -101,13 +101,15 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
             rect.width() - 2 * _PADDING,
             _TEXT_HEIGHT,
         )
-        elided = QFontMetrics(option.font).elidedText(
+        elided = QFontMetrics(option.font).elidedText(  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
             str(name), Qt.TextElideMode.ElideRight, text_rect.width()
         )
+        palette = option.palette  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
+        selected = option.state & QStyle.StateFlag.State_Selected  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
         painter.setPen(
-            option.palette.color(option.palette.ColorRole.HighlightedText)
-            if option.state & QStyle.StateFlag.State_Selected
-            else option.palette.color(option.palette.ColorRole.Text)
+            palette.color(palette.ColorRole.HighlightedText)
+            if selected
+            else palette.color(palette.ColorRole.Text)
         )
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter, elided)
         painter.restore()

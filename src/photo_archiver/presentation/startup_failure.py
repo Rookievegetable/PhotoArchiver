@@ -44,4 +44,6 @@ def show_corrupted_database_dialog(message: str) -> None:
     """Show the corruption dialog, creating a QApplication if none exists yet."""
     if QApplication.instance() is None:
         QApplication(list(sys.argv))
-    QMessageBox.critical(None, CORRUPTED_DATABASE_TITLE, message)
+    # PySide6 6.8.3 stubs type the static parent as non-optional; a null
+    # parent is legal Qt (headless startup path, no window to parent to).
+    QMessageBox.critical(None, CORRUPTED_DATABASE_TITLE, message)  # type: ignore[arg-type]
