@@ -38,7 +38,7 @@
 
 ## 未决问题
 
-_未决（2026-09-13 起）：**LIMIT-006 重开**——"512KB 栈"定论被 run #97 证伪（64MB 显式栈下段错误复现，崩溃点第 4 次漂移至 `PIL Image.open`）。当前确证：崩溃 = macOS arm64 上 **QThreadPool/Python 后台线程的任意原生调用**（已观测 scandir/realpath/sqlite3/PIL 四处漂移）在**主线程运行 Qt 事件循环**时的概率性 SIGSEGV；与枚举 API（3 种实现）、PySide6 版本（6.8.3/6.11.1）、线程类型（QThreadPool/Python threading）、栈大小（512KB/64MB）全部无关。故障在 Python 帧之下原生层，本仓库不可修复——处置：darwin skip 长期维持 + 注解取证通道常驻，出路 = 上游 issue（草稿含全量数据）或本地 macOS 调试环境。曾两次过早宣布定论（6 连续通过判据、512KB 栈根因）均被下一轮证伪——除上述变量外不再仓内猜测。_
+_未决（2026-09-13 起）：**LIMIT-006 重开**——"512KB 栈"定论被 run #97 证伪（64MB 显式栈下段错误复现，崩溃点第 4 次漂移至 `PIL Image.open`）。当前确证：崩溃 = macOS arm64 上 **QThreadPool/Python 后台线程的任意原生调用**（已观测 scandir/realpath/sqlite3/PIL 四处漂移）在**主线程运行 Qt 事件循环**时的概率性 SIGSEGV；与枚举 API（3 种实现）、PySide6 版本（6.8.3/6.11.1）、线程类型（QThreadPool/Python threading）、栈大小（512KB/64MB）全部无关。故障在 Python 帧之下原生层，本仓库不可修复——处置：darwin skip 长期维持 + 注解取证通道常驻，出路 = 上游 issue（草稿含全量数据）或本地 macOS 调试环境。**owner 处置（2026-09-13）：方案 3——维持现状**，darwin skip 长期化、macOS 定性为实验性支持并已在 user-guide/FAQ 如实披露；选项 1（提交上游 issue）与选项 2（本地 macOS 调试）保留为可选动作。曾两次过早宣布定论（6 连续通过判据、512KB 栈根因）均被下一轮证伪——除上述变量外不再仓内猜测。_
 
 > 注意：以下为**设计性/测试覆盖限制**，非缺陷，登记于表格供审计与 CI 规划参考。
 
