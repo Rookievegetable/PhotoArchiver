@@ -6,7 +6,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
-## [Unreleased]
+## [2.7.0] - 2026-09-12
+
+Phase G operator round: the CLI now covers the entire pipeline, the archive
+root leaves `.env`-only configuration, and the photo wall reads at a glance.
+
+### Added
+
+- **`recognize` CLI**: headless face detection/recognition/matching over
+  registered photos — same resume semantics as the UI (only photos without a
+  recognition result by default; `--all` re-matches, `--limit` caps the
+  batch), friendly guidance when the model pack is missing. The CLI now
+  covers the entire pipeline: import-people → scan → recognize → review →
+  archive → export.
+- **Archive root in Settings**（归档根目录进设置）: the settings dialog
+  gains an archive-root field (folder picker); a saved preference overrides
+  `ARCHIVE_ROOT` from `.env`, and when neither is set the archive entry keeps
+  its honest "not configured" guidance. FEAT-14's last real gap closed.
+- **Photo wall status badges**（照片墙状态角标）: every thumbnail carries a
+  corner badge — 待审核 / 已通过 / 已拒绝 / 未匹配, with `· 已归档` appended
+  for archived photos — so the recognition workflow is readable at a glance
+  from the wall itself.
+
+### Internal
+
+- **LIMIT-006 D-3 experiments**: a dedicated macOS job runs the 2000-file
+  scan stress through a real QThreadPool **without qtbot** — it passes
+  stably, narrowing the intermittent native segfault to the qtbot
+  main-thread wait interaction. `PYTHONFAULTHANDLER` is always on in CI, the
+  darwin skips carry a `PA_ALLOW_LIMIT_006=1` evidence-collection override,
+  and a consecutive-pass streak counter tracks the downgrade criterion.
+- **Coverage gate**: CI (Linux job) enforces `--cov-fail-under=90`; local
+  baseline is 93%.
+- **Architecture layer boundaries** are enforced by permanent AST-based tests
+  on every push (health-check T-1).
 
 ### Added
 

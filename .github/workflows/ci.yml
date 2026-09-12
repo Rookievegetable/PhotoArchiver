@@ -178,7 +178,17 @@ jobs:
       # LIMIT-006 可降级。失败是数据不是事故——continue-on-error 保持绿树。
       - name: LIMIT-006 qtbot stress (evidence collection, may crash)
         continue-on-error: true
-        run: PA_ALLOW_LIMIT_006=1 pytest -v tests/unit/presentation/test_scan_single_flight.py::test_real_executor_refuses_second_scan_mid_flight_and_recovers tests/unit/presentation/test_scan_cancellation.py::test_real_cancelled_scan_reports_cancelled_terminal_and_recovers tests/integration/test_scan_cancel_consistency.py
+        run: |
+          PA_ALLOW_LIMIT_006=1 pytest -v tests/unit/presentation/test_scan_single_flight.py::test_real_executor_refuses_second_scan_mid_flight_and_recovers tests/unit/presentation/test_scan_cancellation.py::test_real_cancelled_scan_reports_cancelled_terminal_and_recovers tests/integration/test_scan_cancel_consistency.py
+          code=$?
+          if [ "$code" -eq 0 ]; then
+            echo "EVIDENCE_OUTCOME=success" >> "$GITHUB_ENV"
+          else
+            echo "EVIDENCE_OUTCOME=failure" >> "$GITHUB_ENV"
+          fi
+
+      - name: LIMIT-006 streak tracker
+        run: python scripts/limit006_streak.py
 
       - name: Collect macOS crash reports
         if: failure()

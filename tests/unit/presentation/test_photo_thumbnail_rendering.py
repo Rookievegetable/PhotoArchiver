@@ -106,7 +106,12 @@ def test_photo_list_renders_real_thumbnail(qtbot, tmp_path: Path) -> None:
     thumbnail_path = index.data(THUMBNAIL_ROLE)
     assert isinstance(thumbnail_path, Path)
     assert thumbnail_path.exists()
-    assert not QPixmap(str(thumbnail_path)).isNull()
+    # Windows Defender/AV can transiently lock freshly written files, making
+    # an immediate decode return a null pixmap (observed twice in slow full
+    # runs; the file itself is always valid — retry until decodable).
+    pixmap = QPixmap()
+    qtbot.waitUntil(lambda: pixmap.load(str(thumbnail_path)) and not pixmap.isNull(), timeout=5000)
+    assert not pixmap.isNull()
 
     # The delegate is installed on the real view.
     delegate = window._photo_list.itemDelegate()
