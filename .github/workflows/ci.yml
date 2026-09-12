@@ -20,6 +20,10 @@ jobs:
       # LIMIT-006 D-1 补强：原生段错误时把 C 层栈（faulthandler）打进 stderr
       # 日志——本轮 .ips artifact 曾为空，faulthandler 是不依赖平台的兜底。
       PYTHONFAULTHANDLER: 1
+      # LIMIT-006 D-3 实验三：扫描器已换 os.listdir+lstat（绕开段错误定位的
+      # scandir C 通道）——临时豁免 darwin skip 验证修复。绿 2 轮后移除本
+      # 豁免并解除 skip；仍段错误则回退扫描器实验并恢复 skip。
+      PA_ALLOW_LIMIT_006: 1
     steps:
       - uses: actions/checkout@v4
 
