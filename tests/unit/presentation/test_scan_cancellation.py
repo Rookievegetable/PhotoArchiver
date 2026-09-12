@@ -18,8 +18,6 @@ Cancellation granularity is the task boundary (LIMIT-002 design analog):
 the use case finishes its current batch, then the task reports cancelled.
 """
 
-import os
-import sys
 
 import pytest
 
@@ -121,11 +119,6 @@ def test_scan_refusal_surfaces_reason_through_real_ui(
     assert not window._cancel_action.isEnabled()
 
 
-@pytest.mark.skipif(
-    sys.platform == "darwin" and os.environ.get("PA_ALLOW_LIMIT_006") != "1",
-    reason="LIMIT-006: macOS runner native segfault (exit 139) in the scan worker "
-    "during real-executor 2000-file stress; win/linux unaffected — see KNOWN_ISSUES",
-)
 def test_real_cancelled_scan_reports_cancelled_terminal_and_recovers(
     qtbot, tmp_path: Path
 ) -> None:
