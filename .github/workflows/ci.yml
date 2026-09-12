@@ -20,10 +20,6 @@ jobs:
       # LIMIT-006 D-1 补强：原生段错误时把 C 层栈（faulthandler）打进 stderr
       # 日志——本轮 .ips artifact 曾为空，faulthandler 是不依赖平台的兜底。
       PYTHONFAULTHANDLER: 1
-      # LIMIT-006 D-3 实验三：扫描器已换 os.listdir+lstat（绕开段错误定位的
-      # scandir C 通道）——临时豁免 darwin skip 验证修复。绿 2 轮后移除本
-      # 豁免并解除 skip；仍段错误则回退扫描器实验并恢复 skip。
-      PA_ALLOW_LIMIT_006: 1
     steps:
       - uses: actions/checkout@v4
 
@@ -102,12 +98,17 @@ jobs:
           grep -E "^FAILED|^ERROR" pytest-output.txt | while read -r line; do
             echo "::error::$line"
           done || true
-          # 139/134 类原生崩溃没有 FAILED 汇总——把输出尾部（含
-          # faulthandler 的 C 层栈）逐行转注解，匿名 API 可读。
+          # 139/134 类原生崩溃没有 FAILED 汇总——把 faulthandler 段（含 C 层
+          # 栈，从 "Fatal Python error" 到文件尾）逐行转注解，匿名 API 可读。
           if [ "$PYTEST_EXIT" -ne 0 ]; then
-            tail -n 40 pytest-output.txt | while read -r line; do
-              echo "::error::tail|$line"
+            sed -n '/Fatal Python error/,$p' pytest-output.txt | cut -c1-200 | while read -r line; do
+              echo "::error::fatal|$line"
             done || true
+            if ! grep -q "Fatal Python error" pytest-output.txt; then
+              tail -n 25 pytest-output.txt | cut -c1-200 | while read -r line; do
+                echo "::error::tail|$line"
+              done || true
+            fi
           fi
           exit "$PYTEST_EXIT"
 
