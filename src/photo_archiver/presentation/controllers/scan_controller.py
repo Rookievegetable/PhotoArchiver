@@ -59,7 +59,9 @@ class ScanController(QObject):
             folder_display_name=display_name,
         )
         task = ScanAndRegisterPhotosTask(self._use_case, command)
-        runnable = self._executor.submit(task)  # type: ignore[arg-type]  # generics variance
+        # ADR-040：扫描任务在 Python 线程执行（LIMIT-006 规避）——macOS 上
+        # QThreadPool 线程做目录枚举 + 主线程事件循环会段错误。
+        runnable = self._executor.submit(task, run_on_python_thread=True)  # type: ignore[arg-type]  # generics variance
         self._active_runnable = runnable
         return runnable
 

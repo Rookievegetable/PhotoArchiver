@@ -414,6 +414,17 @@
 
 ---
 
+### ADR-040 — 扫描任务移出 QThreadPool（LIMIT-006 规避，owner 立项）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 2026-09-12 立项"扫描线程规避"；D-3 排除矩阵完成后的产品侧规避） |
+| 决策 | `QtWorkerExecutor.submit` 增加 `run_on_python_thread` 开关；**仅扫描任务**（`ScanController.scan_folder`）以该开关在普通 Python `threading.Thread`（daemon、按 task_id 命名）上执行；其余任务（import/match/export/…）保持 QThreadPool 不变。`QtWorkerRunnable` 的信号契约（started/progress/completed/failed/cancelled + pending-terminal replay）完全不变——Qt 信号从 Python 线程发出，经队列连接投递到主线程，消费方（单飞守卫/取消/终端复位）零改动。 |
+| 理由 | D-3 排除矩阵（run #80/#82/#88 + owner 供日志）锁定崩溃形态：**QThreadPool 线程做文件系统枚举 + 主线程 Qt 事件循环并发**，在 macOS arm64 上与枚举 API（glob/scandir/listdir）及 PySide6 版本（6.8.3/6.11.1）均无关，故障点在 Python 帧之下的原生层——超出本仓库可修复范围，规避是唯一可控选项。扫描为单飞长任务，线程池复用无收益；Python 线程 + 队列信号是 Qt 生态标准模式。 |
+| 影响范围 | `workers/qt_executor.py`（submit 开关 + threading 导入）、`presentation/controllers/scan_controller.py`（scan 传开关）、CI no-skip 守卫恢复严格计数（LIMIT-006 白名单随 skip 解除移除）、4 处 darwin skip 解除（LIMIT-006 规避生效后 macOS 全量真跑）、KNOWN_ISSUES（LIMIT-006 更新规避状态）、CHANGELOG。不变：其他任务的 QThreadPool 执行、任务层（WorkerTask/事件/取消）契约、UI 控制器。 |
+
+---
+
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）
 
 > 权威审计方法论：`.ai/rules/audit-methodology.md`（迁移自废弃文档 `.ai/Consistency-Audit-2026-07-13.md` §8，2026-07-24 裁决2已物理删除该废弃文档）。本节仅列已裁决并执行的冲突处置。

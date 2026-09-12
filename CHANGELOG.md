@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
+## [Unreleased]
+
+### Fixed
+
+- **macOS scan segfault workaround**（macOS 扫描段错误规避，ADR-040）: photo
+  scanning now runs on a plain Python thread instead of a Qt thread-pool
+  thread. On macOS arm64, filesystem enumeration on a QThreadPool thread
+  while the main thread runs the Qt event loop intermittently segfaults
+  (independent of the enumeration API and PySide6 version — investigated in
+  LIMIT-006); the scan task's signals, cancellation, and single-flight
+  semantics are unchanged. The macOS-specific test skips this forced are
+  removed — the previously skipped stress tests now run on every CI pass.
+
 ## [2.7.0] - 2026-09-12
 
 Phase G operator round: the CLI now covers the entire pipeline, the archive
