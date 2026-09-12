@@ -8,15 +8,26 @@ Commit-level history lives in git — this file is the user-facing digest.
 
 ## [Unreleased]
 
+### Fixed
+
+- **macOS scan stability**（macOS 扫描稳定性，ADR-041）: directory
+  enumeration and path resolution for photo scanning moved to the UI thread
+  (a ~0.1 s one-shot per 2,000 files before the background pipeline takes
+  over). This eliminates an intermittent native segfault on macOS arm64
+  where background filesystem calls raced the Qt event loop (investigated
+  as LIMIT-006; independent of the enumeration API, PySide6 version, and
+  thread type). The macOS-specific test skips are removed — the full suite,
+  including the previously skipped stress tests, now runs on every CI pass.
+
 ### Internal
 
-- **LIMIT-006 macOS segfault investigation complete**（排查收官）: three
-  experiment rounds excluded the enumeration API, the PySide6 version, and
-  the worker thread type — the crash requires a background thread doing
-  macOS filesystem calls while the main thread runs the Qt event loop, and
-  faults below Python frames (native layer). Filed upstream: see
-  `docs/development/limit006-upstream-issue-draft.md`; the macOS-specific
-  test skips stay until an upstream fix lands.
+- **LIMIT-006 investigation record**: three experiment rounds excluded the
+  enumeration API, the PySide6 version, and the worker thread type — the
+  crash required a background thread doing macOS filesystem calls while the
+  main thread ran the Qt event loop, faulting below Python frames
+  (native layer). Upstream issue draft kept at
+  `docs/development/limit006-upstream-issue-draft.md` as optional community
+  feedback.
 
 ## [2.7.0] - 2026-09-12
 

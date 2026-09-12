@@ -14,8 +14,6 @@ Two layers, mirroring the MatchPersonsController test split:
 """
 
 
-import os
-import sys
 import pytest
 
 pytest.importorskip("pytestqt")
@@ -57,6 +55,9 @@ def _make_synthetic_controller() -> tuple[ScanController, _RecordingExecutor]:
             import contextlib
 
             return contextlib.nullcontext()
+
+        def enumerate_files(self, command):  # noqa: ANN001  # ADR-041: empty synthetic folder
+            return ()
 
         def execute(self, command):  # pragma: no cover - never executed here
             raise AssertionError("synthetic tests never execute the use case")
@@ -135,11 +136,6 @@ def test_terminal_from_stale_runnable_does_not_release_new_guard() -> None:
     assert controller.is_running  # stale terminal must not clear the fresh guard
 
 
-@pytest.mark.skipif(
-    sys.platform == "darwin" and os.environ.get("PA_ALLOW_LIMIT_006") != "1",
-    reason="LIMIT-006: macOS runner native segfault (exit 139) in the scan worker "
-    "during real-executor 2000-file stress; win/linux unaffected — see KNOWN_ISSUES",
-)
 def test_real_executor_refuses_second_scan_mid_flight_and_recovers(qtbot, tmp_path: Path) -> None:
     """Real QThreadPool + real SQLite: refusal mid-flight, recovery after."""
     folder = tmp_path / "photos"
@@ -172,3 +168,26 @@ def test_real_executor_refuses_second_scan_mid_flight_and_recovers(qtbot, tmp_pa
     # Scenario B proof: the rescan genuinely re-registered (skips this time).
     result = runnable3.task._command  # noqa: SLF001 - test introspection only
     assert result.folder_path == folder
+
+
+def test_scan_folder_pre_enumerates_on_the_calling_thread(monkeypatch, tmp_path) -> None:
+    """ADR-041：枚举在调用（主）线程完成，条目经命令传入 worker。"""
+    import threading
+
+    controller, executor = _make_synthetic_controller()
+    enumerated_threads: list[str] = []
+    original = controller._use_case.enumerate_files
+
+    def _spy_enumerate(command):  # noqa: ANN001
+        enumerated_threads.append(threading.current_thread().name)
+        return original(command)
+
+    monkeypatch.setattr(controller._use_case, "enumerate_files", _spy_enumerate)
+
+    runnable = controller.scan_folder(tmp_path)
+
+    assert runnable is not None
+    assert enumerated_threads == [threading.main_thread().name]
+    command = executor.last_runnable.task._command
+    assert command.folder_path == tmp_path.resolve()
+    assert command.pre_enumerated_items == ()

@@ -425,6 +425,18 @@
 
 ---
 
+### ADR-041 — 扫描枚举前置到主线程（LIMIT-006 仓内根治，owner 批准"功能不依赖外部"）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 2026-09-13 指示"项目功能正常不能依赖外部"——LIMIT-006 处置从等待上游改为仓内根治） |
+| 决策 | 目录枚举与 realpath 从扫描 worker 线程**前置到主线程**：`ScanController.scan_folder` 在提交前 `resolve` 根目录并经新用例方法 `enumerate_files` 完成枚举，条目经 `ScanAndRegisterPhotosCommand.pre_enumerated_items` 传入 worker；worker（预枚举模式）**零枚举/零 realpath syscall**（含取消 per-item resolve，run #91 的崩溃点）。CLI 与旧路径（pre_enumerated_items=None）行为不变。 |
+| 理由 | D-3 排除矩阵终态：崩溃与枚举 API（3 种实现）、PySide6 版本（6.8.3/6.11.1）、线程类型（QThreadPool/Python）均无关，唯一共同必要条件 = **后台线程做 macOS 文件系统调用 + 主线程事件循环并发**（故障在 Python 帧之下原生层，见 run #80/#88/#91 三份 faulthandler 栈）。把枚举搬回主线程使该并发组合在扫描路径上不复存在。枚举成本实测 0.140s/2000 文件（主线程一次性，配状态提示可接受）。 |
+| 影响范围 | `application/services/scan_and_register_photos_service.py`（`enumerate_files` 新用例方法 + execute 预枚举分支 + `_scan_and_register` resolve 开关）、`application/use_cases/scan_and_register_photos.py`（协议扩 enumerate_files）、`application/commands/scan_and_register_photos.py`（pre_enumerated_items 字段）、`presentation/controllers/scan_controller.py`（主线程前置）、`tests/`（服务/控制器/AST 守卫）、user-guide 已知问题节。不变：任务层契约（事件/取消/单飞）、CLI 行为、其他任务的线程模型。 |
+| 残余风险 | worker 仍执行文件内容读取（PIL/哈希）——macOS CI 数百次运行从未在该面崩溃（崩溃仅现于枚举/realpath 系统调用）。大库枚举的主线程冻结 ≈ 70µs/文件（10 万文件 ≈ 7s），阈值已文档化，超出时分块枚举另行立项。 |
+
+---
+
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）
 
 > 权威审计方法论：`.ai/rules/audit-methodology.md`（迁移自废弃文档 `.ai/Consistency-Audit-2026-07-13.md` §8，2026-07-24 裁决2已物理删除该废弃文档）。本节仅列已裁决并执行的冲突处置。

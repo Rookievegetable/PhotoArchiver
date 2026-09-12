@@ -51,6 +51,7 @@ STATUS_IMPORTING_FILE = "正在导入 {path} …"
 STATUS_ARCHIVING = "正在归档…"
 STATUS_EXPORTING = "正在导出…"
 STATUS_SCAN_UNAVAILABLE = "扫描不可用。"
+STATUS_SCAN_ENUMERATION_FAILED = "扫描目录枚举失败：{detail}"
 STATUS_MATCH_UNAVAILABLE = "人脸识别不可用。"
 
 # 归档前置警告

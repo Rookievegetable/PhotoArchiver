@@ -6,7 +6,10 @@ from PySide6.QtCore import QObject, Slot
 
 from photo_archiver.application import ScanAndRegisterPhotosCommand, ScanAndRegisterPhotosUseCase
 from photo_archiver.workers import QtWorkerExecutor, QtWorkerRunnable, ScanAndRegisterPhotosTask
-from photo_archiver.presentation.ui_text import REFUSAL_SCAN_IN_FLIGHT
+from photo_archiver.presentation.ui_text import (
+    REFUSAL_SCAN_IN_FLIGHT,
+    STATUS_SCAN_ENUMERATION_FAILED,
+)
 
 
 class ScanController(QObject):
@@ -53,10 +56,28 @@ class ScanController(QObject):
         if self._active_runnable is not None:
             self.last_refusal_reason = REFUSAL_SCAN_IN_FLIGHT
             return None
+        # ADR-041（LIMIT-006 规避）：目录枚举与 realpath 在主线程完成——
+        # macOS 上后台线程的文件系统调用与主线程事件循环并发的段错误
+        # （run #80/#91）由此消除；worker 只做元数据/哈希/登记。
+        try:
+            resolved_folder = Path(folder_path).resolve()
+            enumerated = tuple(
+                self._use_case.enumerate_files(
+                    ScanAndRegisterPhotosCommand(
+                        folder_path=resolved_folder,
+                        recursive=recursive,
+                        folder_display_name=display_name,
+                    )
+                )
+            )
+        except OSError as exc:
+            self.last_refusal_reason = STATUS_SCAN_ENUMERATION_FAILED.format(detail=exc)
+            return None
         command = ScanAndRegisterPhotosCommand(
-            folder_path=folder_path,
+            folder_path=resolved_folder,
             recursive=recursive,
             folder_display_name=display_name,
+            pre_enumerated_items=enumerated,
         )
         task = ScanAndRegisterPhotosTask(self._use_case, command)
         runnable = self._executor.submit(task)  # type: ignore[arg-type]  # generics variance

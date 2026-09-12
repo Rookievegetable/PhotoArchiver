@@ -50,31 +50,63 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
         self._progress_reporter = progress_reporter
         self._unit_of_work = unit_of_work
 
+    def enumerate_files(self, command: ScanAndRegisterPhotosCommand) -> list[PhotoScanItem]:
+        """Enumerate candidate files for the command folder (ADR-041).
+
+        Intended to be called on the **main thread** before submission: on
+        macOS, directory enumeration from a background thread while the main
+        thread runs the Qt event loop can segfault (LIMIT-006, see
+        KNOWN_ISSUES.md). The controller pre-enumerates here and passes the
+        result back via ``command.pre_enumerated_items`` so the worker thread
+        never touches directory-enumeration or realpath syscalls.
+
+        Raises:
+            OSError: Propagated from the scanner — the caller (controller)
+                surfaces it; unlike ``execute`` this does not wrap the error
+                in a result, because the submission itself should not start.
+        """
+        folder_path = self._absolute_path(command.folder_path)
+        return self._scanner.scan(
+            folder_path,
+            recursive=command.recursive,
+            supported_extensions=command.supported_extensions,
+        )
+
     def execute(self, command: ScanAndRegisterPhotosCommand) -> ScanAndRegisterPhotosResult:
         """Scan the command folder and persist each discovered photo."""
-        folder_path = self._absolute_path(command.folder_path)
-
-        try:
-            scan_items = self._scanner.scan(
-                folder_path,
-                recursive=command.recursive,
-                supported_extensions=command.supported_extensions,
-            )
-        except OSError as exc:
-            logger.warning("Scan failed for {}: {}", folder_path, exc)
-            return ScanAndRegisterPhotosResult(failed_count=1, errors=(str(exc),))
+        if command.pre_enumerated_items is not None:
+            # ADR-041: the controller enumerated on the main thread and
+            # guarantees folder_path is resolved and every item path is a
+            # real absolute path — the worker performs ZERO enumeration or
+            # realpath syscalls (LIMIT-006 workaround).
+            folder_path = command.folder_path
+            scan_items = list(command.pre_enumerated_items)
+            resolve_item_paths = False
+        else:
+            folder_path = self._absolute_path(command.folder_path)
+            resolve_item_paths = True
+            try:
+                scan_items = self._scanner.scan(
+                    folder_path,
+                    recursive=command.recursive,
+                    supported_extensions=command.supported_extensions,
+                )
+            except OSError as exc:
+                logger.warning("Scan failed for {}: {}", folder_path, exc)
+                return ScanAndRegisterPhotosResult(failed_count=1, errors=(str(exc),))
 
         if self._unit_of_work is not None:
             with self._unit_of_work:
-                return self._scan_and_register(folder_path, command.folder_display_name, scan_items)
+                return self._scan_and_register(folder_path, command.folder_display_name, scan_items, resolve_item_paths)
 
-        return self._scan_and_register(folder_path, command.folder_display_name, scan_items)
+        return self._scan_and_register(folder_path, command.folder_display_name, scan_items, resolve_item_paths)
 
     def _scan_and_register(
         self,
         folder_path: Path,
         display_name: str | None,
         scan_items: list[PhotoScanItem],
+        resolve_item_paths: bool = True,
     ) -> ScanAndRegisterPhotosResult:
         """Run the registration loop within (or outside) a unit-of-work scope."""
         total = len(scan_items)
@@ -95,7 +127,9 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
         errors: list[str] = []
 
         for index, item in enumerate(scan_items, start=1):
-            photo_path = self._absolute_path(item.path)
+            # ADR-041：预枚举条目已由主线程解析为真实绝对路径——worker 端
+            # 跳过 per-item resolve（run #91 的段错误点）。
+            photo_path = item.path if not resolve_item_paths else self._absolute_path(item.path)
             path_value = self._photo_path(photo_path)
             existing = existing_photos.get(path_value)
             if existing is not None:
