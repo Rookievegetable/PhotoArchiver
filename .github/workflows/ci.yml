@@ -20,6 +20,10 @@ jobs:
       # LIMIT-006 D-1 补强：原生段错误时把 C 层栈（faulthandler）打进 stderr
       # 日志——本轮 .ips artifact 曾为空，faulthandler 是不依赖平台的兜底。
       PYTHONFAULTHANDLER: 1
+      # LIMIT-006 D-3 实验四：PySide6 降级 6.8.3 LTS（6.11.1 疑似上游缺陷）——
+      # 豁免 darwin skip 让崩溃用例在 macOS 主矩阵真实运行。绿 2 轮则保留
+      # 降级并移除本豁免；仍段错误则回退升级并恢复 skip。
+      PA_ALLOW_LIMIT_006: 1
     steps:
       - uses: actions/checkout@v4
 
