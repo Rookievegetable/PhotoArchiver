@@ -76,6 +76,13 @@ Current thread 0x00000001eff52180 (most recent call first):
   thread waiting in the Qt event loop (plain `threading.Event` + sleep
   polling) → **no crash in 10+ runs** → the concurrent event loop on the
   main thread appears to be a necessary ingredient.
+- **Thread-type-independent**: moving the scan task off the QThreadPool onto
+  a plain Python `threading.Thread` (with the main thread still waiting via
+  `qtbot.waitUntil`) still segfaulted — and the crash site **drifted** from
+  the scanner's `os.scandir` to `pathlib.Path.resolve` /
+  `posixpath._joinrealpath` inside the service's path resolution, again with
+  `<no Python frame>` below. Any background-thread macOS filesystem call
+  concurrent with the main-thread event loop can be the faulting frame.
 - **Version-independent** (reproduces on PySide6 6.11.1 and 6.8.3): downgrading to **PySide6 6.8.3** (same
   code, same suite, crash tests re-enabled) has been green so far —
   observation ongoing.

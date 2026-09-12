@@ -15,6 +15,8 @@ WorkerTask.run() **边界**生效（KNOWN_ISSUES LIMIT-002/006）——"提交�
 覆盖。不依赖 InsightFace 模型（LIMIT-001 / CI Principle 3）。
 """
 
+import os
+import sys
 import pytest
 
 pytest.importorskip("pytestqt")
@@ -66,6 +68,12 @@ def _scan_to_completion(window: MainWindow, photo_dir: Path, qtbot) -> None:
     )
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin" and os.environ.get("PA_ALLOW_LIMIT_006") != "1",
+    reason="LIMIT-006: macOS runner native segfault (signal 11) in the scan worker "
+    "(pathlib.is_file/stat) during real-executor stress scans with qtbot.waitUntil; "
+    "win/linux unaffected — see KNOWN_ISSUES",
+)
 def test_cancel_request_leaves_consistent_store_and_rescan_completes(
     qtbot, tmp_path: Path
 ) -> None:
@@ -115,6 +123,12 @@ def test_cancel_request_leaves_consistent_store_and_rescan_completes(
     assert subset_paths <= _registered_paths(window)
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin" and os.environ.get("PA_ALLOW_LIMIT_006") != "1",
+    reason="LIMIT-006: macOS runner native segfault (signal 11) in the scan worker "
+    "(pathlib.is_file/stat) during real-executor stress scans with qtbot.waitUntil; "
+    "win/linux unaffected — see KNOWN_ISSUES",
+)
 def test_rescan_grows_superset_idempotently(qtbot, tmp_path: Path) -> None:
     """部分文件扫描 → 追加文件 → 重扫：增量补齐、原有照片原样保留、无重复。"""
     window = _make_window(qtbot, tmp_path)

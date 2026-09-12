@@ -8,16 +8,15 @@ Commit-level history lives in git — this file is the user-facing digest.
 
 ## [Unreleased]
 
-### Fixed
+### Internal
 
-- **macOS scan segfault workaround**（macOS 扫描段错误规避，ADR-040）: photo
-  scanning now runs on a plain Python thread instead of a Qt thread-pool
-  thread. On macOS arm64, filesystem enumeration on a QThreadPool thread
-  while the main thread runs the Qt event loop intermittently segfaults
-  (independent of the enumeration API and PySide6 version — investigated in
-  LIMIT-006); the scan task's signals, cancellation, and single-flight
-  semantics are unchanged. The macOS-specific test skips this forced are
-  removed — the previously skipped stress tests now run on every CI pass.
+- **LIMIT-006 macOS segfault investigation complete**（排查收官）: three
+  experiment rounds excluded the enumeration API, the PySide6 version, and
+  the worker thread type — the crash requires a background thread doing
+  macOS filesystem calls while the main thread runs the Qt event loop, and
+  faults below Python frames (native layer). Filed upstream: see
+  `docs/development/limit006-upstream-issue-draft.md`; the macOS-specific
+  test skips stay until an upstream fix lands.
 
 ## [2.7.0] - 2026-09-12
 

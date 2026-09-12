@@ -1,7 +1,5 @@
 """Qt executor for running worker tasks outside the UI thread."""
 
-import threading
-
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from loguru import logger
 
@@ -129,33 +127,8 @@ class QtWorkerExecutor:
         if max_workers is not None:
             self._thread_pool.setMaxThreadCount(max_workers)
 
-    def submit(
-        self,
-        task: WorkerTask[object],
-        *,
-        run_on_python_thread: bool = False,
-    ) -> QtWorkerRunnable:
-        """Submit a task for background execution and return its runnable handle.
-
-        Args:
-            task: The worker task to execute.
-            run_on_python_thread: Execute on a plain Python ``threading.Thread``
-                instead of the QThreadPool (ADR-040, LIMIT-006 workaround:
-                filesystem enumeration on a QThreadPool thread while the main
-                thread runs the Qt event loop segfaults on macOS arm64 —
-                PySide6 6.8.3 and 6.11.1 both affected). Signals are emitted
-                from the Python thread and delivered queued to the main
-                thread, so consumers are unaffected. The scan controller
-                opts in; all other tasks keep the thread pool.
-        """
+    def submit(self, task: WorkerTask[object]) -> QtWorkerRunnable:
+        """Submit a task for background execution and return its runnable handle."""
         runnable = QtWorkerRunnable(task)
-        if run_on_python_thread:
-            thread = threading.Thread(
-                target=runnable.run,
-                name=f"pa-worker-{task.task_id}",
-                daemon=True,
-            )
-            thread.start()
-        else:
-            self._thread_pool.start(runnable)
+        self._thread_pool.start(runnable)
         return runnable
