@@ -80,8 +80,7 @@ class ScanController(QObject):
             pre_enumerated_items=enumerated,
         )
         task = ScanAndRegisterPhotosTask(self._use_case, command)
-        # LIMIT-006：扫描走大栈 Python 线程（实验五，栈大小假设验证）。
-        runnable = self._executor.submit(task, run_on_python_thread=True)  # type: ignore[arg-type]  # generics variance
+        runnable = self._executor.submit(task)  # type: ignore[arg-type]  # generics variance
         self._active_runnable = runnable
         return runnable
 

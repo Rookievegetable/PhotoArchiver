@@ -14,6 +14,8 @@ Two layers, mirroring the MatchPersonsController test split:
 """
 
 
+import os
+import sys
 import pytest
 
 pytest.importorskip("pytestqt")
@@ -136,6 +138,12 @@ def test_terminal_from_stale_runnable_does_not_release_new_guard() -> None:
     assert controller.is_running  # stale terminal must not clear the fresh guard
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin" and os.environ.get("PA_ALLOW_LIMIT_006") != "1",
+    reason="LIMIT-006: macOS arm64 worker-thread native crash (SIGSEGV) during the scan "
+    "while the main thread runs the Qt event loop; site drifts (scandir/realpath/PIL) — "
+    "see KNOWN_ISSUES; win/linux unaffected",
+)
 def test_real_executor_refuses_second_scan_mid_flight_and_recovers(qtbot, tmp_path: Path) -> None:
     """Real QThreadPool + real SQLite: refusal mid-flight, recovery after."""
     folder = tmp_path / "photos"

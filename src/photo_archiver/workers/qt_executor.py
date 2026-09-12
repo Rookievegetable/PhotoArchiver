@@ -1,7 +1,5 @@
 """Qt executor for running worker tasks outside the UI thread."""
 
-import threading
-
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from loguru import logger
 
@@ -14,10 +12,6 @@ from photo_archiver.workers.events import (
     TaskStarted,
 )
 from photo_archiver.workers.task import WorkerTask, WorkerTaskCancelled
-
-# 64 MB：Windows/Linux 次级线程默认栈量级——macOS 次级 pthread 默认仅 512KB，
-# LIMIT-006 的段错误假设为深 C 栈（SQLAlchemy/loguru/pydantic 帧）溢出。
-_WORKER_STACK_SIZE_BYTES = 64 * 1024 * 1024
 
 
 class QtWorkerSignals(QObject):
@@ -133,39 +127,8 @@ class QtWorkerExecutor:
         if max_workers is not None:
             self._thread_pool.setMaxThreadCount(max_workers)
 
-    def submit(
-        self,
-        task: WorkerTask[object],
-        *,
-        run_on_python_thread: bool = False,
-    ) -> QtWorkerRunnable:
-        """Submit a task for background execution and return its runnable handle.
-
-        Args:
-            task: The worker task to execute.
-            run_on_python_thread: Execute on a plain Python ``threading.Thread``
-                with an explicit large stack instead of the QThreadPool
-                (ADR-040/041 evolution, LIMIT-006). macOS gives secondary
-                pthreads only 512 KB of stack (Windows/Linux: 8 MB), which is
-                the leading hypothesis for the arm64 segfaults observed in
-                worker threads. Signals are emitted from the Python thread and
-                delivered queued to the main thread, so consumers are
-                unaffected. The scan controller opts in; other tasks keep the
-                thread pool.
-        """
+    def submit(self, task: WorkerTask[object]) -> QtWorkerRunnable:
+        """Submit a task for background execution and return its runnable handle."""
         runnable = QtWorkerRunnable(task)
-        if run_on_python_thread:
-            previous_stack = threading.stack_size()
-            try:
-                threading.stack_size(_WORKER_STACK_SIZE_BYTES)
-                thread = threading.Thread(
-                    target=runnable.run,
-                    name=f"pa-worker-{task.task_id}",
-                    daemon=True,
-                )
-                thread.start()
-            finally:
-                threading.stack_size(previous_stack)
-        else:
-            self._thread_pool.start(runnable)
+        self._thread_pool.start(runnable)
         return runnable

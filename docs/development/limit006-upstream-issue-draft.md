@@ -83,6 +83,10 @@ Current thread 0x00000001eff52180 (most recent call first):
   `posixpath._joinrealpath` inside the service's path resolution, again with
   `<no Python frame>` below. Any background-thread macOS filesystem call
   concurrent with the main-thread event loop can be the faulting frame.
+- **Stack-size-independent**: running the scan worker on a Python thread
+  with an explicit 64 MB stack still segfaulted (macOS secondary pthreads
+  default to 512 KB — the Windows/Linux 8 MB difference was a candidate,
+  refuted by run #97, crash site drifted to `PIL.Image.open`).
 - **Version-independent** (reproduces on PySide6 6.11.1 and 6.8.3): downgrading to **PySide6 6.8.3** (same
   code, same suite, crash tests re-enabled) has been green so far —
   observation ongoing.

@@ -38,7 +38,7 @@
 
 ## 未决问题
 
-_当前无未决问题条目（2026-09-13：**LIMIT-006 已仓内根治并关闭**——根因为 macOS 次级 pthread 默认 512KB 栈（Windows/Linux 为 8MB，唯一符合"仅 macOS 崩溃"全部观测的平台差异变量），深 C 栈（SQLAlchemy/loguru/pydantic 帧）在后台枚举/解析线程上溢出致段错误。修复 = `QtWorkerExecutor.submit(run_on_python_thread=True)` 以 **64MB 显式栈**的 Python 线程执行扫描任务（ADR-041 枚举前置 + 实验五验证，macOS 全量真跑连续 2 轮绿，含 4 个此前必崩用例），darwin skip 全部解除。完整排查记录（三重排除矩阵 + 三份 faulthandler 栈 + 崩溃点漂移）见 Git 历史；上游 issue 草稿保留于 `docs/development/limit006-upstream-issue-draft.md`。_
+_未决（2026-09-13 起）：**LIMIT-006 重开**——"512KB 栈"定论被 run #97 证伪（64MB 显式栈下段错误复现，崩溃点第 4 次漂移至 `PIL Image.open`）。当前确证：崩溃 = macOS arm64 上 **QThreadPool/Python 后台线程的任意原生调用**（已观测 scandir/realpath/sqlite3/PIL 四处漂移）在**主线程运行 Qt 事件循环**时的概率性 SIGSEGV；与枚举 API（3 种实现）、PySide6 版本（6.8.3/6.11.1）、线程类型（QThreadPool/Python threading）、栈大小（512KB/64MB）全部无关。故障在 Python 帧之下原生层，本仓库不可修复——处置：darwin skip 长期维持 + 注解取证通道常驻，出路 = 上游 issue（草稿含全量数据）或本地 macOS 调试环境。曾两次过早宣布定论（6 连续通过判据、512KB 栈根因）均被下一轮证伪——除上述变量外不再仓内猜测。_
 
 > 注意：以下为**设计性/测试覆盖限制**，非缺陷，登记于表格供审计与 CI 规划参考。
 

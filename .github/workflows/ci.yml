@@ -153,7 +153,10 @@ jobs:
       - name: Assert UI tests ran not skipped (close ISSUE-009)
         shell: bash
         run: |
-          SKIPPED=$(grep -cE "^SKIPPED.*tests[/\]unit[/\]presentation[/\]" pytest-output.txt || true)
+          # 白名单：LIMIT-006 的 macOS darwin skipif（reason 带 LIMIT-006 标记）
+          # 为长期存在项（原生层问题待上游/环境），不计入；ISSUE-009 失败模式
+          # （PySide6 缺失整目录 skip）无该标记，仍会被捕获。
+          SKIPPED=$(grep -E "^SKIPPED.*tests[/\]unit[/\]presentation[/\]" pytest-output.txt | grep -cv "LIMIT-006" || true)
           if [ "$SKIPPED" -gt 0 ]; then
             echo "::error::${SKIPPED} UI test(s) skipped at runtime — ISSUE-009 not truly closed (PySide6/pytest-qt missing on runner)"
             exit 1
