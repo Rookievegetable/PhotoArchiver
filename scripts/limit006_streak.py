@@ -30,13 +30,35 @@ TARGET_STREAK = 5
 MAX_RUNS = 30
 
 
-def _api(url: str) -> dict:
+def _api(url: str, attempts: int = 3) -> dict:
+    """GET a GitHub API URL with retry/backoff on rate limits and 5xx.
+
+    Runners share IP pools, so even an authenticated request can hit a
+    secondary limit — retry with backoff instead of failing the telemetry
+    step (the tracker is best-effort by design, H-1).
+    """
+    import time
+    from urllib.error import HTTPError, URLError
+
     headers = {"Accept": "application/vnd.github+json"}
     if TOKEN:
         headers["Authorization"] = f"Bearer {TOKEN}"
     request = Request(url, headers=headers)
-    with urlopen(request, timeout=30) as response:
-        return json.load(response)
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(request, timeout=30) as response:
+                return json.load(response)
+        except HTTPError as error:
+            last_error = error
+            if error.code not in (403, 429) and error.code < 500:
+                raise  # non-retryable (404 etc.)
+        except URLError as error:
+            last_error = error
+        if attempt < attempts:
+            time.sleep(5 * attempt)
+    assert last_error is not None
+    raise last_error
 
 
 def _evidence_outcomes() -> list[tuple[int, str]]:
@@ -101,10 +123,13 @@ def main() -> int:
         streak += 1
     streak = max(streak, 0)
 
+    # 判据修正（run #80 实证）：stress 上下文连续通过 ≠ 主套件安全——
+    # 崩溃依赖全量套件上下文，6 连续通过后解除 skip 当轮即段错误。
+    # 本计数器降级为 canary 遥测；skip 解除以根因修复（PySide6 降级/上游
+    # 修复）为前提，不再由 stress streak 触发。
     verdict = (
-        f"DOWNGRADE CRITERION MET ({streak} consecutive passes) — remove the darwin skips"
-        if streak >= TARGET_STREAK
-        else f"{streak}/{TARGET_STREAK} consecutive passes — darwin skips stay"
+        f"{streak} consecutive stress-context passes (canary; stress passes do NOT "
+        f"clear main-suite removal — see run #80)"
     )
     lines = ["| run | evidence step |", "|---|---|", *[f"| {h.split('=', 1)[0]} | {h.split('=', 1)[1]} |" for h in history]]
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
