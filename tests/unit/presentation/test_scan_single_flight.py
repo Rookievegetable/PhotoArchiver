@@ -41,7 +41,7 @@ class _RecordingExecutor:
     def __init__(self) -> None:
         self.last_runnable: QtWorkerRunnable | None = None
 
-    def submit(self, task):
+    def submit(self, task, **_kwargs):  # ADR-040/041: scan passes thread options
         runnable = QtWorkerRunnable(task)
         self.last_runnable = runnable
         return runnable
