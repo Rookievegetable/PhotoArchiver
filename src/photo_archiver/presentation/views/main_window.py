@@ -424,6 +424,11 @@ class MainWindow(QMainWindow):
             return
         photos = self._photo_list_controller.search_photos(criteria)
         self._photo_list_model.load_photos(photos)
+        self._photo_list_model.set_status_badges(
+            self._photo_list_controller.status_badges(
+                [photo.id for photo in photos if photo.id is not None]
+            )
+        )
         for photo in photos:
             self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__
 
@@ -668,6 +673,11 @@ class MainWindow(QMainWindow):
         """
         photos = self._photo_list_controller.list_photos()
         self._photo_list_model.load_photos(photos)
+        self._photo_list_model.set_status_badges(
+            self._photo_list_controller.status_badges(
+                [photo.id for photo in photos if photo.id is not None]
+            )
+        )
         for photo in photos:
             self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__
 

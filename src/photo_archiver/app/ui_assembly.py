@@ -127,6 +127,8 @@ def build_ui_controllers(
             thumbnail_cache,
             thumbnail_generator,
             search_service=services.search_photos,
+            recognition_repository=repositories.recognition,
+            archive_record_repository=repositories.archive_records,
         ),
         settings=SettingsController(services.settings),
         export=ExportController(

@@ -98,6 +98,12 @@ REVIEW_STATUS_LINE = (
 REVIEW_ROW_FORMAT = "照片={photo_label} 人员={person_label} 置信度={confidence:.2f}"
 REVIEW_PERSON_UNKNOWN = "未知人员"
 STATUS_PHOTO_LIST_EMPTY = "暂无照片——请先扫描照片文件夹"
+# G-4：照片墙状态角标（PhotoThumbnailDelegate 右上角小签）。
+STATUS_BADGE_PENDING = "待审核"
+STATUS_BADGE_APPROVED = "已通过"
+STATUS_BADGE_REJECTED = "已拒绝"
+STATUS_BADGE_UNMATCHED = "未匹配"
+STATUS_BADGE_ARCHIVED = "已归档"
 SETTINGS_LANGUAGE_HINT = "（语言切换暂未实装，i18n 为 Out-of-Scope，见 roadmap §13.7）"
 
 # ---- 设置对话框（SettingsDialog） ----

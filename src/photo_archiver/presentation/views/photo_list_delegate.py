@@ -15,7 +15,7 @@ eviction stays Qt-managed — no hand-rolled cache to leak.
 from pathlib import Path
 
 from PySide6.QtCore import QRect, QSize, Qt
-from PySide6.QtGui import QFontMetrics, QPainter, QPixmap, QPixmapCache
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPixmap, QPixmapCache
 from PySide6.QtWidgets import (
     QApplication,
     QStyle,
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate,
 )
 
-from photo_archiver.presentation.views.photo_list_model import THUMBNAIL_ROLE
+from photo_archiver.presentation.views.photo_list_model import STATUS_BADGE_ROLE, THUMBNAIL_ROLE
 
 # The generation contract keeps thumbnails inside a 256px bounding box
 # (PhotoListController); the DISPLAY cell shows them in a compact grid —
@@ -74,6 +74,25 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
             image_box.top() + (image_box.height() - scaled.height()) // 2,
             scaled,
         )
+
+        # G-4：状态角标——识别状态 · 归档，右上角半透明小签（主题无关）。
+        badge = index.data(STATUS_BADGE_ROLE)
+        if badge:
+            metrics = QFontMetrics(option.font)
+            badge_text = str(badge)
+            chip_width = metrics.horizontalAdvance(badge_text) + 2 * _PADDING
+            chip_height = metrics.height() + 4
+            chip = QRect(
+                image_box.right() - chip_width,
+                image_box.top() + 2,
+                chip_width,
+                chip_height,
+            )
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(0, 0, 0, 160))
+            painter.drawRoundedRect(chip, 4, 4)
+            painter.setPen(QColor("white"))
+            painter.drawText(chip, Qt.AlignmentFlag.AlignCenter, badge_text)
 
         name = index.data(Qt.ItemDataRole.DisplayRole) or ""
         text_rect = QRect(

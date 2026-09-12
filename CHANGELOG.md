@@ -20,6 +20,19 @@ Commit-level history lives in git — this file is the user-facing digest.
   gains an archive-root field (folder picker); a saved preference overrides
   `ARCHIVE_ROOT` from `.env`, and when neither is set the archive entry keeps
   its honest "not configured" guidance. FEAT-14's last real gap closed.
+- **Photo wall status badges**（照片墙状态角标）: every thumbnail carries a
+  corner badge — 待审核 / 已通过 / 已拒绝 / 未匹配, with `· 已归档` appended
+  for archived photos — so the recognition workflow is readable at a glance
+  from the wall itself.
+
+### Internal
+
+- **LIMIT-006 D-3 experiment**: a dedicated macOS job runs the 2000-file scan
+  stress through a real QThreadPool **without qtbot** — it passes stably,
+  which narrows the intermittent native segfault to the qtbot main-thread
+  wait interaction (QThreadPool × large directories alone does not reproduce
+  it). `PYTHONFAULTHANDLER` is now always on in CI so any future native
+  crash leaves a C-level stack in the logs.
 
 ## [2.6.0] - 2026-09-12
 

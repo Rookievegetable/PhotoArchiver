@@ -13,7 +13,14 @@ from uuid import UUID
 from PySide6.QtCore import QObject, Qt, QRunnable, QThreadPool, Signal, Slot
 
 from photo_archiver.application.ports import ThumbnailCache, ThumbnailGenerator
-from photo_archiver.domain import Photo, PhotoRepository, PhotoSearchCriteria
+from photo_archiver.domain import (
+    ArchiveRecordRepository,
+    MatchStatus,
+    Photo,
+    PhotoRepository,
+    PhotoSearchCriteria,
+    RecognitionRepository,
+)
 
 if TYPE_CHECKING:
     from photo_archiver.application.services import SearchPhotosService
@@ -21,6 +28,13 @@ if TYPE_CHECKING:
 # Default thumbnail bounding box size matches ThumbnailGenerator.generate default.
 from photo_archiver.application.ports.thumbnail_cache import (
     DEFAULT_THUMBNAIL_SIZE as _DEFAULT_THUMBNAIL_SIZE,
+)
+from photo_archiver.presentation.ui_text import (
+    STATUS_BADGE_APPROVED,
+    STATUS_BADGE_ARCHIVED,
+    STATUS_BADGE_PENDING,
+    STATUS_BADGE_REJECTED,
+    STATUS_BADGE_UNMATCHED,
 )
 
 
@@ -73,6 +87,8 @@ class PhotoListController(QObject):
         thumbnail_cache: ThumbnailCache,
         thumbnail_generator: ThumbnailGenerator,
         search_service: "SearchPhotosService | None" = None,
+        recognition_repository: RecognitionRepository | None = None,
+        archive_record_repository: ArchiveRecordRepository | None = None,
         parent: QObject | None = None,
     ) -> None:
         """Initialize the controller with its repository and thumbnail services.
@@ -89,6 +105,8 @@ class PhotoListController(QObject):
         self._thumbnail_cache = thumbnail_cache
         self._thumbnail_generator = thumbnail_generator
         self._search_service = search_service
+        self._recognition_repository = recognition_repository
+        self._archive_record_repository = archive_record_repository
         self._in_flight: set[UUID] = set()
         # Wire the async completion back through a QueuedConnection so the
         # signal fires on the UI thread, not the QThreadPool worker thread.
@@ -97,6 +115,42 @@ class PhotoListController(QObject):
     def list_photos(self) -> list[Photo]:
         """Return all registered photos for the photo-list view."""
         return self._photo_repository.list_all()
+
+    def status_badges(self, photo_ids: list[UUID]) -> dict[UUID, str]:
+        """Return per-photo badge text (G-4): recognition status + archived flag.
+
+        ``list_first_by_photo_ids`` 与 ``list_by_photo_ids`` 均为批量联查（一次
+        往返），照片墙每次刷新共 2 次查询。两个仓库均未注入（CLI/CI 装配）
+        时返回空映射——模型侧无角标。
+        """
+        if self._recognition_repository is None:
+            return {}
+        ids = list(photo_ids)
+        first_results = self._recognition_repository.list_first_by_photo_ids(ids)
+        archived_ids: set[UUID] = set()
+        if self._archive_record_repository is not None:
+            archived_ids = {
+                record.photo_id
+                for record in self._archive_record_repository.list_by_photo_ids(ids)
+                if record.photo_id is not None
+            }
+        status_labels = {
+            MatchStatus.PENDING: STATUS_BADGE_PENDING,
+            MatchStatus.APPROVED: STATUS_BADGE_APPROVED,
+            MatchStatus.REJECTED: STATUS_BADGE_REJECTED,
+        }
+        badges: dict[UUID, str] = {}
+        for photo_id in ids:
+            result = first_results.get(photo_id)
+            label = (
+                status_labels.get(result.status, STATUS_BADGE_UNMATCHED)
+                if result is not None
+                else STATUS_BADGE_UNMATCHED
+            )
+            if photo_id in archived_ids:
+                label = f"{label} · {STATUS_BADGE_ARCHIVED}"
+            badges[photo_id] = label
+        return badges
 
     def search_photos(self, criteria: PhotoSearchCriteria) -> list[Photo]:
         """Return photos matching the supplied search criteria.

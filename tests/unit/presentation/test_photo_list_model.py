@@ -2,6 +2,7 @@
 
 import pytest
 
+pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
 from pathlib import Path
@@ -81,3 +82,27 @@ def test_data_for_invalid_row_returns_none() -> None:
     model.load_photos([_make_photo("a.jpg")])
     idx = model.index(99, 0)
     assert model.data(idx, Qt.DisplayRole) is None
+
+
+def test_status_badges_round_trip_and_clear_on_reload(qtbot) -> None:
+    """G-4：角标经 STATUS_BADGE_ROLE 读取；load_photos 重置后清空。"""
+
+    from photo_archiver.domain import Photo, PhotoPath
+    from photo_archiver.presentation.views.photo_list_model import (
+        STATUS_BADGE_ROLE,
+        PhotoListModel,
+    )
+
+    model = PhotoListModel()
+    photo_a = Photo(path=PhotoPath("photos/a.jpg"), folder_id=None, original_name="a.jpg")
+    photo_b = Photo(path=PhotoPath("photos/b.jpg"), folder_id=None, original_name="b.jpg")
+    model.load_photos([photo_a, photo_b])
+    model.set_status_badges({photo_a.id: "已通过 · 已归档", photo_b.id: "未匹配"})
+
+    index_a = model.index(0, 0)
+    index_b = model.index(1, 0)
+    assert index_a.data(STATUS_BADGE_ROLE) == "已通过 · 已归档"
+    assert index_b.data(STATUS_BADGE_ROLE) == "未匹配"
+
+    model.load_photos([photo_a])
+    assert model.index(0, 0).data(STATUS_BADGE_ROLE) is None
