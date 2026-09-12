@@ -92,12 +92,23 @@ jobs:
           # 退出码必须先捕获，否则失败时脚本即刻退出，下方注解循环永远
           # 不会执行（run #76 实证过这个取证盲区）。
           set +e
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            pytest -v --tb=short -rsf --cov=photo_archiver --cov-report=term --cov-fail-under=90 2>&1 | tee pytest-output.txt
-          else
-            pytest -v --tb=short -rsf 2>&1 | tee pytest-output.txt
-          fi
-          PYTEST_EXIT=$?
+          # runner 环境漂移（2026-09-12 起 macOS 偶发、Linux 单次）：pytest 进程
+          # 概率性 SIGSEGV（exit 139，崩溃点随漂移：scandir/realpath/sqlite/
+          # PIL/uuid4——与仓库代码无关，docs-only 提交亦崩）。139 自动重试
+          # （最多 3 次）；exit 1（真实断言失败）不重试、直接失败。
+          PYTEST_EXIT=1
+          for ATTEMPT in 1 2 3; do
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              pytest -v --tb=short -rsf --cov=photo_archiver --cov-report=term --cov-fail-under=90 2>&1 | tee pytest-output.txt
+            else
+              pytest -v --tb=short -rsf 2>&1 | tee pytest-output.txt
+            fi
+            PYTEST_EXIT=$?
+            if [ "$PYTEST_EXIT" -ne 139 ]; then
+              break
+            fi
+            echo "::warning::attempt $ATTEMPT: pytest SIGSEGV (runner environment flake) — retrying"
+          done
           grep -E "^FAILED|^ERROR" pytest-output.txt | while read -r line; do
             echo "::error::$line"
           done || true
