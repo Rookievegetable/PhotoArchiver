@@ -79,9 +79,14 @@ class InsightFaceLoader:
         # the Person entity has no gender/age fields). Removal measured
         # 254.4 → 128.2 ms/photo (1.985×) with byte-identical bbox/kps/
         # embedding outputs (tools/spike_segment_profile.py v2 A/B experiment).
+        # LIMIT-006 后续（离线包缺陷，2026-09-13）：insightface 内部会给 root
+        # **自行追加一层 `models`**（ensure_available: root/models/name）——传
+        # model_root 本身会导致它去 `model_root/models/<pack>` 找模型而找不到，
+        # 继而触发 insightface 自建下载（直连 GitHub、无 sha256 校验，离线包
+        # 内置的模型被无视）。正确语义：root = model_root 的父目录。
         analysis = FaceAnalysis(
             name=self._name,
-            root=str(self._model_root),
+            root=str(self._model_root.parent),
             allowed_modules=("detection", "recognition"),
         )
         analysis.prepare(
