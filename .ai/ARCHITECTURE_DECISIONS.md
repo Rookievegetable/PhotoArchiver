@@ -326,6 +326,7 @@
 | 决策 | 四点：(1) 应用受支持运行形态 = 仓库 clone + venv + `pip install -r requirements/base.txt` + `python main.py`（user-guide 链路，入口自带 src 路径注入）；(2) Release 页挂载的 wheel/sdist 定位为**源码元数据产物**，不承诺安装态可运行，Release body 置顶安装态标注文案（owner 粘贴）；(3) ISSUE-018 以 **by-design 正式终结**——安装态断点 E1-E6（wheel/sdist 无 main.py 与 console 入口、alembic 五层 parent 解析、插件目录 4×parent 缺失、DATABASE_URL/MODEL_PATH/LOG_DIRECTORY 默认值 CWD 相对、无 MANIFEST/package-data）不再作为缺陷追踪；(4) 未来出现非技术用户分发需求时，另起前置门草案按方案 B 重开（console 入口 + package_data + 用户目录默认值重构，v1.1.0 候选）。 |
 | 理由 | 实测证明安装态支持是运行形态级重构而非补丁：E1-E6 断点中默认路径语义（CWD 相对迁往用户目录）直接触及 ADR-010/022 的 base 设计与设置体系；在无非技术用户分发需求的现状下投入违背 YAGNI。受支持流（user-guide 链路）全程不安装包本体，方案 A 以一条页内标注获得确定性终态并消除 ISSUE-018 的开放态歧义。 |
 | 影响范围 | GitHub Release v1.0.0 body 标注（owner 粘贴，文案见 phase5 草案 §4）；KNOWN_ISSUES ISSUE-018 条目移除（by-design 关闭不入清单）；`docs/user-guide/installation.md` 已与该定位一致无需改；代码 / Schema / 依赖 / Schema 迁移体系零变更。反例守护：禁止未来无声引入「半支持安装态」（如仅修 E3 不修 E4/E5）。 |
+| 追记（2026-09-13，ADR-031 方案 B 触发落地） | owner 立项 Windows 桌面交付（Phase P）：PyInstaller onedir + Inno Setup per-user 安装器（在线/离线双产物）+ `download-models` 内置命令（sha256 fail-closed）。源码形态继续受支持；打包适配点：alembic 脚本随 bundle（frozen 感知 runner）、模型目录 frozen 锚定 `<exe>\models`、枚举前置主线程（ADR-041）使扫描在打包形态天然规避 LIMIT-006 线程形态。详见 `packaging/windows/`。 |
 
 ### ADR-032 — Phase 6 识别管线吞吐加固五项裁决（基准入库 / 线程并行 / 持久化批下推 / 进度保持 / UI 触发点不补）
 

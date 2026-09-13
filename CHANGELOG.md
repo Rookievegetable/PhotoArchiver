@@ -8,6 +8,20 @@ Commit-level history lives in git — this file is the user-facing digest.
 
 ## [Unreleased]
 
+### Added
+
+- **Windows installer**（Windows 安装包，ADR-031 方案B 落地）: PyInstaller
+  onedir bundle wrapped in a per-user Inno Setup installer — no admin rights,
+  user data untouched by upgrades or uninstall. Released as two artifacts:
+  an online installer and an offline installer with the buffalo_l model pack
+  bundled (sha256-verified at build time).
+- **`download-models` CLI**: fetches and verifies the recognition model pack
+  into the configured model directory (sha256 fail-closed) — packaged builds
+  gain first-run model acquisition without a repository checkout.
+- **Frozen-build adaptations**: Alembic migrations bundled with the
+  executable (frozen-aware runner), model directory anchored to the install
+  location — packaged apps are fully self-contained.
+
 ### Fixed
 
 - **macOS scan stability**（macOS 扫描稳定性，ADR-041）: directory
