@@ -6,7 +6,50 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Commit-level history lives in git — this file is the user-facing digest.
 
-## [Unreleased]
+## [2.8.0] - 2026-09-13
+
+Windows desktop delivery round (ADR-031 plan B triggered): the app is now
+installable without a repository checkout, and the macOS scan-stability
+investigation concluded with an in-repo fix.
+
+### Added
+
+- **Windows installer**（Windows 安装包，ADR-031 方案B 落地）: PyInstaller
+  onedir bundle wrapped in a per-user Inno Setup installer — no admin rights,
+  user data untouched by upgrades or uninstall. Released as two artifacts:
+  an online installer and an offline installer with the buffalo_l model pack
+  bundled (sha256-verified at build time).
+- **`download-models` CLI**: fetches and verifies the recognition model pack
+  into the configured model directory (sha256 fail-closed) — packaged builds
+  gain first-run model acquisition without a repository checkout.
+- **Frozen-build adaptations**: Alembic migrations bundled with the
+  executable (frozen-aware runner), model directory anchored to the install
+  location — packaged apps are fully self-contained.
+
+### Fixed
+
+- **macOS scan stability**（macOS 扫描稳定性，ADR-041）: directory
+  enumeration and path resolution for photo scanning moved to the UI thread
+  (a ~0.1 s one-shot per 2,000 files before the background pipeline takes
+  over). This reduces the intermittent native segfault exposure on macOS
+  arm64 (investigated as LIMIT-006; independent of the enumeration API,
+  PySide6 version, thread type, and stack size). macOS remains
+  **experimental support** — see the user-guide known-issues section.
+
+### Internal
+
+- **LIMIT-006 investigation record**: five experiment rounds excluded the
+  enumeration API, the PySide6 version, the worker thread type, and the
+  thread stack size — the residual crash requires a background thread doing
+  native calls while the main thread runs the Qt event loop on macOS
+  runners, faulting below Python frames. Full record in KNOWN_ISSUES.md;
+  upstream issue draft kept at
+  `docs/development/limit006-upstream-issue-draft.md`.
+- **CI self-healing**: pytest retries once-per-run SIGSEGV flakes (exit 139)
+  up to 3 times on runner environment drift; real assertion failures still
+  fail fast. Failed test names and native stacks surface as public
+  annotations.
+- **Coverage gate**: CI (Linux job) enforces `--cov-fail-under=90`.
 
 ### Added
 
