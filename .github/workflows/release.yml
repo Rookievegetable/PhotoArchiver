@@ -56,6 +56,14 @@ jobs:
       - name: Stage offline model pack (sha256 fail-closed)
         run: python scripts/download_models.py --root packaging/windows/models
 
+      - name: Write build stamp
+        shell: bash
+        run: |
+          # 构建版本戳：frozen 应用启动日志/设置页显示真实交付版本，
+          # 消除"跑的是哪个构建"的辨别困难。
+          printf 'APP_BUILD = "%s
+"' "${{ github.ref_name }}" > src/photo_archiver/_build_info.py
+
       - name: Build PyInstaller bundle
         shell: bash
         run: |

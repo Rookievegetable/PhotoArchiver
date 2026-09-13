@@ -16,6 +16,23 @@ from photo_archiver.infrastructure.logging.configuration import (
 
 DEFAULT_APP_NAME = "PhotoArchiver"
 DEFAULT_APP_VERSION = "0.1.0"
+
+
+def _default_app_version() -> str:
+    """Return the visible app version; frozen builds carry a build stamp.
+
+    桌面安装包的版本由 release 构建注入（``_build_info.py``，见
+    release.yml build-windows）——日志/关于页据此显示真实交付版本，
+    避免"装的是哪个构建"无法辨别（2026-09-13 真机验收教训）。
+    """
+    if getattr(sys, "frozen", False):
+        try:
+            from photo_archiver._build_info import APP_BUILD  # type: ignore[import-not-found]
+
+            return str(APP_BUILD)
+        except Exception:  # noqa: BLE001 - 版本戳缺失时回退默认值
+            return DEFAULT_APP_VERSION
+    return DEFAULT_APP_VERSION
 DEFAULT_ENVIRONMENT = "development"
 # Phase F F-2（ADR-035）：默认数据库/日志路径锚定用户数据目录——同一用户从
 # 任意目录启动都命中同一份库，不再随 CWD 分裂。显式 .env / 环境变量配置完全
@@ -78,7 +95,7 @@ class AppSettings(BaseSettings):
     )
 
     app_name: str = Field(default=DEFAULT_APP_NAME)
-    app_version: str = Field(default=DEFAULT_APP_VERSION)
+    app_version: str = Field(default_factory=_default_app_version)
     env: str = Field(default=DEFAULT_ENVIRONMENT)
     debug: bool = Field(default=False)
     log_level: str = Field(default=DEFAULT_LOG_LEVEL)
