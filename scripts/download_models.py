@@ -27,9 +27,16 @@ import argparse
 import sys
 from pathlib import Path
 
-import certifi  # noqa: F401  # re-exported: the download pins the TLS trust store
+# 直接执行时（python scripts/download_models.py）src 不在 sys.path——
+# 先引导再导入 SSOT 模块（frozen 构建无此问题，bundle 自含）。
+ROOT = Path(__file__).resolve().parent.parent
+_SRC = ROOT / "src"
+if _SRC.is_dir():
+    sys.path.insert(0, str(_SRC))
 
-from photo_archiver.infrastructure.ai.model_deployment import (  # noqa: F401
+import certifi  # noqa: E402,F401  # re-exported: the download pins the TLS trust store
+
+from photo_archiver.infrastructure.ai.model_deployment import (  # noqa: E402,F401
     DEFAULT_MODEL_NAME,
     DEFAULT_MODEL_URL,
     EXPECTED_SHA256,
@@ -40,7 +47,6 @@ from photo_archiver.infrastructure.ai.model_deployment import (  # noqa: F401
     verify_integrity,
 )
 
-ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MODEL_ROOT = ROOT / "resources" / "models"
 
 
