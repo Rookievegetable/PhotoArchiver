@@ -28,6 +28,18 @@ investigation concluded with an in-repo fix.
 
 ### Fixed
 
+- **Offline-installed models were ignored**（离线模型被无视，真机验收发现）:
+  two stacked defects made the offline installer's bundled models invisible.
+  First, the model zip has a top-level `buffalo_l/` folder, so extraction
+  double-nested it (`models/buffalo_l/buffalo_l/*.onnx`); extraction now
+  flattens the pack. Second, insightface appends its own `models` segment
+  below the root it is given, so it searched `models/models/<pack>` and
+  silently downloaded from GitHub (unverified) instead of using the
+  installed copy; the loader now passes the parent directory. Installed and
+  `download-models`-fetched packs are found without any network access. The
+  pack-availability check now requires actual onnx files (misplaced layouts
+  fail loudly with actionable guidance instead of a confusing downstream
+  error).
 - **macOS scan stability**（macOS 扫描稳定性，ADR-041）: directory
   enumeration and path resolution for photo scanning moved to the UI thread
   (a ~0.1 s one-shot per 2,000 files before the background pipeline takes
