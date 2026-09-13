@@ -31,8 +31,9 @@ UninstallDisplayIcon={app}\PhotoArchiver.exe
 ; 升级（D-P5）：UsePreviousAppDir 覆盖安装，用户数据在 ADR-035 锚定的
 ; 用户目录（{app} 之外），卸载/升级天然保留。
 
+; ChineseSimplified.isl 从 issrc 仓库 vendor 进来（choco 版 Inno 未随附）。
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]

@@ -76,6 +76,10 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
+      - name: Install Inno Setup dependencies
+        run: choco install wget -y --no-progress && wget -q https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/ChineseSimplified.isl -O "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl"
+        shell: cmd
+
       - name: Compile online installer
         shell: cmd
         run: |
