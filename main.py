@@ -1,4 +1,15 @@
+import os
 import sys
+
+# PyInstaller windowed 模式：stdout/stderr 为 None——loguru/第三方 print 需要
+# 可写流，指向 devnull（日志本体走文件 sink，见 logging.configuration）。
+if getattr(sys, "frozen", False) and (sys.stdout is None or sys.stderr is None):
+    _devnull = open(os.devnull, "w")  # noqa: SIM115 - 进程级生命周期，随进程关闭
+    if sys.stdout is None:
+        sys.stdout = _devnull
+    if sys.stderr is None:
+        sys.stderr = _devnull
+
 from argparse import ArgumentParser, Namespace
 from datetime import datetime, timedelta
 from pathlib import Path

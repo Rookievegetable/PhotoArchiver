@@ -28,6 +28,7 @@ where = ["src"]
 line-length = 100
 
 [tool.ruff]
+extend-exclude = ["build_dist*", "build"]
 line-length = 100
 
 [tool.isort]

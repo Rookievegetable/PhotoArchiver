@@ -53,7 +53,7 @@
 3. 勾选 **试运行（仅预览，不写入文件）** 可只生成计划不落盘；
 4. 在列表中多选照片可只归档选中项；未选择时归档全部已通过照片。
 
-> 若提示「未配置归档根目录（ARCHIVE_ROOT）」，请在 `.env` 中设置该目录后重启，或改用命令行 `python main.py archive --archive-root <目录>`。
+> 若提示「未配置归档根目录（ARCHIVE_ROOT）」，请在 `.env` 中设置该目录后重启，或改用命令行 `PhotoArchiver-cli.exe archive --archive-root <目录>`。
 
 ## ⑤ 库管理（删除登记 / 删除人员 / 重复处置）
 
@@ -92,8 +92,8 @@
 使用命令行显式清理：
 
 ```text
-python main.py prune-missing              # 只列出失联登记（默认 dry-run）
-python main.py prune-missing --execute    # 确认后移除这些登记
+PhotoArchiver-cli.exe prune-missing              # 只列出失联登记（默认 dry-run）
+PhotoArchiver-cli.exe prune-missing --execute    # 确认后移除这些登记
 ```
 
 ## 附加能力
@@ -109,14 +109,14 @@ python main.py prune-missing --execute    # 确认后移除这些登记
 
 | 图形操作 | 等效命令 |
 |---|---|
-| 扫描文件夹 | `python main.py scan <目录> [--no-recursive] [--name 显示名]` |
-| 归档（全量已通过） | `python main.py archive --archive-root <目录> [--dry-run] [--conflict-strategy ...]` |
-| 历史哈希回填 | `python main.py backfill-content-hash` |
-| 拍摄时刻回填 | `python main.py backfill-capture-time [--execute]`（默认 dry-run） |
-| 清理失联登记 | `python main.py prune-missing [--execute]`（默认 dry-run） |
-| 导入人员 | `python main.py import-people <文件> [--no-header] [--sheet-name ...]` |
-| 导出数据 | `python main.py export <输出> [--format xlsx/csv/html] [--scope filtered --status ... --person ...]` |
-| 缩略图缓存清理 | `python main.py cleanup-thumbnails [--execute]`（默认 dry-run） |
-| 旧库迁移 | `python main.py migrate [--execute]`（默认 dry-run；复制不搬移） |
-| 人脸识别（无界面） | `python main.py recognize [--all] [--limit N]`（默认只跑未识别照片） |
-| 捕捉时刻纠错 | `python main.py backfill-capture-time [--execute]` |
+| 扫描文件夹 | `PhotoArchiver-cli.exe scan <目录> [--no-recursive] [--name 显示名]` |
+| 归档（全量已通过） | `PhotoArchiver-cli.exe archive --archive-root <目录> [--dry-run] [--conflict-strategy ...]` |
+| 历史哈希回填 | `PhotoArchiver-cli.exe backfill-content-hash` |
+| 拍摄时刻回填 | `PhotoArchiver-cli.exe backfill-capture-time [--execute]`（默认 dry-run） |
+| 清理失联登记 | `PhotoArchiver-cli.exe prune-missing [--execute]`（默认 dry-run） |
+| 导入人员 | `PhotoArchiver-cli.exe import-people <文件> [--no-header] [--sheet-name ...]` |
+| 导出数据 | `PhotoArchiver-cli.exe export <输出> [--format xlsx/csv/html] [--scope filtered --status ... --person ...]` |
+| 缩略图缓存清理 | `PhotoArchiver-cli.exe cleanup-thumbnails [--execute]`（默认 dry-run） |
+| 旧库迁移 | `PhotoArchiver-cli.exe migrate [--execute]`（默认 dry-run；复制不搬移） |
+| 人脸识别（无界面） | `PhotoArchiver-cli.exe recognize [--all] [--limit N]`（默认只跑未识别照片） |
+| 捕捉时刻纠错 | `PhotoArchiver-cli.exe backfill-capture-time [--execute]` |

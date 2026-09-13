@@ -60,7 +60,10 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe = EXE(
+# 双可执行文件（共享同一 Analysis 产物，体积近零增量）：
+#   PhotoArchiver.exe      windowed——桌面 GUI 主入口，无控制台窗口；
+#   PhotoArchiver-cli.exe  console——CLI 子命令（scan/recognize/…）。
+gui_exe = EXE(
     pyz,
     a.scripts,
     [],
@@ -70,11 +73,25 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
+    console=False,
+    disable_windowed_traceback=False,
+)
+cli_exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="PhotoArchiver-cli",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
     console=True,
     disable_windowed_traceback=False,
 )
 coll = COLLECT(
-    exe,
+    gui_exe,
+    cli_exe,
     a.binaries,
     a.datas,
     strip=False,
