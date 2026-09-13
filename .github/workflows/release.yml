@@ -79,16 +79,26 @@ jobs:
       - name: Compile online installer
         shell: cmd
         run: |
-          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ github.ref_name }} packaging\windows\installer.iss
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ github.ref_name }} packaging\windows\installer.iss > iscc-online.log 2>&1
           set EXITCODE=%ERRORLEVEL%
-          if not "%EXITCODE%"=="0" findstr /C:"Error" /C:"错误" packaging\windows\installer\*.log & exit %EXITCODE%
+          if not "%EXITCODE%"=="0" goto iscc_failed
+          exit /b 0
+          :iscc_failed
+          findstr /R /C:"Error" /C:"错误" iscc-online.log
+          for /f "tokens=*" %%L in (iscc-online.log) do echo ::error::iscc^|%%L
+          exit %EXITCODE%
 
       - name: Compile offline installer (models bundled)
         shell: cmd
         run: |
-          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ github.ref_name }} /DPACK_MODELS packaging\windows\installer.iss
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ github.ref_name }} /DPACK_MODELS packaging\windows\installer.iss > iscc-offline.log 2>&1
           set EXITCODE=%ERRORLEVEL%
-          if not "%EXITCODE%"=="0" findstr /C:"Error" /C:"错误" packaging\windows\installer\*.log & exit %EXITCODE%
+          if not "%EXITCODE%"=="0" goto iscc_failed
+          exit /b 0
+          :iscc_failed
+          findstr /R /C:"Error" /C:"错误" iscc-offline.log
+          for /f "tokens=*" %%L in (iscc-offline.log) do echo ::error::iscc^|%%L
+          exit %EXITCODE%
 
       - uses: actions/upload-artifact@v4
         with:

@@ -1,4 +1,4 @@
-; PhotoArchiver Windows 安装器（ADR-031 方案 B，Phase P P-4）
+﻿; PhotoArchiver Windows 安装器（ADR-031 方案 B，Phase P P-4）
 ; 编译：ISCC /DAppVersion=2.7.0 packaging\windows\installer.iss
 ; 离线模型包：ISCC /DAppVersion=2.7.0 /DPACK_MODELS=1 ...（需 models\ 就位）
 ; 产物：PhotoArchiver-{版本}-setup.exe（在线）/ PhotoArchiver-{版本}-offline-setup.exe（离线）
