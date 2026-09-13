@@ -20,12 +20,12 @@ DefaultDirName={autopf}\{#AppName}
 UsePreviousAppDir=yes
 DisableProgramGroupPage=yes
 #ifdef PACK_MODELS
-#define OutputName PhotoArchiver-{#AppVersion}-offline-setup
+#define OutputSuffix "-offline-setup"
 #else
-#define OutputName PhotoArchiver-{#AppVersion}-setup
+#define OutputSuffix "-setup"
 #endif
 OutputDir=installer
-OutputBaseFilename={#OutputName}
+OutputBaseFilename=PhotoArchiver-{#AppVersion}{#OutputSuffix}
 Compression=lzma2/max
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
