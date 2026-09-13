@@ -84,8 +84,8 @@ jobs:
           if not "%EXITCODE%"=="0" goto iscc_failed
           exit /b 0
           :iscc_failed
-          findstr /R /C:"^Error" /C:"Error on line" iscc-online.log > iscc-err.txt
-          for /f "tokens=*" %%L in (iscc-err.txt) do echo ::error::iscc^|%%L
+          findstr /R /C:"Error" /C:"错误" iscc-online.log
+          for /f "tokens=*" %%L in (iscc-online.log) do echo ::error::iscc^|%%L
           exit %EXITCODE%
 
       - name: Compile offline installer (models bundled)
@@ -96,8 +96,8 @@ jobs:
           if not "%EXITCODE%"=="0" goto iscc_failed
           exit /b 0
           :iscc_failed
-          findstr /R /C:"^Error" /C:"Error on line" iscc-offline.log > iscc-err.txt
-          for /f "tokens=*" %%L in (iscc-err.txt) do echo ::error::iscc^|%%L
+          findstr /R /C:"Error" /C:"错误" iscc-offline.log
+          for /f "tokens=*" %%L in (iscc-offline.log) do echo ::error::iscc^|%%L
           exit %EXITCODE%
 
       - uses: actions/upload-artifact@v4
