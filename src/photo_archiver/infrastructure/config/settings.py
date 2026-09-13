@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from platformdirs import user_data_dir, user_log_dir
 from pydantic import Field, field_validator
@@ -34,7 +35,16 @@ def default_database_url() -> str:
     return f"sqlite:///{Path(APP_DATA_DIR) / 'photo_archiver.db'}"
 
 
+# ADR-042：frozen（PyInstaller）模式下模型目录锚定到可执行文件旁的 models\；
+# 源码形态保持仓库相对路径（开发/CLI 语义不变）。
 DEFAULT_MODEL_PATH = Path("resources/models")
+
+
+def _default_model_path() -> Path:
+    """Return the out-of-the-box model directory for the current form."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "models"
+    return DEFAULT_MODEL_PATH
 DEFAULT_MAX_WORKERS = 4
 MIN_MAX_WORKERS = 1
 MAX_MAX_WORKERS = 32
@@ -74,7 +84,7 @@ class AppSettings(BaseSettings):
     log_level: str = Field(default=DEFAULT_LOG_LEVEL)
     log_directory: Path = Field(default_factory=lambda: APP_LOG_DIR)
     database_url: str = Field(default_factory=default_database_url)
-    model_path: Path = Field(default=DEFAULT_MODEL_PATH)
+    model_path: Path = Field(default_factory=_default_model_path)
     photo_root: Path | None = Field(default=None)
     output_root: Path | None = Field(default=None)
     archive_root: Path | None = Field(default=None)

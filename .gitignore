@@ -306,3 +306,8 @@ Desktop.ini
 # AI/session tool caches (not source, never commit).
 /.mypy_cache_run/
 /.workbuddy/
+
+# PyInstaller build output (ADR-031 方案B)
+/build/
+/build_dist/
+*.spec.bak

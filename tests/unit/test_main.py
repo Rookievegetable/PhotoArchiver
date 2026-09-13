@@ -238,7 +238,7 @@ class StubExportService:
     def __init__(self) -> None:
         self.calls: list[tuple] = []
 
-    def execute(self, exporter, output_path, scope, criteria=None):
+    def export(self, exporter, output_path, scope, criteria=None):
         self.calls.append((exporter, output_path, scope, criteria))
         return output_path
 

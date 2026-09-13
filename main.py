@@ -21,6 +21,11 @@ from photo_archiver.application import (  # noqa: E402  # sys.path injection abo
 )
 from photo_archiver.application.commands import MatchPersonsCommand  # noqa: E402
 from photo_archiver.app.services import ModelPackMissing  # noqa: E402
+from photo_archiver.infrastructure.ai.model_deployment import (  # noqa: E402
+    DEFAULT_MODEL_NAME,
+    DEFAULT_MODEL_URL,
+    download_model_pack,
+)
 from photo_archiver.application.dtos.export import ExportScope  # noqa: E402
 from photo_archiver.domain import MatchStatus, PhotoSearchCriteria  # noqa: E402
 from photo_archiver.infrastructure.exporters import (  # noqa: E402
@@ -169,6 +174,43 @@ def build_argument_parser() -> ArgumentParser:
         "--execute",
         action="store_true",
         help="really perform the copy (default: dry-run plan only)",
+    )
+
+    models_parser = subparsers.add_parser(
+        "download-models",
+        help="download and verify the face-recognition model pack (sha256 fail-closed)",
+    )
+    models_parser.add_argument(
+        "--name",
+        default=DEFAULT_MODEL_NAME,
+        help="model pack name (default: %(default)s)",
+    )
+    models_parser.add_argument(
+        "--url",
+        default=DEFAULT_MODEL_URL,
+        help="model pack download URL (default: the canonical InsightFace release)",
+    )
+    models_parser.add_argument(
+        "--root",
+        type=Path,
+        default=None,
+        help="destination model root (default: the configured MODEL_PATH)",
+    )
+    models_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="re-download even when the model pack already exists",
+    )
+    models_parser.add_argument(
+        "--sha256",
+        default=None,
+        help="expected SHA-256 hex digest of the zip (overrides the pin map)",
+    )
+    models_parser.add_argument(
+        "--allow-unverified",
+        action="store_true",
+        help="extract without digest verification when no digest is pinned "
+        "(first-bootstrap escape hatch; do not use in CI)",
     )
 
     recognize_parser = subparsers.add_parser(
@@ -471,7 +513,7 @@ def run_export_command(arguments: Namespace) -> int:
         )
         return 2
     scope = ExportScope.FILTERED if arguments.scope == "filtered" else ExportScope.ALL
-    path = context.services.export.execute(
+    path = context.services.export.export(
         exporters[format_name],
         str(arguments.output),
         scope,
@@ -686,6 +728,20 @@ def run_recognize_command(arguments: Namespace) -> int:
     return 0
 
 
+def run_download_models_command(arguments: Namespace) -> int:
+    """Download and verify the model pack (P-3; sha256 fail-closed)."""
+    settings = AppSettings()
+    root = arguments.root or settings.model_path
+    return download_model_pack(
+        name=arguments.name,
+        url=arguments.url,
+        root=root,
+        force=arguments.force,
+        sha256=arguments.sha256,
+        allow_unverified=arguments.allow_unverified,
+    )
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run the PhotoArchiver desktop application.
 
@@ -714,6 +770,8 @@ def main(arguments: list[str] | None = None) -> int:
         return run_migrate_command(parsed_arguments)
     if parsed_arguments.command == "recognize":
         return run_recognize_command(parsed_arguments)
+    if parsed_arguments.command == "download-models":
+        return run_download_models_command(parsed_arguments)
 
     try:
         context = bootstrap_application()

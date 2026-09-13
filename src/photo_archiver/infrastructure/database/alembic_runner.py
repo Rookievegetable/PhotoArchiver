@@ -5,13 +5,20 @@ creates the tables.  Alembic detects the current ``PRAGMA user_version`` and
 applies any pending migrations from ``alembic/versions/``.
 """
 
+import sys
+
 from pathlib import Path
 
 from alembic.config import Config
 from alembic import command
 from loguru import logger
 
-_ALEMBIC_CFG_PATH = Path(__file__).resolve().parent.parent.parent.parent.parent / "alembic.ini"  # 5×parent: file→database→infrastructure→photo_archiver→src→project root
+if getattr(sys, "frozen", False):
+    # PyInstaller frozen：alembic.ini 与 alembic/ 作为数据文件置于 bundle 根
+    # （spec datas），从 sys._MEIPASS 解析。
+    _ALEMBIC_CFG_PATH = Path(getattr(sys, "_MEIPASS")) / "alembic.ini"
+else:
+    _ALEMBIC_CFG_PATH = Path(__file__).resolve().parent.parent.parent.parent.parent / "alembic.ini"  # 5×parent: file→database→infrastructure→photo_archiver→src→project root
 
 def run_alembic_migrations(database_path: Path) -> None:
     """Run Alembic migrations against the given SQLite database.

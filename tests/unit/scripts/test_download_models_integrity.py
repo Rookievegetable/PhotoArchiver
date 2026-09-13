@@ -24,6 +24,13 @@ def _load_script():
     return module
 
 
+def _load_deployment():
+    """Load the SSOT module carrying download/verify logic (ADR-042)."""
+    from photo_archiver.infrastructure.ai import model_deployment
+
+    return model_deployment
+
+
 def test_sha256_of_matches_hashlib(tmp_path: Path) -> None:
     """sha256_of streams the file and equals hashlib on the same bytes."""
     import hashlib
@@ -39,7 +46,7 @@ def test_verify_integrity_accepts_matching_pinned_digest(tmp_path: Path) -> None
     """A pinned digest that matches the archive verifies OK."""
     import hashlib
 
-    dm = _load_script()
+    dm = _load_deployment()
     f = tmp_path / "pack.zip"
     f.write_bytes(b"model payload")
     digest = hashlib.sha256(b"model payload").hexdigest()
@@ -49,7 +56,7 @@ def test_verify_integrity_accepts_matching_pinned_digest(tmp_path: Path) -> None
 
 def test_verify_integrity_rejects_mismatched_digest(tmp_path: Path) -> None:
     """A pinned digest that does not match fails closed."""
-    dm = _load_script()
+    dm = _load_deployment()
     f = tmp_path / "pack.zip"
     f.write_bytes(b"tampered payload")
 
@@ -60,7 +67,7 @@ def test_verify_integrity_rejects_mismatched_digest(tmp_path: Path) -> None:
 
 def test_verify_integrity_unpinned_refuses_by_default(tmp_path: Path) -> None:
     """No pinned digest + no escape hatch -> refuse (fail closed)."""
-    dm = _load_script()
+    dm = _load_deployment()
     f = tmp_path / "pack.zip"
     f.write_bytes(b"unverified payload")
 
@@ -75,7 +82,7 @@ def test_verify_integrity_unpinned_allows_first_bootstrap(
     Uses a fake pack name — antelopev2 is pinned since ISSUE-024 (2026-09-12)
     and buffalo_l since P0-8; both now fail closed on unverified archives.
     """
-    dm = _load_script()
+    dm = _load_deployment()
     f = tmp_path / "pack.zip"
     f.write_bytes(b"unverified payload")
     monkeypatch.setitem(dm.EXPECTED_SHA256, "future_pack", "")
@@ -85,7 +92,7 @@ def test_verify_integrity_unpinned_allows_first_bootstrap(
 
 def test_verify_integrity_antelopev2_now_pinned(tmp_path: Path) -> None:
     """ISSUE-024: antelopev2 carries a pinned digest and fails closed unverified."""
-    dm = _load_script()
+    dm = _load_deployment()
     f = tmp_path / "pack.zip"
     f.write_bytes(b"unverified payload")
 
@@ -99,7 +106,7 @@ def test_verify_integrity_falls_back_to_expected_sha256_map(
     """When --sha256 is absent the EXPECTED_SHA256 pin map is consulted."""
     import hashlib
 
-    dm = _load_script()
+    dm = _load_deployment()
     f = tmp_path / "pack.zip"
     f.write_bytes(b"pinned payload")
     digest = hashlib.sha256(b"pinned payload").hexdigest()
@@ -112,7 +119,7 @@ def test_verify_integrity_explicit_sha256_overrides_map(
     tmp_path: Path, monkeypatch
 ) -> None:
     """An explicit --sha256 takes precedence over the pin map."""
-    dm = _load_script()
+    dm = _load_deployment()
     f = tmp_path / "pack.zip"
     f.write_bytes(b"explicit payload")
     monkeypatch.setitem(dm.EXPECTED_SHA256, "buffalo_l", "0" * 64)
@@ -133,7 +140,7 @@ def test_buffalo_l_digest_is_pinned_fail_closed() -> None:
     """
     import re
 
-    dm = _load_script()
+    dm = _load_deployment()
 
     pinned = dm.EXPECTED_SHA256["buffalo_l"]
     assert re.fullmatch(r"[0-9a-f]{64}", pinned), (
@@ -145,7 +152,7 @@ def test_verify_integrity_rejects_archive_not_matching_production_pin(
     tmp_path: Path,
 ) -> None:
     """An archive that does not match the PRODUCTION buffalo_l pin fails."""
-    dm = _load_script()
+    dm = _load_deployment()
     f = tmp_path / "pack.zip"
     f.write_bytes(b"payload that differs from the official release zip")
 
@@ -159,7 +166,7 @@ def test_download_uses_verified_certifi_ssl_context(
     anchored to certifi's CA bundle (clean-Windows CA failure fix)."""
     import ssl
 
-    dm = _load_script()
+    dm = _load_deployment()
     captured: dict[str, object] = {}
     where_calls: list[str] = []
     real_where = dm.certifi.where
@@ -196,7 +203,7 @@ def test_download_script_contains_no_ssl_bypass() -> None:
     Source scan pins the security contract (mirrors the plugin static
     dependency check pattern).
     """
-    dm = _load_script()
+    dm = _load_deployment()
     source = Path(dm.__file__).read_text(encoding="utf-8")
 
     for forbidden in (
