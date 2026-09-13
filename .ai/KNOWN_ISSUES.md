@@ -6,7 +6,7 @@
 >
 > 动态维护，实时更新。问题解决后**立即删除**，不保留历史记录。
 >
-> Version: 1.14.0 ｜ Last Updated: 2026-09-12 ｜ Status: Live
+> Version: 1.15.0 ｜ Last Updated: 2026-09-13 ｜ Status: Live
 
 ---
 
@@ -38,7 +38,7 @@
 
 ## 未决问题
 
-_未决（2026-09-13 新发现，**真实用户实测暴露**）：**离线安装包模型路径缺陷**——insightface 的 `ensure_available` 会给 root 自行追加一层 `models`（root/models/name），而离线包/下载器把模型装在 `<app>\models\<pack>`，insightface 找的是 `<app>\models\models\<pack>` → 永远找不到 → 触发 insightface 自建下载（直连 GitHub、无校验）。源码形态同样隐性存在（开发机历史上已有双嵌套副本故未暴露）。修复 = `InsightFaceLoader` 向 FaceAnalysis 传 `root=model_root.parent`（已落地并测试）。**LIMIT-006 另见下文 macOS 排查记录（runner 环境漂移定性，维持现状处置）**。_ _LIMIT-006 历史记录（2026-09-13 起）：**LIMIT-006 重开**——"512KB 栈"定论被 run #97 证伪（64MB 显式栈下段错误复现，崩溃点第 4 次漂移至 `PIL Image.open`）。当前确证：崩溃 = macOS arm64 上 **QThreadPool/Python 后台线程的任意原生调用**（已观测 scandir/realpath/sqlite3/PIL 四处漂移）在**主线程运行 Qt 事件循环**时的概率性 SIGSEGV；与枚举 API（3 种实现）、PySide6 版本（6.8.3/6.11.1）、线程类型（QThreadPool/Python threading）、栈大小（512KB/64MB）全部无关。故障在 Python 帧之下原生层，本仓库不可修复——处置：darwin skip 长期维持 + 注解取证通道常驻，出路 = 上游 issue（草稿含全量数据）或本地 macOS 调试环境。 **补充定性（run #99，最终）**：darwin skip 恢复后 docs-only 提交的 macOS 运行仍段错误（uuid4 崩溃点第 5 次漂移）且与 skip/代码/提交内容完全无关——定性为 **GitHub macOS runner 环境漂移**（始于 run #71 ≈ v2.6.0 发版日），任何 worker 线程原生调用约 30-40% 概率中招。CI 处置 = pytest 步骤对 exit 139 自动重试（≤3 次，真实断言失败 exit 1 不重试）。**owner 处置（2026-09-13）：方案 3——维持现状**，darwin skip 长期化、macOS 定性为实验性支持并已在 user-guide/FAQ 如实披露；选项 1（提交上游 issue）与选项 2（本地 macOS 调试）保留为可选动作。曾两次过早宣布定论（6 连续通过判据、512KB 栈根因）均被下一轮证伪——除上述变量外不再仓内猜测。_
+_当前无未决问题条目（已修复问题按维护规则同提交删除；设计 / 平台 / 测试覆盖限制登记于下方两个表格）。_
 
 > 注意：以下为**设计性/测试覆盖限制**，非缺陷，登记于表格供审计与 CI 规划参考。
 
@@ -55,7 +55,9 @@ _未决（2026-09-13 新发现，**真实用户实测暴露**）：**离线安�
 
 ## 平台与第三方限制
 
-_当前无未决平台与第三方限制条目。_
+| ID | Description | Status | Impact | 说明 |
+|---|---|---|---|---|
+| LIMIT-006 | GitHub macOS/Linux runner 环境漂移致 pytest 工作线程概率性 SIGSEGV（exit 139；崩溃点每次漂移——已观测 scandir / realpath / sqlite3 / PIL / uuid4 五处） | Mitigated（CI 自愈 + darwin skip 长期维持） | Low | 五轮仓内实验已排除枚举 API（glob/scandir/listdir 三种实现）、PySide6 版本（6.8.3/6.11.1）、线程类型（QThreadPool/Python threading）、栈大小（512KB/64MB）——与仓库代码无关（docs-only 提交亦崩），故障在 Python 帧之下原生层，本仓库不可修复。CI pytest 步骤对 exit 139 自动重试 ≤3 次（真实断言失败 exit 1 不重试）；4 处 darwin skip 长期维持（reason 带 `PA_ALLOW_LIMIT_006` 豁免机制），实验入口 `tests/integration/test_scan_stress_no_qtbot.py`（PA_STRESS 门控）。**owner 处置（2026-09-13）：维持现状**——macOS 定性为实验性支持（user-guide/FAQ 已如实披露）；上游 issue 草稿备提交：`docs/development/limit006-upstream-issue-draft.md`。教训：曾两次过早宣布定论（6 连续通过判据、512KB 栈根因）均被下一轮证伪——除已排除变量外不再仓内猜测，不再因单轮绿宣布根治。 |
 
 ## 维护规则
 

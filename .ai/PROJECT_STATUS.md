@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.16.0 · Last Updated: 2026-09-12 · Status: Live
+> Version: 1.17.0 · Last Updated: 2026-09-13 · Status: Live
 
 ---
 
@@ -20,7 +20,7 @@
 | 12–14 | Main UI、Settings、Export | ✅ Completed |
 | 15 | Plugin System | ✅ Completed |
 
-M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 均已落地。此后进入发布工程与桌面验收驱动的迭代修复（v2.3.x 系列已发布至 v2.3.2）。
+M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 均已落地。此后进入发布工程与桌面验收驱动的迭代修复（已发布至 v2.8.0）。
 
 ---
 
@@ -37,7 +37,6 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 全量回归 **783 passed / 4 skipped / 0 failed**；覆盖率基线 **92%**（pytest-cov 首次引入，dev-only，不设门槛）。
 
 ### 历史发版锚点
-### 历史发版锚点
 
 | 版本 | tag → 提交 | 主题 |
 |---|---|---|
@@ -45,10 +44,10 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | v2.3.1 | `90c46db` | 桌面 UI 中文化 + 工具栏纯化 + 人员筛选智能搜索（owner 裁决多轮折入单一发布；tag 二次重打至 CI 绿树） |
 | v2.3.2 | `2aadcee` | 桌面复验修复：EXIF 拍摄时刻 + 照片墙 + 占位 |
 | v2.4.0 | `93b7a15` | 库管理：删除登记 / 删除人员 / 重复处置 / 重扫对账 / prune-missing CLI（Phase E） |
-| v2.8.0 | 2026-09-13 | Windows 桌面交付：安装包（在线/离线）+ download-models + frozen 适配（ADR-031 方案B） |
-| v2.7.0 | 2026-09-12 | Phase G 运营轮：recognize CLI + 归档根设置 + 状态角标 + LIMIT-006 计数器 + 覆盖率门槛 |
-| v2.6.0 | 2026-09-12 | 审计清零轮：插件目录接线 + 并行匹配分片 flush + cleanup-thumbnails + migrate + 未匹配筛选 + antelopev2 钉定（ADR-037/038/039） |
 | v2.5.0 | 2026-09-12 | Phase F：captured_at 回填 + 路径锚定 + CI 崩溃诊断 + Windows 保留名净化/扫描环防护 + 查询去重/未匹配哨兵 + 取消接线/UX + 覆盖率基线 + CLI 对等（ADR-035/036） |
+| v2.6.0 | 2026-09-12 | 审计清零轮：插件目录接线 + 并行匹配分片 flush + cleanup-thumbnails + migrate + 未匹配筛选 + antelopev2 钉定（ADR-037/038/039） |
+| v2.7.0 | 2026-09-12 | Phase G 运营轮：recognize CLI + 归档根设置 + 状态角标 + LIMIT-006 计数器 + 覆盖率门槛 |
+| v2.8.0 | `fe7f46f` | Windows 桌面交付：安装包（在线/离线）+ download-models + frozen 适配 + 离线模型路径修复（ADR-031 方案B / ADR-041） |
 
 更早锚点：v1.0.0→`49b2ac6`、v2.0.0→`ba3ad02`、v2.1.0→`bd52fbb`、v2.2.0→`f9fb8c5`。
 
@@ -59,12 +58,12 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | 范围 | 状态 | 当前事实 |
 |---|---|---|
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
-| 版本链 | ✅ | v2.4.0 三处一致（pyproject / .env.example / CHANGELOG `[2.4.0] - 2026-09-08`）；历史锚点 v2.3.2 保留。 |
-| CI | ✅ | 三平台绿；本地全量 783/4/0 实证；CI no-skip 守卫改为运行期统计（F-5/体检 T-5）；macOS 崩溃报告收集在位（LIMIT-006 D-1）。 |
+| 版本链 | ✅ | v2.8.0 三处一致（pyproject / .env.example / CHANGELOG `[2.8.0] - 2026-09-13`）。 |
+| CI | ✅ | 三平台绿（run #124 @ main `92bb1e9`）；runner 环境漂移 exit 139 自动重试 ≤3 次自愈常驻；no-skip 守卫运行期统计（F-5/体检 T-5）；覆盖率门槛 90%（Linux job 强制）；macOS 崩溃报告收集在位（LIMIT-006 D-1）。 |
 | 桌面复验 | ✅ | 机制项（N1–N4 自动化：1200 行导入闭环/取消一致性/备份恢复演练/换目录子进程）+ 感知项（J1–J7 owner 逐项判定）全部通过。 |
-| 未决问题 | ✅ 清零 | 体检 N-1~N-9 全部处置：N-1 插件接线（ADR-038）、N-3/N-2/F-10/F-11/F-13 随 Phase F 修复、N-5 实证不复现（测试锁定）、N-7/N-8 技术债修复（摘要补钉 + cleanup-thumbnails CLI）。仅余 LIMIT-* 设计/环境限制。 |
-| Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消为任务边界粒度，设计特征）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS CI runner 压力扫描段错误，darwin skip），均 Low、不阻塞。 |
-| Release body | ⏳ 待 owner | GitHub Release 已由 tag `v2.4.0` 触发生成（`generate_release_notes` 自动摘要 + `dist-*` 资产）；`CHANGELOG.md` 第 9–54 行 `[2.4.0]` 段需 owner 粘贴进 body 后签核（v2.3.2 同流程）。 |
+| 未决问题 | ✅ 清零 | 体检 N-1~N-9 全部处置；离线模型路径缺陷（v2.8.0 真机验收发现）已修复并有守卫测试。仅余 LIMIT-* 设计/环境限制。 |
+| Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消为任务边界粒度，设计特征）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS/Linux runner 环境漂移 SIGSEGV，CI 自愈 + darwin skip 维持），均 Low、不阻塞。 |
+| Release body | ⏳ 待 owner | GitHub Release v2.8.0 已发布（资产：在线 145MB + 离线 419MB 安装包 + wheel/sdist，随 tag 重打更新）；当前 body 为 `generate_release_notes` 自动生成的比较链接（且重复多条），需 owner 粘贴 `CHANGELOG.md` `[2.8.0]` 段进 body 后签核（v2.5.0/v2.7.0 同流程）。 |
 
 ### 数据库 Schema
 
@@ -78,7 +77,8 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 |---|---|---|
 | Logging / Configuration | ✅ | `infrastructure/logging/`、`infrastructure/config/` |
 | Database | ✅ | Alembic 管理（ADR-027） |
-| Domain / Import / Scan / Thumbnail | ✅ | `domain/`、`application/services/`、`infrastructure/`；`PillowPhotoMetadataReader` 支持 Exif 子 IFD 拍摄时刻（ISSUE-019 修复） |
+| Domain / Import / Scan / Thumbnail | ✅ | `domain/`、`application/services/`、`infrastructure/`；`PillowPhotoMetadataReader` 支持 Exif 子 IFD 拍摄时刻（ISSUE-019 修复）；扫描枚举前置主线程（ADR-041 预枚举模式） |
+| 模型部署（下载/解包/校验/frozen） | ✅ | `infrastructure/ai/model_deployment.py`（SSOT，zip 顶层拍平 + onnx 存在性校验）+ `insightface_loader.py`（root 语义：传 `model_root.parent`）+ `download-models` CLI（sha256 fail-closed） |
 | Recognition / Review | ✅ | InsightFace detect/recognize/match 与审核闭环 |
 | Archive | ✅ | Planner → Plan → Executor，captured_at 现对真实相机照片正确分桶 |
 | UI / Settings / Export | ✅ | 主窗口、设置闭环（含归档根目录，G-2）、Excel/CSV/HTML 导出、照片墙网格布局 |
@@ -91,35 +91,40 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-12（本地） |
-| 会话范围 | 交接恢复 → 体检报告核验 → Phase F 正确性收口实施（F-2/F-5/F-1/F-3/F-6/F-7，ADR-036）→ v2.5.0 发版 + 签核 → CI 双修复（stat 常量平台性 + LIMIT-006 守卫白名单）→ **ISSUE-021 分片 flush（ADR-037）** → **LIMIT-006 D-2 解除实验**（os.scandir 下段错误仍复现，已回退并登记证据）。 |
-| 关键产出 | **v2.5.0 后续轮（ADR-037/038 + 技术债清零）**：⑦ **ISSUE-021**：并行匹配持久化分片 flush（每 50 条 add_many，崩溃丢失窗口 ≤49 条，ADR-037）；⑧ **ISSUE-020**：`PLUGINS_DIRECTORY` 生产接线（ADR-038，opt-in 加载 + 工具栏挂载 + 错误隔离）；⑨ **LIMIT-006 D-2**：darwin skip 解除实验——os.scandir 下段错误仍复现（CI exit 139），崩溃面非 pathlib glob，已回退留证；⑩ **ISSUE-022**：N-5 证伪（elif 分支误读，测试锁定）；⑪ **ISSUE-023**：`cleanup-thumbnails` CLI（端口扩 compute_key/cleanup，dry-run 默认）；⑫ **ISSUE-024**：antelopev2 摘要补钉（真实包校验后钉定）。原 v2.5.0 轮产出：① **F-2**：识别轴 JOIN DISTINCT 去重 + `UNMATCHED` 哨兵（LEFT JOIN IS NULL，Domain 导出）；② **F-5**：`tests/conftest.py` 共享 SQLite 工厂 fixture（3 模块重构采用）+ pytest-cov 7.1.0（覆盖率基线 92%）+ CI no-skip 守卫运行期化；③ **F-1**：`sanitize_windows_filename` Domain 净化（保留设备名矩阵/非法字符/尾点尾空格）+ builder 审计日志 + 扫描器迭代式 os.scandir 重写（realpath 环检测 + 深度上限 + junction reparse-tag 识别，2000 文件 0.037s vs glob 0.218s）；④ **F-3**：import cancelled 接线 + 导出取消通道 + 照片墙空态占位 + 审核行姓名化 + 语言占位标注 + .xlsm 过滤器 + `_active_runnable` 终态清零；⑤ **F-6**：CLI `import-people`/`export` 子命令 + CLI 启动备份对齐（D8）；⑥ **F-7**：README 矛盾段删除 + user-guide 新命令表 + 配置默认路径文档修正 + v2.5.0 发版。 |
-| 当前质量门 | ruff 0 / mypy 191 files 0 / pytest **783 passed / 4 skipped / 0 failed** / pip check 通过（本地实测）。 |
-| 工作区 | Phase F 正确性收口 + v2.5.0 发版提交完成并 push。 |
-| Remaining | G-1 CLI recognize + G-2 归档根目录设置已落地（未发版，CHANGELOG Unreleased）· CURRENT_BATCH 导出（roadmap §13.12 owner 门控；owner 2026-09-12 再次确认挂起）· 分层边界 AST 断言已常驻（体检 T-1 关闭）· 覆盖率门槛 90% 已入 CI（Linux job 采集）· G-3 实验二（豁免直跑崩溃用例）进行中· G-3 实验一完成（stress-macos 非 qtbot 形态通过 → 嫌疑收敛 qtbot 交互，LIMIT-006 已更新）· G-4 状态角标已落地· LIMIT-006 D-3（macOS 调试手段立项；D-2 已实证非 pathlib glob）· CI 偶发 flake 观察：Linux SIGSEGV（run #65）、macOS pytest exit 1（#71/#75/#76，非确定、与提交无关，重跑绿）——已加 -rf + ::error:: 注解机制，复现时自动报出失败用例名（#77 修复了注解被 -e/pipefail 吞掉的取证盲区）。`migrate` 子命令与"未匹配"UI 筛选已落地（ADR-039 / ADR-036 D6 闭环），未发版（CHANGELOG Unreleased）。 |
+| 时间 | 2026-09-13（本地） |
+| 会话范围 | 交接恢复（git 基线 / 状态文档 / 四门实测 / CI 核查）→ **文档卫生轮**：CHANGELOG [2.8.0]/[2.7.0] 重复陈旧段去重（旧版含被 run #99 证伪的"skip 已移除/segfault 已消除"表述）→ KNOWN_ISSUES 清理（已修复的离线模型缺陷段删除；LIMIT-006 从未决问题段转为"平台与第三方限制"表行，保留 darwin skip reason 的文档锚点）→ PROJECT_STATUS 刷新至 v2.8.0 后状态。 |
+| 关键产出 | **文档卫生轮（本会话）**：① CHANGELOG 去重——[2.8.0] 与 [2.7.0] 各删除一整套重复的 Added/Fixed/Internal 旧稿，每版本仅保留与最终事实一致的一套；② KNOWN_ISSUES v1.15.0——未决问题清零，LIMIT-006 转平台限制表行（Mitigated：CI 自愈 + darwin skip 维持）；③ PROJECT_STATUS v1.17.0——Release body 行更新为 v2.8.0 真实状态（body 为自动生成重复比较链接，待 owner 粘贴 `[2.8.0]` 段）、CI/版本链/Limit 登记行刷新、锚点表补 v2.8.0→`fe7f46f` 并按时间排序、§5/§6/§7 重写。**上一会话（v2.8.0 桌面交付轮）**：ADR-031 方案B 落地——PyInstaller onedir + Inno Setup per-user 双安装包（在线 152MB windowed + 离线 439MB 含 buffalo_l，构建期 sha256 校验）+ `PhotoArchiver-cli.exe` 独立 CLI；`download-models` 命令（sha256 fail-closed）；frozen 适配（alembic 随 bundle / 模型目录锚定 / windowed 流 shim / 构建版本戳）；离线模型路径缺陷修复（zip 顶层拍平 + insightface root 语义 + onnx 存在性校验，真机验收第一轮发现）；ADR-041 扫描枚举前置主线程（ADR-040 规避证伪后 Rejected）；CI 自愈（exit 139 重试 ≤3 次 + 崩溃栈公开注解）；`docs/user-guide/manual.md` 安装版端到端手册。 |
+| 当前质量门 | ruff 0 / mypy 193 files 0 / pytest **841 passed / 6 skipped / 0 failed** / pip check 通过（2026-09-13 本地实测）。 |
+| 工作区 | 干净；main 与 origin/main 同步（`92bb1e9`，v2.8.0 tag `fe7f46f` 之上 2 个 docs 提交）。 |
+| Remaining | **owner 二轮真机验收**（新离线安装包；启动日志首行应显示 `Starting PhotoArchiver v2.8.0` 构建版本戳 + 识别不再报错不再下载）· GitHub Release v2.8.0 body 待 owner 粘贴 CHANGELOG `[2.8.0]` 段 · A-1 CURRENT_BATCH 导出挂起（解除则先出批次持久化设计文档）· A-3 代码签名证书采购决策 · 上游 PySide6 issue 是否提交（草稿就绪：`docs/development/limit006-upstream-issue-draft.md`）· A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论，勿盲目开工 · B 类触发式（模型镜像/导出流式化/检查更新）信号到达才动 · 第 4 轮全面体检候审（建议 v2.8.x 稳定后，覆盖 ADR-037~041 + 桌面交付全变更）。 |
 
 ---
 
 ## 6. Next Step（下一步开发计划）
 
-v2.5.0 已发布待签核。可选后续（均需 owner 另行立项）：
+v2.8.0 已发布（安装包资产齐备），等待 owner 二轮验收与决策；当前无进行中开发任务。后续均需 owner 立项：
 
-| Next Step | **owner 汇总决策**：① v2.5.0 签核；② ISSUE-020 插件可见性二选一（接入可配置插件目录 vs 收回 README/FAQ 宣传）；③ ISSUE-021 并行匹配分片 flush（F-8）；④ 下一候选立项（如旧 CWD 库自动迁移 `migrate` 子命令、CURRENT_BATCH 导出 P2-4、"未匹配"筛选的 UI 暴露）。
+| Next Step | **待 owner**：① 新离线安装包二轮真机验收 + Release body 粘贴 `[2.8.0]` 段后签核；② A-1 CURRENT_BATCH 导出是否解除挂起（解除则先出批次持久化设计文档）；③ A-3 代码签名证书采购决策；④ 是否提交上游 PySide6 issue（草稿就绪）。**可立项**：A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论（枚举回后台线程 = 回到崩溃形态）。**明确不做**：i18n 实装、自动更新、macOS 安装包、批次撤销。 |
 
 ---
+
 ## 7. Key Files（关键文件索引）
 
 | 职责 | 文件 |
 |---|---|
-| 插件协议与上下文 | `src/photo_archiver/application/ports/plugin.py`、`plugin_context.py` |
-| 人员导入服务 | `src/photo_archiver/application/services/import_people_service.py` |
+| 运行状态唯一快照 | `.ai/PROJECT_STATUS.md` |
+| 架构决策（ADR-031~041，040 Rejected） | `.ai/ARCHITECTURE_DECISIONS.md` |
+| 用户使用手册（安装版端到端） | `docs/user-guide/manual.md` |
+| 打包定义（PyInstaller + Inno Setup） | `packaging/windows/photo_archiver.spec`、`installer.iss`、`ChineseSimplified.isl`（vendored） |
+| 模型部署 SSOT（下载/解包/校验） | `src/photo_archiver/infrastructure/ai/model_deployment.py`（脚本为薄壳） |
+| insightface 装载（root 语义） | `src/photo_archiver/infrastructure/ai/insightface_loader.py` |
+| 扫描预枚举（ADR-041） | `src/photo_archiver/presentation/controllers/scan_controller.py`（主线程枚举）+ `src/photo_archiver/application/services/scan_and_register_photos_service.py`（`enumerate_files`/`pre_enumerated_items`） |
+| 分层边界守卫 | `tests/unit/architecture/test_layer_boundaries.py` |
+| LIMIT-006 压力实验 | `tests/integration/test_scan_stress_no_qtbot.py`（PA_STRESS 门控） |
+| 上游 issue 草稿 | `docs/development/limit006-upstream-issue-draft.md` |
 | UI 文案表（中文化单一置换点） | `src/photo_archiver/presentation/ui_text.py` |
-| Qt 标准翻译装载 | `src/photo_archiver/presentation/translations.py` |
-| 人员搜索智能排名 | `src/photo_archiver/presentation/person_matcher.py` |
-| EXIF 元数据读取（子 IFD 修复） | `src/photo_archiver/infrastructure/filesystem/pillow_photo_metadata_reader.py` |
-| 数据库初始化/迁移 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`、`alembic_runner.py`、`alembic/versions/002_split_create_ddl.py` |
-| 质量验证 | `tests/`、`.github/workflows/ci.yml` |
-| 发布工作流 | `.github/workflows/release.yml` |
+| 数据库初始化/迁移 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`、`alembic_runner.py` |
+| 质量验证 / 发布工作流 | `tests/`、`.github/workflows/ci.yml` / `.github/workflows/release.yml` |
 
 ---
 

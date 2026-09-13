@@ -63,41 +63,6 @@ investigation concluded with an in-repo fix.
   annotations.
 - **Coverage gate**: CI (Linux job) enforces `--cov-fail-under=90`.
 
-### Added
-
-- **Windows installer**（Windows 安装包，ADR-031 方案B 落地）: PyInstaller
-  onedir bundle wrapped in a per-user Inno Setup installer — no admin rights,
-  user data untouched by upgrades or uninstall. Released as two artifacts:
-  an online installer and an offline installer with the buffalo_l model pack
-  bundled (sha256-verified at build time).
-- **`download-models` CLI**: fetches and verifies the recognition model pack
-  into the configured model directory (sha256 fail-closed) — packaged builds
-  gain first-run model acquisition without a repository checkout.
-- **Frozen-build adaptations**: Alembic migrations bundled with the
-  executable (frozen-aware runner), model directory anchored to the install
-  location — packaged apps are fully self-contained.
-
-### Fixed
-
-- **macOS scan stability**（macOS 扫描稳定性，ADR-041）: directory
-  enumeration and path resolution for photo scanning moved to the UI thread
-  (a ~0.1 s one-shot per 2,000 files before the background pipeline takes
-  over). This eliminates an intermittent native segfault on macOS arm64
-  where background filesystem calls raced the Qt event loop (investigated
-  as LIMIT-006; independent of the enumeration API, PySide6 version, and
-  thread type). The macOS-specific test skips are removed — the full suite,
-  including the previously skipped stress tests, now runs on every CI pass.
-
-### Internal
-
-- **LIMIT-006 investigation record**: three experiment rounds excluded the
-  enumeration API, the PySide6 version, and the worker thread type — the
-  crash required a background thread doing macOS filesystem calls while the
-  main thread ran the Qt event loop, faulting below Python frames
-  (native layer). Upstream issue draft kept at
-  `docs/development/limit006-upstream-issue-draft.md` as optional community
-  feedback.
-
 ## [2.7.0] - 2026-09-12
 
 Phase G operator round: the CLI now covers the entire pipeline, the archive
@@ -132,32 +97,6 @@ root leaves `.env`-only configuration, and the photo wall reads at a glance.
   baseline is 93%.
 - **Architecture layer boundaries** are enforced by permanent AST-based tests
   on every push (health-check T-1).
-
-### Added
-
-- **`recognize` CLI**: headless face detection/recognition/matching over
-  registered photos — same resume semantics as the UI (only photos without a
-  recognition result by default; `--all` re-matches, `--limit` caps the
-  batch), friendly guidance when the model pack is missing. The CLI now
-  covers the entire pipeline: import-people → scan → recognize → review →
-  archive → export.
-- **Archive root in Settings**（归档根目录进设置）: the settings dialog
-  gains an archive-root field (folder picker); a saved preference overrides
-  `ARCHIVE_ROOT` from `.env`, and when neither is set the archive entry keeps
-  its honest "not configured" guidance. FEAT-14's last real gap closed.
-- **Photo wall status badges**（照片墙状态角标）: every thumbnail carries a
-  corner badge — 待审核 / 已通过 / 已拒绝 / 未匹配, with `· 已归档` appended
-  for archived photos — so the recognition workflow is readable at a glance
-  from the wall itself.
-
-### Internal
-
-- **LIMIT-006 D-3 experiment**: a dedicated macOS job runs the 2000-file scan
-  stress through a real QThreadPool **without qtbot** — it passes stably,
-  which narrows the intermittent native segfault to the qtbot main-thread
-  wait interaction (QThreadPool × large directories alone does not reproduce
-  it). `PYTHONFAULTHANDLER` is now always on in CI so any future native
-  crash leaves a C-level stack in the logs.
 
 ## [2.6.0] - 2026-09-12
 
