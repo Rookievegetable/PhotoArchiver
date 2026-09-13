@@ -239,6 +239,7 @@ Infrastructure
 
 ## 文档入口
 
+- `docs/user-guide/manual.md`：**用户使用手册**（安装版最终用户从这里开始——安装/配置/全流程/命令行/备份）。
 - `docs/development/getting-started.md`：开发环境、运行、测试和质量检查。
 - `docs/development/configuration.md`：`.env`、日志、数据库、模型和目录配置。
 - `docs/architecture/overview.md`：分层架构、模块职责和依赖方向。

@@ -1,5 +1,7 @@
 # 安装与首次运行
 
+> **使用 Windows 安装包的最终用户**：完整操作请看 [`manual.md`](manual.md)（用户使用手册）。本文件面向源码形态（git clone + Python 环境）的安装。
+
 > 本文档面向 PhotoArchiver 的最终使用者。开发者环境准备请参阅 [`docs/development/getting-started.md`](../development/getting-started.md)。
 
 ## 1. 前置要求
