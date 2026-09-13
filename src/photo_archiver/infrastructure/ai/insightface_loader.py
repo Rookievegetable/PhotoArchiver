@@ -7,6 +7,7 @@ focused on detection/recognition behaviour against a pre-built analysis
 instance.
 """
 
+import sys
 from pathlib import Path
 
 from insightface.app import FaceAnalysis  # type: ignore[import-untyped]
@@ -56,19 +57,28 @@ class InsightFaceLoader:
         return self._model_root / self._name
 
     def is_available(self) -> bool:
-        """Return whether the named model pack is present and non-empty."""
-        return self.pack_path.exists() and any(self.pack_path.iterdir())
+        """Return whether the named model pack contains loadable onnx files.
+
+        只查目录非空不够——双嵌套等错误布局也会让目录存在（真实用户安装
+        曾暴露，2026-09-13）。必须存在 *.onnx 才算可用。
+        """
+        return self.pack_path.exists() and any(self.pack_path.glob("*.onnx"))
 
     def load(self) -> FaceAnalysis:
         """Build and prepare a ``FaceAnalysis`` instance from the model pack.
 
         Raises:
-            ModelPackMissing: When the model pack directory is absent or empty.
+            ModelPackMissing: When the model pack directory is absent or
+                contains no loadable onnx files.
         """
         if not self.is_available():
+            hint = (
+                "run 'PhotoArchiver-cli.exe download-models' in the install directory"
+                if getattr(sys, "frozen", False)
+                else "run scripts/download_models.py to fetch it"
+            )
             raise ModelPackMissing(
-                f"InsightFace model pack not found at {self.pack_path}; run "
-                "scripts/download_models.py to fetch it"
+                f"InsightFace model pack (onnx files) not found at {self.pack_path}; {hint}"
             )
         # FaceAnalysis's `root` is the parent directory of the named pack;
         # it internally joins `root/name` to locate model files.

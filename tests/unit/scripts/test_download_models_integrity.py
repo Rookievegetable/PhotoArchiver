@@ -230,3 +230,24 @@ def test_certifi_is_declared_runtime_dependency() -> None:
     pinned = [line.strip() for line in base.splitlines() if line.strip().startswith("certifi==")]
     assert pinned, "certifi is not declared in requirements/base.txt"
     assert re.fullmatch(r"certifi==\d{4}\.\d+\.\d+", pinned[0])
+
+
+def test_extract_flattens_zip_internal_top_level_dir(tmp_path: Path) -> None:
+    """真实安装暴露（2026-09-13）：官方 zip 自带顶层 `<pack>/` 目录——
+
+    直接 extractall 会双嵌套成 `<dest>/<pack>/<pack>/*.onnx`，导致加载器
+    永远找不到模型而触发 insightface 自建下载。extract 必须拍平。
+    """
+    import zipfile
+
+    dm = _load_deployment()
+    zip_path = tmp_path / "buffalo_l.zip"
+    with zipfile.ZipFile(zip_path, "w") as z:
+        z.writestr("buffalo_l/det_10g.onnx", b"fake-onnx")
+        z.writestr("buffalo_l/w600k_r50.onnx", b"fake-onnx")
+
+    pack = dm.extract(zip_path, tmp_path / "models", "buffalo_l")
+
+    assert sorted(p.name for p in pack.glob("*.onnx")) == ["det_10g.onnx", "w600k_r50.onnx"]
+    assert not (pack / "buffalo_l").exists()
+

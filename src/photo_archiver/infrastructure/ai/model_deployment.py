@@ -126,13 +126,24 @@ def verify_integrity(
 
 
 def extract(zip_path: Path, dest_root: Path, name: str) -> Path:
-    """Extract the model zip into ``dest_root`` and return the pack directory."""
+    """Extract the model zip into ``dest_root/name`` and return the pack dir.
+
+    官方 release zip 内部自带顶层 ``<name>/`` 目录——直接 extractall 会产生
+    ``<dest_root>/<name>/<name>/*.onnx`` 双嵌套（真实用户安装暴露，
+    2026-09-13）。解压后将顶层同名目录上提一层，保证 pack 目录直接含
+    *.onnx。
+    """
     pack_dir = dest_root / name
     if pack_dir.exists():
         shutil.rmtree(pack_dir)
     pack_dir.mkdir(parents=True)
     with zipfile.ZipFile(zip_path) as archive:
         archive.extractall(pack_dir)
+    nested = pack_dir / name
+    if nested.is_dir():
+        for entry in nested.iterdir():
+            shutil.move(str(entry), str(pack_dir / entry.name))
+        nested.rmdir()
     logger.info("Extracted model pack into {}", pack_dir)
     return pack_dir
 
