@@ -58,7 +58,11 @@ from photo_archiver.application.dtos.settings import (
     validate_preferences,
 )
 
+from photo_archiver.application.dtos.workspace import ModelAvailability, WorkspaceStatus
+
 __all__ = [
+    "ModelAvailability",
+    "WorkspaceStatus",
     "ArchiveOutcome",
     "ArchivePlan",
     "ArchivePlanItem",

@@ -26,7 +26,10 @@ from photo_archiver.application.services.scan_photo_folder_service import ScanPh
 from photo_archiver.application.services.search_photos_service import SearchPhotosService
 from photo_archiver.application.services.settings_service import SettingsService
 
+from photo_archiver.application.services.workspace_readiness import WorkspaceReadinessService
+
 __all__ = [
+    "WorkspaceReadinessService",
     "ArchiveExecutor",
     "ArchivePathBuilderService",
     "ArchivePhotosService",

@@ -7,7 +7,9 @@ controls. The dialog holds NO business logic:
 - approve/reject forward to the controller synchronously (<10ms SQLite per
   Step 12 裁决 A);
 - after each transition the list re-fetches ``list_pending`` so the user sees
-  the remaining queue shrink, and the dialog closes when the queue is empty.
+  the remaining queue shrink. An empty queue no longer auto-closes the dialog:
+  Batch 2 keeps it open with an explicit empty state so the entry point is
+  inspectable instead of appearing to "flash and vanish".
 
 Layout:
     QListWidget rows: "photo={path} person={name} confidence={0.NN}"
@@ -38,6 +40,7 @@ from photo_archiver.presentation.controllers.review_controller import ReviewCont
 from photo_archiver.presentation.ui_text import (
     REVIEW_APPROVE_ALL,
     REVIEW_APPROVE_SELECTED,
+    REVIEW_EMPTY,
     REVIEW_REJECT_SELECTED,
     REVIEW_DIALOG_TITLE,
     REVIEW_ROW_FORMAT,
@@ -95,15 +98,32 @@ class ReviewDialog(QDialog):
         layout.addWidget(self._status)
         layout.addWidget(close_buttons)
 
+        # Wire selection changes → per-button enablement (done after the
+        # first refresh so construction-time selection changes are inert).
+        self._list.itemSelectionChanged.connect(self._update_action_buttons)
+
     def _refresh_list(self) -> None:
-        """Reload pending results from the controller; close dialog when queue empty."""
+        """Reload pending results; keep the dialog open with an empty state."""
         pending = self._controller.list_pending()
         self._list.clear()
         for result in pending:
             self._list.addItem(self._make_row(result))
-        self._status.setText(REVIEW_STATUS_LINE.format(count=len(pending)))
-        if not pending:
-            self.accept()
+        # Batch 2: an emptied queue stays open and inspectable instead of
+        # auto-closing; the entry must never appear to "flash and vanish".
+        has_pending = bool(pending)
+        self._list.setVisible(has_pending)
+        self._status.setText(
+            REVIEW_STATUS_LINE.format(count=len(pending)) if has_pending else REVIEW_EMPTY
+        )
+        self._update_action_buttons()
+
+    def _update_action_buttons(self) -> None:
+        """Enable queue actions only while both queue and selection exist (Batch 2)."""
+        has_rows = self._list.count() > 0
+        has_selection = bool(self._list.selectedItems())
+        self._approve_all.setEnabled(has_rows)
+        self._approve_selected.setEnabled(has_rows and has_selection)
+        self._reject_selected.setEnabled(has_rows and has_selection)
 
     def _make_row(self, result: RecognitionResult) -> QListWidgetItem:
         """Build a list row carrying the recognition result id for retrieve on action.

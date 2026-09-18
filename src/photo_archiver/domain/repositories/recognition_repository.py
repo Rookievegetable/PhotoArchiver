@@ -1,6 +1,7 @@
 """Recognition result repository interface."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
@@ -8,8 +9,30 @@ from uuid import UUID
 from photo_archiver.domain.entities import MatchStatus, RecognitionResult
 
 
+@dataclass(frozen=True, slots=True)
+class WorkspaceCounts:
+    """Bounded read projection; counts do not materialize library entities."""
+
+    has_persons: bool
+    has_photos: bool
+    pending_match_count: int
+    pending_review_count: int
+    archivable_count: int
+
+
 class RecognitionRepository(Protocol):
     """Define persistence operations for recognition result aggregates."""
+
+    def read_workspace_counts(self) -> WorkspaceCounts:
+        """Read library readiness in one aggregate query, without entity enumeration.
+
+        Pending match counts photos with no recognition rows. Pending review
+        counts pending result rows (including unknown persons). Archivable counts
+        distinct absolute-path photos with an approved result for an existing
+        person and no successful archive record (archived/skipped/renamed/
+        overwritten), matching ArchivePlanner. Failed, planned and dry-run
+        archive records do not block retries. Presence checks include all rows.
+        """
 
     def add(self, result: RecognitionResult) -> None:
         """Add a recognition result or replace the existing aggregate by id."""

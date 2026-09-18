@@ -35,7 +35,6 @@ from photo_archiver.app import bootstrap_application
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.presentation.views import main_window as main_window_module
 from photo_archiver.presentation.views.main_window import MainWindow
-from photo_archiver.workers.events import TaskCancelled
 
 FILE_COUNT = 2000
 
@@ -82,11 +81,8 @@ def test_cancelled_terminal_resets_ui_and_reenables_scan(
     assert window._active_runnable is not None
     assert window._active_runnable.task.is_cancel_requested
 
-    # The task reports the cancelled terminal state (boundary granularity).
-    runnable = window._active_runnable
-    runnable.signals.cancelled.emit(
-        TaskCancelled("scan_and_register_photos", "task_1", "User requested cancel")
-    )
+    # Wait for the real boundary terminal; a synthetic ID must not release a live worker.
+    qtbot.waitUntil(lambda: window._active_runnable is None, timeout=60000)
     assert "已取消" in window._status_label.text().lower()
     assert not window._cancel_action.isEnabled()
     assert window._scan_action.isEnabled()
@@ -107,12 +103,11 @@ def test_scan_refusal_surfaces_reason_through_real_ui(
     window._scan_action.trigger()
     qtbot.waitUntil(lambda: not window._scan_action.isEnabled(), timeout=10000)
 
-    # Second attempt: re-enable the action first to simulate the disable
-    # being bypassed — the controller-level guard must still refuse (§17:
-    # system-level single-flight, not just a disabled button).
+    # Bypass QAction enablement; window admission must still refuse before
+    # another picker or controller submission can run.
     window._scan_action.setEnabled(True)
     window._scan_action.trigger()
-    assert "正在进行" in window._status_label.text().lower()
+    assert "正在进行" in window._status.currentMessage()
     assert window._scan_controller.is_running
     window._scan_action.setEnabled(False)
 

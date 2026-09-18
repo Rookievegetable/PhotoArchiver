@@ -83,6 +83,45 @@ def test_window_loads_plugins_from_configured_directory_and_mounts_actions(
     assert action in toolbar.actions()
 
 
+def test_loaded_plugin_action_obeys_window_admission(
+    qtbot, make_sqlite_context, tmp_path, monkeypatch,
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    from photo_archiver.application.dtos.plugin_action_result import ActionResult
+    from photo_archiver.workers.events import TaskCompleted
+    from photo_archiver.workers.qt_executor import QtWorkerSignals
+
+    plugins_dir = tmp_path / "gated-plugins"
+    plugins_dir.mkdir()
+    _write_plugin(plugins_dir, _GOOD_PLUGIN)
+    window = MainWindow(make_sqlite_context(plugins_directory=plugins_dir))
+    qtbot.addWidget(window)
+    action = window._plugin_actions[0]
+    plugin = window._plugin_registry.enabled_plugins["directory-loaded"]
+    execute = Mock(return_value=ActionResult(status="success", message="done"))
+    monkeypatch.setattr(plugin, "execute_action", execute)
+    monkeypatch.setattr(QMessageBox, "information", Mock(return_value=0))
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a: ("people.txt", ""))
+    runnable = SimpleNamespace(signals=QtWorkerSignals(), replay_pending_terminal=lambda: None)
+    monkeypatch.setattr(window._import_controller, "import_from", lambda *a: runnable)
+    window._on_import_clicked()
+    assert not action.isEnabled()
+    assert "人员导入" in action.toolTip()
+    action.trigger()
+    window._on_plugin_action("directory-loaded.ping")
+    execute.assert_not_called()
+    runnable.signals.completed.emit(TaskCompleted("import_people"))
+    assert action.isEnabled()
+    assert action.toolTip() == "ADR-038"
+    action.trigger()
+    execute.assert_called_once_with("directory-loaded.ping")
+    assert not window._task_coordinator.is_busy
+
+
 def test_window_without_plugins_directory_loads_nothing(
     qtbot, make_sqlite_context
 ) -> None:

@@ -4,7 +4,12 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from photo_archiver.domain import MatchStatus, RecognitionResult, RecognitionRepository
+from photo_archiver.domain import (
+    MatchStatus,
+    RecognitionResult,
+    RecognitionRepository,
+)
+from photo_archiver.domain.repositories.recognition_repository import WorkspaceCounts
 from photo_archiver.infrastructure.database.sqlite_connection import SQLiteConnectionProvider
 from photo_archiver.infrastructure.database.sqlite_mappers import (
     datetime_to_text,
@@ -172,6 +177,68 @@ class SQLiteRecognitionRepository(RecognitionRepository):
             ),
         )
         return results
+
+    def read_workspace_counts(self) -> WorkspaceCounts:
+        """Read readiness counts in ONE aggregate query — zero entity materialization.
+
+        Batch2 工作台就绪服务要求大库上不得全量物化实体列表，因此本方法把
+        一次性 SQL 推到存储层：
+
+        - has_persons / has_photos：EXISTS 全表任一行（不做状态过滤）。
+        - pending_match_count：无任何识别行的照片数（NOT EXISTS）。
+        - pending_review_count：status=pending 的结果行数——ReviewDialog 按
+          结果行展示（同一照片可有多张待审人脸），故意不去重。
+        - archivable_count：与 ArchivePlanner 同语义的去重照片数——绝对路径
+          照片（path_base='absolute'，planner 的 ``is_absolute`` 过滤对应列）、
+          APPROVED 结果且 person 仍在库内（FK ON DELETE SET NULL 保证
+          person_id NULL 即人员已删）、且没有成功态归档记录（ARCHIVED /
+          SKIPPED / RENAMED / OVERWRITTEN；FAILED/PLANNED/DRY_RUN 不拦重试，
+          与 find_by_photo / planner 的 review M-2 语义一致）。
+        """
+        with self._connection_provider.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    EXISTS(SELECT 1 FROM people) AS has_persons,
+                    EXISTS(SELECT 1 FROM photos) AS has_photos,
+                    (
+                        SELECT COUNT(*) FROM photos p
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM recognition_results r WHERE r.photo_id = p.id
+                        )
+                    ) AS pending_match_count,
+                    (
+                        SELECT COUNT(*) FROM recognition_results
+                        WHERE status = :pending
+                    ) AS pending_review_count,
+                    (
+                        SELECT COUNT(DISTINCT r.photo_id)
+                        FROM recognition_results r
+                        JOIN photos p ON p.id = r.photo_id
+                        JOIN people person ON person.id = r.person_id
+                        WHERE r.status = :approved
+                          AND p.path_base = 'absolute'
+                          AND r.person_id IS NOT NULL
+                          AND NOT EXISTS (
+                              SELECT 1 FROM archive_records a
+                              WHERE a.photo_id = r.photo_id
+                                AND a.status IN ('archived', 'skipped', 'renamed', 'overwritten')
+                          )
+                    ) AS archivable_count
+                """,
+                {
+                    "pending": MatchStatus.PENDING.value,
+                    "approved": MatchStatus.APPROVED.value,
+                },
+            ).fetchone()
+        assert row is not None  # aggregate SELECT always returns exactly one row
+        return WorkspaceCounts(
+            has_persons=bool(row["has_persons"]),
+            has_photos=bool(row["has_photos"]),
+            pending_match_count=int(row["pending_match_count"]),
+            pending_review_count=int(row["pending_review_count"]),
+            archivable_count=int(row["archivable_count"]),
+        )
 
     def list_pending(self) -> list[RecognitionResult]:
         """Return all recognition results awaiting user review."""

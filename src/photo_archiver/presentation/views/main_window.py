@@ -8,15 +8,22 @@ Status:  progress bar + status label
 短耗时（review approve/reject、archive preview）同步调。
 """
 
+from __future__ import annotations
+
+from collections.abc import Callable
+from functools import wraps
 from pathlib import Path
 from uuid import UUID
+from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSignalBlocker, QSize, Qt, Slot
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
     QLabel,
+    QHBoxLayout,
+    QPushButton,
     QMainWindow,
     QMessageBox,
     QProgressBar,
@@ -30,7 +37,8 @@ from PySide6.QtWidgets import (
 
 from loguru import logger
 
-from photo_archiver.app.context import ApplicationContext
+if TYPE_CHECKING:
+    from photo_archiver.app.context import ApplicationContext
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.application.dtos.plugin_action_result import ActionResult
 from photo_archiver.domain import PhotoSearchCriteria
@@ -40,7 +48,19 @@ from photo_archiver.presentation.controllers import (
     MatchPersonsController,
     ScanController,
 )
+from photo_archiver.presentation.controllers.workspace_controller import (
+    ActionGuidance, WorkspaceController,
+)
+from photo_archiver.presentation import ui_text as text
+from photo_archiver.presentation.task_coordinator import TaskCoordinator
 from photo_archiver.presentation.ui_text import (
+    STATUS_OPERATION_FAILED,
+    STATUS_REFRESH_FAILED,
+    STATUS_PROGRESS_UNKNOWN,
+    STATUS_TASK_BUSY,
+    STATUS_TASK_CANCEL_PROGRESS,
+    STATUS_TASK_PREPARING,
+    STATUS_TASK_PROGRESS,
     ACTION_ARCHIVE,
     ACTION_CANCEL_TASK,
     ACTION_DELETE_PERSON,
@@ -73,6 +93,7 @@ from photo_archiver.presentation.ui_text import (
     PLUGIN_RESULT_TITLE,
     STATUS_ARCHIVING,
     STATUS_CANCELLING,
+    STATUS_CANCEL_FAILED,
     STATUS_EXPORTING,
     STATUS_IMPORTING_FILE,
     STATUS_MATCH_UNAVAILABLE,
@@ -115,6 +136,29 @@ DEFAULT_WINDOW_HEIGHT = 800
 _PROGRESS_RESOLUTION = 100
 
 
+def _exclusive(label: str) -> Callable:
+    """Reserve admission before modal dialogs, queries or nested GUI dispatch."""
+    def decorate(method: Callable) -> Callable:
+        @wraps(method)
+        def guarded(self: "MainWindow", *args: object, **kwargs: object) -> None:
+            reservation = self._task_coordinator.reserve(label)
+            if reservation is None:
+                self._status.showMessage(
+                    STATUS_TASK_BUSY.format(label=self._task_coordinator.label)
+                )
+                return
+            try:
+                method(self, *args, **kwargs)
+            except Exception as exc:  # noqa: BLE001 - GUI boundary
+                logger.exception("GUI operation {} failed", label)
+                self._status_label.setText(STATUS_OPERATION_FAILED.format(detail=exc))
+                QMessageBox.warning(self, label, STATUS_OPERATION_FAILED.format(detail=exc))
+            finally:
+                self._task_coordinator.release(reservation)
+        return guarded
+    return decorate
+
+
 class MainWindow(QMainWindow):
     """Main window for the PhotoArchiver desktop application.
 
@@ -135,13 +179,21 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(MAIN_WINDOW_TITLE)
         self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         self._context = context
+        self._task_coordinator = TaskCoordinator(self)
+        self._current_criteria: PhotoSearchCriteria | None = None
+        self._action_states: dict[QAction, tuple[bool, str]] = {}
+        self._workspace_controller = WorkspaceController(context.services.workspace_readiness)
         self._build_controllers()
         self._build_toolbar()
         self._load_plugins()
         self._build_central()
         self._build_status()
-        self._active_runnable: QtWorkerRunnable | None = None  # tracks the currently running worker
-        self._current_criteria: PhotoSearchCriteria | None = None  # FEATURE-004 F2: sole UI holding point
+        self._task_coordinator.changed.connect(self._on_task_state_changed)
+        self._task_coordinator.started.connect(self._on_started)
+        self._task_coordinator.progress.connect(self._on_progress)
+        self._task_coordinator.terminal.connect(self._on_terminal)
+        self._refresh_workspace_state()
+        self._on_task_state_changed()
 
     def _build_controllers(self) -> None:
         """Assemble the four controllers from context services + worker executor."""
@@ -209,19 +261,10 @@ class MainWindow(QMainWindow):
         archive_action.triggered.connect(self._on_archive_clicked)
         toolbar.addAction(archive_action)
 
-        # Phase 4.2 Commit 3: face-recognition trigger. Disabled while a match
-        # task is in flight; re-enabled by every terminal signal (completed /
-        # failed / cancelled). The controller's _active_runnable remains the
-        # authoritative running state (AC-014), so no second UI busy flag.
         self._match_action = QAction(ACTION_RUN_FACE_RECOGNITION, self)
         self._match_action.triggered.connect(self._on_match_clicked)
         toolbar.addAction(self._match_action)
 
-        # Phase 5 Commit 1: export trigger. Disabled while an export task runs;
-        # re-enabled by every terminal signal (completed / failed) — ExportController
-        # exposes 4 channels (no cancelled), matching the connect_signals contract.
-        # UI-side enablement is the only single-flight state for export: unlike
-        # the match controller, ExportController carries no guard of its own.
         self._export_action = QAction(ACTION_EXPORT_DATA, self)
         self._export_action.triggered.connect(self._on_export_clicked)
         toolbar.addAction(self._export_action)
@@ -252,7 +295,15 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self._cancel_action)
 
         toolbar.addSeparator()
+        self._review_action = review_action
+        self._archive_action = archive_action
+        self._delete_photos_action = delete_photos_action
         self._plugin_actions: list[QAction] = []
+        self._conflicting_actions = [
+            import_action, scan_action, review_action, archive_action,
+            self._match_action, self._export_action, detect_duplicates_action,
+            delete_photos_action, delete_person_action, settings_action,
+        ]
 
     def _load_plugins(self) -> None:
         """Construct the plugin registry and load the configured plugin directory.
@@ -297,7 +348,9 @@ class MainWindow(QMainWindow):
                 qaction.triggered.connect(lambda checked=False, pid=pid: self._on_plugin_action(pid))
                 toolbar.addAction(qaction)
                 self._plugin_actions.append(qaction)
+                self._conflicting_actions.append(qaction)
 
+    @_exclusive(PLUGIN_RESULT_TITLE.format(action_id="…"))
     def _on_plugin_action(self, action_id: str) -> None:
         """Dispatch a plugin action click to the owning plugin and render the result.
 
@@ -353,11 +406,22 @@ class MainWindow(QMainWindow):
         self._filter_bar = FilterBar(self)
         self._filter_bar.criteria_changed.connect(self._on_filter_changed)
         layout.addWidget(self._filter_bar)
+        guidance_row = QHBoxLayout()
+        self._match_next_button = QPushButton(self)
+        self._archive_next_button = QPushButton(self)
+        for button in (self._match_next_button, self._archive_next_button):
+            button.setVisible(False)
+            button.clicked.connect(lambda checked=False, button=button: self._on_workspace_next(button))
+            guidance_row.addWidget(button)
+        guidance_row.addStretch()
+        layout.addLayout(guidance_row)
 
         self._photo_list_model = PhotoListModel(parent=self)
         self._photo_list = QListView(self)
         self._photo_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._photo_list.setModel(self._photo_list_model)
+        self._photo_list.selectionModel().selectionChanged.connect(self._render_workspace_actions)
+        self._photo_list_model.modelReset.connect(self._render_workspace_actions)
         # 照片墙网格布局（2026-09-06 桌面感知抽查反馈）：换行流式多列排列，
         # 单元格与委托 sizeHint 匹配（160px 缩略框 + 文件名条）。
         self._photo_list.setViewMode(QListView.ViewMode.IconMode)
@@ -398,6 +462,61 @@ class MainWindow(QMainWindow):
         # refresh it triggers requires _photo_list_model to exist. Re-populated
         # after each people import completes (see _on_completed).
         self._refresh_filter_persons()
+
+    def _refresh_workspace_state(self) -> None:
+        """Refresh one shared query snapshot after workspace mutations."""
+        self._workspace_controller.refresh(self._effective_archive_root())
+        self._render_workspace_actions()
+
+    def _render_workspace_actions(self) -> None:
+        """Selection changes consume cached facts, never re-query the library."""
+        controller = self._workspace_controller
+        pairs = (
+            (self._match_action, controller.match_guidance()),
+            (self._archive_action, controller.archive_guidance()),
+            (self._review_action, controller.review_guidance()),
+            (self._delete_photos_action, ActionGuidance(
+                bool(self._collect_selected_photo_ids()), text.DELETE_PHOTOS_NO_SELECTION,
+            )),
+        )
+        busy = self._task_coordinator.is_busy
+        for action, guidance in pairs:
+            if busy:
+                self._action_states[action] = (guidance.enabled, guidance.tooltip)
+            else:
+                action.setEnabled(guidance.enabled)
+                action.setToolTip(guidance.tooltip)
+        labels = {
+            "import": text.WORKSPACE_NEXT_IMPORT, "scan": text.WORKSPACE_NEXT_SCAN,
+            "review": text.WORKSPACE_NEXT_REVIEW, "settings": text.WORKSPACE_NEXT_SETTINGS,
+            "model": text.WORKSPACE_NEXT_MODEL,
+        }
+        for button, guidance in (
+            (self._match_next_button, controller.match_guidance()),
+            (self._archive_next_button, controller.archive_guidance()),
+        ):
+            button.setProperty("next_action", guidance.next_action)
+            button.setVisible(guidance.next_action is not None)
+            button.setText(labels.get(guidance.next_action or "", ""))
+            button.setToolTip(guidance.tooltip)
+            button.setEnabled(not busy and guidance.next_action is not None)
+
+    def _on_workspace_next(self, button: QPushButton) -> None:
+        """Dispatch a visible next step through the ordinary guarded entry."""
+        if self._task_coordinator.is_busy:
+            return
+        handlers = {
+            "import": self._on_import_clicked, "scan": self._on_scan_clicked,
+            "review": self._on_review_clicked, "settings": self._on_settings_clicked,
+            "model": self._on_model_help_clicked,
+        }
+        handler = handlers.get(button.property("next_action"))
+        if handler is not None:
+            handler()
+
+    @_exclusive(text.WORKSPACE_MODEL_HELP_TITLE)
+    def _on_model_help_clicked(self) -> None:
+        QMessageBox.information(self, text.WORKSPACE_MODEL_HELP_TITLE, text.WORKSPACE_MODEL_HELP)
 
     def _update_photo_empty_state(self) -> None:
         """Show the empty-state placeholder when the photo wall has no rows."""
@@ -445,52 +564,119 @@ class MainWindow(QMainWindow):
 
     # ---- Worker task slots ----
 
-    def _connect_task_signals(self, runnable) -> None:
-        """Wire the runnable's signals to the shared task slots and track it."""
-        self._active_runnable = runnable
-        ImportPeopleController.connect_signals(
-            runnable,
-            self._on_started,  # type: ignore[arg-type]  # Qt Slot vs Callable variance, existing convention
-            self._on_progress,  # type: ignore[arg-type]
-            self._on_completed,  # type: ignore[arg-type]
-            self._on_failed,  # type: ignore[arg-type]
-            cancelled=self._on_task_cancelled,  # type: ignore[arg-type]
+    @property
+    def _active_runnable(self) -> QtWorkerRunnable | None:
+        """Read-only compatibility view of the coordinator's task handle."""
+        return self._task_coordinator.active_runnable
+
+    @Slot()
+    def _on_task_state_changed(self) -> None:
+        coordinator = self._task_coordinator
+        if coordinator.is_busy:
+            reason = STATUS_TASK_BUSY.format(label=coordinator.label)
+            for action in self._conflicting_actions:
+                if action not in self._action_states:
+                    self._action_states[action] = (action.isEnabled(), action.toolTip())
+                action.setEnabled(False)
+                action.setToolTip(reason)
+        else:
+            for action, (enabled, tooltip) in self._action_states.items():
+                action.setEnabled(enabled)
+                action.setToolTip(tooltip)
+            self._action_states.clear()
+            self._status.clearMessage()
+        self._render_workspace_actions()
+        self._cancel_action.setEnabled(coordinator.can_cancel)
+        self._cancel_action.setToolTip(
+            STATUS_CANCELLING if coordinator.is_cancelling else
+            text.WORKSPACE_CANCEL_READY if coordinator.can_cancel else text.WORKSPACE_CANCEL_IDLE
         )
-        runnable.replay_pending_terminal()
-        self._cancel_action.setEnabled(True)
+        if coordinator.is_cancelling and STATUS_CANCELLING not in self._status_label.text():
+            self._status_label.setText(STATUS_TASK_CANCEL_PROGRESS.format(
+                status=self._status_label.text(), cancellation=STATUS_CANCELLING,
+            ))
 
+    def _connect_task_signals(
+        self, runnable: QtWorkerRunnable, connect: Callable | None = None,
+    ) -> None:
+        """Initialize UI before any controller's synchronous terminal replay."""
+        self._progress.setRange(0, 0)
+        self._progress.setValue(0)
+        self._status_label.setText(STATUS_TASK_PROGRESS.format(
+            label=self._task_coordinator.label, progress=STATUS_PROGRESS_UNKNOWN,
+            message=self._status_label.text(),
+        ))
+        self._task_coordinator.bind(runnable, connect or ImportPeopleController.connect_signals)
+
+    @Slot(object)
     def _on_started(self, event: TaskStarted) -> None:
-        """Reflect task start in the status bar."""
-        self._status_label.setText(STATUS_TASK_STARTED.format(label=task_label(event.task_name)))
+        """Reflect an identity-checked start without erasing cancellation."""
+        self._render_task_progress(STATUS_TASK_STARTED.format(
+            label=self._task_coordinator.label,
+        ))
 
+    def _render_task_progress(self, message: str) -> None:
+        progress = (
+            STATUS_PROGRESS_UNKNOWN if self._progress.maximum() == 0
+            else f"{self._progress.value()}%"
+        )
+        text = STATUS_TASK_PROGRESS.format(
+            label=self._task_coordinator.label, progress=progress, message=message,
+        )
+        if self._task_coordinator.is_cancelling:
+            text = STATUS_TASK_CANCEL_PROGRESS.format(status=text, cancellation=STATUS_CANCELLING)
+        self._status_label.setText(text)
+
+    @Slot(object)
     def _on_progress(self, event: TaskProgress) -> None:
-        """Update the progress bar from task progress events."""
-        if event.current is not None and event.total and event.total > 0:
-            self._progress.setValue(int(event.current * _PROGRESS_RESOLUTION / event.total))
-        elif event.message:
-            self._status_label.setText(event.message)
+        """Show message and measured progress together; unknown totals stay busy."""
+        if event.current is not None and event.total is not None and event.total > 0:
+            self._progress.setRange(0, _PROGRESS_RESOLUTION)
+            self._progress.setValue(max(0, min(
+                _PROGRESS_RESOLUTION, int(event.current * _PROGRESS_RESOLUTION / event.total),
+            )))
+        else:
+            self._progress.setRange(0, 0)
+        self._render_task_progress(event.message)
+
+    @Slot(object)
+    def _on_terminal(self, event: TaskCompleted | TaskFailed | TaskCancelled) -> None:
+        """One accepted terminal, one refresh, still reserved through modal feedback."""
+        self._progress.setRange(0, _PROGRESS_RESOLUTION)
+        if isinstance(event, TaskCompleted):
+            self._on_completed(event)
+        elif isinstance(event, TaskFailed):
+            self._on_failed(event)
+        else:
+            self._on_task_cancelled(event)
+
+    def _refresh_task_results(self, task_name: str) -> None:
+        # Failed/cancelled tasks may already have persisted a partial batch.
+        try:
+            if task_name == "import_people":
+                # Refill the catalog without set_persons emitting transient criteria.
+                with QSignalBlocker(self._filter_bar):
+                    self._refresh_filter_persons()
+            self._refresh_photo_list()
+            if task_name == "match_persons":
+                self._refresh_review_pending()
+            self._refresh_workspace_state()
+        except Exception:  # noqa: BLE001 - terminal feedback must survive read failures
+            logger.exception("Unable to refresh task results for {}", task_name)
+            self._status_label.setText(
+                self._status_label.text() + " · " + STATUS_REFRESH_FAILED
+            )
 
     def _on_task_cancelled(self, event: TaskCancelled) -> None:
-        """Reset UI after a cancelled generic task (import; ADR-036 D7 wiring).
-
-        Without the wiring the UI stuck at "Cancelling …" with the Cancel
-        action dead (体检 N-3)."""
-        self._active_runnable = None
-        self._cancel_action.setEnabled(False)
         self._progress.setValue(0)
         self._status_label.setText(STATUS_TASK_CANCELLED.format(label=task_label(event.task_name)))
+        self._refresh_task_results(event.task_name)
 
     def _on_completed(self, event: TaskCompleted) -> None:
-        """Reflect task completion and refresh the photo list."""
-        self._active_runnable = None  # N-9: terminal events clear the tracking handle
-        self._cancel_action.setEnabled(False)
+        """Reflect completion and refresh persisted results under current criteria."""
         self._progress.setValue(_PROGRESS_RESOLUTION)
         self._status_label.setText(STATUS_TASK_COMPLETED.format(label=task_label(event.task_name)))
-        self._refresh_photo_list()
-        if event.task_name == "import_people":
-            # Phase 9 FEAT-P9-2: a people import changes the person catalog,
-            # so the FilterBar person axis must offer the fresh entries.
-            self._refresh_filter_persons()
+        self._refresh_task_results(event.task_name)
 
     def _refresh_filter_persons(self) -> None:
         """Load the FilterBar person axis through the Application layer.
@@ -502,25 +688,23 @@ class MainWindow(QMainWindow):
         self._filter_bar.set_persons(self._context.services.list_persons.execute())
 
     def _on_failed(self, event: TaskFailed) -> None:
-        """Surface task failure with the concrete error message and reset progress."""
-        self._active_runnable = None  # N-9
-        self._cancel_action.setEnabled(False)
+        """Refresh partial results before showing the concrete worker failure."""
         self._progress.setValue(0)
         self._status_label.setText(STATUS_TASK_FAILED.format(label=task_label(event.task_name)))
+        self._refresh_task_results(event.task_name)
         QMessageBox.warning(
-            self, STATUS_TASK_FAILED.format(label=task_label(event.task_name)), event.message
+            self, STATUS_TASK_FAILED.format(label=task_label(event.task_name)), event.message,
         )
 
     def _on_cancel_clicked(self) -> None:
-        """Request cooperative cancellation for the active task."""
-        runnable = getattr(self, "_active_runnable", None)
-        if runnable is not None:
-            runnable.cancel("User requested cancel")
-            self._cancel_action.setEnabled(False)
-            self._status_label.setText(STATUS_CANCELLING)
+        """Request cooperative cancellation only for the coordinator's task."""
+        coordinator = self._task_coordinator
+        if coordinator.can_cancel and not coordinator.cancel() and coordinator.can_cancel:
+            self._render_task_progress(STATUS_CANCEL_FAILED)
 
     # ---- Toolbar actions ----
 
+    @_exclusive(task_label("scan_and_register_photos"))
     def _on_scan_clicked(self) -> None:
         """Open a folder picker and start the scan workflow.
 
@@ -540,42 +724,13 @@ class MainWindow(QMainWindow):
         self._status_label.setText(STATUS_SCANNING_FOLDER.format(folder=folder))
         self._connect_scan_signals(runnable)
 
-    def _connect_scan_signals(self, runnable) -> None:
-        """Wire a scan runnable's signals, including the P0-4 cancelled slot.
+    def _connect_scan_signals(self, runnable: QtWorkerRunnable) -> None:
+        """Attach a scan while retaining its controller-local single-flight guard."""
+        if not self._task_coordinator.is_busy:
+            self._task_coordinator.reserve(task_label("scan_and_register_photos"))
+        self._connect_task_signals(runnable, self._scan_controller.connect_signals)
 
-        Also flips the UI into its single-flight state (Scan action disabled,
-        Cancel enabled) — any submission path through here is covered.
-        """
-        self._active_runnable = runnable
-        self._scan_action.setEnabled(False)
-        self._scan_controller.connect_signals(
-            runnable,
-            self._on_started,  # type: ignore[arg-type]  # Qt Slot vs Callable variance, existing convention
-            self._on_progress,  # type: ignore[arg-type]
-            self._on_scan_completed,  # type: ignore[arg-type]
-            self._on_scan_failed,  # type: ignore[arg-type]
-            cancelled=self._on_scan_cancelled,  # type: ignore[arg-type]
-        )
-        self._cancel_action.setEnabled(True)
-
-    def _on_scan_completed(self, event: TaskCompleted) -> None:
-        """Shared completion handling plus P0-4 single-flight re-enable."""
-        self._on_completed(event)
-        self._scan_action.setEnabled(True)
-
-    def _on_scan_failed(self, event: TaskFailed) -> None:
-        """Shared failure handling plus P0-4 single-flight re-enable."""
-        self._on_failed(event)
-        self._scan_action.setEnabled(True)
-
-    def _on_scan_cancelled(self, event: TaskCancelled) -> None:
-        """Reset UI after a cancelled scan (P0-4: previously stuck at 'Cancelling ...')."""
-        self._active_runnable = None  # N-9
-        self._cancel_action.setEnabled(False)
-        self._progress.setValue(0)
-        self._status_label.setText(STATUS_TASK_CANCELLED.format(label=task_label(event.task_name)))
-        self._scan_action.setEnabled(True)
-
+    @_exclusive(task_label("import_people"))
     def _on_import_clicked(self) -> None:
         """Open a file picker and start the people-import workflow."""
         path, _ = QFileDialog.getOpenFileName(
@@ -588,6 +743,7 @@ class MainWindow(QMainWindow):
         runnable = self._import_controller.import_from(Path(path))
         self._connect_task_signals(runnable)
 
+    @_exclusive(ACTION_REVIEW_PENDING)
     def _on_review_clicked(self) -> None:
         """Open the modal ReviewDialog for inline approve/reject.
 
@@ -598,7 +754,10 @@ class MainWindow(QMainWindow):
         """
         dialog = ReviewDialog(self._review_controller, self)
         dialog.exec()
+        # Approve/reject inside the dialog changes pending/archivable counts.
+        self._refresh_workspace_state()
 
+    @_exclusive(task_label("archive_photos"))
     def _on_archive_clicked(self) -> None:
         """Open the archive preview dialog; on accept, start the archive task.
 
@@ -671,7 +830,11 @@ class MainWindow(QMainWindow):
         surface without a manual refresh. Thumbnails load lazily via the
         PhotoListController when the list view asks for them.
         """
-        photos = self._photo_list_controller.list_photos()
+        photos = (
+            self._photo_list_controller.search_photos(self._current_criteria)
+            if self._current_criteria is not None
+            else self._photo_list_controller.list_photos()
+        )
         self._photo_list_model.load_photos(photos)
         self._photo_list_model.set_status_badges(
             self._photo_list_controller.status_badges(
@@ -681,6 +844,7 @@ class MainWindow(QMainWindow):
         for photo in photos:
             self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__
 
+    @_exclusive(ACTION_SETTINGS)
     def _on_settings_clicked(self) -> None:
         """Open the modal SettingsDialog; the dialog owns its own save/cancel flow.
 
@@ -693,7 +857,10 @@ class MainWindow(QMainWindow):
         """
         dialog = SettingsDialog(self._settings_controller, self)
         dialog.exec()
+        # Archive root preference may have changed — reprobe and re-render.
+        self._refresh_workspace_state()
 
+    @_exclusive(ACTION_DETECT_DUPLICATES)
     def _on_detect_duplicates_clicked(self) -> None:
         """Run duplicate detection and pop up the read-only report dialog.
 
@@ -705,6 +872,7 @@ class MainWindow(QMainWindow):
 
     # ---- Library management (Phase E E-4, ADR-034) ----
 
+    @_exclusive(ACTION_DELETE_PHOTOS)
     def _on_delete_photos_clicked(self) -> None:
         """Remove the selected photo registrations after confirmation (E-4).
 
@@ -749,6 +917,7 @@ class MainWindow(QMainWindow):
             ),
         )
 
+    @_exclusive(ACTION_DELETE_PERSON)
     def _on_delete_person_clicked(self) -> None:
         """Open the person-deletion dialog and run the confirmed removal (E-4).
 
@@ -789,6 +958,7 @@ class MainWindow(QMainWindow):
 
     # ---- Face recognition (match persons) ----
 
+    @_exclusive(task_label("match_persons"))
     def _on_match_clicked(self) -> None:
         """Start the face-recognition (match persons) workflow on click.
 
@@ -799,57 +969,30 @@ class MainWindow(QMainWindow):
         ``last_refusal_reason`` surfaced in the status bar. A submitted
         runnable disables this action until a terminal signal (completed /
         failed / cancelled) re-enables it and releases the controller guard.
+
+        Batch 2: a cached readiness gate runs first so a missing model or
+        empty workspace is refused with guidance before any worker submission;
+        the controller's own refusals remain the authoritative second line.
         """
+        guidance = self._workspace_controller.match_guidance()
+        if not guidance.enabled:
+            # Cached read-side guidance; the controller's own refusals remain
+            # the authoritative second line (TOCTOU).
+            self._status_label.setText(guidance.tooltip)
+            return
         runnable = self._match_controller.start_match()
         if runnable is None:
             reason = self._match_controller.last_refusal_reason
             self._status_label.setText(reason or STATUS_MATCH_UNAVAILABLE)
             return
-        self._match_action.setEnabled(False)
-        self._active_runnable = runnable
-        self._cancel_action.setEnabled(True)
-        self._match_controller.connect_signals(
-            runnable,
-            self._on_started,  # type: ignore[arg-type]  # Qt Slot vs Callable variance, existing convention
-            self._on_progress,  # type: ignore[arg-type]
-            self._on_match_completed,  # type: ignore[arg-type]
-            self._on_match_failed,  # type: ignore[arg-type]
-            cancelled=self._on_match_cancelled,  # type: ignore[arg-type]
-        )
-
-    def _on_match_completed(self, event: TaskCompleted) -> None:
-        """Handle match completion: shared finish, re-enable, review refresh.
-
-        ``_on_completed`` resets progress/status and refreshes the photo list;
-        the match action is re-enabled and the pending-review queue re-queried
-        so freshly created PENDING results surface when the user opens Review.
-        """
-        self._on_completed(event)
-        self._match_action.setEnabled(True)
-        self._refresh_review_pending()
-
-    def _on_match_failed(self, event: TaskFailed) -> None:
-        """Handle match failure: shared error surface + re-enable the action.
-
-        The concrete error is already surfaced by ``_on_failed`` (status label +
-        QMessageBox); re-enabling lets the user retry after correcting the cause
-        (e.g. installing the model pack or importing persons).
-        """
-        self._on_failed(event)
-        self._match_action.setEnabled(True)
-
-    def _on_match_cancelled(self, event: TaskCancelled) -> None:
-        """Handle cooperative cancellation: reset progress and re-enable."""
-        self._active_runnable = None  # N-9
-        self._cancel_action.setEnabled(False)
-        self._progress.setValue(0)
-        self._status_label.setText(STATUS_TASK_CANCELLED.format(label=task_label(event.task_name)))
-        self._match_action.setEnabled(True)
+        self._status_label.setText(STATUS_TASK_PREPARING.format(label=task_label("match_persons")))
+        self._connect_task_signals(runnable, self._match_controller.connect_signals)
 
     # ------------------------------------------------------------------
     # Phase 5 Commit 1: Export UI wiring
     # ------------------------------------------------------------------
 
+    @_exclusive(task_label("export"))
     def _on_export_clicked(self) -> None:
         """Open the modal ExportDialog; on accept, dispatch the export task.
 
@@ -870,7 +1013,6 @@ class MainWindow(QMainWindow):
             # Defensive: _on_accept validates a non-empty path before
             # accepting, so this branch is unreachable in practice.
             return
-        self._export_action.setEnabled(False)
         self._progress.setValue(0)
         self._status_label.setText(STATUS_EXPORTING)
         scope = dialog.scope
@@ -884,42 +1026,7 @@ class MainWindow(QMainWindow):
             format_name=dialog.format_name,
             criteria=criteria,
         )
-        self._active_runnable = runnable
-        self._cancel_action.setEnabled(True)
-        self._export_controller.connect_signals(
-            runnable,
-            self._on_export_started,  # type: ignore[arg-type]  # Qt Slot vs Callable variance, existing convention
-            self._on_export_progress,  # type: ignore[arg-type]
-            self._on_export_completed,  # type: ignore[arg-type]
-            self._on_export_failed,  # type: ignore[arg-type]
-            cancelled=self._on_export_cancelled,  # type: ignore[arg-type]
-        )
-
-    def _on_export_started(self, event: TaskStarted) -> None:
-        """Reflect export start in the status bar (delegates to shared slot)."""
-        self._on_started(event)
-
-    def _on_export_progress(self, event: TaskProgress) -> None:
-        """Update the progress bar from the two-phase export progress events."""
-        self._on_progress(event)
-
-    def _on_export_completed(self, event: TaskCompleted) -> None:
-        """Reflect completion via the shared slot and re-enable the action."""
-        self._on_completed(event)
-        self._export_action.setEnabled(True)
-
-    def _on_export_failed(self, event: TaskFailed) -> None:
-        """Surface the failure via the shared slot and re-enable the action."""
-        self._on_failed(event)
-        self._export_action.setEnabled(True)
-
-    def _on_export_cancelled(self, event: TaskCancelled) -> None:
-        """Reset UI after a cancelled export (ADR-036 D7)."""
-        self._active_runnable = None
-        self._cancel_action.setEnabled(False)
-        self._progress.setValue(0)
-        self._status_label.setText(STATUS_TASK_CANCELLED.format(label=task_label(event.task_name)))
-        self._export_action.setEnabled(True)
+        self._connect_task_signals(runnable, self._export_controller.connect_signals)
 
     def _refresh_review_pending(self) -> None:
         """Re-query recognition results so newly created PENDING entries surface.
@@ -931,5 +1038,5 @@ class MainWindow(QMainWindow):
         """
         pending = self._review_controller.list_pending()
         self._status_label.setText(
-            STATUS_PENDING_REVIEW_COUNT.format(count=len(pending))
+            self._status_label.text() + " · " + STATUS_PENDING_REVIEW_COUNT.format(count=len(pending))
         )

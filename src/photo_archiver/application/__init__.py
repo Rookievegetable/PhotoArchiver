@@ -27,6 +27,8 @@ from photo_archiver.application.dtos import (
     ScanAndRegisterPhotosResult,
     ScanPhotoFolderResult,
     UserPreferences,
+    ModelAvailability,
+    WorkspaceStatus,
     validate_preferences,
 )
 from photo_archiver.application.ports import (
@@ -62,6 +64,7 @@ from photo_archiver.application.services import (
     ScanPhotoFolderService,
     SearchPhotosService,
     SettingsService,
+    WorkspaceReadinessService,
 )
 from photo_archiver.application.use_cases import (
     ArchivePhotosUseCase,
@@ -114,6 +117,7 @@ __all__ = [
     "ListPersonsService",
     "MatchPersonsService",
     "MatchPersonsUseCase",
+    "ModelAvailability",
     "PersonImportReader",
     "PersonImportRow",
     "PhotoFileScanner",
@@ -144,6 +148,8 @@ __all__ = [
     "SystemSettings",
     "UnitOfWork",
     "UserPreferences",
+    "WorkspaceReadinessService",
+    "WorkspaceStatus",
     "UserSettingsStore",
     "validate_preferences",
 ]

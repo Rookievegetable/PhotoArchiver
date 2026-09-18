@@ -1,6 +1,7 @@
 """Application-level service assembly."""
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
 from photo_archiver.app.repositories import ApplicationRepositories
@@ -28,6 +29,8 @@ from photo_archiver.application import (
     SearchPhotosService,
     SettingsService,
 )
+from photo_archiver.application.dtos.workspace import ModelAvailability
+from photo_archiver.application.services.workspace_readiness import WorkspaceReadinessService
 from photo_archiver.infrastructure import (
     DispatchingPersonImportReader,
     ExcelPersonImportReader,
@@ -64,6 +67,21 @@ class ApplicationServices:
     prune_missing_photos: PruneMissingPhotosService
     dispose_duplicates: DisposeDuplicatesService
     cleanup_thumbnails: CleanupThumbnailCacheService
+    workspace_readiness: WorkspaceReadinessService
+
+
+def archive_root_available(path: Path) -> bool:
+    """Check the nearest existing ancestor without creating or scanning anything.
+
+    This is an advisory access check, not a guarantee against later filesystem
+    changes. A dangling symlink or a file ancestor is not a creatable directory.
+    """
+    candidate = path
+    while not candidate.exists():
+        if candidate.is_symlink() or candidate.parent == candidate:
+            return False
+        candidate = candidate.parent
+    return candidate.is_dir() and os.access(candidate, os.W_OK | os.X_OK)
 
 
 def thumbnail_cache_root(settings: AppSettings) -> Path:
@@ -221,6 +239,15 @@ def build_application_services(
             unit_of_work=unit_of_work,
         ),
         match_persons=match_service,
+        workspace_readiness=WorkspaceReadinessService(
+            repositories.recognition,
+            archive_root_probe=archive_root_available,
+            model_availability=(
+                ModelAvailability.MISSING
+                if isinstance(match_service, _UnavailableMatchService)
+                else ModelAvailability.AVAILABLE
+            ),
+        ),
         archive_photos=archive_photos_service,
         review_recognition=review_service,
         settings=settings_service,

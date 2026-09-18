@@ -13,7 +13,10 @@ import pytest
 pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
+from unittest.mock import Mock
+
 from photo_archiver.app import bootstrap_application  # noqa: F401
+from photo_archiver.application.dtos.workspace import ModelAvailability, WorkspaceStatus
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.presentation.views.main_window import MainWindow
 from photo_archiver.workers.events import (
@@ -51,11 +54,26 @@ def _make_runnable():
     return FakeRunnable()
 
 
-def _make_window(qtbot, tmp_path) -> MainWindow:
+def _make_window(qtbot, tmp_path, monkeypatch) -> MainWindow:
     """Build a real MainWindow over a tmp SQLite context (smoke-test pattern)."""
-    settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'match_ui.db'}")
+    settings = AppSettings(
+        database_url=f"sqlite:///{tmp_path / 'match_ui.db'}",
+        model_path=tmp_path / "missing-models",
+    )
     settings.ensure_runtime_directories()
     context = bootstrap_application(settings)
+    # Batch2 readiness: stub the workspace query to an all-ready snapshot so
+    # the match action starts enabled — the tests below exercise the worker
+    # guards, not the (separately covered) readiness policy.
+    monkeypatch.setattr(
+        context.services.workspace_readiness, "execute",
+        Mock(return_value=WorkspaceStatus(
+            has_persons=True, has_photos=True, pending_match_count=1,
+            pending_review_count=0, archivable_count=1,
+            archive_root_available=True,
+            model_availability=ModelAvailability.AVAILABLE,
+        )),
+    )
     window = MainWindow(context)
     qtbot.addWidget(window)
     return window
@@ -73,16 +91,18 @@ def _stub_start(window, monkeypatch):
     return calls, runnable
 
 
-def test_action_exists_and_enabled_by_default(qtbot, tmp_path) -> None:
-    """The Run Face Recognition toolbar action exists and starts enabled."""
-    window = _make_window(qtbot, tmp_path)
+def test_action_exists_and_enabled_by_default(qtbot, tmp_path, monkeypatch) -> None:
+    """The action exists, starts enabled on a ready snapshot, and carries the count tooltip."""
+    window = _make_window(qtbot, tmp_path, monkeypatch)
     assert window._match_action.text() == "运行人脸识别"
     assert window._match_action.isEnabled() is True
+    assert window._workspace_controller.status.pending_match_count == 1
+    assert "有 1 张照片待识别" in window._match_action.toolTip()
 
 
 def test_trigger_calls_start_match_and_disables_action(qtbot, tmp_path, monkeypatch) -> None:
     """Clicking the action submits via the controller and locks the action."""
-    window = _make_window(qtbot, tmp_path)
+    window = _make_window(qtbot, tmp_path, monkeypatch)
     calls, runnable = _stub_start(window, monkeypatch)
 
     window._match_action.trigger()
@@ -95,7 +115,7 @@ def test_trigger_calls_start_match_and_disables_action(qtbot, tmp_path, monkeypa
 
 def test_started_signal_keeps_action_disabled_and_updates_status(qtbot, tmp_path, monkeypatch) -> None:
     """started updates the status bar and does not unlock the action."""
-    window = _make_window(qtbot, tmp_path)
+    window = _make_window(qtbot, tmp_path, monkeypatch)
     _, runnable = _stub_start(window, monkeypatch)
     window._match_action.trigger()
 
@@ -107,7 +127,7 @@ def test_started_signal_keeps_action_disabled_and_updates_status(qtbot, tmp_path
 
 def test_progress_uses_real_current_total_message(qtbot, tmp_path, monkeypatch) -> None:
     """progress renders real current/total into the bar; message only into status."""
-    window = _make_window(qtbot, tmp_path)
+    window = _make_window(qtbot, tmp_path, monkeypatch)
     _, runnable = _stub_start(window, monkeypatch)
     window._match_action.trigger()
 
@@ -119,12 +139,14 @@ def test_progress_uses_real_current_total_message(qtbot, tmp_path, monkeypatch) 
     runnable.signals.progress.emit(
         TaskProgress("match_persons", "task_1", message="Matching batch 2")
     )
-    assert window._status_label.text() == "Matching batch 2"
+    assert "Matching batch 2" in window._status_label.text()
+    assert "人脸识别" in window._status_label.text()
+    assert window._progress.maximum() == 0
 
 
 def test_completed_enables_action_and_refreshes_photo_and_review(qtbot, tmp_path, monkeypatch) -> None:
     """completed re-enables the action and triggers photo + review-pending refresh."""
-    window = _make_window(qtbot, tmp_path)
+    window = _make_window(qtbot, tmp_path, monkeypatch)
     _, runnable = _stub_start(window, monkeypatch)
     window._match_action.trigger()
     photo_refreshed: list[str] = []
@@ -142,7 +164,7 @@ def test_completed_enables_action_and_refreshes_photo_and_review(qtbot, tmp_path
 
 def test_failed_enables_action_and_surfaces_error(qtbot, tmp_path, monkeypatch) -> None:
     """failed re-enables the action, resets progress, and surfaces the error."""
-    window = _make_window(qtbot, tmp_path)
+    window = _make_window(qtbot, tmp_path, monkeypatch)
     _, runnable = _stub_start(window, monkeypatch)
     window._match_action.trigger()
     dialogs: list[tuple[str, str]] = []
@@ -164,7 +186,7 @@ def test_failed_enables_action_and_surfaces_error(qtbot, tmp_path, monkeypatch) 
 
 def test_cancelled_enables_action_and_gives_feedback(qtbot, tmp_path, monkeypatch) -> None:
     """cancelled re-enables the action, resets progress, and reports cancellation."""
-    window = _make_window(qtbot, tmp_path)
+    window = _make_window(qtbot, tmp_path, monkeypatch)
     _, runnable = _stub_start(window, monkeypatch)
     window._match_action.trigger()
 
@@ -178,7 +200,7 @@ def test_cancelled_enables_action_and_gives_feedback(qtbot, tmp_path, monkeypatc
 
 def test_running_action_disabled_prevents_duplicate_ui_start(qtbot, tmp_path, monkeypatch) -> None:
     """While in flight the action is disabled — the UI cannot re-submit (AC-014)."""
-    window = _make_window(qtbot, tmp_path)
+    window = _make_window(qtbot, tmp_path, monkeypatch)
     calls, _ = _stub_start(window, monkeypatch)
     window._match_action.trigger()
     assert calls == ["start"]
@@ -192,7 +214,7 @@ def test_running_action_disabled_prevents_duplicate_ui_start(qtbot, tmp_path, mo
 
 def test_refusal_surfaces_reason_and_keeps_action_enabled(qtbot, tmp_path, monkeypatch) -> None:
     """A None return from start_match surfaces last_refusal_reason, stays enabled."""
-    window = _make_window(qtbot, tmp_path)
+    window = _make_window(qtbot, tmp_path, monkeypatch)
     calls: list[str] = []
     monkeypatch.setattr(
         window._match_controller,
@@ -211,7 +233,7 @@ def test_refusal_surfaces_reason_and_keeps_action_enabled(qtbot, tmp_path, monke
 
 def test_cancel_action_forwards_cancellation_to_runnable(qtbot, tmp_path, monkeypatch) -> None:
     """The shared Cancel Task action forwards a cooperative cancel to the runnable."""
-    window = _make_window(qtbot, tmp_path)
+    window = _make_window(qtbot, tmp_path, monkeypatch)
     _, runnable = _stub_start(window, monkeypatch)
     window._match_action.trigger()
 
@@ -219,5 +241,5 @@ def test_cancel_action_forwards_cancellation_to_runnable(qtbot, tmp_path, monkey
 
     assert runnable.cancel_calls == ["User requested cancel"]
     assert window._cancel_action.isEnabled() is False
-    assert "正在取消" in window._status_label.text()
+    assert "正在请求取消；当前处理单元完成后停止，已完成部分会保留" in window._status_label.text()
 

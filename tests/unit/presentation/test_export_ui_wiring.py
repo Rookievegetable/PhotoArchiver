@@ -203,7 +203,7 @@ def test_accepted_dialog_submits_scope_format_and_disables_action(qtbot, tmp_pat
     assert dialog.parent is window  # dialog is parented to the MainWindow
     assert window._export_action.isEnabled() is False  # in-flight lock
     assert window._progress.value() == 0
-    assert window._status_label.text() == "正在导出…"
+    assert window._status_label.text() == "导出 · 总数未知 · 正在导出…"
     # ADR-036 D7: exports are cooperatively cancellable at task boundaries —
     # the Cancel action is enabled for the run and the cancelled terminal
     # resets the UI (see _on_export_cancelled).
@@ -231,7 +231,8 @@ def test_progress_two_phase_renders_bar_and_message(qtbot, tmp_path, monkeypatch
     # Phase 1 (real ExportTask): message-only, no current/total.
     runnable.signals.progress.emit(TaskProgress("export", "task_1", message="Gathering export data"))
     assert window._progress.value() == 0
-    assert window._status_label.text() == "Gathering export data"
+    assert window._status_label.text() == "导出 · 总数未知 · Gathering export data"
+    assert window._progress.maximum() == 0
 
     # Phase 2 (real ExportTask): "Export finished" with current=1, total=1.
     runnable.signals.progress.emit(
@@ -474,7 +475,7 @@ def test_export_forwards_criteria_by_scope(qtbot, tmp_path, monkeypatch) -> None
     held = PhotoSearchCriteria(match_status=MatchStatus.PENDING)
     window._current_criteria = held
 
-    calls, _, _ = _stub_export(window, monkeypatch, scope=ExportScope.FILTERED)
+    calls, first_runnable, _ = _stub_export(window, monkeypatch, scope=ExportScope.FILTERED)
     window._export_action.trigger()
     assert calls == [{
         "path": Path("export.csv"),
@@ -484,7 +485,8 @@ def test_export_forwards_criteria_by_scope(qtbot, tmp_path, monkeypatch) -> None
     }]
 
     calls2, _, _ = _stub_export(window, monkeypatch, scope=ExportScope.ALL)
-    window._export_action.setEnabled(True)  # re-enable between the two runs
+    first_runnable.signals.completed.emit(TaskCompleted("export", "task_1"))
+    assert window._export_action.isEnabled()
     window._export_action.trigger()
     assert calls2 == [{
         "path": Path("export.csv"),
