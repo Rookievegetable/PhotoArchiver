@@ -1,11 +1,16 @@
-"""Main application window — Step 12 complete workbench.
+"""Main application window — Batch 3 flow-driven workbench.
 
-Toolbar: [Import People] [Scan Folder] [Review Pending] [Archive]
-Central: QListView of photos with thumbnails (PhotoListModel)
-Status:  progress bar + status label
+Layout: left navigation (overview / photo library / review center /
+data tools / settings) beside a QStackedWidget of reusable pages; a
+window-level toolbar keeps the five frequent primary actions visible on
+every page, and the status bar keeps the task panel (progress, message,
+cancel) permanently visible. Maintenance entries (export, duplicate
+detection, person deletion) live on the data-tools page; settings is a
+navigation entry.
 
-每个 toolbar action 接对应 controller，长耗时走 QtWorkerExecutor，
-短耗时（review approve/reject、archive preview）同步调。
+每个页面动作接对应 controller，长耗时走 QtWorkerExecutor，短耗时
+（review approve/reject、archive preview）同步调。所有动作经
+TaskCoordinator 全局准入（Batch 1）。
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QHBoxLayout,
+    QListWidget,
     QPushButton,
     QMainWindow,
     QMessageBox,
@@ -30,6 +36,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QStatusBar,
     QToolBar,
+    QToolButton,
     QListView,
     QVBoxLayout,
     QWidget,
@@ -48,11 +55,15 @@ from photo_archiver.presentation.controllers import (
     MatchPersonsController,
     ScanController,
 )
+from photo_archiver.presentation.controllers.overview_presenter import (
+    OverviewPresenter,
+)
 from photo_archiver.presentation.controllers.workspace_controller import (
     ActionGuidance, WorkspaceController,
 )
 from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.task_coordinator import TaskCoordinator
+from photo_archiver.presentation.views.overview_page import OverviewPage
 from photo_archiver.presentation.ui_text import (
     STATUS_OPERATION_FAILED,
     STATUS_REFRESH_FAILED,
@@ -135,6 +146,15 @@ DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
 _PROGRESS_RESOLUTION = 100
 
+# 导航行 ↔ 页面映射：0 概览 / 1 照片库 / 3 数据工具切页；
+# 行 2（审核中心）与行 4（设置）是触发式导航项（打开模态对话框，不切页）。
+_NAV_ROW_TO_PAGE = {0: 0, 1: 1, 3: 2}
+_PAGE_TO_NAV_ROW = {page: row for row, page in _NAV_ROW_TO_PAGE.items()}
+_NAV_LABELS = (
+    text.NAV_OVERVIEW, text.NAV_PHOTO_LIBRARY, text.NAV_REVIEW_CENTER,
+    text.NAV_DATA_TOOLS, text.NAV_SETTINGS,
+)
+
 
 def _exclusive(label: str) -> Callable:
     """Reserve admission before modal dialogs, queries or nested GUI dispatch."""
@@ -183,7 +203,9 @@ class MainWindow(QMainWindow):
         self._current_criteria: PhotoSearchCriteria | None = None
         self._action_states: dict[QAction, tuple[bool, str]] = {}
         self._workspace_controller = WorkspaceController(context.services.workspace_readiness)
+        self._overview_presenter = OverviewPresenter(self._workspace_controller)
         self._build_controllers()
+        self._build_actions()
         self._build_toolbar()
         self._load_plugins()
         self._build_central()
@@ -232,8 +254,64 @@ class MainWindow(QMainWindow):
         self._settings_controller = self._context.settings_controller  # set by bootstrap (Step 13)
         self._export_controller = self._context.export_controller  # already assembled in ui_assembly (ISSUE-016 fixed)
 
+    def _build_actions(self) -> None:
+        """Create every window action once; placement happens per page.
+
+        Instances stay on ``self`` so tests and pages address stable handles;
+        the five primary flow actions land on the window-level ``Main``
+        toolbar, maintenance actions on the data-tools page, delete-selection
+        on the photo-library page, settings on the navigation, and cancel in
+        the status bar (Batch 3 information architecture).
+        """
+        # 流程序主操作：导入 → 扫描 → 识别 → 审核 → 归档。
+        self._import_action = QAction(ACTION_IMPORT_PEOPLE, self)
+        self._import_action.triggered.connect(self._on_import_clicked)
+        self._scan_action = QAction(ACTION_SCAN_FOLDER, self)
+        self._scan_action.triggered.connect(self._on_scan_clicked)
+        self._match_action = QAction(ACTION_RUN_FACE_RECOGNITION, self)
+        self._match_action.triggered.connect(self._on_match_clicked)
+        self._review_action = QAction(ACTION_REVIEW_PENDING, self)
+        self._review_action.triggered.connect(self._on_review_clicked)
+        self._archive_action = QAction(ACTION_ARCHIVE, self)
+        self._archive_action.triggered.connect(self._on_archive_clicked)
+        # 维护操作（数据工具页）。
+        self._export_action = QAction(ACTION_EXPORT_DATA, self)
+        self._export_action.triggered.connect(self._on_export_clicked)
+        self._detect_duplicates_action = QAction(ACTION_DETECT_DUPLICATES, self)
+        self._detect_duplicates_action.triggered.connect(
+            self._on_detect_duplicates_clicked,
+        )
+        self._delete_person_action = QAction(ACTION_DELETE_PERSON, self)
+        self._delete_person_action.triggered.connect(self._on_delete_person_clicked)
+        # 照片库选择态操作（照片库页）。
+        self._delete_photos_action = QAction(ACTION_DELETE_PHOTOS, self)
+        self._delete_photos_action.triggered.connect(self._on_delete_photos_clicked)
+        # 设置（导航项触发；保留 Ctrl+, 快捷键，需挂到窗口）。
+        self._settings_action = QAction(ACTION_SETTINGS, self)
+        self._settings_action.setShortcut(QKeySequence("Ctrl+,"))
+        self._settings_action.triggered.connect(self._on_settings_clicked)
+        self.addAction(self._settings_action)
+        # 取消（状态栏常驻按钮持有）。
+        self._cancel_action = QAction(ACTION_CANCEL_TASK, self)
+        self._cancel_action.setEnabled(False)
+        self._cancel_action.triggered.connect(self._on_cancel_clicked)
+        # 任务运行时置灰的冲突入口全集（Batch 1 语义：置灰 + 原因说明）。
+        self._plugin_actions: list[QAction] = []
+        self._conflicting_actions = [
+            self._import_action, self._scan_action, self._review_action,
+            self._archive_action, self._match_action, self._export_action,
+            self._detect_duplicates_action, self._delete_photos_action,
+            self._delete_person_action, self._settings_action,
+        ]
+
     def _build_toolbar(self) -> None:
-        """Create the primary action toolbar covering the full闭环."""
+        """Create the window-level primary toolbar (frequent flow actions).
+
+        The toolbar keeps objectName ``Main`` — the ADR-038 plugin mount
+        contract resolves it via ``findChild(QToolBar, "Main")`` and appends
+        one QAction per plugin action. The toolbar lives on the QMainWindow,
+        so it stays visible on every navigation page.
+        """
         toolbar = QToolBar("Main", self)
         # P0-1: the constructor string above is the toolbar's windowTitle, not
         # its objectName — _add_plugin_actions' findChild(QToolBar, "Main")
@@ -241,69 +319,11 @@ class MainWindow(QMainWindow):
         # plugin actions were silently dropped even once discovery worked.
         toolbar.setObjectName("Main")
         self.addToolBar(toolbar)
-
-        import_action = QAction(ACTION_IMPORT_PEOPLE, self)
-        import_action.triggered.connect(self._on_import_clicked)
-        toolbar.addAction(import_action)
-
-        scan_action = QAction(ACTION_SCAN_FOLDER, self)
-        scan_action.triggered.connect(self._on_scan_clicked)
-        toolbar.addAction(scan_action)
-        # P0-4 single-flight: kept so the action can be disabled while a scan
-        # task is in flight and re-enabled by its terminal signals.
-        self._scan_action = scan_action
-
-        review_action = QAction(ACTION_REVIEW_PENDING, self)
-        review_action.triggered.connect(self._on_review_clicked)
-        toolbar.addAction(review_action)
-
-        archive_action = QAction(ACTION_ARCHIVE, self)
-        archive_action.triggered.connect(self._on_archive_clicked)
-        toolbar.addAction(archive_action)
-
-        self._match_action = QAction(ACTION_RUN_FACE_RECOGNITION, self)
-        self._match_action.triggered.connect(self._on_match_clicked)
-        toolbar.addAction(self._match_action)
-
-        self._export_action = QAction(ACTION_EXPORT_DATA, self)
-        self._export_action.triggered.connect(self._on_export_clicked)
-        toolbar.addAction(self._export_action)
-
-        detect_duplicates_action = QAction(ACTION_DETECT_DUPLICATES, self)
-        detect_duplicates_action.triggered.connect(self._on_detect_duplicates_clicked)
-        toolbar.addAction(detect_duplicates_action)
-
-        # Phase E E-4 (ADR-034): library-management entries — photo-registration
-        # removal (multi-select in the photo wall) and person removal. Both run
-        # the E-3 preview→confirm→execute flow synchronously (fast SQLite).
-        delete_photos_action = QAction(ACTION_DELETE_PHOTOS, self)
-        delete_photos_action.triggered.connect(self._on_delete_photos_clicked)
-        toolbar.addAction(delete_photos_action)
-
-        delete_person_action = QAction(ACTION_DELETE_PERSON, self)
-        delete_person_action.triggered.connect(self._on_delete_person_clicked)
-        toolbar.addAction(delete_person_action)
-
-        settings_action = QAction(ACTION_SETTINGS, self)
-        settings_action.setShortcut(QKeySequence("Ctrl+,"))
-        settings_action.triggered.connect(self._on_settings_clicked)
-        toolbar.addAction(settings_action)
-
-        self._cancel_action = QAction(ACTION_CANCEL_TASK, self)
-        self._cancel_action.setEnabled(False)
-        self._cancel_action.triggered.connect(self._on_cancel_clicked)
-        toolbar.addAction(self._cancel_action)
-
-        toolbar.addSeparator()
-        self._review_action = review_action
-        self._archive_action = archive_action
-        self._delete_photos_action = delete_photos_action
-        self._plugin_actions: list[QAction] = []
-        self._conflicting_actions = [
-            import_action, scan_action, review_action, archive_action,
-            self._match_action, self._export_action, detect_duplicates_action,
-            delete_photos_action, delete_person_action, settings_action,
-        ]
+        for action in (
+            self._import_action, self._scan_action, self._match_action,
+            self._review_action, self._archive_action,
+        ):
+            toolbar.addAction(action)
 
     def _load_plugins(self) -> None:
         """Construct the plugin registry and load the configured plugin directory.
@@ -397,9 +417,37 @@ class MainWindow(QMainWindow):
         # noop → 不渲染（_add_plugin_actions 已按 id 路由，不应走到）
 
     def _build_central(self) -> None:
-        """Create the central photo list view with a filter bar above it."""
+        """Assemble the left navigation and the three stacked pages."""
+        self._nav_list = QListWidget(self)
+        for label in _NAV_LABELS:
+            self._nav_list.addItem(label)
+        self._nav_list.setFixedWidth(150)
+        self._nav_list.currentRowChanged.connect(self._on_nav_changed)
+
+        self._pages = QStackedWidget(self)
+        self._overview_page = OverviewPage(self)
+        self._overview_page.primary_clicked.connect(self._on_overview_primary)
+        self._pages.addWidget(self._overview_page)  # index 0: 概览
+        self._pages.addWidget(self._build_photo_library_page())  # index 1: 照片库
+        self._pages.addWidget(self._build_data_tools_page())  # index 2: 数据工具
+
         central = QWidget(self)
-        layout = QVBoxLayout(central)
+        layout = QHBoxLayout(central)
+        layout.addWidget(self._nav_list)
+        layout.addWidget(self._pages, 1)
+        self.setCentralWidget(central)
+        self._nav_list.setCurrentRow(0)
+
+    def _build_photo_library_page(self) -> QWidget:
+        """Build the photo-library page (filter bar, photo wall, selection ops).
+
+        The frequent primary flow stays reachable from the window toolbar;
+        this page carries the library-specific surface: filter axis, next-step
+        guidance row, the photo wall with its empty state, and the
+        selection-scoped delete action (Batch 2 semantics preserved).
+        """
+        page = QWidget(self)
+        layout = QVBoxLayout(page)
 
         # B2 搜索/筛选：FilterBar 在列表上方，发 criteria_changed → 刷新列表。
         # criteria None 时回退 list_all；否则走 PhotoListController.search_photos。
@@ -444,7 +492,12 @@ class MainWindow(QMainWindow):
         self._photo_list_stack.addWidget(self._photo_empty_label)  # index 1: 空态
         layout.addWidget(self._photo_list_stack)
 
-        self.setCentralWidget(central)
+        # 照片库页内工具栏：仅放选择态的删除登记（有选区才可用，Batch 2）。
+        library_bar = QToolBar(self)
+        library_bar.setObjectName("PhotoLibrary")
+        library_bar.addAction(self._delete_photos_action)
+        layout.addWidget(library_bar)
+
         # Wire thumbnail loads → model now that _photo_list_model exists.
         self._photo_list_controller.thumbnail_loaded.connect(
             self._photo_list_model.set_thumbnail,
@@ -462,11 +515,79 @@ class MainWindow(QMainWindow):
         # refresh it triggers requires _photo_list_model to exist. Re-populated
         # after each people import completes (see _on_completed).
         self._refresh_filter_persons()
+        return page
+
+    def _build_data_tools_page(self) -> QWidget:
+        """Build the data-tools page (maintenance entries, Batch 3 IA).
+
+        Decision 4 (owner 2026-09-18): export, duplicate detection and person
+        deletion leave the primary toolbar and live here; each keeps its
+        existing guarded handler and TaskCoordinator admission.
+        """
+        page = QWidget(self)
+        layout = QVBoxLayout(page)
+        bar = QToolBar(self)
+        bar.setObjectName("DataTools")
+        for action in (
+            self._export_action, self._detect_duplicates_action,
+            self._delete_person_action,
+        ):
+            bar.addAction(action)
+        layout.addWidget(bar)
+        hint = QLabel(text.NAV_DATA_TOOLS_HINT, self)
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        layout.addStretch()
+        return page
+
+    @Slot(int)
+    def _on_nav_changed(self, row: int) -> None:
+        """Switch pages for page rows; trigger dialogs for action rows.
+
+        Review-center and settings rows are triggers, not destinations: the
+        selection snaps back to the current page's row (signals blocked) so
+        the nav highlight always mirrors the visible page.
+        """
+        if row == 2:  # 审核中心 → 模态对话框
+            self._snap_nav_to_page()
+            self._on_review_clicked()
+            return
+        if row == 4:  # 设置 → 模态对话框
+            self._snap_nav_to_page()
+            self._on_settings_clicked()
+            return
+        page = _NAV_ROW_TO_PAGE.get(row)
+        if page is not None:
+            self._pages.setCurrentIndex(page)
+
+    def _snap_nav_to_page(self) -> None:
+        """Restore the nav selection to the current page row without re-entry."""
+        row = _PAGE_TO_NAV_ROW.get(self._pages.currentIndex())
+        if row is None:
+            return
+        with QSignalBlocker(self._nav_list):
+            self._nav_list.setCurrentRow(row)
+
+    @Slot(str)
+    def _on_overview_primary(self, action_id: str) -> None:
+        """Dispatch the overview CTA through the ordinary guarded entries."""
+        if self._task_coordinator.is_busy:
+            return
+        handlers = {
+            "import": self._on_import_clicked, "scan": self._on_scan_clicked,
+            "review": self._on_review_clicked, "settings": self._on_settings_clicked,
+            "model": self._on_model_help_clicked, "match": self._on_match_clicked,
+            "archive": self._on_archive_clicked,
+        }
+        handler = handlers.get(action_id)
+        if handler is not None:
+            handler()
 
     def _refresh_workspace_state(self) -> None:
         """Refresh one shared query snapshot after workspace mutations."""
         self._workspace_controller.refresh(self._effective_archive_root())
         self._render_workspace_actions()
+        self._overview_page.render_model(self._overview_presenter.build())
 
     def _render_workspace_actions(self) -> None:
         """Selection changes consume cached facts, never re-query the library."""
@@ -552,7 +673,11 @@ class MainWindow(QMainWindow):
             self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__
 
     def _build_status(self) -> None:
-        """Create the status bar with a progress bar and persistent label."""
+        """Create the status bar with progress, label and the cancel button.
+
+        The cancel entry lives in the permanent status-bar area so the task
+        panel (progress, message, cancel) stays visible on every page.
+        """
         self._status = QStatusBar(self)
         self.setStatusBar(self._status)
         self._progress = QProgressBar(self)
@@ -561,6 +686,10 @@ class MainWindow(QMainWindow):
         self._status.addPermanentWidget(self._progress)
         self._status_label = QLabel(STATUS_READY, self)
         self._status.addWidget(self._status_label)
+        cancel_button = QToolButton(self)
+        cancel_button.setObjectName("CancelTask")
+        cancel_button.setDefaultAction(self._cancel_action)
+        self._status.addPermanentWidget(cancel_button)
 
     # ---- Worker task slots ----
 
@@ -586,6 +715,7 @@ class MainWindow(QMainWindow):
             self._action_states.clear()
             self._status.clearMessage()
         self._render_workspace_actions()
+        self._overview_page.set_busy(coordinator.is_busy, coordinator.label)
         self._cancel_action.setEnabled(coordinator.can_cancel)
         self._cancel_action.setToolTip(
             STATUS_CANCELLING if coordinator.is_cancelling else

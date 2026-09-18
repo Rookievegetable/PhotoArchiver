@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.20.0 · Last Updated: 2026-09-18 · Status: Live
+> Version: 1.21.0 · Last Updated: 2026-09-18 · Status: Live
 
 ---
 
@@ -25,6 +25,8 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 ---
 
 ## 2. Current Step（当前开发阶段）
+
+**UI/UX Batch 3：主窗口信息架构与首次引导（2026-09-18 实施，待 owner 验收）**——MainWindow 重构为流程驱动工作台壳：左侧 QListWidget 导航（概览 / 照片库 / 审核中心 / 数据工具 / 设置）+ QStackedWidget 三页；窗口级 Main 工具栏精简为五个频繁主操作（流程序：导入 / 扫描 / 识别 / 审核 / 归档，插件动作 ADR-038 挂载契约不变）；维护操作（导出数据 / 检测重复 / 删除人员）移入数据工具页（Owner 决策 4 的信息架构落地），删除登记留在照片库页（选区态，Batch 2 语义不变）；设置改为触发式导航项（Ctrl+, 快捷键经 window.addAction 保留）；取消动作移入状态栏常驻 QToolButton（objectName="CancelTask"，QAction 契约不变）。新增概览页：`controllers/overview_presenter.py`（纯逻辑）+ `views/overview_page.py`——五步检查清单（导入人员 → 扫描照片 → 运行人脸识别 → 人工审核 → 安全归档）逐步由 Batch 2 WorkspaceController 快照驱动（Widget 零仓储访问），唯一主 CTA 指向最合理的下一步（优先级 match → model → import/scan → review → archive → settings，全部完成时引导继续扫描；允许先扫描再导入，识别需人员与照片双齐由 CTA 归位表达），底部本地处理隐私说明。审核中心/设置导航行为触发式（打开模态不切页，高亮自动回贴）。文案全入 ui_text.py；未改审核业务规则、归档默认值、CURRENT_BATCH 展示、controller API、Schema/CLI/CI/扫描线程模型。
 
 **UI/UX Batch 2：工作区就绪状态与防呆动作可用性（2026-09-17 实施；2026-09-18 owner 验收通过并随 Batch 1 一并提交入库，未发布）**。Application 层新增只读工作区查询：`WorkspaceStatus` DTO（`application/dtos/workspace.py`，七字段：人员存在/照片存在/待识别数/待审核数/可归档数/归档根可用/模型 available·missing·unknown）+ `WorkspaceReadinessService`（`application/services/workspace_readiness.py`）；计数由 `RecognitionRepository.read_workspace_counts()` 单条 SQL 聚合（不物化实体、不重复扫描大库、无新 Schema），可归档数与 ArchivePlanner 语义对齐（绝对路径 + 存在人员 + APPROVED + 排除成功归档历史），归档根探测只查最近存在祖先目录可写性（不创建、不用异常判断），模型状态装配时一次性判定（真实 MatchPersonsService→AVAILABLE，`_UnavailableMatchService`→MISSING，UNKNOWN 可注入测试）。Presentation 侧 `WorkspaceController` 将缓存快照翻译为各动作的 enabled/tooltip/next_action：识别缺人员/缺照片/全部已识别/模型缺失时置灰并给出可直达的下一步按钮（导入/扫描/审核/设置/模型说明）；审核 0 条时对话框保持打开显示空态（不再"一闪而过"），通过/拒绝按钮按队列+选区启用；归档无根/无可归档时置灰并直达设置/审核；删除登记仅在照片墙有选区时可用；取消动作维持 Batch 1 语义。刷新时机：启动、任务终态、审核/设置对话框返回；任务进行中保存原状态、终态后恢复为最新快照（一次查询）。服务层原有校验保留为第二道防线（TOCTOU）。文案全部入 `ui_text.py`。Batch 1 全局任务协调与取消语义同批在案（`TaskCoordinator`、五任务互斥、LIMIT-002 取消、终态恢复、异常路径修复）。本轮质量门见 §5；均未发布安装包。
 
@@ -93,12 +95,12 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-18（本地 Windows / Python 3.11.9 / PySide6 6.11.1） |
-| 会话范围 | UI/UX Batch 0（只读基线复核，零生产代码）→ owner 验收 Batch 1+2 → Batch 1+2 提交入库（P0 风险收口）→ Batch 3 立项。不改变导航、审核业务规则、视觉主题、归档默认值或 CURRENT_BATCH 展示。 |
-| 关键产出 | Batch 0 证据报告：HEAD（`35f9007`）基线 `main_window.py` 中 `_active_runnable` 13 处可写引用，并发覆盖风险确证；工作树经 `TaskCoordinator` 收口至 1 处只读兼容转发（`main_window.py:567-570`），ScanController/MatchPersonsController 本地 single-flight 保留为深层保护。四项 Owner 决策状态核定：决策 1 已落地（Batch 1）；决策 2/3/4 已批准、实现归 Batch 6（试运行默认值 / 移除 CURRENT_BATCH / 危险操作迁移，现状证据见 Batch 0 报告）。蓝图 `docs/development/ui-ux-execution-prompts.md` 状态行由"Proposed/未授权"修正为 Active（文档漂移修复）。owner 裁决：Batch 1+2 产物有效、提交入库、Batch 3 立项。Batch 1+2 交付内容不变：Batch 1 = Presentation `TaskCoordinator`（reservation 五任务互斥、身份检查与终态去重、模态与插件入口纳入保护、取消异常可重试）；Batch 2 = Application 层 `WorkspaceStatus` DTO + `WorkspaceReadinessService` + `RecognitionRepository.read_workspace_counts()` 单 SQL 聚合 + Presentation `WorkspaceController` 就绪防呆（enabled/tooltip/next_action、审核空态保持打开）。 |
-| 当前质量门 | 提交前实测（本轮）：Ruff 全库通过；MyPy `mypy src`（CI 同款）**197 source files** 无问题；完整 pytest **962 passed / 6 skipped / 0 failed，188.17s，104 warnings**（CUDA provider 不可用 + insightface 弃用提示，与上轮同源）；Batch 1+2 最小相关 120 项定向实测通过（20.61s）。未运行 pip check 或覆盖率测量。 |
-| 工作区 | main；本轮将 Batch 1+2 全部源码、测试与文档改动以单提交入库：`378e26b`（feat(ui)，27 files，+2433/−218；两批改动在 `main_window.py` 等文件交织，无法安全拆分）；工作树干净、**未推送**（push 属 owner，GIT-020）。本轮不构建安装包、不更新 CI 或 Release。 |
-| Remaining | **Batch 3 实施**（已立项：主窗口信息架构与首次引导，蓝图 §Batch 3）· **owner 二轮真机验收**（新离线安装包；启动日志首行应显示 `Starting PhotoArchiver v2.8.0` 构建版本戳 + 识别不再报错不再下载）· GitHub Release v2.8.0 body 待 owner 粘贴 CHANGELOG `[2.8.0]` 段 · A-1 CURRENT_BATCH 导出挂起（解除则先出批次持久化设计文档）· A-3 代码签名证书采购决策 · 上游 PySide6 issue 是否提交（草稿就绪：`docs/development/limit006-upstream-issue-draft.md`）· A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论，勿盲目开工 · B 类触发式（模型镜像/导出流式化/检查更新）信号到达才动 · 第 4 轮全面体检候审（建议 v2.8.x 稳定后，覆盖 ADR-037~041 + 桌面交付全变更）。 |
+| 时间 | 2026-09-18（本地 Windows / Python 3.11.9 / PySide6 6.11.1）；Batch 3 实施于 Batch 0–2 提交（`378e26b` / `6649a96`）之后 |
+| 会话范围 | UI/UX Batch 3（主窗口信息架构与首次引导）。不改变审核业务规则、归档默认值、CURRENT_BATCH 展示、既有 controller API 或扫描线程模型。 |
+| 关键产出 | ① 新增 `presentation/controllers/overview_presenter.py`（五步清单 + 主 CTA 推导，纯逻辑消费 WorkspaceController 缓存快照，零仓储）与 `presentation/views/overview_page.py`（渲染视图 + `primary_clicked` 信号 + `render_model`/`set_busy`）。② `main_window.py`：`_build_actions()` 集中创建 11 个 QAction（实例属性契约保留）→ `_build_toolbar()` 精简 Main 工具栏（五主操作流程序 + 插件挂载）→ `_build_central()` 改为导航 + 三页（照片库页 = 原 FilterBar/引导行/照片墙/空态 + 页内删除登记工具栏；数据工具页收纳导出/查重/删除人员）→ `_build_status()` 状态栏常驻取消 QToolButton → 触发式导航行（审核中心/设置，`_snap_nav_to_page` 高亮回贴）→ 概览渲染接 `_refresh_workspace_state`、busy 接 `_on_task_state_changed`。③ `ui_text.py` 新增导航/概览文案区段 24 项。④ 用户手册 §4 重写（导航结构 + 概览页）、§3.1/④/⑥/§5 入口更新。⑤ 测试：新增 `test_overview_presenter.py`（12 项五态矩阵）+ `test_main_window_navigation.py`（14 项：工具栏契约/数据工具分置/五态 CTA/真实 picker 路由/页面切换/触发式导航回贴/任务面板常驻/busy 置灰恢复/导航标签）；适配 `test_main_window_workspace_state.py`（3 处切照片库页后断言 isVisible）与 `test_photo_thumbnail_rendering.py`（grab 前切照片库页）。 |
+| 当前质量门 | 提交前实测（本轮）：Ruff 全库通过；MyPy `mypy src`（CI 同款）**199 source files** 无问题；完整 pytest **988 passed / 6 skipped / 0 failed，181.45s，104 warnings**（首轮 1 failed 为缩略图 grab 在非当前页白屏，修复后第二轮全量全绿）；presentation 定向 **163 passed**（66.17s）+ 导入闭环集成 2 passed + 缩略图渲染 3 passed。未运行 pip check 或覆盖率测量。 |
+| 工作区 | main；本轮 Batch 3 改动以单提交入库：`<commit>`（feat(ui)）；工作树干净、**未推送**（push 属 owner，GIT-020）。本轮不构建安装包、不更新 CI 或 Release。 |
+| Remaining | **owner Batch 3 验收** · **Batch 4 实施**（照片库：筛选、空态、选择态与详情——蓝图 §Batch 4，需 owner 明确命令）· v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 待 owner 粘贴 CHANGELOG `[2.8.0]` 段 · A-1 CURRENT_BATCH 导出挂起（Batch 6 落地）· A-3 代码签名证书采购决策 · 上游 PySide6 issue 是否提交（草稿就绪）· A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论 · B 类触发式（模型镜像/导出流式化/检查更新）信号到达才动 · 第 4 轮全面体检候审。 |
 
 ---
 
@@ -119,9 +121,16 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 - 适配回归：`test_match_ui_wiring.py` 与 `test_main_window_task_coordination.py` 的快照式原状态断言更新为就绪/未就绪显式期望；原有互斥、取消、恢复语义断言不变。
 - 边界：Widget 不触仓储（只经 `WorkspaceController` 缓存快照），可用性判断零异常捕获；`MatchPersonsController.start_match`、删除预览、归档服务校验原样保留为第二道防线；模型状态为装配期快照（装包后不自动探测文件变化，需重启）；归档根探测为咨询性检查，不保证后续文件系统变化；未做人工桌面视觉验收。
 
+### Batch 3 验收证据与边界
+
+- 五态矩阵：`tests/unit/presentation/test_overview_presenter.py`（12 项）——空库 → 导入 / 只有人员 → 扫描 / 只有照片 → 导入（识别需人员与照片双齐）/ 全识别待审核 → 审核 / 可归档 → 归档 / 模型缺失·未知 → 模型说明 / 归档根不可用 → 设置 / 全部完成 → 继续扫描；各步 done 语义与 detail 来源（guidance tooltip）断言；快照未加载 → 无清单无 CTA。
+- 导航与常驻可见性：`tests/unit/presentation/test_main_window_navigation.py`（14 项）——Main 工具栏五主操作流程序、数据工具页三维护动作与 Main 无交集、五态 CTA 渲染与真实导入 picker 路由、页面栈切换、审核中心/设置触发式导航开对话框不切页且高亮回贴、状态栏（进度 + CancelTask 按钮）在每页可见、busy 时数据工具动作与概览 CTA 置灰带原因并恢复、导航五项标签。
+- 兼容契约保持：ADR-038 插件挂载（findChild(QToolBar,"Main") + isVisible + actions() 文本契约）由 test_plugin_ui_loading / test_plugin_directory_loading 覆盖全绿；bulk/excel 导入闭环经 Main 工具栏触发"导入人员"全绿；Batch 1/2（协调 45、workspace_state 19、审核空态、workspace_controller）经适配后全绿；缩略图渲染/网格布局经切页适配后全绿。
+- 边界：概览归档步 done 为中性判定（archivable_count==0 即完成，根不可用阻塞由 detail 说明）；空库审核步 done=True 由 detail 解释（权威引导是主 CTA）；未新增图标（文本符号 ✓/○）、未改主题/QSS、未新增依赖；导航仅本窗口范围，不提供跨窗口状态；未做人工桌面视觉验收。
+
 ## 6. Next Step（下一步开发计划）
 
-Batch 1+2 已由 owner 验收（2026-09-18）并提交入库。**Batch 3（主窗口信息架构与首次引导）已立项，待实施**（蓝图：`docs/development/ui-ux-execution-prompts.md` §Batch 3；前置 Batch 2 已满足）。Batch 4–7 仍需逐批明确命令，不因四项产品方向已批准而自动开工。v2.8.0 发布与安装包验收事项仍独立保留；本轮没有重新核验远端 CI、Release body 或安装包。后续均需 owner 立项：
+Batch 3 已完成并交由 owner 验收（2026-09-18）。**Batch 4（照片库：筛选、空态、选择态与详情）需 owner 明确命令后才开工**（蓝图：`docs/development/ui-ux-execution-prompts.md` §Batch 4；前置 Batch 3 已满足）。Batch 5–7 仍需逐批明确命令，不因四项产品方向已批准而自动开工。v2.8.0 发布与安装包验收事项仍独立保留；本轮没有重新核验远端 CI、Release body 或安装包。后续均需 owner 立项：
 
 | Next Step | **待 owner**：① 新离线安装包二轮真机验收 + Release body 粘贴 `[2.8.0]` 段后签核；② A-1 CURRENT_BATCH 导出是否解除挂起（解除则先出批次持久化设计文档）；③ A-3 代码签名证书采购决策；④ 是否提交上游 PySide6 issue（草稿就绪）。**可立项**：A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论（枚举回后台线程 = 回到崩溃形态）。**明确不做**：i18n 实装、自动更新、macOS 安装包、批次撤销。 |
 

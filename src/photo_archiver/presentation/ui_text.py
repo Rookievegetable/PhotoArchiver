@@ -230,6 +230,43 @@ REVIEW_EMPTY = "暂无待审核结果。可先扫描照片并运行人脸识别�
 WORKSPACE_CANCEL_IDLE = "当前没有可取消的活动任务。"
 WORKSPACE_CANCEL_READY = "请求取消当前任务；已完成的结果会保留。"
 
+# ---- 主窗口 · 导航（Batch 3 信息架构） ----
+NAV_OVERVIEW = "概览"
+NAV_PHOTO_LIBRARY = "照片库"
+NAV_REVIEW_CENTER = "审核中心"
+NAV_DATA_TOOLS = "数据工具"
+NAV_SETTINGS = "设置"
+NAV_DATA_TOOLS_HINT = "维护操作：导出数据、检测重复照片、删除人员等低频操作集中于此。"
+
+# ---- 主窗口 · 概览页（流程驱动工作台） ----
+OVERVIEW_TITLE = "归档工作台"
+OVERVIEW_STEP_IMPORT = "导入人员"
+OVERVIEW_STEP_SCAN = "扫描照片"
+OVERVIEW_STEP_MATCH = "运行人脸识别"
+OVERVIEW_STEP_REVIEW = "人工审核"
+OVERVIEW_STEP_ARCHIVE = "安全归档"
+OVERVIEW_STEP_DONE_MARK = "✓"
+OVERVIEW_STEP_TODO_MARK = "○"
+OVERVIEW_STEP_DONE = "已完成"
+OVERVIEW_STEP_IMPORT_TODO = "先导入人员名单，识别结果才能归属到人。"
+OVERVIEW_STEP_SCAN_TODO = "扫描照片目录，把照片登记进库。"
+OVERVIEW_STEP_REVIEW_TODO = "人工确认识别结果；批准后才可归档。"
+OVERVIEW_STEP_ARCHIVE_NOTE = "批准的识别结果将按拍摄时间归档到本地归档根目录。"
+OVERVIEW_STEP_FORMAT = "{mark} {label}　·　{detail}"
+OVERVIEW_PRIVACY_NOTE = (
+    "所有照片与识别数据均保存在本机：处理全程离线完成，无需账号，不会自动上传任何文件。"
+)
+OVERVIEW_PRIMARY_RUN_MATCH = "运行人脸识别"
+OVERVIEW_PRIMARY_ARCHIVE = "开始归档"
+OVERVIEW_PRIMARY_REVIEW = "前往审核"
+OVERVIEW_PRIMARY_IMPORT = "导入人员"
+OVERVIEW_PRIMARY_SCAN = "扫描照片"
+OVERVIEW_PRIMARY_SETTINGS = "前往归档设置"
+OVERVIEW_PRIMARY_MODEL = "查看模型说明"
+OVERVIEW_PRIMARY_BUSY = "{label}正在进行，请等待当前任务结束后再开始新操作。"
+OVERVIEW_STATUS_NONE = "工作区状态尚未加载。"
+
+
 # ---- 照片登记删除（Phase E E-4，ADR-034 D1/D3） ----
 ACTION_DELETE_PHOTOS = "删除登记"
 DELETE_PHOTOS_NO_SELECTION_TITLE = "未选择照片"

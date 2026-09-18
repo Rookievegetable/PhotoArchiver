@@ -65,6 +65,7 @@ def test_initial_snapshot_queries_effective_root_and_explains_empty_actions(work
     assert window._review_action.toolTip() == text.REVIEW_EMPTY
     assert not window._delete_photos_action.isEnabled()
     assert window._delete_photos_action.toolTip() == text.DELETE_PHOTOS_NO_SELECTION
+    window._nav_list.setCurrentRow(1)  # 照片库页：next 引导按钮的宿主页（Batch 3 IA）
     for button, action in ((window._match_next_button, "import"),
                            (window._archive_next_button, "settings")):
         assert isinstance(button, QPushButton)
@@ -84,6 +85,7 @@ def test_refresh_replaces_tooltips_and_next_step_then_hides_ready_buttons(
     workspace, status, match_tooltip, next_action,
 ):
     window = workspace.window
+    window._nav_list.setCurrentRow(1)  # next 引导按钮的宿主页（Batch 3 IA）
     workspace.state.value = replace(status, archivable_count=0)
     window._refresh_workspace_state()
     assert not window._match_action.isEnabled()
@@ -183,6 +185,7 @@ def test_terminal_refresh_restores_latest_not_pre_task_action_state(
     workspace, monkeypatch, kind, initial, latest,
 ):
     window = workspace.window
+    window._nav_list.setCurrentRow(1)  # next 引导按钮的宿主页（Batch 3 IA）
     workspace.state.value = initial
     window._refresh_workspace_state()
     runnable = Runnable()
