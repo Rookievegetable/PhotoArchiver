@@ -184,6 +184,7 @@ class FilterBar(QWidget):
         self._count_label = QLabel("", self)
         summary_row.addWidget(self._count_label)
         outer.addLayout(summary_row)
+        self._last_result_count = 0
 
         # Inline validation (Batch 4): from > to blocks the query — the hint
         # stays visible until corrected; never a silent empty result.
@@ -273,7 +274,18 @@ class FilterBar(QWidget):
         The bar cannot know result sizes (it only emits criteria); the window
         calls this after each query so the count never lies about the list.
         """
+        self._last_result_count = count
         self._count_label.setText(FILTER_RESULT_COUNT.format(count=count))
+
+    @property
+    def result_count(self) -> int:
+        """Return the last backfilled query size (``0`` before any query)."""
+        return self._last_result_count
+
+    @property
+    def summary_text(self) -> str:
+        """Return the effective-conditions summary (for scope-honest exports)."""
+        return self._summary_label.text()
 
     def _emit_criteria(self) -> None:
         """Build PhotoSearchCriteria from current control state and emit.

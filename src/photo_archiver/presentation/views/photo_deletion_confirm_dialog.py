@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from photo_archiver.presentation.ui_text import (
     DELETE_PHOTOS_CONFIRM,
     DELETE_PHOTOS_CONFIRM_BUTTON,
+    DELETE_PHOTOS_IRREVERSIBLE,
     DELETE_PHOTOS_MISSING_NOTE,
     DELETE_PHOTOS_TITLE,
 )
@@ -65,7 +66,13 @@ class PhotoDeletionConfirmDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
         )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(DELETE_PHOTOS_CONFIRM_BUTTON)
+        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        cancel = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        ok.setText(DELETE_PHOTOS_CONFIRM_BUTTON)
+        # Batch 6: a destructive confirm never owns the default focus — a
+        # stray Enter must cancel, not remove registrations.
+        cancel.setDefault(True)
+        cancel.setFocus()
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -81,4 +88,6 @@ class PhotoDeletionConfirmDialog(QDialog):
             text += "\n\n" + DELETE_PHOTOS_MISSING_NOTE.format(
                 missing_count=self._preview.missing_count,
             )
+        # Batch 6: state honestly that the UI offers no undo — never imply one.
+        text += "\n\n" + DELETE_PHOTOS_IRREVERSIBLE
         return text

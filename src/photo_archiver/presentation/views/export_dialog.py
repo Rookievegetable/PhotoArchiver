@@ -1,8 +1,14 @@
 """Export dialog for Step 14 Export.
 
-Provides scope selection (all / current batch / filtered), output path,
-and format (XLSX / CSV) controls. Follows the ``ArchivePreviewDialog``
-precedent for UI layout and user interaction patterns.
+Provides scope selection (all / filtered), output path, and format
+(XLSX / CSV / HTML) controls. Follows the ``ArchivePreviewDialog`` precedent
+for UI layout and user interaction patterns.
+
+Batch 6: CURRENT_BATCH is removed from the end-user dialog (owner decision —
+the scope is a contract placeholder without a persistence design, and an
+unselectable radio would dress it up as a feature). The FILTERED scope states
+the active criteria summary and the expected photo count, matching what the
+photo wall would show for the same filter.
 """
 
 from pathlib import Path
@@ -29,6 +35,7 @@ from photo_archiver.presentation.ui_text import (
     EXPORT_CSV_FILTER,
     EXPORT_DEFAULT_FILENAME,
     EXPORT_DIALOG_TITLE,
+    EXPORT_FILTERED_SUMMARY,
     EXPORT_FORMAT_CSV,
     EXPORT_FORMAT_HTML,
     EXPORT_FORMAT_LABEL,
@@ -42,8 +49,6 @@ from photo_archiver.presentation.ui_text import (
     EXPORT_SAVE_DIALOG_TITLE,
     EXPORT_SCOPE_ALL,
     EXPORT_SCOPE_ALL_TOOLTIP,
-    EXPORT_SCOPE_CURRENT_BATCH,
-    EXPORT_SCOPE_CURRENT_BATCH_TOOLTIP,
     EXPORT_SCOPE_FILTERED,
     EXPORT_SCOPE_FILTERED_TOOLTIP,
     EXPORT_SCOPE_GROUP,
@@ -52,13 +57,11 @@ from photo_archiver.presentation.ui_text import (
 
 _SCOPE_LABELS = {
     ExportScope.ALL: EXPORT_SCOPE_ALL,
-    ExportScope.CURRENT_BATCH: EXPORT_SCOPE_CURRENT_BATCH,
     ExportScope.FILTERED: EXPORT_SCOPE_FILTERED,
 }
 
 _SCOPE_TOOLTIPS = {
     ExportScope.ALL: EXPORT_SCOPE_ALL_TOOLTIP,
-    ExportScope.CURRENT_BATCH: EXPORT_SCOPE_CURRENT_BATCH_TOOLTIP,
     ExportScope.FILTERED: EXPORT_SCOPE_FILTERED_TOOLTIP,
 }
 
@@ -81,12 +84,20 @@ class ExportDialog(QDialog):
         default_output_root: Path | None = None,
         parent: QWidget | None = None,
         active_criteria: PhotoSearchCriteria | None = None,
+        filtered_count: int | None = None,
+        criteria_summary: str = "",
     ) -> None:
         """Initialize the dialog with an optional default output root.
 
         Args:
             default_output_root: Default directory for the output file picker.
                 Falls back to the current working directory when ``None``.
+            active_criteria: The window's active filter criteria, gating the
+                FILTERED scope (F3: no criteria → not selectable).
+            filtered_count: Photo count the active filter matched (from the
+                window's last query); shown with the FILTERED scope (Batch 6).
+            criteria_summary: Human-readable summary of the active criteria;
+                shown with the FILTERED scope (Batch 6).
         """
         super().__init__(parent)
         self.setWindowTitle(EXPORT_DIALOG_TITLE)
@@ -94,6 +105,8 @@ class ExportDialog(QDialog):
         self._default_output_root = default_output_root or Path.cwd()
         self._output_path: Path | None = None
         self._active_criteria = active_criteria
+        self._filtered_count = filtered_count
+        self._criteria_summary = criteria_summary
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -117,13 +130,19 @@ class ExportDialog(QDialog):
                 if self._active_criteria is None:
                     radio.setEnabled(False)
                     radio.setToolTip(_NO_ACTIVE_CRITERIA_HINT)
-            elif scope is ExportScope.CURRENT_BATCH:
-                # D3: DEFERRED — radio stays visible (product visibility) but
-                # is never selectable in Phase 7.
-                radio.setEnabled(False)
             self._scope_radios[scope] = radio
             self._scope_group.addWidget(radio)
         main_layout.addLayout(self._scope_group)
+
+        # Batch 6: the FILTERED scope states what it will export — the same
+        # conditions summary and result count the photo wall shows.
+        self._filtered_hint = QLabel(self)
+        self._filtered_hint.setWordWrap(True)
+        self._filtered_hint.setVisible(False)
+        main_layout.addWidget(self._filtered_hint)
+        for radio in self._scope_radios.values():
+            radio.toggled.connect(self._update_scope_hint)
+        self._update_scope_hint()
 
         # --- Format -----------------------------------------------------------
         fmt_layout = QFormLayout()
@@ -151,6 +170,21 @@ class ExportDialog(QDialog):
         main_layout.addWidget(buttons)
 
     # ── Properties (read by the caller after accept) ─────────────────────────
+
+    def _update_scope_hint(self) -> None:
+        """Show the criteria summary + expected count beside the FILTERED scope."""
+        filtered_active = self._scope_radios[ExportScope.FILTERED].isChecked()
+        has_criteria = self._active_criteria is not None
+        self._filtered_hint.setVisible(filtered_active and has_criteria)
+        if filtered_active and has_criteria:
+            count_text = (
+                str(self._filtered_count)
+                if self._filtered_count is not None
+                else "—"
+            )
+            self._filtered_hint.setText(EXPORT_FILTERED_SUMMARY.format(
+                summary=self._criteria_summary or "—", count=count_text,
+            ))
 
     @property
     def scope(self) -> ExportScope:

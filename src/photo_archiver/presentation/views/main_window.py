@@ -85,7 +85,9 @@ from photo_archiver.presentation.ui_text import (
     ACTION_SETTINGS,
     ARCHIVE_DIALOG_TITLE,
     ARCHIVE_NOTHING_TO_ARCHIVE,
-    ARCHIVE_ROOT_NOT_CONFIGURED,
+    ARCHIVE_ROOT_SETUP_BUTTON,
+    ARCHIVE_ROOT_SETUP_CANCEL,
+    ARCHIVE_ROOT_SETUP_PROMPT,
     DELETE_FAILED_MESSAGE,
     DELETE_FAILED_TITLE,
     DELETE_PHOTOS_DONE,
@@ -986,15 +988,30 @@ class MainWindow(QMainWindow):
 
         B3 批量归档：读 QListView 选中项的 photo_id 透传 preview/execute——
         用户多选的 photos 直下推 plan 过滤。无选中时 photo_ids=() 走原路径
-        （全部 APPROVED 照片），向后兼容。
+        （全部 APPROVED 照片），向后兼容。Batch 6：缺根目录不再只是报错——
+        询问后可直达「设置」；预览对话框携带范围说明（选中数）。
         """
         archive_root = self._effective_archive_root()
         if archive_root is None:
-            QMessageBox.warning(
-                self,
+            box = QMessageBox(
+                QMessageBox.Icon.Question,
                 ARCHIVE_DIALOG_TITLE,
-                ARCHIVE_ROOT_NOT_CONFIGURED,
+                ARCHIVE_ROOT_SETUP_PROMPT,
+                QMessageBox.StandardButton.NoButton,
+                self,
             )
+            setup = box.addButton(
+                ARCHIVE_ROOT_SETUP_BUTTON, QMessageBox.ButtonRole.YesRole,
+            )
+            dismiss = box.addButton(
+                ARCHIVE_ROOT_SETUP_CANCEL, QMessageBox.ButtonRole.NoRole,
+            )
+            box.setDefaultButton(dismiss)
+            box.exec()
+            if box.clickedButton() is setup:
+                # 本预约内联打开设置（不再走 @_exclusive 重入），返回后
+                # 立即以最新快照恢复各动作可用性。
+                self._open_settings_dialog()
             return
         photo_ids = self._collect_selected_photo_ids()
         plan = self._archive_controller.preview(archive_root, (), photo_ids=photo_ids)
@@ -1005,7 +1022,9 @@ class MainWindow(QMainWindow):
                 ARCHIVE_NOTHING_TO_ARCHIVE.format(skipped=plan.skipped_count),
             )
             return
-        dialog = ArchivePreviewDialog(plan, archive_root, self)
+        dialog = ArchivePreviewDialog(
+            plan, archive_root, self, selected_count=len(photo_ids),
+        )
         if not dialog.exec():
             return
         self._progress.setValue(0)
@@ -1082,6 +1101,15 @@ class MainWindow(QMainWindow):
         successful save. Restart prompts for theme / language changes are
         documented in docs/development/configuration.md §3 (this round ships
         the persistence; hot-reload of theme is a follow-up).
+        """
+        self._open_settings_dialog()
+
+    def _open_settings_dialog(self) -> None:
+        """Open settings and refresh afterwards, without fresh task admission.
+
+        Batch 6: the archive root-missing prompt opens this directly inside
+        its own reservation (a nested @_exclusive call would deadlock on the
+        coordinator); the refresh on return picks up the new archive root.
         """
         dialog = SettingsDialog(self._settings_controller, self)
         dialog.exec()
@@ -1233,7 +1261,16 @@ class MainWindow(QMainWindow):
         the Cancel toolbar action is enabled for the run and the cancelled
         terminal resets the UI and re-enables the export action.
         """
-        dialog = ExportDialog(parent=self, active_criteria=self._current_criteria)
+        dialog = ExportDialog(
+            parent=self,
+            active_criteria=self._current_criteria,
+            filtered_count=(
+                self._filter_bar.result_count
+                if self._current_criteria is not None
+                else None
+            ),
+            criteria_summary=self._filter_bar.summary_text,
+        )
         if not dialog.exec():
             return
         output_path = dialog.output_path

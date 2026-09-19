@@ -122,7 +122,7 @@ def test_export_cancel_resets_ui_and_writes_no_file(
     monkeypatch.setattr(
         main_window_module,
         "ExportDialog",
-        lambda parent=None, active_criteria=None: _FakeExportDialog(output_path),
+        lambda parent=None, active_criteria=None, **kwargs: _FakeExportDialog(output_path),
     )
 
     window._on_export_clicked()  # 真实处理器：提交 + cancelled 接线 + Cancel 使能

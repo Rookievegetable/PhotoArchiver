@@ -64,9 +64,11 @@ STATUS_MATCH_UNAVAILABLE = "人脸识别不可用。"
 
 # 归档前置警告
 ARCHIVE_DIALOG_TITLE = "归档"
-ARCHIVE_ROOT_NOT_CONFIGURED = (
-    "未配置归档根目录（ARCHIVE_ROOT）。请在 .env 中设置，或使用 CLI --archive-root 参数。"
+ARCHIVE_ROOT_SETUP_PROMPT = (
+    "尚未配置归档根目录，无法归档。\n\n是否现在打开「设置」配置归档根目录？"
 )
+ARCHIVE_ROOT_SETUP_BUTTON = "去设置"
+ARCHIVE_ROOT_SETUP_CANCEL = "暂不"
 ARCHIVE_NOTHING_TO_ARCHIVE = (
     "没有可归档的照片（跳过 {skipped} 项）。请先通过「审核待处理」确认识别结果。"
 )
@@ -196,12 +198,11 @@ SETTINGS_LANGUAGE_CHOICES = (
 EXPORT_DIALOG_TITLE = "导出数据"
 EXPORT_SCOPE_GROUP = "导出范围："
 EXPORT_SCOPE_ALL = "全部数据（人员、照片、匹配、归档记录）"
-EXPORT_SCOPE_CURRENT_BATCH = "当前批次（最近一批处理结果）"
 EXPORT_SCOPE_FILTERED = "按当前筛选结果（匹配筛选栏条件的照片）"
 EXPORT_SCOPE_ALL_TOOLTIP = "导出完整目录。"
-EXPORT_SCOPE_CURRENT_BATCH_TOOLTIP = "当前批次导出暂未实现（FEATURE-004 延后）。"
 EXPORT_SCOPE_FILTERED_TOOLTIP = "导出匹配当前筛选条件的照片。需先在筛选栏设置筛选条件。"
 EXPORT_NO_ACTIVE_CRITERIA_HINT = "请先在筛选栏设置筛选条件，再启用此范围。"
+EXPORT_FILTERED_SUMMARY = "当前筛选：{summary}；预计导出 {count} 张照片。"
 EXPORT_FORMAT_LABEL = "格式："
 EXPORT_FORMAT_XLSX = "Excel (.xlsx)"
 EXPORT_FORMAT_CSV = "CSV (.csv)"
@@ -230,7 +231,20 @@ ARCHIVE_CONFLICT_LABELS = (
     ("覆盖同名文件", "overwrite"),
     ("自动重命名", "rename"),
 )
+ARCHIVE_CONFLICT_HINTS = {
+    "skip": "跳过：保留目标位置现有同名文件，冲突条目本次不写入（最安全）。",
+    "overwrite": "覆盖：用本次归档文件替换目标位置的同名文件，原文件内容会丢失。",
+    "rename": "自动重命名：同名时保存为 x.dup-1.jpg 等新文件名，两个文件都保留。",
+}
 ARCHIVE_DRY_RUN_CHECK = "试运行（仅预览，不写入文件）"
+ARCHIVE_EXECUTE_BUTTON = "开始归档"
+ARCHIVE_DRY_RUN_BUTTON = "执行试运行"
+ARCHIVE_SCOPE_LABEL = "范围："
+ARCHIVE_SCOPE_SELECTED = "已选 {count} 张照片（仅归档选中项）"
+ARCHIVE_SCOPE_ALL = "全部已通过照片（已归档过的不会重复归档）"
+ARCHIVE_SAMPLE_HEADER = "源 → 目标示例："
+ARCHIVE_SAMPLE_ROW = "{source} → {target}"
+ARCHIVE_SAMPLE_TRUNCATED = "（仅显示前 {shown} 项，共 {total} 项）"
 
 # ---- 重复照片报告对话框（DuplicateReportDialog） ----
 DUPLICATE_DIALOG_TITLE = "重复照片报告"
@@ -327,6 +341,7 @@ DELETE_PHOTOS_CONFIRM = (
 )
 DELETE_PHOTOS_MISSING_NOTE = "另有 {missing_count} 个所选项目不在库中，将自动跳过。"
 DELETE_PHOTOS_CONFIRM_BUTTON = "移除登记"
+DELETE_PHOTOS_IRREVERSIBLE = "该操作会从数据库移除登记，界面内没有撤销操作。"
 DELETE_PHOTOS_DONE_TITLE = "删除登记"
 DELETE_PHOTOS_DONE = (
     "已移除 {removed} 张照片登记（级联移除识别 {recognition_cascade} 条、归档 {archive_cascade} 条）。"

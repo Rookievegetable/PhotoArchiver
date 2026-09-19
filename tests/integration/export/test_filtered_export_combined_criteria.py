@@ -203,7 +203,7 @@ class _FakeExportDialog:
 def _stub_dialog(monkeypatch, output_path, scope, format_name) -> list:
     created: list[_FakeExportDialog] = []
 
-    def _factory(parent=None, active_criteria=None):
+    def _factory(parent=None, active_criteria=None, **kwargs):
         dialog = _FakeExportDialog(
             parent=parent,
             output_path=output_path,

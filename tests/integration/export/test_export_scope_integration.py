@@ -216,7 +216,7 @@ def _stub_dialog(monkeypatch, output_path: Path, scope: ExportScope, format_name
     """Patch the modal boundary in the window module; capture created dialogs."""
     created: list[_FakeExportDialog] = []
 
-    def _factory(parent=None, active_criteria=None) -> _FakeExportDialog:
+    def _factory(parent=None, active_criteria=None, **kwargs) -> _FakeExportDialog:
         dialog = _FakeExportDialog(
             parent=parent,
             output_path=output_path,

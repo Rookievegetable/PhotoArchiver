@@ -77,7 +77,13 @@ class PersonDeletionDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
         )
-        self._buttons.button(QDialogButtonBox.StandardButton.Ok).setText(PERSON_DELETE_BUTTON)
+        ok = self._buttons.button(QDialogButtonBox.StandardButton.Ok)
+        cancel = self._buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        ok.setText(PERSON_DELETE_BUTTON)
+        # Batch 6: destructive confirm — cancel owns the default focus, a
+        # stray Enter must never delete a person.
+        cancel.setDefault(True)
+        cancel.setFocus()
         self._buttons.accepted.connect(self.accept)
         self._buttons.rejected.connect(self.reject)
         layout.addWidget(self._buttons)

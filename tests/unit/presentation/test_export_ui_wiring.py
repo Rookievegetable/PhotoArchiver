@@ -133,7 +133,7 @@ def _stub_export(
     runnable = _make_runnable()
     created: list[_FakeExportDialog] = []
 
-    def _dialog_factory(parent=None, active_criteria=None) -> _FakeExportDialog:
+    def _dialog_factory(parent=None, active_criteria=None, **kwargs) -> _FakeExportDialog:
         """Build the fake dialog at call time so the parent wiring is captured."""
         dialog = _FakeExportDialog(
             parent=parent,
@@ -377,7 +377,7 @@ def test_reenabled_action_permits_second_export(qtbot, tmp_path, monkeypatch) ->
     dialog = _FakeExportDialog(output_path=tmp_path / "second.csv")
     monkeypatch.setattr(
         main_window_module, "ExportDialog",
-        lambda parent=None, active_criteria=None: dialog,
+        lambda parent=None, active_criteria=None, **kwargs: dialog,
     )
     monkeypatch.setattr(
         window._export_controller,
@@ -444,15 +444,44 @@ def test_export_dialog_filtered_requires_active_criteria(qtbot, tmp_path) -> Non
     )
 
 
-def test_export_dialog_current_batch_always_disabled_and_has_tooltip(qtbot, tmp_path) -> None:
-    """D3: real dialog — CURRENT_BATCH radio stays visible but never selectable."""
+def test_export_dialog_current_batch_is_removed_from_user_ui(qtbot, tmp_path) -> None:
+    """Batch 6 owner decision: CURRENT_BATCH must not dress up as a feature.
+
+    The scope is a contract placeholder without a persistence design — the
+    end-user dialog no longer shows it at all (not even as a disabled radio);
+    the deeper Task → Service guard stays covered by the integration suite.
+    """
 
     window = _make_window(qtbot, tmp_path)
     dialog = ExportDialog(parent=window)
     qtbot.addWidget(dialog)
-    radio = dialog._scope_radios[ExportScope.CURRENT_BATCH]
-    assert radio.isEnabled() is False
-    assert "暂未实现" in radio.toolTip()
+    assert ExportScope.CURRENT_BATCH not in dialog._scope_radios
+    # The two shipped scopes remain.
+    assert set(dialog._scope_radios) == {ExportScope.ALL, ExportScope.FILTERED}
+
+
+def test_export_dialog_filtered_scope_shows_summary_and_expected_count(qtbot, tmp_path) -> None:
+    """Batch 6: selecting FILTERED states the active criteria and count."""
+    from photo_archiver.presentation import ui_text as text
+
+    window = _make_window(qtbot, tmp_path)
+    dialog = ExportDialog(
+        parent=window,
+        active_criteria=PhotoSearchCriteria(match_status=MatchStatus.PENDING),
+        filtered_count=7,
+        criteria_summary="状态：待审核",
+    )
+    qtbot.addWidget(dialog)
+    assert not dialog._filtered_hint.isVisibleTo(dialog)  # ALL 默认选中
+
+    dialog._scope_radios[ExportScope.FILTERED].setChecked(True)
+    assert dialog._filtered_hint.isVisibleTo(dialog)
+    assert dialog._filtered_hint.text() == text.EXPORT_FILTERED_SUMMARY.format(
+        summary="状态：待审核", count=7,
+    )
+
+    dialog._scope_radios[ExportScope.ALL].setChecked(True)
+    assert not dialog._filtered_hint.isVisibleTo(dialog)
 
 
 def test_export_dialog_all_always_enabled(qtbot, tmp_path) -> None:
