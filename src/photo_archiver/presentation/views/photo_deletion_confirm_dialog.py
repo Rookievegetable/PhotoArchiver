@@ -23,6 +23,7 @@ from photo_archiver.presentation.ui_text import (
     DELETE_PHOTOS_MISSING_NOTE,
     DELETE_PHOTOS_TITLE,
 )
+from photo_archiver.presentation.visual_style import ROLE_DANGER, assign_role
 
 if TYPE_CHECKING:
     from photo_archiver.application.dtos import PhotoDeletionPreview
@@ -69,8 +70,9 @@ class PhotoDeletionConfirmDialog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         cancel = buttons.button(QDialogButtonBox.StandardButton.Cancel)
         ok.setText(DELETE_PHOTOS_CONFIRM_BUTTON)
-        # Batch 6: a destructive confirm never owns the default focus — a
-        # stray Enter must cancel, not remove registrations.
+        # Batch 6/7: destructive confirm — danger styling and cancel owns the
+        # default focus; a stray Enter must cancel, not remove registrations.
+        assign_role(ok, ROLE_DANGER)
         cancel.setDefault(True)
         cancel.setFocus()
         buttons.accepted.connect(self.accept)

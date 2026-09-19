@@ -44,6 +44,11 @@ from photo_archiver.presentation.ui_text import (
     ARCHIVE_SCOPE_LABEL,
     ARCHIVE_SCOPE_SELECTED,
 )
+from photo_archiver.presentation.visual_style import (
+    ROLE_DANGER,
+    ROLE_PRIMARY,
+    assign_role,
+)
 
 # How many source→target samples to render inline; the plan itself stays the
 # complete truth (the executor reports every item's outcome).
@@ -164,16 +169,20 @@ class ArchivePreviewDialog(QDialog):
         )
 
     def _update_accept_label(self) -> None:
-        """Label the accept button with what it will actually start (Batch 6).
+        """Label and color the accept button with what it will actually start.
 
-        Dry-run (the default) keeps the safe "执行试运行" as the default
-        button; once real writing is armed, the accept button reads the
-        explicit "开始归档" and default focus moves to Cancel — a stray
-        Enter must never launch a disk write.
+        Dry-run (the default) keeps the safe "执行试运行" as a primary button
+        and the default; once real writing is armed, the accept button reads
+        the explicit "开始归档", switches to the danger tone and default
+        focus moves to Cancel — a stray Enter must never launch a disk write.
         """
         dry_run = self._dry_run_check.isChecked()
         self._accept_button.setText(
             ARCHIVE_DRY_RUN_BUTTON if dry_run else ARCHIVE_EXECUTE_BUTTON,
+        )
+        assign_role(
+            self._accept_button,
+            ROLE_PRIMARY if dry_run else ROLE_DANGER,
         )
         self._accept_button.setDefault(dry_run)
         cancel = self._buttons.button(QDialogButtonBox.StandardButton.Cancel)

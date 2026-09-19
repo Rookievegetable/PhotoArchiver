@@ -20,6 +20,7 @@ from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.controllers.overview_presenter import (
     OverviewModel,
 )
+from photo_archiver.presentation.visual_style import ROLE_PRIMARY, assign_role
 
 from loguru import logger
 
@@ -48,6 +49,7 @@ class OverviewPage(QWidget):
 
         layout.addStretch()
         self._primary_button = QPushButton(self)
+        assign_role(self._primary_button, ROLE_PRIMARY)
         self._primary_button.clicked.connect(self._emit_primary)
         layout.addWidget(self._primary_button)
         layout.addStretch()

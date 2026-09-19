@@ -130,6 +130,12 @@ from photo_archiver.presentation.views.photo_deletion_confirm_dialog import (
 )
 from photo_archiver.presentation.views.photo_list_delegate import PhotoThumbnailDelegate
 from photo_archiver.presentation.views.photo_detail_dialog import PhotoDetailDialog
+from photo_archiver.presentation.visual_style import (
+    ROLE_DANGER,
+    ROLE_PRIMARY,
+    assign_role,
+    style_empty_state_card,
+)
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
 from photo_archiver.presentation.views.photo_list_model import (
     PHOTO_ID_ROLE, PhotoListModel, STATUS_BADGE_ROLE, THUMBNAIL_ROLE,
@@ -470,12 +476,15 @@ class MainWindow(QMainWindow):
         layout.addLayout(guidance_row)
 
         # 选择态批量操作栏（Batch 4）：仅在有选区时出现，数量明确可见；
-        # 无选区时不显示任何危险批量操作（蓝图条 3）。
+        # 无选区时不显示任何危险批量操作（蓝图条 3）。Batch 7 视觉层级：
+        # 归档为主操作，移除登记为危险操作。
         bulk_row = QHBoxLayout()
         self._bulk_archive_button = QPushButton(self)
         self._bulk_archive_button.clicked.connect(self._on_archive_clicked)
+        assign_role(self._bulk_archive_button, ROLE_PRIMARY)
         self._bulk_delete_button = QPushButton(self)
         self._bulk_delete_button.clicked.connect(self._on_delete_photos_clicked)
+        assign_role(self._bulk_delete_button, ROLE_DANGER)
         for button in (self._bulk_archive_button, self._bulk_delete_button):
             button.setVisible(False)
             bulk_row.addWidget(button)
@@ -506,11 +515,13 @@ class MainWindow(QMainWindow):
         self._photo_list_stack = QStackedWidget(self)
         self._photo_list_stack.addWidget(self._photo_list)  # index 0: 照片墙
         empty_library = QWidget(self)
+        style_empty_state_card(empty_library)
         empty_library_layout = QVBoxLayout(empty_library)
         library_title = QLabel(text.PHOTO_EMPTY_LIBRARY_TITLE, empty_library)
         library_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         library_title.setWordWrap(True)
         self._empty_scan_button = QPushButton(text.PHOTO_EMPTY_LIBRARY_ACTION, empty_library)
+        assign_role(self._empty_scan_button, ROLE_PRIMARY)
         self._empty_scan_button.clicked.connect(self._on_scan_clicked)
         empty_library_layout.addStretch(1)
         empty_library_layout.addWidget(library_title)
@@ -520,6 +531,7 @@ class MainWindow(QMainWindow):
         empty_library_layout.addStretch(1)
         self._photo_list_stack.addWidget(empty_library)  # index 1: 库中无照片
         empty_filtered = QWidget(self)
+        style_empty_state_card(empty_filtered)
         empty_filtered_layout = QVBoxLayout(empty_filtered)
         filtered_title = QLabel(text.PHOTO_EMPTY_FILTERED_TITLE, empty_filtered)
         filtered_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -774,6 +786,7 @@ class MainWindow(QMainWindow):
         cancel_button = QToolButton(self)
         cancel_button.setObjectName("CancelTask")
         cancel_button.setDefaultAction(self._cancel_action)
+        cancel_button.setAccessibleName(ACTION_CANCEL_TASK)
         self._status.addPermanentWidget(cancel_button)
 
     # ---- Worker task slots ----

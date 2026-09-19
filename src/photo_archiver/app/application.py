@@ -9,6 +9,7 @@ from photo_archiver.app.repositories import ApplicationRepositories
 from photo_archiver.app.services import ApplicationServices
 from photo_archiver.presentation.translations import install_chinese_ui_translations
 from photo_archiver.presentation.views.main_window import MainWindow
+from photo_archiver.presentation.visual_style import apply_visual_system
 
 
 class PhotoArchiverApplication:
@@ -23,6 +24,9 @@ class PhotoArchiverApplication:
         """
         self._context = context
         self._qt_application = QApplication(list(arguments))
+        # Batch 7：集中视觉体系（按钮层级/焦点环/空态卡片）在窗口构造前
+        # 一次性安装——唯一 setStyleSheet 调用点，Widget 内零散布。
+        apply_visual_system(self._qt_application)
         # Qt 标准按钮/系统对话框（保存/取消/确定/关闭、文件选择框）中文化——
         # 尽早于窗口构造前安装；缺失仅告警（presentation.translations）。
         install_chinese_ui_translations(self._qt_application)

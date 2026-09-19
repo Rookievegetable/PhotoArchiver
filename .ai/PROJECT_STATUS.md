@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.24.0 · Last Updated: 2026-09-19 · Status: Live
+> Version: 1.25.0 · Last Updated: 2026-09-19 · Status: Live
 
 ---
 
@@ -25,6 +25,8 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 ---
 
 ## 2. Current Step（当前开发阶段）
+
+**UI/UX Batch 7：视觉体系、键盘可用性与最终验收（2026-09-19 实施，待 owner 验收）**——新增 `presentation/visual_style.py` 作为集中视觉体系唯一替换点：主/次/危险按钮层级经动态属性 `styleRole` + 应用级 QSS 选择器表达（唯一 `setStyleSheet` 调用点在 `app/application.py` 装配处，静态守卫测试确保零散布）；焦点环覆盖按钮/输入/日期/列表控件；空态页走共享 `EmptyStateCard` objectName 卡片样式。角色赋值：概览 CTA、照片库空态扫描 CTA、批量归档 = primary；移除登记、删除登记确认、删除人员确认 = danger；归档确认按钮随试运行切换 primary↔danger（配合 Batch 6 的默认焦点规则）。可访问性：状态栏取消按钮补 accessible name；全局无仅图标控件（工具栏动作均带文本）；快捷键仅 Ctrl+,（设置）无冲突；状态语义全部文字化（文字角标 + ✓/○ 清单标记）非仅颜色；Qt6 原生高 DPI 缩放 + palette 驱动的 QSS 保证浅/深主题无需固定色（危险色除外）。新增 `docs/development/ui-acceptance-script.md` 面向验收人员的端到端手工脚本（§1–§8 覆盖蓝图九场景，§9 如实列出 LIMIT-001/002/004/006 验证边界），手册 §4 链接。未改业务逻辑、前序交互契约、Schema/CLI/CI/打包配置；未新增图标与依赖（resources/icons 仍空置，文本符号复用）。
 
 **UI/UX Batch 6：归档、导出与危险操作的安全表达（2026-09-19 实施，待 owner 验收）**——归档：根目录缺失从纯报错改为询问式「去设置」直达设置页（默认按钮「暂不」，Yes 后内联打开 SettingsDialog 并同轮刷新快照，设置入口抽出 `_open_settings_dialog` 供复用避免协调器重入）；ArchivePreviewDialog 首行声明范围（已选 N 张 / 全部已通过）、新增源→目标示例列表（前 8 项 + 截断说明，`ArchivePath.resolve()` 纯拼接）、冲突策略选择器下附后果文字提示（随切换更新）；**试运行默认勾选**（owner 决策），确认按钮语义化——试运行显示「执行试运行」（默认按钮），正式写入显示「开始归档」且默认焦点移至「取消」。导出：**CURRENT_BATCH 从最终用户对话框移除**（owner 决策，不再以禁用单选框伪装功能；ExportScope 枚举与 Task→Service 的契约 ValueError 守卫不动）；FILTERED 范围选中时显示当前筛选摘要 + 预计导出数量（经 FilterBar 新增 `summary_text`/`result_count` 属性由窗口传入，与照片墙同源）。危险操作：PhotoDeletionConfirmDialog 补「界面内没有撤销操作」明示并将默认焦点固定于「取消」；PersonDeletionDialog 同样取消默认焦点；重复处置本为只读报告无需确认。文案全入 ui_text.py；未改 Archive Planner/Executor、冲突策略契约、文件复制语义、ExportScope 服务契约、Schema/CLI/CI。
 
@@ -101,12 +103,12 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-19（本地 Windows / Python 3.11.9 / PySide6 6.11.1）；Batch 6 实施于 Batch 5 提交（`ccdee5f`）之后，同日 owner 以"继续"立项 |
-| 会话范围 | UI/UX Batch 6（归档、导出与危险操作的安全表达）。不改变 Archive Planner/Executor、冲突策略契约、文件复制语义、ExportScope 服务契约、Schema/CLI/CI。 |
-| 关键产出 | ① `archive_preview_dialog.py` 重写：范围行（selected_count 参数）、源→目标样本列表（`_SAMPLE_LIMIT=8` + 截断说明）、冲突策略后果提示（`ARCHIVE_CONFLICT_HINTS` 随切换更新）、试运行默认勾选（owner 决策）、确认按钮语义化（「执行试运行」默认/「开始归档」+ 焦点移 Cancel）。② `export_dialog.py`：CURRENT_BATCH radio 移除（`_SCOPE_LABELS`/`_SCOPE_TOOLTIPS` 收窄）；FILTERED 选中显示筛选摘要 + 预计数（`filtered_count`/`criteria_summary` 新参数 + `_update_scope_hint`）。③ `filter_bar.py` 新增只读属性 `result_count`/`summary_text`。④ `main_window.py`：根目录缺失 → `QMessageBox` 询问「去设置」（默认「暂不」），Yes 走新抽出的 `_open_settings_dialog()`（无协调器重入）；归档预览传 `selected_count`；导出对话框传筛选摘要与预计数；`ARCHIVE_ROOT_NOT_CONFIGURED` 文案退役。⑤ `photo_deletion_confirm_dialog.py`/`person_deletion_dialog.py`：默认焦点固定「取消」；照片删除补 `DELETE_PHOTOS_IRREVERSIBLE` 明示。⑥ `ui_text.py` 新增/替换 ARCHIVE_*/EXPORT_*/DELETE_* 文案 15 项。⑦ 用户手册 §⑤ 归档、§⑥ 导出数据、§10 已知限制更新。⑧ 测试：新增 `test_archive_export_safety.py`（8 项：范围两态、样本 + 截断、试运行默认与按钮语义切换 + 默认焦点、冲突提示、根目录缺失确认/取消直达设置）；`test_export_ui_wiring.py` CURRENT_BATCH 测试重写为"已移除" + 新增 FILTERED 摘要/计数；4 处 `_FakeExportDialog` 工厂签名放宽 `**kwargs`（Batch 6 新参数连带适配）。 |
-| 当前质量门 | 提交前实测（本轮）：Ruff 全库通过（自动修 1 处 import）；MyPy `mypy src`（CI 同款）**200 source files** 无问题；完整 pytest **1025 passed / 6 skipped / 0 failed，202.33s，103 warnings**。期间定位并排除了两次全量/子集挂起：① 根因 A——`_on_export_clicked` 新参数使 4 处旧签名 `_FakeExportDialog` 工厂抛 TypeError，落入 `@_exclusive` 异常分支弹出**真实模态 QMessageBox** 阻塞事件循环（test_export_scope_integration 首测试处挂起）；替身签名放宽后消除。② 根因 B——干净 HEAD worktree 单测 `test_plugin_report_dialog.py` 同样挂起，确证子集顺序原生级问题（LIMIT-004 类）与本次改动无关。 |
-| 工作区 | main；本轮 Batch 6 改动以单提交入库（feat(ui)，13 files）；工作树干净、**未推送**（push 属 owner，GIT-020）。本轮不构建安装包、不更新 CI 或 Release。 |
-| Remaining | **owner Batch 6 验收** · **Batch 7 实施**（视觉体系、键盘可用性与最终验收——蓝图 §Batch 7，需 owner 明确命令）· v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 待 owner 粘贴 CHANGELOG `[2.8.0]` 段 · A-1 CURRENT_BATCH 导出挂起（界面入口已移除，持久化设计仍待 owner 立项）· A-3 代码签名证书采购决策 · 上游 PySide6 issue 是否提交（草稿就绪）· A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论 · B 类触发式信号到达才动 · 第 4 轮全面体检候审。 |
+| 时间 | 2026-09-19（本地 Windows / Python 3.11.9 / PySide6 6.11.1）；Batch 7 实施于 Batch 6 提交（`03fe69c`）之后，同日 owner 以"继续"立项 |
+| 会话范围 | UI/UX Batch 7（视觉体系、键盘可用性与最终验收，收口批次）。不改变业务逻辑、前序已批准交互契约、Schema/CLI/CI/打包配置；无新增依赖与图标。 |
+| 关键产出 | ① 新增 `presentation/visual_style.py`：`build_stylesheet()`/`apply_visual_system()`（应用级 QSS 单一安装点）、`assign_role()`/`button_role()`（`styleRole` 动态属性）、`style_empty_state_card()`（EmptyStateCard objectName）；QSS 含 primary/danger 按钮层级（palette 驱动，危险色唯一固定色）、按钮/输入/列表焦点环、禁用态降级、空态卡片。② `app/application.py` 在 QApplication 创建后一次性安装（唯一 `.setStyleSheet(` 调用点）。③ 角色赋值：概览 CTA、空态扫描 CTA、批量归档 = primary；批量移除登记、删除登记确认 OK、删除人员确认 OK = danger；归档确认随试运行 primary↔danger。④ 可访问性：状态栏取消按钮 `setAccessibleName`；确认对话框取消默认焦点（Batch 6 已立）；文字角标 + ✓/○ 非仅颜色（断言锁定）；无仅图标控件、快捷键仅 Ctrl+,（断言锁定）。⑤ 新增 `docs/development/ui-acceptance-script.md` 面向验收人员的端到端人工脚本（九场景 + LIMIT-001/002/004/006 边界表），手册 §4 链接。⑥ 新增 `test_visual_system.py`（12 项：样式表内容、应用安装、角色往返、main_window 角色 + 空态卡片 objectName、取消 accessibleName、归档角色切换、两危险确认 danger+取消默认、零散布 setStyleSheet 静态守卫、非颜色语义）。 |
+| 当前质量门 | 提交前实测（本轮）：Ruff 全库通过；MyPy `mypy src`（CI 同款）**201 source files** 无问题（含新增 visual_style.py）；完整 pytest **1036 passed / 6 skipped / 0 failed，212.64s，103 warnings**。高 DPI/主题为人工脚本抽查项（Qt6 palette 驱动 + 原生缩放，未在 CI 模拟）。 |
+| 工作区 | main；本轮 Batch 7 改动以单提交入库（feat(ui)，12 files）；工作树干净、**未推送**（push 属 owner，GIT-020）。本轮不构建安装包、不更新 CI 或 Release。 |
+| Remaining | **owner Batch 7 + 整体 UI/UX 收口验收**（按 `docs/development/ui-acceptance-script.md` 执行）· v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 待 owner 粘贴 CHANGELOG `[2.8.0]` 段 · A-1 CURRENT_BATCH 导出挂起（界面入口已移除，持久化设计仍待 owner 立项）· A-3 代码签名证书采购决策 · 上游 PySide6 issue 是否提交（草稿就绪）· A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论 · B 类触发式信号到达才动 · 第 4 轮全面体检候审。 |
 
 ---
 
@@ -151,7 +153,7 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 ## 6. Next Step（下一步开发计划）
 
-Batch 6 已完成并交由 owner 验收（2026-09-19）。**Batch 7（视觉体系、键盘可用性与最终验收）需 owner 明确命令后才开工**（蓝图：`docs/development/ui-ux-execution-prompts.md` §Batch 7；前置 Batch 6 已满足）。v2.8.0 发布与安装包验收事项仍独立保留；本轮没有重新核验远端 CI、Release body 或安装包。后续均需 owner 立项：
+Batch 7 已完成，**UI/UX 收口批次 0–7 全部实施完毕**（2026-09-19）。**待 owner 按 `docs/development/ui-acceptance-script.md` 执行端到端验收**后签核。v2.8.0 发布与安装包验收事项仍独立保留；本轮没有重新核验远端 CI、Release body 或安装包。后续均需 owner 立项：
 
 | Next Step | **待 owner**：① 新离线安装包二轮真机验收 + Release body 粘贴 `[2.8.0]` 段后签核；② A-1 CURRENT_BATCH 导出是否解除挂起（解除则先出批次持久化设计文档）；③ A-3 代码签名证书采购决策；④ 是否提交上游 PySide6 issue（草稿就绪）。**可立项**：A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论（枚举回后台线程 = 回到崩溃形态）。**明确不做**：i18n 实装、自动更新、macOS 安装包、批次撤销。 |
 
@@ -172,6 +174,8 @@ Batch 6 已完成并交由 owner 验收（2026-09-19）。**Batch 7（视觉体�
 | LIMIT-006 压力实验 | `tests/integration/test_scan_stress_no_qtbot.py`（PA_STRESS 门控） |
 | 上游 issue 草稿 | `docs/development/limit006-upstream-issue-draft.md` |
 | UI 文案表（中文化单一置换点） | `src/photo_archiver/presentation/ui_text.py` |
+| 集中视觉体系（Batch 7 唯一样式点） | `src/photo_archiver/presentation/visual_style.py` |
+| 桌面 GUI 人工验收脚本（UI/UX 收口） | `docs/development/ui-acceptance-script.md` |
 | 数据库初始化/迁移 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`、`alembic_runner.py` |
 | 质量验证 / 发布工作流 | `tests/`、`.github/workflows/ci.yml` / `.github/workflows/release.yml` |
 

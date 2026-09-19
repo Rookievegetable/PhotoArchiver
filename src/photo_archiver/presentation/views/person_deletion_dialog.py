@@ -25,6 +25,7 @@ from photo_archiver.presentation.ui_text import (
     PERSON_DELETE_EMPTY,
     PERSON_DELETE_SELECTOR_LABEL,
 )
+from photo_archiver.presentation.visual_style import ROLE_DANGER, assign_role
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -80,8 +81,9 @@ class PersonDeletionDialog(QDialog):
         ok = self._buttons.button(QDialogButtonBox.StandardButton.Ok)
         cancel = self._buttons.button(QDialogButtonBox.StandardButton.Cancel)
         ok.setText(PERSON_DELETE_BUTTON)
-        # Batch 6: destructive confirm — cancel owns the default focus, a
-        # stray Enter must never delete a person.
+        # Batch 6/7: destructive confirm — danger styling and cancel owns the
+        # default focus, a stray Enter must never delete a person.
+        assign_role(ok, ROLE_DANGER)
         cancel.setDefault(True)
         cancel.setFocus()
         self._buttons.accepted.connect(self.accept)
