@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.25.0 · Last Updated: 2026-09-19 · Status: Live
+> Version: 1.26.0 · Last Updated: 2026-09-19 · Status: Live
 
 ---
 
@@ -103,12 +103,14 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-19（本地 Windows / Python 3.11.9 / PySide6 6.11.1）；Batch 7 实施于 Batch 6 提交（`03fe69c`）之后，同日 owner 以"继续"立项 |
-| 会话范围 | UI/UX Batch 7（视觉体系、键盘可用性与最终验收，收口批次）。不改变业务逻辑、前序已批准交互契约、Schema/CLI/CI/打包配置；无新增依赖与图标。 |
-| 关键产出 | ① 新增 `presentation/visual_style.py`：`build_stylesheet()`/`apply_visual_system()`（应用级 QSS 单一安装点）、`assign_role()`/`button_role()`（`styleRole` 动态属性）、`style_empty_state_card()`（EmptyStateCard objectName）；QSS 含 primary/danger 按钮层级（palette 驱动，危险色唯一固定色）、按钮/输入/列表焦点环、禁用态降级、空态卡片。② `app/application.py` 在 QApplication 创建后一次性安装（唯一 `.setStyleSheet(` 调用点）。③ 角色赋值：概览 CTA、空态扫描 CTA、批量归档 = primary；批量移除登记、删除登记确认 OK、删除人员确认 OK = danger；归档确认随试运行 primary↔danger。④ 可访问性：状态栏取消按钮 `setAccessibleName`；确认对话框取消默认焦点（Batch 6 已立）；文字角标 + ✓/○ 非仅颜色（断言锁定）；无仅图标控件、快捷键仅 Ctrl+,（断言锁定）。⑤ 新增 `docs/development/ui-acceptance-script.md` 面向验收人员的端到端人工脚本（九场景 + LIMIT-001/002/004/006 边界表），手册 §4 链接。⑥ 新增 `test_visual_system.py`（12 项：样式表内容、应用安装、角色往返、main_window 角色 + 空态卡片 objectName、取消 accessibleName、归档角色切换、两危险确认 danger+取消默认、零散布 setStyleSheet 静态守卫、非颜色语义）。 |
-| 当前质量门 | 提交前实测（本轮）：Ruff 全库通过；MyPy `mypy src`（CI 同款）**201 source files** 无问题（含新增 visual_style.py）；完整 pytest **1036 passed / 6 skipped / 0 failed，212.64s，103 warnings**。高 DPI/主题为人工脚本抽查项（Qt6 palette 驱动 + 原生缩放，未在 CI 模拟）。 |
-| 工作区 | main；本轮 Batch 7 改动以单提交入库（feat(ui)，12 files）；工作树干净、**未推送**（push 属 owner，GIT-020）。本轮不构建安装包、不更新 CI 或 Release。 |
-| Remaining | **owner Batch 7 + 整体 UI/UX 收口验收**（按 `docs/development/ui-acceptance-script.md` 执行）· v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 待 owner 粘贴 CHANGELOG `[2.8.0]` 段 · A-1 CURRENT_BATCH 导出挂起（界面入口已移除，持久化设计仍待 owner 立项）· A-3 代码签名证书采购决策 · 上游 PySide6 issue 是否提交（草稿就绪）· A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论 · B 类触发式信号到达才动 · 第 4 轮全面体检候审。 |
+| 时间 | 2026-09-19（本地 Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；AUDIT-UI 修复实施于 Batch 7 提交（`6a8fd73`）之后，owner 任务单立项 |
+| 会话范围 | AUDIT-UI-001（P1）+ AUDIT-UI-002 修复：Batch 7 集中视觉体系的 QSS 在 Qt 6.11.1 下整表解析失败导致主/次/危险层级、焦点环、空态卡片全部失效。仅改 `presentation/visual_style.py` 与 `tests/unit/presentation/test_visual_system.py`，不动业务语义/控制器/其他批次。 |
+| 根因与修复 | 根因：QSS 使用 `palette.Highlight` 点语法（Qt 6 仅支持 `palette(Role)` 函数形式），单条非法规则令 Qt 拒绝**整个**应用样式表（"Could not parse application stylesheet"，经 qInstallMessageHandler 实测捕获）；disabled 规则还误用了 `palette.Disabled palette.ButtonText` 双参写法。修复：① 全部改为 `palette(Highlight)`/`palette(ButtonText)` 等函数形式；② 禁用态改用 `:disabled` 伪态选择器（primary/danger 各自独立规则，disabled 不覆盖 enabled 危险红）；③ EmptyStateCard 单独处理——实测发现 Qt 6.11.1 普通 QWidget 背景绘制路径上**任何** `palette(角色)` 均坍缩为 Window 色（固定颜色正常渲染），故卡片改用主题中性 `rgba()` 半透明方案（明暗主题均可见 tint/边框/圆角），并补 `WA_StyledBackground`；证据与警告已写入模块 docstring 防回改。 |
+| 测试防线（AUDIT-UI-002） | 新增两层行为验证：① **Qt 解析捕获**——`test_production_stylesheet_parses_without_qt_warning`（生产样式表零解析警告）+ 负向对照 `test_broken_palette_syntax_is_detected_by_warning_capture`（故意注入旧点语法必须触发捕获，防检测器失效）；② **渲染像素探针**——primary 命中 palette(Highlight) 且异于普通按钮、danger 精确 #c62828、disabled 双角色脱离角色色且互相同色、焦点环聚焦边框==Highlight 且异于未聚焦、空态卡片背景/边框/圆角三重像素断言。静态守卫增强：`\bpalette\.[A-Za-z_]+` 与 `palette(Disabled` 双禁。负向实证：把样式表改回点语法后 primary==normal、danger 不红、焦点环消失——探针必然失败。专项 18 passed；presentation+导出+取消集成 335 passed。 |
+| 桌面复验（DV） | 真实 MainWindow（真实 bootstrap + 生产装配点 apply_visual_system）探针：DV-01 空库概览唯一 CTA=primary 且命中 Highlight、普通按钮非 Highlight = PASS；DV-02 Tab 遍历焦点移动 ≥3 且全部聚焦控件边框=Highlight = PASS；DV-06 归档确认试运行=primary/正式写入=danger红+取消默认 = PASS；DV-07 删除确认 OK=danger红+取消默认焦点 = PASS。首版探针取样点落在文字抗锯齿区导致误报，已改取顶部无文字条带；探针脚本存 `logs/probe/`（gitignored）。 |
+| 当前质量门 | 提交前实测（本轮）：`ruff check src tests` 通过；`mypy src` **201 source files** 无问题；完整 pytest **1043 passed / 6 skipped / 0 failed，205.45s，103 warnings**。 |
+| 工作区 | main；单提交入库（fix(ui)，2 files，+226/−21）；工作树干净、**未推送**（push 属 owner，GIT-020）。探针脚本不入库。 |
+| Remaining | **独立重新审计**（本任务单要求的下一步；不自行宣布 Batch 0–7 最终验收通过）· owner 按 `docs/development/ui-acceptance-script.md` 人工验收 · v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 待 owner 签核 · A-1 CURRENT_BATCH 导出挂起 · A-3 代码签名证书采购决策 · 上游 PySide6 issue 是否提交 · A-2 大库分块枚举（硬前置：上游并发缺陷结论）· 第 4 轮全面体检候审。 |
 
 ---
 

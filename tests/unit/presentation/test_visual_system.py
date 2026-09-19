@@ -4,8 +4,17 @@ The look is defined once in ``presentation/visual_style.py`` and applied as a
 single application-level stylesheet; widgets only opt in via roles. No
 widget calls ``setStyleSheet`` itself (UI-rules §16), and status semantics
 stay text-first (badges, ✓/○ marks) rather than color-only.
+
+AUDIT-UI-001/002 defense-in-depth: beyond QSS text assertions this module
+runs (a) Qt parse-warning capture with a negative control, and (b) minimal
+offscreen render probes that pixel-sample real widgets under the production
+stylesheet. A future ``palette(Highlight)`` → ``palette.Highlight`` revert
+fails ``test_production_stylesheet_parses_without_qt_warning`` AND the
+render probes (Qt rejects the whole stylesheet, so primary/danger/focus
+colors collapse to the default button look).
 """
 
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -16,10 +25,14 @@ import pytest
 pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import qInstallMessageHandler
 from PySide6.QtWidgets import (
     QDialogButtonBox,
+    QLabel,
     QPushButton,
     QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from photo_archiver.application.dtos import ArchivePlan, ArchivePlanItem
@@ -43,6 +56,7 @@ from photo_archiver.presentation.visual_style import (
     assign_role,
     build_stylesheet,
     button_role,
+    style_empty_state_card,
 )
 
 
@@ -57,11 +71,177 @@ def test_stylesheet_declares_hierarchy_focus_and_card() -> None:
     assert "EmptyStateCard" in qss  # shared empty-state card look
 
 
-def test_apply_visual_system_installs_app_stylesheet(qapp) -> None:
+def test_stylesheet_uses_only_valid_palette_function_form() -> None:
+    """AUDIT-UI-001 syntax guard: ``palette(Role)`` only — never dotted.
+
+    A single ``palette.Highlight`` style rule makes Qt reject the ENTIRE
+    application stylesheet (see the parse-warning test below), so the dot
+    syntax must stay out even inside comments of the shipped QSS.
+    """
+    qss = build_stylesheet()
+    assert "palette(" in qss
+    assert not re.search(r"\bpalette\.[A-Za-z_]+", qss)
+    # Disabled is a pseudo-state, never a second palette() argument.
+    assert not re.search(r"palette\(\s*Disabled\b", qss)
+
+
+# ── AUDIT-UI-002 layer 1: Qt parse-warning capture ───────────────────────────
+
+
+def test_production_stylesheet_parses_without_qt_warning(qapp) -> None:
+    """The shipped stylesheet must not trip Qt's stylesheet parser.
+
+    With the AUDIT-UI-001 defect, Qt emitted
+    ``Could not parse application stylesheet`` here and silently dropped
+    every Batch 7 rule — the tests stayed green because they only read the
+    QSS string. This closes that gap.
+    """
+    messages: list[str] = []
+    previous = qInstallMessageHandler(lambda _m, _c, msg: messages.append(msg))
+    try:
+        qapp.setStyleSheet(build_stylesheet())
+        probe = QPushButton()
+        probe.ensurePolished()
+        probe.grab()  # force style resolution
+    finally:
+        qInstallMessageHandler(previous)
+        qapp.setStyleSheet("")
+    parse_failures = [m for m in messages if "Could not parse" in m]
+    assert parse_failures == []
+
+
+def test_broken_palette_syntax_is_detected_by_warning_capture(qapp) -> None:
+    """Negative control: the parse detector must fire on the old defect.
+
+    If this ever fails, the parse-warning test above is vacuous (it cannot
+    detect the regression it exists for).
+    """
+    messages: list[str] = []
+    previous = qInstallMessageHandler(lambda _m, _c, msg: messages.append(msg))
+    try:
+        qapp.setStyleSheet("QPushButton { color: palette.Highlight; }")
+        probe = QPushButton()
+        probe.ensurePolished()
+        probe.grab()
+    finally:
+        qInstallMessageHandler(previous)
+        qapp.setStyleSheet("")
+    assert any("Could not parse" in m for m in messages)
+
+
+# ── AUDIT-UI-002 layer 2: minimal render probes (pixel sampling) ─────────────
+
+
+@pytest.fixture
+def styled_app(qapp):
+    """Production stylesheet installed for the probe, restored afterwards."""
     apply_visual_system(qapp)
-    assert "styleRole" in qapp.styleSheet()
-    # Restore: other suites must not depend on a leftover app stylesheet.
+    yield qapp
     qapp.setStyleSheet("")
+
+
+def _button_color(widget: QPushButton, x: int) -> str:
+    image = widget.grab().toImage()
+    return image.pixelColor(x, widget.height() // 2).name().lower()
+
+
+def _center_color(widget: QWidget) -> str:
+    widget.adjustSize()
+    widget.resize(max(widget.width(), 120), max(widget.height(), 34))
+    image = widget.grab().toImage()
+    return image.pixelColor(widget.width() // 3, widget.height() // 2).name().lower()
+
+
+def _highlight(qapp) -> str:
+    color = qapp.palette().color(qapp.palette().ColorRole.Highlight)
+    return color.name().lower()
+
+
+def test_render_primary_differs_from_normal_button(styled_app) -> None:
+    """Primary must really paint palette(Highlight) — not just carry a property."""
+    normal = QPushButton("Normal")
+    primary = QPushButton("Primary")
+    assign_role(primary, ROLE_PRIMARY)
+
+    expected = _highlight(styled_app)
+    assert _center_color(primary) == expected
+    assert _center_color(normal) != expected
+    # Hierarchy beyond color: the primary keeps its emphasized padding/weight.
+    assert primary.font().bold() or primary.minimumSizeHint().width() > normal.minimumSizeHint().width()
+
+
+def test_render_danger_paints_the_danger_color(styled_app) -> None:
+    danger = QPushButton("Danger")
+    assign_role(danger, ROLE_DANGER)
+    assert _center_color(danger) == "#c62828"
+
+
+def test_render_disabled_roles_keep_disabled_semantics(styled_app) -> None:
+    """Disabled primary/danger shed their role colors entirely."""
+    primary = QPushButton("P")
+    assign_role(primary, ROLE_PRIMARY)
+    primary.setEnabled(False)
+    danger = QPushButton("D")
+    assign_role(danger, ROLE_DANGER)
+    danger.setEnabled(False)
+
+    disabled_primary = _center_color(primary)
+    disabled_danger = _center_color(danger)
+    # Both disabled variants render the same flat disabled look...
+    assert disabled_primary == disabled_danger
+    # ...never the enabled role colors.
+    assert disabled_danger != "#c62828"
+    assert disabled_primary != _highlight(styled_app)
+
+
+def test_render_focus_ring_is_visible(styled_app, qtbot) -> None:
+    """A focused button paints a highlight border; an unfocused one does not."""
+    host = QWidget()
+    qtbot.addWidget(host)
+    first = QPushButton("First")
+    second = QPushButton("Second")
+    QVBoxLayout(host).addWidget(first)
+    QVBoxLayout(host).addWidget(second)
+    host.show()
+    qtbot.waitExposed(host)
+    host.activateWindow()
+    first.setFocus()
+    qtbot.wait(50)
+    if styled_app.focusWidget() is not first:
+        pytest.skip("window activation unavailable on this platform")
+
+    focused_border = _button_color(first, 0)
+    unfocused_border = _button_color(second, 0)
+    assert focused_border == _highlight(styled_app)
+    assert focused_border != unfocused_border
+
+
+def test_render_empty_state_card_paints_background_border_radius(styled_app, qtbot) -> None:
+    """The card must really paint tint, border and rounded corners.
+
+    AUDIT-UI-001's parse failure killed this rule entirely; also note the
+    card paints through the plain-QWidget path where ``palette(<Role>)``
+    collapses to the window color on Qt 6.11.1 — hence the rgba() scheme.
+    """
+    host = QWidget()
+    host.resize(400, 300)
+    card = QWidget(host)
+    style_empty_state_card(card)
+    card.setGeometry(0, 0, 400, 300)
+    QVBoxLayout(card).addWidget(QLabel("empty"))
+    host.show()
+    qtbot.addWidget(host)
+
+    image = host.grab().toImage()
+    center = image.pixelColor(200, 150).name().lower()
+    border = image.pixelColor(0, 150).name().lower()
+    corner = image.pixelColor(0, 0).name().lower()
+    # Tinted background actually painted (not the host window color).
+    assert center != corner
+    # Border actually painted and distinct from the fill.
+    assert border != center
+    # Rounded corner: the exact corner pixel shows through to the host.
+    assert corner != border
 
 
 def test_assign_role_roundtrip(qtbot) -> None:
