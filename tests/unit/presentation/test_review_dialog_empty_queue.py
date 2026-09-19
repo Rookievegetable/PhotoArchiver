@@ -9,7 +9,7 @@ pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog, QMessageBox
 
 from photo_archiver.domain import RecognitionResult
 from photo_archiver.presentation.ui_text import REVIEW_EMPTY, REVIEW_STATUS_LINE
@@ -39,7 +39,12 @@ def test_empty_queue_stays_open_with_buttons_disabled(qtbot, monkeypatch):
     ("_reject_selected", "bulk_reject"),
     ("_approve_all", "bulk_approve"),
 ])
-def test_selection_and_queue_transition_to_empty_stays_open(qtbot, button_name, method):
+def test_selection_and_queue_transition_to_empty_stays_open(qtbot, button_name, method, monkeypatch):
+    # Batch 5: 全部通过需要二次确认——确认路径在本测试中放行以聚焦队列语义。
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.review_dialog.QMessageBox.question",
+        Mock(return_value=QMessageBox.StandardButton.Yes),
+    )
     result = RecognitionResult(photo_id=uuid4(), confidence=0.9, person_id=uuid4())
     pending = [result]
     controller = Mock()

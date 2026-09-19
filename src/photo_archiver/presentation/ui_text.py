@@ -134,10 +134,24 @@ REVIEW_DIALOG_TITLE = "审核待处理识别结果"
 REVIEW_APPROVE_SELECTED = "通过所选"
 REVIEW_REJECT_SELECTED = "拒绝所选"
 REVIEW_APPROVE_ALL = "全部通过"
+REVIEW_APPROVE_SELECTED_COUNTED = "通过所选（{count}）"
+REVIEW_REJECT_SELECTED_COUNTED = "拒绝所选（{count}）"
+REVIEW_APPROVE_ALL_COUNTED = "全部通过（{count}）"
+REVIEW_APPROVE_ALL_CONFIRM_TITLE = "确认全部通过"
+REVIEW_APPROVE_ALL_CONFIRM = (
+    "将把全部 {count} 条待审核结果标记为「已通过」，完成后它们会从待审核列表移除。\n"
+    "界面内没有批量撤销操作；已通过的照片仍可在照片墙中筛选复核。\n\n确定继续？"
+)
 REVIEW_STATUS_LINE = (
     "待审核 {count} 条。选择记录后点「通过所选」或「拒绝所选」，或点「全部通过」完成整批。"
 )
-REVIEW_ROW_FORMAT = "照片={photo_label} 人员={person_label} 置信度={confidence:.2f}"
+REVIEW_ROW_FORMAT = "照片={photo_label}　人员={person_label}"
+REVIEW_ROW_DETAIL_FORMAT = "{confidence_text} · 状态：{status}"
+REVIEW_CONFIDENCE_FORMAT = "置信度：{band}（{value:.2f}）"
+REVIEW_CONFIDENCE_VERY_HIGH = "很高"
+REVIEW_CONFIDENCE_HIGH = "较高"
+REVIEW_CONFIDENCE_MEDIUM = "中等"
+REVIEW_CONFIDENCE_LOW = "较低"
 REVIEW_PERSON_UNKNOWN = "未知人员"
 STATUS_PHOTO_LIST_EMPTY = "暂无照片——请先扫描照片文件夹"
 # G-4：照片墙状态角标（PhotoThumbnailDelegate 右上角小签）。

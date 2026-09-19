@@ -965,11 +965,20 @@ class MainWindow(QMainWindow):
         recognition results, forwards approve/reject to the controller
         synchronously (<10ms SQLite per Step 12 裁决 A), and refreshes the
         queue after each action. The "Use the CLI" info popup is retired.
+        Batch 5: rows render through the shared async thumbnail channel and
+        after close the photo wall (badges + counts) re-queries immediately —
+        approving here must be reflected in the library without a manual
+        refresh.
         """
-        dialog = ReviewDialog(self._review_controller, self)
+        dialog = ReviewDialog(
+            self._review_controller,
+            self,
+            thumbnail_source=self._photo_list_controller,
+        )
         dialog.exec()
         # Approve/reject inside the dialog changes pending/archivable counts.
         self._refresh_workspace_state()
+        self._refresh_photo_list()
 
     @_exclusive(task_label("archive_photos"))
     def _on_archive_clicked(self) -> None:

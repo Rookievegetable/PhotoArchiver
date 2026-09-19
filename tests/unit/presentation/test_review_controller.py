@@ -127,6 +127,38 @@ def test_resolve_row_labels_falls_back_when_entities_missing() -> None:
     assert person_label == REVIEW_PERSON_UNKNOWN
 
 
+def test_photo_for_returns_entity_behind_a_review_row() -> None:
+    """Batch 5: photo_for feeds the dialog's thumbnail channel (read-side)."""
+    result = RecognitionResult(photo_id=uuid4(), confidence=0.9)
+    photo = Photo(
+        path=PhotoPath("photos/alice_portrait.jpg"),
+        folder_id=None,
+        original_name="alice_portrait.jpg",
+    )
+    controller = ReviewController(
+        _FakeReviewUseCase(),  # type: ignore[arg-type]
+        _FakeRecognitionRepo([result]),  # type: ignore[arg-type]
+        photo_repository=_FakePhotoRepo(photo),  # type: ignore[arg-type]
+    )
+    assert controller.photo_for(result) is photo
+
+
+def test_photo_for_degrades_without_lookup_repository() -> None:
+    """No photo repository injected (or entity gone) → None, never a raise."""
+    result = RecognitionResult(photo_id=uuid4(), confidence=0.9)
+    controller = ReviewController(
+        _FakeReviewUseCase(),  # type: ignore[arg-type]
+        _FakeRecognitionRepo([result]),  # type: ignore[arg-type]
+    )
+    assert controller.photo_for(result) is None
+    controller = ReviewController(
+        _FakeReviewUseCase(),  # type: ignore[arg-type]
+        _FakeRecognitionRepo([result]),  # type: ignore[arg-type]
+        photo_repository=_FakePhotoRepo(None),  # type: ignore[arg-type]
+    )
+    assert controller.photo_for(result) is None
+
+
 class _FakePhotoRepo:
     """find_by_id stub returning the configured photo (or None)."""
 

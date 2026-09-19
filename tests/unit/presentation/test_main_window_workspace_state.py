@@ -252,7 +252,7 @@ def test_next_button_invokes_decorated_dialog_handler_after_idle_and_refreshes(
         return 1
 
     monkeypatch.setattr(module, "SettingsDialog" if route == "settings" else "ReviewDialog",
-                        lambda *args: SimpleNamespace(exec=execute))
+                        lambda *args, **kwargs: SimpleNamespace(exec=execute))
     reservation = window._task_coordinator.reserve("busy")
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     assert calls == []

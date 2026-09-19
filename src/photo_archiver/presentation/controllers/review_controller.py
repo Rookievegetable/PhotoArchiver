@@ -16,6 +16,7 @@ from PySide6.QtCore import QObject
 from photo_archiver.application import ReviewRecognitionUseCase
 from photo_archiver.domain import (
     PersonRepository,
+    Photo,
     PhotoRepository,
     RecognitionRepository,
     RecognitionResult,
@@ -72,6 +73,18 @@ class ReviewController(QObject):
             if person is not None:
                 person_label = person.name
         return photo_label, person_label
+
+    def photo_for(self, result: RecognitionResult) -> Photo | None:
+        """Return the photo entity behind a review row (Batch 5 read-side).
+
+        Feeds the dialog's thumbnail channel (source path for the existing
+        async loader); ``None`` when the entity is gone or no lookup
+        repository was injected — the row then simply renders without a
+        thumbnail, never via a synchronous disk read in the widget.
+        """
+        if self._photo_repository is None:
+            return None
+        return self._photo_repository.find_by_id(result.photo_id)
 
     def list_pending(self) -> list[RecognitionResult]:
         """Return all recognition results awaiting user review."""

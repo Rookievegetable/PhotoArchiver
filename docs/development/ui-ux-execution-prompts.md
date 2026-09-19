@@ -1,6 +1,6 @@
 # PhotoArchiver UI/UX 收口：分批 AI 执行提示词
 
-> 状态：**Active — owner 已立项并逐批推进**（Batch 0–3 已完成并经 owner 验收提交入库；**Batch 4 已实施待 owner 验收**；Batch 5–7 仍需逐批明确命令）  
+> 状态：**Active — owner 已立项并逐批推进**（Batch 0–4 已完成并经 owner 验收提交入库；**Batch 5 已实施待 owner 验收**；Batch 6–7 仍需逐批明确命令）  
 > 目的：把验收中发现的 UI 交互、防呆与可用性问题，拆成可由不同 AI 会话独立执行的批次。  
 > 适用范围：v2.8.0 之后的 Windows 桌面 GUI；不涉及打包、数据库 Schema、AI 识别算法或扫描线程模型。
 

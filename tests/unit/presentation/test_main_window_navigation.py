@@ -124,7 +124,7 @@ def test_navigation_switches_between_the_three_pages(nav) -> None:
 def test_review_center_nav_opens_dialog_and_snaps_back(nav, monkeypatch) -> None:
     exec_mock = Mock(return_value=1)
     monkeypatch.setattr(
-        module, "ReviewDialog", lambda *args: SimpleNamespace(exec=exec_mock),
+        module, "ReviewDialog", lambda *args, **kwargs: SimpleNamespace(exec=exec_mock),
     )
     window = nav.window
     window._nav_list.setCurrentRow(2)
