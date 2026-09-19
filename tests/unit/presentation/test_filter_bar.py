@@ -21,6 +21,7 @@ from datetime import datetime
 from PySide6.QtCore import QDateTime
 
 from photo_archiver.domain import MatchStatus
+from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.views.filter_bar import FilterBar
 
 
@@ -41,78 +42,70 @@ def _set(edit, year: int, month: int, day: int) -> None:
     edit.setDateTime(QDateTime(year, month, day, 12, 0, 0))
 
 
-def test_unchecked_date_gates_mean_no_date_constraint(qtbot) -> None:
-    """Default (unchecked) state emits None — no hidden date constraint."""
+def test_all_time_mode_starts_with_no_date_constraint(qtbot) -> None:
+    """Default ("全部时间") mode carries no date constraint at all."""
     bar = FilterBar()
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    bar._from_check.setChecked(True)  # constrain ...
-    assert recorder.last.captured_from is not None
-    bar._from_check.setChecked(False)  # ... then unset again
-    assert recorder.last is None  # back to "no criteria at all"
-
-
-def test_from_only_emits_captured_from_only(qtbot) -> None:
-    bar = FilterBar()
-    qtbot.addWidget(bar)
-    recorder = _CriteriaRecorder(bar)
-
-    _set(bar._from_edit, 2023, 5, 1)
-    bar._from_check.setChecked(True)
-
+    bar._status_combo.setCurrentIndex(0)  # activate another axis first
     criteria = recorder.last
     assert criteria is not None
-    assert criteria.captured_from == datetime(2023, 5, 1, 12, 0, 0)
-    assert criteria.captured_to is None
-    assert criteria.person_id is None and criteria.match_status is None
+    assert criteria.captured_from is None and criteria.captured_to is None
 
 
-def test_to_only_emits_captured_to_only(qtbot) -> None:
+def test_custom_time_mode_emits_both_bounds(qtbot) -> None:
+    """Picking 自定义时间 reveals the edits; both datetimes then constrain."""
     bar = FilterBar()
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    _set(bar._to_edit, 2024, 6, 30)
-    bar._to_check.setChecked(True)
-
-    criteria = recorder.last
-    assert criteria is not None
-    assert criteria.captured_to == datetime(2024, 6, 30, 12, 0, 0)
-    assert criteria.captured_from is None
-
-
-def test_from_and_to_emit_both_bounds(qtbot) -> None:
-    bar = FilterBar()
-    qtbot.addWidget(bar)
-    recorder = _CriteriaRecorder(bar)
-
-    bar._from_check.setChecked(True)
-    bar._to_check.setChecked(True)
+    bar._time_mode_combo.setCurrentIndex(1)
     _set(bar._from_edit, 2023, 1, 1)
     _set(bar._to_edit, 2023, 12, 31)
 
     criteria = recorder.last
+    assert criteria is not None
     assert criteria.captured_from == datetime(2023, 1, 1, 12, 0, 0)
     assert criteria.captured_to == datetime(2023, 12, 31, 12, 0, 0)
 
 
-def test_from_after_to_is_passed_through_verbatim(qtbot) -> None:
-    """from > to is NOT clamped or rejected — it emits as-is and the range
-    semantics of the repository match nothing (honest empty result)."""
+def test_date_edits_hidden_until_custom_time(qtbot) -> None:
+    """The from/to edits only appear on screen in the custom-time mode."""
     bar = FilterBar()
     qtbot.addWidget(bar)
+    bar.show()  # isVisible() 只有在窗口实际显示后才反映布局可见性
+
+    assert not bar._from_edit.isVisible()
+    assert not bar._to_edit.isVisible()
+    bar._time_mode_combo.setCurrentIndex(1)
+    assert bar._from_edit.isVisible() and bar._to_edit.isVisible()
+    bar._time_mode_combo.setCurrentIndex(0)
+    assert not bar._from_edit.isVisible() and not bar._to_edit.isVisible()
+
+
+def test_from_after_to_blocks_query_and_shows_hint(qtbot) -> None:
+    """from > to never emits a criteria — the previous valid one stays in
+    force and the inline hint appears until corrected (Batch 4 decision:
+    never a silent empty result)."""
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    bar.show()  # 内联提示的 isVisible() 断言需要窗口实际显示
     recorder = _CriteriaRecorder(bar)
 
-    bar._from_check.setChecked(True)
-    bar._to_check.setChecked(True)
-    _set(bar._from_edit, 2024, 6, 30)
-    _set(bar._to_edit, 2023, 1, 1)
+    bar._time_mode_combo.setCurrentIndex(1)  # valid default range emits once
+    _set(bar._from_edit, 2024, 6, 30)        # still valid against "now"
+    recorder.emissions.clear()
 
-    criteria = recorder.last
-    assert criteria.captured_from == datetime(2024, 6, 30, 12, 0, 0)
-    assert criteria.captured_to == datetime(2023, 1, 1, 12, 0, 0)
-    assert criteria.captured_from > criteria.captured_to
+    _set(bar._to_edit, 2023, 1, 1)  # invalid: from > to
+
+    assert bar._date_warning_label.isVisible()
+    assert recorder.emissions == []  # the invalid range was never emitted
+
+    _set(bar._to_edit, 2024, 12, 31)  # corrected
+    assert not bar._date_warning_label.isVisible()
+    assert recorder.last.captured_from == datetime(2024, 6, 30, 12, 0, 0)
+    assert recorder.last.captured_to == datetime(2024, 12, 31, 12, 0, 0)
 
 
 def test_date_axis_combines_with_status_axis(qtbot) -> None:
@@ -121,25 +114,13 @@ def test_date_axis_combines_with_status_axis(qtbot) -> None:
     recorder = _CriteriaRecorder(bar)
 
     bar._status_combo.setCurrentIndex(0)  # Pending
-    bar._from_check.setChecked(True)
+    bar._time_mode_combo.setCurrentIndex(1)
+    recorder.emissions.clear()
     _set(bar._from_edit, 2023, 5, 1)
 
     criteria = recorder.last
     assert criteria.match_status is MatchStatus.PENDING
     assert criteria.captured_from == datetime(2023, 5, 1, 12, 0, 0)
-    assert criteria.captured_to is None
-
-
-def test_date_edits_disabled_until_gated(qtbot) -> None:
-    """The edit widgets stay disabled while their gate is unchecked."""
-    bar = FilterBar()
-    qtbot.addWidget(bar)
-
-    assert not bar._from_edit.isEnabled()
-    assert not bar._to_edit.isEnabled()
-    bar._from_check.setChecked(True)
-    assert bar._from_edit.isEnabled()
-    assert not bar._to_edit.isEnabled()
 
 
 def test_clear_resets_every_axis_to_unset(qtbot) -> None:
@@ -148,24 +129,24 @@ def test_clear_resets_every_axis_to_unset(qtbot) -> None:
     recorder = _CriteriaRecorder(bar)
 
     bar._status_combo.setCurrentIndex(0)
-    bar._from_check.setChecked(True)
-    bar._to_check.setChecked(True)
+    bar._time_mode_combo.setCurrentIndex(1)
     _set(bar._from_edit, 2023, 1, 1)
     bar.clear()
 
     assert recorder.last is None
     assert bar._status_combo.currentIndex() == -1  # back to the placeholder state
-    assert not bar._from_check.isChecked() and not bar._to_check.isChecked()
-    assert not bar._from_edit.isEnabled() and not bar._to_edit.isEnabled()
+    assert bar._time_mode_combo.currentIndex() == 0  # back to "全部时间"
+    assert not bar._from_edit.isVisible() and not bar._to_edit.isVisible()
 
 
-def test_changing_date_value_while_gated_reemits(qtbot) -> None:
-    """Editing a gated-in date re-emits with the updated value (live filter)."""
+def test_changing_date_value_while_custom_reemits(qtbot) -> None:
+    """Editing a custom-time date re-emits with the updated value (live)."""
     bar = FilterBar()
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    bar._from_check.setChecked(True)
+    bar._time_mode_combo.setCurrentIndex(1)
+    recorder.emissions.clear()
     _set(bar._from_edit, 2023, 5, 1)
     _set(bar._from_edit, 2023, 6, 1)
 
@@ -285,14 +266,15 @@ def test_person_axis_combines_with_status_and_date(qtbot) -> None:
     bar.set_persons([alice])
     bar._person_combo.setCurrentIndex(0)
     bar._status_combo.setCurrentIndex(1)  # Approved
-    bar._to_check.setChecked(True)
+    bar._time_mode_combo.setCurrentIndex(1)
+    recorder.emissions.clear()
+    _set(bar._from_edit, 2024, 1, 1)  # 默认 from=一年前，晚于 to 会触发非法区间拦截
     _set(bar._to_edit, 2024, 12, 31)
 
     criteria = recorder.last
     assert criteria.person_id == alice.id
     assert criteria.match_status is MatchStatus.APPROVED
     assert criteria.captured_to == datetime(2024, 12, 31, 12, 0, 0)
-    assert criteria.captured_from is None
 
 
 def test_clear_resets_person_axis_too(qtbot) -> None:
@@ -360,3 +342,62 @@ def test_clear_resets_unmatched_back_to_unset(qtbot) -> None:
     assert recorder.last is not None
     bar.clear()
     assert recorder.last is None
+
+
+# ── Summary row + result count (Batch 4) ─────────────────────────────────────
+
+
+def test_summary_starts_at_no_filter(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    assert bar._summary_label.text() == text.FILTER_SUMMARY_NONE
+
+
+def test_set_result_count_updates_the_count_label(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    bar.set_result_count(7)
+    assert bar._count_label.text() == text.FILTER_RESULT_COUNT.format(count=7)
+
+
+def test_summary_lists_all_active_conditions(qtbot) -> None:
+    from photo_archiver.presentation import ui_text as text
+
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+    alice = _make_person("Alice")
+
+    bar.set_persons([alice])
+    bar._person_combo.setCurrentIndex(0)
+    bar._status_combo.setCurrentIndex(0)  # 待审核
+    bar._time_mode_combo.setCurrentIndex(1)
+    _set(bar._from_edit, 2023, 1, 1)
+    _set(bar._to_edit, 2023, 12, 31)
+
+    summary = bar._summary_label.text()
+    assert text.FILTER_SUMMARY_PERSON.format(name="Alice") in summary
+    assert text.FILTER_SUMMARY_STATUS.format(name="待审核") in summary
+    assert text.FILTER_SUMMARY_TIME_FROM.format(date="2023-01-01") in summary
+    assert text.FILTER_SUMMARY_TIME_TO.format(date="2023-12-31") in summary
+    assert recorder.last is not None  # 摘要与实际发出的 criteria 同源
+
+
+def test_invalid_range_keeps_previous_summary_and_count(qtbot) -> None:
+    """A blocked range never rewrites the summary to a condition it didn't apply."""
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    bar.show()  # 内联提示的 isVisible() 断言需要窗口实际显示
+    bar.set_result_count(3)
+    bar._status_combo.setCurrentIndex(0)  # 有效：待审核
+
+    bar._time_mode_combo.setCurrentIndex(1)
+    _set(bar._from_edit, 2024, 6, 30)
+    # 摘要基线取自最近一次"合法"应用（含自定义模式的默认区间 emission）；
+    # 拦截只应阻止非法区间的重写，不应回滚已生效条件。
+    summary_before = bar._summary_label.text()
+    _set(bar._to_edit, 2023, 1, 1)  # invalid
+
+    assert bar._date_warning_label.isVisible()
+    assert bar._summary_label.text() == summary_before  # 仍反映生效筛选
+    assert bar._count_label.text() == text.FILTER_RESULT_COUNT.format(count=3)

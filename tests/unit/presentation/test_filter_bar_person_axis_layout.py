@@ -63,30 +63,27 @@ def test_person_combo_stays_usable_after_repopulation(qtbot) -> None:
     assert combo.currentIndex() == -1  # reset to the unselected placeholder state
 
 
-def test_to_date_edit_is_managed_by_the_layout(qtbot) -> None:
-    """P0-3: the To edit must sit in the row, right of its checkbox.
+def test_date_edits_are_managed_by_the_layout_in_custom_time(qtbot) -> None:
+    """P0-3 heritage (Batch 4): the date edits stay layout-managed.
 
-    Regression for the Phase 9 gap: ``_to_edit`` was never added to the
-    layout, so it floated as an unmanaged child at (0, 0, 100, 30) — painting
-    its frame and date text over the Person axis and swallowing that area's
-    clicks on the real desktop.
+    Regression for the Phase 9 gap (an unmanaged date edit floated over the
+    Person axis and swallowed its clicks) — re-checked in the custom-time
+    mode where the edits are actually visible, against both axis widgets.
     """
     bar = FilterBar()
     qtbot.addWidget(bar)
-    bar.resize(1200, 40)
+    bar.resize(1200, 80)
     bar.show()
 
+    bar._time_mode_combo.setCurrentIndex(1)  # 自定义时间：显示起止编辑
     person_combo = bar._person_combo
-    to_check = bar._to_check
     to_edit = bar._to_edit
+    from_edit = bar._from_edit
 
-    # Managed by the row: right of its own checkbox, no overlap anywhere.
-    assert to_edit.geometry().left() >= to_check.geometry().right()
+    assert to_edit.isVisible() and from_edit.isVisible()
     assert not to_edit.geometry().intersects(person_combo.geometry()), (
         f"to_edit {to_edit.geometry()} overlaps person combo {person_combo.geometry()}"
     )
-    assert not to_edit.geometry().intersects(bar.findChild(QLabel).geometry()), (
-        "to_edit overlaps the Person label"
+    assert not from_edit.geometry().intersects(person_combo.geometry()), (
+        f"from_edit {from_edit.geometry()} overlaps person combo {person_combo.geometry()}"
     )
-    # The From edit sits symmetrically right of its own checkbox.
-    assert bar._from_edit.geometry().left() >= bar._from_check.geometry().right()

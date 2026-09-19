@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.21.0 · Last Updated: 2026-09-18 · Status: Live
+> Version: 1.22.0 · Last Updated: 2026-09-19 · Status: Live
 
 ---
 
@@ -25,6 +25,8 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 ---
 
 ## 2. Current Step（当前开发阶段）
+
+**UI/UX Batch 4：照片库——筛选、空态、选择态与详情（2026-09-19 实施，待 owner 验收）**——FilterBar 时间轴重构为时间模式下拉（默认"全部时间"不约束且隐藏起止编辑；"自定义时间"展开并生效）；`from > to` 阻止发 criteria（上一个有效筛选保持生效）并显示内联修正提示，绝不静默渲染空结果；新增摘要行（已生效条件 + 结果计数，计数经 `set_result_count` 由窗口查询后回填）。照片库空态三态化（ADR-036 延伸）：库中无照片（CTA 扫描照片）/ 筛选无结果（CTA 清除筛选）/ 任务中（进度说明），`_refresh_workspace_state` 后重评估（快照 has_photos 变化联动，本轮修复的真实缺口）；选择态上下文批量操作栏（归档所选 N / 移除登记 N，无选区整体隐藏，busy 置灰，接线既有 `_collect_selected_photo_ids` → 批量归档/删除登记路径）；双击照片打开只读 `PhotoDetailDialog`（大预览 + 原名/路径/拍摄时间/状态角标，仅用已加载实体与缓存缩略图，缺失降级"未知/未生成"）。页内 "PhotoLibrary" 工具栏由批量操作栏取代（`_delete_photos_action` QAction 契约与 Batch 2 选区语义不变，仅不再挂工具栏）。文案全入 ui_text.py；未改 PhotoListModel/Delegate/搜索 DTO/异步缩略图机制、审核业务规则、归档默认值、controller API、Schema/CLI/CI/扫描线程模型。
 
 **UI/UX Batch 3：主窗口信息架构与首次引导（2026-09-18 实施，待 owner 验收）**——MainWindow 重构为流程驱动工作台壳：左侧 QListWidget 导航（概览 / 照片库 / 审核中心 / 数据工具 / 设置）+ QStackedWidget 三页；窗口级 Main 工具栏精简为五个频繁主操作（流程序：导入 / 扫描 / 识别 / 审核 / 归档，插件动作 ADR-038 挂载契约不变）；维护操作（导出数据 / 检测重复 / 删除人员）移入数据工具页（Owner 决策 4 的信息架构落地），删除登记留在照片库页（选区态，Batch 2 语义不变）；设置改为触发式导航项（Ctrl+, 快捷键经 window.addAction 保留）；取消动作移入状态栏常驻 QToolButton（objectName="CancelTask"，QAction 契约不变）。新增概览页：`controllers/overview_presenter.py`（纯逻辑）+ `views/overview_page.py`——五步检查清单（导入人员 → 扫描照片 → 运行人脸识别 → 人工审核 → 安全归档）逐步由 Batch 2 WorkspaceController 快照驱动（Widget 零仓储访问），唯一主 CTA 指向最合理的下一步（优先级 match → model → import/scan → review → archive → settings，全部完成时引导继续扫描；允许先扫描再导入，识别需人员与照片双齐由 CTA 归位表达），底部本地处理隐私说明。审核中心/设置导航行为触发式（打开模态不切页，高亮自动回贴）。文案全入 ui_text.py；未改审核业务规则、归档默认值、CURRENT_BATCH 展示、controller API、Schema/CLI/CI/扫描线程模型。
 
@@ -95,12 +97,12 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-18（本地 Windows / Python 3.11.9 / PySide6 6.11.1）；Batch 3 实施于 Batch 0–2 提交（`378e26b` / `6649a96`）之后 |
-| 会话范围 | UI/UX Batch 3（主窗口信息架构与首次引导）。不改变审核业务规则、归档默认值、CURRENT_BATCH 展示、既有 controller API 或扫描线程模型。 |
-| 关键产出 | ① 新增 `presentation/controllers/overview_presenter.py`（五步清单 + 主 CTA 推导，纯逻辑消费 WorkspaceController 缓存快照，零仓储）与 `presentation/views/overview_page.py`（渲染视图 + `primary_clicked` 信号 + `render_model`/`set_busy`）。② `main_window.py`：`_build_actions()` 集中创建 11 个 QAction（实例属性契约保留）→ `_build_toolbar()` 精简 Main 工具栏（五主操作流程序 + 插件挂载）→ `_build_central()` 改为导航 + 三页（照片库页 = 原 FilterBar/引导行/照片墙/空态 + 页内删除登记工具栏；数据工具页收纳导出/查重/删除人员）→ `_build_status()` 状态栏常驻取消 QToolButton → 触发式导航行（审核中心/设置，`_snap_nav_to_page` 高亮回贴）→ 概览渲染接 `_refresh_workspace_state`、busy 接 `_on_task_state_changed`。③ `ui_text.py` 新增导航/概览文案区段 24 项。④ 用户手册 §4 重写（导航结构 + 概览页）、§3.1/④/⑥/§5 入口更新。⑤ 测试：新增 `test_overview_presenter.py`（12 项五态矩阵）+ `test_main_window_navigation.py`（14 项：工具栏契约/数据工具分置/五态 CTA/真实 picker 路由/页面切换/触发式导航回贴/任务面板常驻/busy 置灰恢复/导航标签）；适配 `test_main_window_workspace_state.py`（3 处切照片库页后断言 isVisible）与 `test_photo_thumbnail_rendering.py`（grab 前切照片库页）。 |
-| 当前质量门 | 提交前实测（本轮）：Ruff 全库通过；MyPy `mypy src`（CI 同款）**199 source files** 无问题；完整 pytest **988 passed / 6 skipped / 0 failed，181.45s，104 warnings**（首轮 1 failed 为缩略图 grab 在非当前页白屏，修复后第二轮全量全绿）；presentation 定向 **163 passed**（66.17s）+ 导入闭环集成 2 passed + 缩略图渲染 3 passed。未运行 pip check 或覆盖率测量。 |
-| 工作区 | main；本轮 Batch 3 改动以单提交入库：`644b797`（feat(ui)，10 files，+829/−87）；工作树干净、**未推送**（push 属 owner，GIT-020）。本轮不构建安装包、不更新 CI 或 Release。 |
-| Remaining | **owner Batch 3 验收** · **Batch 4 实施**（照片库：筛选、空态、选择态与详情——蓝图 §Batch 4，需 owner 明确命令）· v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 待 owner 粘贴 CHANGELOG `[2.8.0]` 段 · A-1 CURRENT_BATCH 导出挂起（Batch 6 落地）· A-3 代码签名证书采购决策 · 上游 PySide6 issue 是否提交（草稿就绪）· A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论 · B 类触发式（模型镜像/导出流式化/检查更新）信号到达才动 · 第 4 轮全面体检候审。 |
+| 时间 | 2026-09-19（本地 Windows / Python 3.11.9 / PySide6 6.11.1）；Batch 4 实施于 Batch 0–3 提交（`378e26b` / `6649a96` / `644b797`）之后，开工时工作树已有上一会话的 Batch 4 半成品改动（本轮在其基础上收尾） |
+| 会话范围 | UI/UX Batch 4（照片库：筛选、空态、选择态与详情）。不改变 PhotoListModel/Delegate/搜索 DTO/异步缩略图机制、审核业务规则、归档默认值、既有 controller API 或扫描线程模型。 |
+| 关键产出 | ① `filter_bar.py`：时间轴重构为"全部时间/自定义时间"模式下拉（默认无约束、起止编辑隐藏），from>to 阻止 emission + 内联修正提示，新增条件摘要行与 `set_result_count`（`_from_check`/`_to_check` API 移除）。② `main_window.py`：空态三态（`_photo_list_stack` 增至 4 页：照片墙/库中无照片 CTA 扫描/筛选无结果 CTA 清除筛选/任务中说明）；`_refresh_workspace_state` 后调 `_update_photo_empty_state`（快照 has_photos 联动，本轮修复缺口）；选择态批量操作栏（`_bulk_archive_button`/`_bulk_delete_button`，数量可见、无选区隐藏、busy 置灰，复用 `_collect_selected_photo_ids` 既有批量归档/删除路径）；`_photos_by_id` 身份映射 + 双击打开 `PhotoDetailDialog`；页内 PhotoLibrary 工具栏由批量栏取代（`_delete_photos_action` QAction 与选区语义保留）。③ 新增 `views/photo_detail_dialog.py`（只读详情：大预览 + 原名/路径/拍摄时间/状态，缺失降级，不做原图同步 IO）。④ `ui_text.py` 新增 Batch 4 文案区段 27 项。⑤ 用户手册 §② 扫描文件夹筛选/空态/详情/批量栏重写、§⑤·附 删除登记入口表述更新。⑥ 测试：新增 `test_photo_library_page.py`（8 项：三空态、清除 CTA、busy 态、批量栏出现/计数/busy 置灰、详情打开与降级）；`test_filter_bar.py` 适配时间模式契约 + 新增摘要/计数/拦截 5 项；`test_filter_bar_person_axis_layout.py` 适配（P0-3 布局回归在自定义时间模式复检）；`test_filtered_export_combined_criteria.py` 的 `_set_date` 适配时间模式契约。 |
+| 当前质量门 | 提交前实测（本轮）：Ruff 全库通过；MyPy `mypy src`（CI 同款）**200 source files** 无问题；完整 pytest **999 passed / 6 skipped / 0 failed，194.25s，102 warnings**（期间修复：MyPy `scaledToHeight` 枚举参、6 项测试的平台可见性/时序适配、集成测试 `_set_date` API 适配——均为 Batch 4 契约变化的连带适配，非业务回归）；presentation 定向 **265 passed**（69.74s）+ 导出集成 23 passed。未运行 pip check 或覆盖率测量。 |
+| 工作区 | main；本轮 Batch 4 改动以单提交入库（feat(ui)，10 files）；工作树干净、**未推送**（push 属 owner，GIT-020）。本轮不构建安装包、不更新 CI 或 Release。 |
+| Remaining | **owner Batch 4 验收** · **Batch 5 实施**（审核中心：人工确认而非盲批——蓝图 §Batch 5，需 owner 明确命令）· v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 待 owner 粘贴 CHANGELOG `[2.8.0]` 段 · A-1 CURRENT_BATCH 导出挂起（Batch 6 落地）· A-3 代码签名证书采购决策 · 上游 PySide6 issue 是否提交（草稿就绪）· A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论 · B 类触发式（模型镜像/导出流式化/检查更新）信号到达才动 · 第 4 轮全面体检候审。 |
 
 ---
 
@@ -128,9 +130,16 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 - 兼容契约保持：ADR-038 插件挂载（findChild(QToolBar,"Main") + isVisible + actions() 文本契约）由 test_plugin_ui_loading / test_plugin_directory_loading 覆盖全绿；bulk/excel 导入闭环经 Main 工具栏触发"导入人员"全绿；Batch 1/2（协调 45、workspace_state 19、审核空态、workspace_controller）经适配后全绿；缩略图渲染/网格布局经切页适配后全绿。
 - 边界：概览归档步 done 为中性判定（archivable_count==0 即完成，根不可用阻塞由 detail 说明）；空库审核步 done=True 由 detail 解释（权威引导是主 CTA）；未新增图标（文本符号 ✓/○）、未改主题/QSS、未新增依赖；导航仅本窗口范围，不提供跨窗口状态；未做人工桌面视觉验收。
 
+### Batch 4 验收证据与边界
+
+- 筛选轴：`tests/unit/presentation/test_filter_bar.py`（时间模式默认无约束/自定义展开双值/from>to 拦截且恢复后继续、摘要与结果计数、非法区间不改写已生效摘要）与 `test_filter_bar_person_axis_layout.py`（P0-3 布局回归在自定义时间模式对起止两编辑复检）。
+- 空态三态与批量栏：`tests/unit/presentation/test_photo_library_page.py`（8 项）——空库 CTA 扫描、has_photos 快照 + 0 结果 → 筛选空态（不误导重扫）、清除 CTA 复位摘要、busy 态进出、批量栏仅选区出现且计数准确、busy 时批量按钮置灰恢复、双击打开详情、查询后计数回填、详情缺数据降级三断言。
+- 兼容契约保持：`_delete_photos_action` QAction 选区语义（Batch 2 workspace_state 断言不变）；批量归档/删除复用既有 `_on_archive_clicked`/`_on_delete_photos_clicked` 路径（B3 photo_ids 透传不变）；导航/概览/任务协调/导入闭环/缩略图渲染测试全绿；PhotoListModel 与异步缩略图机制零改动。
+- 边界：筛选空态判定使用 WorkspaceController 缓存快照的 has_photos（任务终态/对话框返回即刷新，本轮补 `_refresh_workspace_state` 后重评估）；详情预览解码缓存缩略图小文件（非原图同步 IO，已在 docstring 声明边界）；批量栏按钮与 `_delete_photos_action` 双入口并存（QAction 不再挂工具栏，工具栏入口被批量栏取代）；状态角标沿用 v2.7.0 文本角标（非仅颜色）；未新增图标/主题/QSS/依赖；未做人工桌面视觉验收。
+
 ## 6. Next Step（下一步开发计划）
 
-Batch 3 已完成并交由 owner 验收（2026-09-18）。**Batch 4（照片库：筛选、空态、选择态与详情）需 owner 明确命令后才开工**（蓝图：`docs/development/ui-ux-execution-prompts.md` §Batch 4；前置 Batch 3 已满足）。Batch 5–7 仍需逐批明确命令，不因四项产品方向已批准而自动开工。v2.8.0 发布与安装包验收事项仍独立保留；本轮没有重新核验远端 CI、Release body 或安装包。后续均需 owner 立项：
+Batch 4 已完成并交由 owner 验收（2026-09-19）。**Batch 5（审核中心：人工确认而非盲批）需 owner 明确命令后才开工**（蓝图：`docs/development/ui-ux-execution-prompts.md` §Batch 5；前置 Batch 4 已满足）。Batch 6–7 仍需逐批明确命令，不因四项产品方向已批准而自动开工。v2.8.0 发布与安装包验收事项仍独立保留；本轮没有重新核验远端 CI、Release body 或安装包。后续均需 owner 立项：
 
 | Next Step | **待 owner**：① 新离线安装包二轮真机验收 + Release body 粘贴 `[2.8.0]` 段后签核；② A-1 CURRENT_BATCH 导出是否解除挂起（解除则先出批次持久化设计文档）；③ A-3 代码签名证书采购决策；④ 是否提交上游 PySide6 issue（草稿就绪）。**可立项**：A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论（枚举回后台线程 = 回到崩溃形态）。**明确不做**：i18n 实装、自动更新、macOS 安装包、批次撤销。 |
 

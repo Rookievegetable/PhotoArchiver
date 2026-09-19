@@ -90,11 +90,44 @@ FILTER_STATUS_PENDING = "待审核"
 FILTER_STATUS_APPROVED = "已通过"
 FILTER_STATUS_REJECTED = "已拒绝"
 FILTER_STATUS_UNMATCHED = "未匹配"
-FILTER_FROM_CHECK = "从"
-FILTER_TO_CHECK = "至"
 FILTER_FROM_TOOLTIP = "筛选捕获时间晚于此时刻（含）的照片。"
 FILTER_TO_TOOLTIP = "筛选捕获时间早于此时刻（含）的照片。"
 FILTER_CLEAR_BUTTON = "清除"
+
+# ---- 筛选栏 · 时间模式与摘要（Batch 4） ----
+FILTER_TIME_LABEL = "时间："
+FILTER_TIME_ALL = "全部时间"
+FILTER_TIME_CUSTOM = "自定义时间"
+FILTER_DATE_RANGE_INVALID = "开始时间晚于结束时间，已暂停筛选；请修正后再试。"
+FILTER_SUMMARY_NONE = "未启用筛选"
+FILTER_SUMMARY_PERSON = "人员：{name}"
+FILTER_SUMMARY_STATUS = "状态：{name}"
+FILTER_SUMMARY_TIME_FROM = "拍摄自 {date}"
+FILTER_SUMMARY_TIME_TO = "拍摄至 {date}"
+FILTER_SUMMARY_SEPARATOR = " · "
+FILTER_RESULT_COUNT = "{count} 张照片"
+FILTER_DATE_FORMAT = "%Y-%m-%d"
+
+# ---- 照片库 · 空态三态（Batch 4） ----
+PHOTO_EMPTY_LIBRARY_TITLE = "库中还没有照片——扫描照片目录后，照片会出现在这里。"
+PHOTO_EMPTY_LIBRARY_ACTION = "扫描照片"
+PHOTO_EMPTY_FILTERED_TITLE = "没有照片符合当前筛选条件。"
+PHOTO_EMPTY_FILTERED_ACTION = "清除筛选"
+PHOTO_EMPTY_BUSY = "任务进行中；完成后照片墙将按当前筛选自动刷新。"
+
+# ---- 照片库 · 选择态批量操作栏（Batch 4） ----
+BULK_ARCHIVE_BUTTON = "归档所选（{count}）"
+BULK_DELETE_BUTTON = "移除登记（{count}）"
+
+# ---- 照片详情对话框（Batch 4） ----
+PHOTO_DETAIL_TITLE = "照片详情"
+PHOTO_DETAIL_NAME = "文件名：{name}"
+PHOTO_DETAIL_PATH = "路径：{path}"
+PHOTO_DETAIL_CAPTURED = "拍摄时间：{time}"
+PHOTO_DETAIL_CAPTURED_UNKNOWN = "拍摄时间：未知"
+PHOTO_DETAIL_STATUS = "状态：{badge}"
+PHOTO_DETAIL_THUMB_PENDING = "缩略图尚未生成；稍后重新打开即可查看。"
+
 
 # ---- 审核对话框（ReviewDialog） ----
 REVIEW_DIALOG_TITLE = "审核待处理识别结果"

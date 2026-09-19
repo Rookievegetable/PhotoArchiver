@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from photo_archiver.app.context import ApplicationContext
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.application.dtos.plugin_action_result import ActionResult
-from photo_archiver.domain import PhotoSearchCriteria
+from photo_archiver.domain import Photo, PhotoSearchCriteria
 from photo_archiver.presentation.controllers import (
     ArchiveController,
     ImportPeopleController,
@@ -110,7 +110,6 @@ from photo_archiver.presentation.ui_text import (
     STATUS_MATCH_UNAVAILABLE,
     STATUS_PENDING_REVIEW_COUNT,
     STATUS_READY,
-    STATUS_PHOTO_LIST_EMPTY,
     STATUS_SCAN_UNAVAILABLE,
     STATUS_SCANNING_FOLDER,
     STATUS_TASK_CANCELLED,
@@ -128,8 +127,11 @@ from photo_archiver.presentation.views.photo_deletion_confirm_dialog import (
     PhotoDeletionConfirmDialog,
 )
 from photo_archiver.presentation.views.photo_list_delegate import PhotoThumbnailDelegate
+from photo_archiver.presentation.views.photo_detail_dialog import PhotoDetailDialog
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
-from photo_archiver.presentation.views.photo_list_model import PHOTO_ID_ROLE, PhotoListModel
+from photo_archiver.presentation.views.photo_list_model import (
+    PHOTO_ID_ROLE, PhotoListModel, STATUS_BADGE_ROLE, THUMBNAIL_ROLE,
+)
 from photo_archiver.presentation.views.review_dialog import ReviewDialog
 from photo_archiver.presentation.views.settings_dialog import SettingsDialog
 from photo_archiver.plugins import PluginRegistry
@@ -201,6 +203,7 @@ class MainWindow(QMainWindow):
         self._context = context
         self._task_coordinator = TaskCoordinator(self)
         self._current_criteria: PhotoSearchCriteria | None = None
+        self._photos_by_id: dict[UUID, Photo] = {}
         self._action_states: dict[QAction, tuple[bool, str]] = {}
         self._workspace_controller = WorkspaceController(context.services.workspace_readiness)
         self._overview_presenter = OverviewPresenter(self._workspace_controller)
@@ -464,6 +467,19 @@ class MainWindow(QMainWindow):
         guidance_row.addStretch()
         layout.addLayout(guidance_row)
 
+        # 选择态批量操作栏（Batch 4）：仅在有选区时出现，数量明确可见；
+        # 无选区时不显示任何危险批量操作（蓝图条 3）。
+        bulk_row = QHBoxLayout()
+        self._bulk_archive_button = QPushButton(self)
+        self._bulk_archive_button.clicked.connect(self._on_archive_clicked)
+        self._bulk_delete_button = QPushButton(self)
+        self._bulk_delete_button.clicked.connect(self._on_delete_photos_clicked)
+        for button in (self._bulk_archive_button, self._bulk_delete_button):
+            button.setVisible(False)
+            bulk_row.addWidget(button)
+        bulk_row.addStretch()
+        layout.addLayout(bulk_row)
+
         self._photo_list_model = PhotoListModel(parent=self)
         self._photo_list = QListView(self)
         self._photo_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -483,20 +499,46 @@ class MainWindow(QMainWindow):
         # Without it the default delegate renders filenames only, leaving the
         # entire thumbnail pipeline invisible to the user.
         self._photo_list.setItemDelegate(PhotoThumbnailDelegate(self._photo_list))
-        # ADR-036：空态占位——库内无照片（或筛选无结果）时给出行动指引，
-        # 避免纯白区域让用户误判为故障。
+        # ADR-036 → Batch 4：空态三态——库中无照片（CTA 扫描）/ 筛选无结果
+        # （CTA 清除筛选）/ 任务中（进度说明），绝不混淆两种"没有照片"。
         self._photo_list_stack = QStackedWidget(self)
         self._photo_list_stack.addWidget(self._photo_list)  # index 0: 照片墙
-        self._photo_empty_label = QLabel(STATUS_PHOTO_LIST_EMPTY, self)
-        self._photo_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._photo_list_stack.addWidget(self._photo_empty_label)  # index 1: 空态
+        empty_library = QWidget(self)
+        empty_library_layout = QVBoxLayout(empty_library)
+        library_title = QLabel(text.PHOTO_EMPTY_LIBRARY_TITLE, empty_library)
+        library_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        library_title.setWordWrap(True)
+        self._empty_scan_button = QPushButton(text.PHOTO_EMPTY_LIBRARY_ACTION, empty_library)
+        self._empty_scan_button.clicked.connect(self._on_scan_clicked)
+        empty_library_layout.addStretch(1)
+        empty_library_layout.addWidget(library_title)
+        empty_library_layout.addWidget(
+            self._empty_scan_button, 0, Qt.AlignmentFlag.AlignHCenter,
+        )
+        empty_library_layout.addStretch(1)
+        self._photo_list_stack.addWidget(empty_library)  # index 1: 库中无照片
+        empty_filtered = QWidget(self)
+        empty_filtered_layout = QVBoxLayout(empty_filtered)
+        filtered_title = QLabel(text.PHOTO_EMPTY_FILTERED_TITLE, empty_filtered)
+        filtered_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        filtered_title.setWordWrap(True)
+        self._empty_clear_button = QPushButton(text.PHOTO_EMPTY_FILTERED_ACTION, empty_filtered)
+        self._empty_clear_button.clicked.connect(self._filter_bar.clear)
+        empty_filtered_layout.addStretch(1)
+        empty_filtered_layout.addWidget(filtered_title)
+        empty_filtered_layout.addWidget(
+            self._empty_clear_button, 0, Qt.AlignmentFlag.AlignHCenter,
+        )
+        empty_filtered_layout.addStretch(1)
+        self._photo_list_stack.addWidget(empty_filtered)  # index 2: 筛选无结果
+        busy_label = QLabel(text.PHOTO_EMPTY_BUSY, self)
+        busy_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        busy_label.setWordWrap(True)
+        self._photo_list_stack.addWidget(busy_label)  # index 3: 任务中
         layout.addWidget(self._photo_list_stack)
 
-        # 照片库页内工具栏：仅放选择态的删除登记（有选区才可用，Batch 2）。
-        library_bar = QToolBar(self)
-        library_bar.setObjectName("PhotoLibrary")
-        library_bar.addAction(self._delete_photos_action)
-        layout.addWidget(library_bar)
+        # Batch 4：双击照片打开只读详情（大预览 + 元数据，无同步原图 IO）。
+        self._photo_list.doubleClicked.connect(self._on_photo_double_clicked)
 
         # Wire thumbnail loads → model now that _photo_list_model exists.
         self._photo_list_controller.thumbnail_loaded.connect(
@@ -587,6 +629,9 @@ class MainWindow(QMainWindow):
         """Refresh one shared query snapshot after workspace mutations."""
         self._workspace_controller.refresh(self._effective_archive_root())
         self._render_workspace_actions()
+        # Batch 4：has_photos 随快照变化时空态页必须跟着重评估（模型行数信号
+        # 只反映照片墙，不反映就绪快照）——否则删光照片后仍停留在筛选空态。
+        self._update_photo_empty_state()
         self._overview_page.render_model(self._overview_presenter.build())
 
     def _render_workspace_actions(self) -> None:
@@ -607,6 +652,7 @@ class MainWindow(QMainWindow):
             else:
                 action.setEnabled(guidance.enabled)
                 action.setToolTip(guidance.tooltip)
+        self._update_bulk_bar()
         labels = {
             "import": text.WORKSPACE_NEXT_IMPORT, "scan": text.WORKSPACE_NEXT_SCAN,
             "review": text.WORKSPACE_NEXT_REVIEW, "settings": text.WORKSPACE_NEXT_SETTINGS,
@@ -640,9 +686,58 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, text.WORKSPACE_MODEL_HELP_TITLE, text.WORKSPACE_MODEL_HELP)
 
     def _update_photo_empty_state(self) -> None:
-        """Show the empty-state placeholder when the photo wall has no rows."""
-        empty = self._photo_list_model.rowCount() == 0
-        self._photo_list_stack.setCurrentIndex(1 if empty else 0)
+        """Pick the empty-state page — never confuse the two kinds of "none".
+
+        Rows present → the wall. Otherwise: a running task explains the wait,
+        a photo-less library invites scanning, and a filtered empty result
+        offers the one-click "clear filters" escape (Batch 4 decision).
+        """
+        if self._photo_list_model.rowCount() > 0:
+            self._photo_list_stack.setCurrentIndex(0)
+            return
+        if self._task_coordinator.is_busy:
+            self._photo_list_stack.setCurrentIndex(3)
+            return
+        status = self._workspace_controller.status
+        if status is not None and not status.has_photos:
+            self._photo_list_stack.setCurrentIndex(1)
+            return
+        self._photo_list_stack.setCurrentIndex(2)
+
+    def _update_bulk_bar(self) -> None:
+        """Show the context bulk bar only for a non-empty selection.
+
+        Buttons carry the exact selected count; with no selection the bar
+        disappears entirely and during a busy task both dangerous actions
+        stay disabled (Batch 1 admission + Batch 4 context rule).
+        """
+        count = len(self._collect_selected_photo_ids())
+        busy = self._task_coordinator.is_busy
+        for button, template in (
+            (self._bulk_archive_button, text.BULK_ARCHIVE_BUTTON),
+            (self._bulk_delete_button, text.BULK_DELETE_BUTTON),
+        ):
+            button.setVisible(count > 0)
+            button.setText(template.format(count=count))
+            button.setEnabled(count > 0 and not busy)
+
+    @Slot(object)
+    def _on_photo_double_clicked(self, index: object) -> None:
+        """Open the read-only detail dialog for the double-clicked photo."""
+        if not hasattr(index, "data"):
+            return
+        photo_id = index.data(PHOTO_ID_ROLE)
+        photo = self._photos_by_id.get(photo_id) if isinstance(photo_id, UUID) else None
+        if photo is None:
+            return
+        badge = index.data(STATUS_BADGE_ROLE)
+        thumbnail = index.data(THUMBNAIL_ROLE)
+        PhotoDetailDialog(
+            photo,
+            badge=str(badge) if badge else None,
+            thumbnail_path=thumbnail if isinstance(thumbnail, Path) else None,
+            parent=self,
+        ).exec()
 
     def _on_filter_changed(self, criteria: object) -> None:
         """Reload photos filtered by the supplied criteria, or all when None.
@@ -658,19 +753,7 @@ class MainWindow(QMainWindow):
         self._current_criteria = (
             criteria if isinstance(criteria, PhotoSearchCriteria) else None
         )
-        if not isinstance(criteria, PhotoSearchCriteria):
-            # None or unexpected type → fall back to unfiltered list.
-            self._refresh_photo_list()
-            return
-        photos = self._photo_list_controller.search_photos(criteria)
-        self._photo_list_model.load_photos(photos)
-        self._photo_list_model.set_status_badges(
-            self._photo_list_controller.status_badges(
-                [photo.id for photo in photos if photo.id is not None]
-            )
-        )
-        for photo in photos:
-            self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__
+        self._refresh_photo_list()
 
     def _build_status(self) -> None:
         """Create the status bar with progress, label and the cancel button.
@@ -716,6 +799,7 @@ class MainWindow(QMainWindow):
             self._status.clearMessage()
         self._render_workspace_actions()
         self._overview_page.set_busy(coordinator.is_busy, coordinator.label)
+        self._update_photo_empty_state()
         self._cancel_action.setEnabled(coordinator.can_cancel)
         self._cancel_action.setToolTip(
             STATUS_CANCELLING if coordinator.is_cancelling else
@@ -965,12 +1049,17 @@ class MainWindow(QMainWindow):
             if self._current_criteria is not None
             else self._photo_list_controller.list_photos()
         )
+        # Batch 4: identity map for the detail dialog + live result count.
+        self._photos_by_id = {
+            photo.id: photo for photo in photos if photo.id is not None
+        }
         self._photo_list_model.load_photos(photos)
         self._photo_list_model.set_status_badges(
             self._photo_list_controller.status_badges(
                 [photo.id for photo in photos if photo.id is not None]
             )
         )
+        self._filter_bar.set_result_count(len(photos))
         for photo in photos:
             self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__
 

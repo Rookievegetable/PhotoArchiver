@@ -2,14 +2,17 @@
 
 落 B2 裁决：筛选栏归 Presentation 层，发 ``criteria_changed`` 信号（持
 PhotoSearchCriteria 或 None）由 PhotoListController 接收调 SearchPhotosService。
-控件含人员下拉 + 状态下拉 + 日期区间（from/to）+ 清除按钮。
+控件含人员下拉 + 状态下拉 + 时间模式 + 清除按钮。
 
 状态下拉走 MatchStatus 三值，人员轴经 ``set_persons`` 供给（FEAT-P9-2）。
 两轴均为占位语义：下拉列表只含真实选项，未选中（currentIndex == -1）时
-闭合框内灰色占位（"全部" / "全部人员"）= 该轴不设约束。日期区间用
-QDateTimeEdit 双控件，各自由 "从"/"至" 复选框门控（Phase 9 FEAT-P9-1）：
-未勾选 = 该轴不设约束（QDateTimeEdit 恒有值，必须显式表达"未设置"），
-勾选后取控件当前值。
+闭合框内灰色占位（"全部" / "全部人员"）= 该轴不设约束。
+
+时间轴（Batch 4）：默认"全部时间"（无约束，起止控件隐藏）；仅当选择
+"自定义时间"才展开起止 QDateTimeEdit。开始时间晚于结束时间时**阻止发
+criteria**（保持上一个有效筛选生效）并显示内联修正提示——绝不静默渲染
+空结果。摘要行显示已生效条件与结果计数（计数经 ``set_result_count`` 由
+窗口在查询后回填）。
 """
 
 from __future__ import annotations
@@ -20,13 +23,13 @@ from uuid import UUID
 
 from PySide6.QtCore import QDateTime, Qt, Signal, QStringListModel
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QCompleter,
     QDateTimeEdit,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -40,10 +43,12 @@ from photo_archiver.presentation.person_matcher import rank_person_names
 from photo_archiver.presentation.ui_text import (
     FILTER_ALL_PERSONS,
     FILTER_CLEAR_BUTTON,
-    FILTER_FROM_CHECK,
+    FILTER_DATE_FORMAT,
+    FILTER_DATE_RANGE_INVALID,
     FILTER_FROM_TOOLTIP,
     FILTER_PERSON_LABEL,
     FILTER_PERSON_TOOLTIP,
+    FILTER_RESULT_COUNT,
     FILTER_STATUS_ALL,
     FILTER_STATUS_APPROVED,
     FILTER_STATUS_LABEL,
@@ -51,7 +56,15 @@ from photo_archiver.presentation.ui_text import (
     FILTER_STATUS_PLACEHOLDER_TOOLTIP,
     FILTER_STATUS_REJECTED,
     FILTER_STATUS_UNMATCHED,
-    FILTER_TO_CHECK,
+    FILTER_SUMMARY_NONE,
+    FILTER_SUMMARY_PERSON,
+    FILTER_SUMMARY_SEPARATOR,
+    FILTER_SUMMARY_STATUS,
+    FILTER_SUMMARY_TIME_FROM,
+    FILTER_SUMMARY_TIME_TO,
+    FILTER_TIME_ALL,
+    FILTER_TIME_CUSTOM,
+    FILTER_TIME_LABEL,
     FILTER_TO_TOOLTIP,
 )
 
@@ -64,25 +77,29 @@ class FilterBar(QWidget):
     query per B2-a decision) or debounce. Empty criteria (all axes unset) is
     emitted as ``None`` so the controller falls back to ``list_all``.
 
-    Date axes are gated by their "From"/"To" checkboxes: an unchecked box
-    means the axis carries no constraint, regardless of the edit's value
-    (QDateTimeEdit always holds a datetime, so the gate is the explicit
-    "unset" representation). ``from > to`` is passed through verbatim — the
-    repository range semantics simply match nothing (an honest empty result).
+    Date semantics (Batch 4): the time-mode combo defaults to "全部时间"
+    (no constraint, edits hidden). Picking "自定义时间" reveals both edits
+    and contributes their values. ``from > to`` blocks the emission — the
+    previous valid criteria stays in force and an inline hint explains the
+    fix, so an invalid range never silently renders an empty result.
     """
 
     criteria_changed = Signal(object)  # PhotoSearchCriteria | None
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Build the filter bar with person/status combos + gated date range."""
+        """Build the filter bar with person/status combos + time-mode axis."""
         super().__init__(parent)
         self._build_ui()
         self._wire_signals()
 
     def _build_ui(self) -> None:
-        """Lay out the filter controls horizontally."""
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(4, 2, 4, 2)
+        """Lay out the filter controls plus the summary and warning rows."""
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(4, 2, 4, 2)
+        outer.setSpacing(2)
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        outer.addLayout(layout)
 
         # Person axis — populated via set_persons(). 占位语义：下拉列表只含
         # 真实人员；未选中（currentIndex == -1）时闭合框内显示灰色占位
@@ -130,28 +147,28 @@ class FilterBar(QWidget):
         self._status_combo.setCurrentIndex(-1)
         layout.addWidget(self._status_combo)
 
-        # Date range axis — each edit gated by a checkbox (FEAT-P9-1): an
-        # unchecked box = axis unset (no constraint), checked = use the edit's
-        # current value. ``from > to`` is allowed and matches nothing.
-        self._from_check = QCheckBox(FILTER_FROM_CHECK, self)
-        layout.addWidget(self._from_check)
+        # Time mode axis (Batch 4): "全部时间" is the default — the from/to
+        # edits only appear (and only constrain) after picking "自定义时间".
+        layout.addWidget(QLabel(FILTER_TIME_LABEL, self))
+        self._time_mode_combo = QComboBox(self)
+        self._time_mode_combo.addItem(FILTER_TIME_ALL)
+        self._time_mode_combo.addItem(FILTER_TIME_CUSTOM)
+        layout.addWidget(self._time_mode_combo)
+
         self._from_edit = QDateTimeEdit(self)
         self._from_edit.setCalendarPopup(True)
-        self._from_edit.setEnabled(False)
         self._from_edit.setToolTip(FILTER_FROM_TOOLTIP)
         self._from_edit.setDateTime(QDateTime.currentDateTime().addYears(-1))
+        self._from_edit.setVisible(False)
         layout.addWidget(self._from_edit)
 
-        self._to_check = QCheckBox(FILTER_TO_CHECK, self)
-        layout.addWidget(self._to_check)
         self._to_edit = QDateTimeEdit(self)
         self._to_edit.setCalendarPopup(True)
-        self._to_edit.setEnabled(False)
         self._to_edit.setToolTip(FILTER_TO_TOOLTIP)
         self._to_edit.setDateTime(QDateTime.currentDateTime())
-        # P0-3: the To edit MUST join the layout — without addWidget it sat as
-        # an unmanaged child at (0,0,100,30), overlapping and blocking the
-        # Person axis (found via manual desktop smoke; Phase 9 FEAT-P9-1 gap).
+        self._to_edit.setVisible(False)
+        # P0-3 heritage: both edits MUST join the layout (unmanaged children
+        # overlapped the Person axis in the Phase 9 gap — never regress).
         layout.addWidget(self._to_edit)
 
         layout.addStretch(1)
@@ -159,24 +176,36 @@ class FilterBar(QWidget):
         self._clear_button = QPushButton(FILTER_CLEAR_BUTTON, self)
         layout.addWidget(self._clear_button)
 
+        # Summary row (Batch 4): effective conditions + live result count.
+        summary_row = QHBoxLayout()
+        self._summary_label = QLabel(FILTER_SUMMARY_NONE, self)
+        summary_row.addWidget(self._summary_label)
+        summary_row.addStretch(1)
+        self._count_label = QLabel("", self)
+        summary_row.addWidget(self._count_label)
+        outer.addLayout(summary_row)
+
+        # Inline validation (Batch 4): from > to blocks the query — the hint
+        # stays visible until corrected; never a silent empty result.
+        self._date_warning_label = QLabel(FILTER_DATE_RANGE_INVALID, self)
+        self._date_warning_label.setVisible(False)
+        self._date_warning_label.setWordWrap(True)
+        outer.addWidget(self._date_warning_label)
+
     def _wire_signals(self) -> None:
         """Connect control changes to emit criteria_changed."""
         self._person_combo.currentIndexChanged.connect(self._emit_criteria)
         self._status_combo.currentIndexChanged.connect(self._emit_criteria)
-        self._from_check.toggled.connect(self._on_from_gate_toggled)
-        self._to_check.toggled.connect(self._on_to_gate_toggled)
+        self._time_mode_combo.currentIndexChanged.connect(self._on_time_mode_changed)
         self._from_edit.dateTimeChanged.connect(self._emit_criteria)
         self._to_edit.dateTimeChanged.connect(self._emit_criteria)
         self._clear_button.clicked.connect(self.clear)
 
-    def _on_from_gate_toggled(self, checked: bool) -> None:
-        """Gate the From edit on its checkbox and re-emit criteria."""
-        self._from_edit.setEnabled(checked)
-        self._emit_criteria()
-
-    def _on_to_gate_toggled(self, checked: bool) -> None:
-        """Gate the To edit on its checkbox and re-emit criteria."""
-        self._to_edit.setEnabled(checked)
+    def _on_time_mode_changed(self, index: int) -> None:
+        """Custom time reveals both edits; all-time hides and unsets them."""
+        custom = index == 1
+        self._from_edit.setVisible(custom)
+        self._to_edit.setVisible(custom)
         self._emit_criteria()
 
     def _on_person_search_text_changed(self, text: str) -> None:
@@ -238,30 +267,45 @@ class FilterBar(QWidget):
         self._person_combo.setCurrentIndex(restore_index)
         self._emit_criteria()
 
+    def set_result_count(self, count: int) -> None:
+        """Backfill the live result count shown beside the conditions summary.
+
+        The bar cannot know result sizes (it only emits criteria); the window
+        calls this after each query so the count never lies about the list.
+        """
+        self._count_label.setText(FILTER_RESULT_COUNT.format(count=count))
+
     def _emit_criteria(self) -> None:
         """Build PhotoSearchCriteria from current control state and emit.
 
         Empty criteria (all axes unset / "All" placeholders) is emitted as
         ``None`` so the controller falls back to ``list_all`` rather than
-        forcing a trivially-true search.
+        forcing a trivially-true search. Batch 4: date values only constrain
+        in the custom-time mode, and ``from > to`` blocks the emission (the
+        previous valid criteria stays in force) with an inline hint — never
+        a silent empty result.
         """
         # Person ids travel the combo as strings (see set_persons); convert
         # back to the UUID the criteria VO expects.
         person_data = self._person_combo.currentData()
         person_id = UUID(person_data) if person_data else None
         status_value = self._status_combo.currentData()
-        # A gated-off date edit carries no constraint even though QDateTimeEdit
-        # always holds a value (the checkbox is the explicit "unset" state).
+        custom_time = self._time_mode_combo.currentIndex() == 1
         captured_from: datetime | None = (
             self._from_edit.dateTime().toPython()  # type: ignore[assignment]  # Qt opaquely returns object
-            if self._from_check.isChecked()
+            if custom_time
             else None
         )
         captured_to: datetime | None = (
             self._to_edit.dateTime().toPython()  # type: ignore[assignment]  # Qt opaquely returns object
-            if self._to_check.isChecked()
+            if custom_time
             else None
         )
+        if custom_time and captured_from and captured_to and captured_from > captured_to:
+            # Invalid range: keep the previous criteria in force, show why.
+            self._date_warning_label.setVisible(True)
+            return
+        self._date_warning_label.setVisible(False)
         if (
             person_id is None
             and status_value is None
@@ -269,6 +313,7 @@ class FilterBar(QWidget):
             and captured_to is None
         ):
             self.criteria_changed.emit(None)
+            self._update_summary(None, None, None, None)
             return
         match_status = None
         if status_value is not None:
@@ -280,14 +325,49 @@ class FilterBar(QWidget):
             captured_from=captured_from,
             captured_to=captured_to,
         )
+        person_name = (
+            self._person_combo.currentText()
+            if self._person_combo.currentIndex() >= 0
+            else None
+        )
+        status_name = (
+            self._status_combo.currentText()
+            if self._status_combo.currentIndex() >= 0
+            else None
+        )
         self.criteria_changed.emit(criteria)
+        self._update_summary(person_name, status_name, captured_from, captured_to)
+
+    def _update_summary(
+        self,
+        person_name: str | None,
+        status_name: str | None,
+        captured_from: datetime | None,
+        captured_to: datetime | None,
+    ) -> None:
+        """Render the effective-conditions text under the control row."""
+        parts: list[str] = []
+        if person_name:
+            parts.append(FILTER_SUMMARY_PERSON.format(name=person_name))
+        if status_name:
+            parts.append(FILTER_SUMMARY_STATUS.format(name=status_name))
+        if captured_from is not None:
+            parts.append(FILTER_SUMMARY_TIME_FROM.format(
+                date=captured_from.strftime(FILTER_DATE_FORMAT),
+            ))
+        if captured_to is not None:
+            parts.append(FILTER_SUMMARY_TIME_TO.format(
+                date=captured_to.strftime(FILTER_DATE_FORMAT),
+            ))
+        self._summary_label.setText(
+            FILTER_SUMMARY_SEPARATOR.join(parts) if parts else FILTER_SUMMARY_NONE,
+        )
 
     def clear(self) -> None:
         """Reset all axes to unset and emit criteria via the single _emit_criteria path.
 
-        与 _emit_criteria 逻辑单源：未勾选的日期轴在 _emit_criteria 判 None 分支
-        返 None，故 clear() 复位控件后调 _emit_criteria() 即可——避免 emit None
-        与 _emit_criteria 的判 None 逻辑二处维护。
+        与 _emit_criteria 逻辑单源：全部时间模式下日期轴在 _emit_criteria 判
+        None 分支返 None，故 clear() 复位控件后调 _emit_criteria() 即可。
         """
         self._person_combo.setCurrentIndex(-1)
         # combo 已 setEditable(True)，lineEdit() 运行时恒非空——守卫仅满足可空注解。
@@ -295,8 +375,7 @@ class FilterBar(QWidget):
         if line_edit is not None:
             line_edit.clear()
         self._status_combo.setCurrentIndex(-1)
-        self._from_check.setChecked(False)
-        self._to_check.setChecked(False)
+        self._time_mode_combo.setCurrentIndex(0)  # 回"全部时间"（隐藏起止编辑）
         self._from_edit.setDateTime(QDateTime.currentDateTime().addYears(-1))
         self._to_edit.setDateTime(QDateTime.currentDateTime())
         self._emit_criteria()

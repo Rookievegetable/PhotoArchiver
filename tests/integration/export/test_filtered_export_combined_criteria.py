@@ -161,12 +161,16 @@ def _select_status(window, index: int) -> None:
 
 
 def _set_date(window, *, frm: tuple | None = None, to: tuple | None = None) -> None:
+    # Batch 4 时间模式契约：仅"自定义时间"展开起止编辑并生效。先切模式
+    # （默认区间合法），再依次覆写起止值——各次 emission 均不会触发 from>to 拦截。
+    if frm is None and to is None:
+        return
+    bar = window._filter_bar
+    bar._time_mode_combo.setCurrentIndex(1)
     if frm is not None:
-        window._filter_bar._from_check.setChecked(True)
-        window._filter_bar._from_edit.setDateTime(QDateTime(*frm))
+        bar._from_edit.setDateTime(QDateTime(*frm))
     if to is not None:
-        window._filter_bar._to_check.setChecked(True)
-        window._filter_bar._to_edit.setDateTime(QDateTime(*to))
+        bar._to_edit.setDateTime(QDateTime(*to))
 
 
 # ── Export boundary doubles (Phase 7 established strategy) ──────────────────
