@@ -109,7 +109,9 @@ from photo_archiver.presentation.ui_text import (
     STATUS_CANCEL_FAILED,
     STATUS_EXPORTING,
     STATUS_IMPORTING_FILE,
+    STATUS_MATCH_SUMMARY,
     STATUS_MATCH_UNAVAILABLE,
+    STATUS_MATCH_UNREADABLE,
     STATUS_PENDING_REVIEW_COUNT,
     STATUS_READY,
     STATUS_SCAN_UNAVAILABLE,
@@ -905,7 +907,26 @@ class MainWindow(QMainWindow):
         """Reflect completion and refresh persisted results under current criteria."""
         self._progress.setValue(_PROGRESS_RESOLUTION)
         self._status_label.setText(STATUS_TASK_COMPLETED.format(label=task_label(event.task_name)))
+        self._append_match_summary(event)
         self._refresh_task_results(event.task_name)
+
+    def _append_match_summary(self, event: TaskCompleted) -> None:
+        """Append processed/found/unreadable counts after a match batch finishes.
+
+        AUDIT 2026-09-20: 473/473 unreadable photos used to look identical to
+        a clean empty run ("识别完成 · 0 条待审核"); the completion status must
+        carry the counts so read failures can never hide again.
+        """
+        results = event.result
+        if event.task_name != "match_persons" or not isinstance(results, tuple):
+            return
+        processed = len(results)
+        faces = sum(1 for result in results if getattr(result, "box", None) is not None)
+        unreadable = sum(1 for result in results if getattr(result, "read_failed", False))
+        summary = STATUS_MATCH_SUMMARY.format(processed=processed, faces=faces)
+        if unreadable:
+            summary += " · " + STATUS_MATCH_UNREADABLE.format(unreadable=unreadable)
+        self._status_label.setText(self._status_label.text() + " · " + summary)
 
     def _refresh_filter_persons(self) -> None:
         """Load the FilterBar person axis through the Application layer.

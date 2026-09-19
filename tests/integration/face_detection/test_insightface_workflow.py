@@ -21,6 +21,7 @@ from photo_archiver.ai import (
     InsightFaceDetector,
     InsightFaceRecognizer,
 )
+from photo_archiver.domain.exceptions import ImageUnreadableError
 from photo_archiver.domain.value_objects import FaceBox
 from photo_archiver.infrastructure.ai import InsightFaceLoader, ModelPackMissing
 
@@ -87,10 +88,15 @@ def test_recognizer_dimension_is_512(recognizer: InsightFaceRecognizer) -> None:
     assert recognizer.embedding_dimension() == 512
 
 
-def test_detector_returns_empty_for_unreadable_image(detector: InsightFaceDetector) -> None:
-    """An unreadable image must yield an empty box list, not an exception."""
-    boxes = detector.detect(Path("/nonexistent/photo.jpg"))
-    assert boxes == []
+def test_detector_raises_for_unreadable_image(detector: InsightFaceDetector) -> None:
+    """AUDIT 2026-09-20: an unreadable image raises ImageUnreadableError.
+
+    The old contract (empty list) made unreadable files indistinguishable
+    from "no face" and silently dropped 473/473 Chinese-path photos; the
+    service now reports them per photo via MatchResult.read_failed.
+    """
+    with pytest.raises(ImageUnreadableError):
+        detector.detect(Path("/nonexistent/photo.jpg"))
 
 
 def test_detector_raises_model_pack_missing_for_empty_dir(tmp_path: Path) -> None:

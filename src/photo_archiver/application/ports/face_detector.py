@@ -12,7 +12,11 @@ class FaceDetector(Protocol):
 
     Implementations MUST be deterministic given the same image bytes and MUST
     return an empty list (rather than raising) when no faces are found, so the
-    detection step never silently swallows a "no face" result.
+    detection step never silently swallows a "no face" result. An image that
+    cannot be read/decoded at all is a different situation: implementations
+    raise :class:`ImageUnreadableError` so callers can report the input
+    problem per photo instead of mistaking it for a faceless photo
+    (AUDIT 2026-09-20: Chinese-path photos were silently dropped this way).
 
     ISSUE-001 optimization: callers on the matching pipeline SHOULD prefer
     :meth:`detect_with_embeddings` so the recognizer does not re-detect the
@@ -28,6 +32,9 @@ class FaceDetector(Protocol):
         Returns:
             A list of :class:`FaceBox` instances, possibly empty. The order
             is implementation-defined but stable for a given input.
+
+        Raises:
+            ImageUnreadableError: When the file cannot be read or decoded.
         """
         ...
 
@@ -45,5 +52,8 @@ class FaceDetector(Protocol):
             A list of :class:`FaceBoxEmbedding` pairs, possibly empty. The
             order is implementation-defined but stable for a given input and
             consistent with :meth:`detect` for the same image.
+
+        Raises:
+            ImageUnreadableError: When the file cannot be read or decoded.
         """
         ...

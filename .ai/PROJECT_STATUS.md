@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.26.0 · Last Updated: 2026-09-19 · Status: Live
+> Version: 1.27.0 · Last Updated: 2026-09-20 · Status: Live
 
 ---
 
@@ -103,14 +103,12 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-19（本地 Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；AUDIT-UI 修复实施于 Batch 7 提交（`6a8fd73`）之后，owner 任务单立项 |
-| 会话范围 | AUDIT-UI-001（P1）+ AUDIT-UI-002 修复：Batch 7 集中视觉体系的 QSS 在 Qt 6.11.1 下整表解析失败导致主/次/危险层级、焦点环、空态卡片全部失效。仅改 `presentation/visual_style.py` 与 `tests/unit/presentation/test_visual_system.py`，不动业务语义/控制器/其他批次。 |
-| 根因与修复 | 根因：QSS 使用 `palette.Highlight` 点语法（Qt 6 仅支持 `palette(Role)` 函数形式），单条非法规则令 Qt 拒绝**整个**应用样式表（"Could not parse application stylesheet"，经 qInstallMessageHandler 实测捕获）；disabled 规则还误用了 `palette.Disabled palette.ButtonText` 双参写法。修复：① 全部改为 `palette(Highlight)`/`palette(ButtonText)` 等函数形式；② 禁用态改用 `:disabled` 伪态选择器（primary/danger 各自独立规则，disabled 不覆盖 enabled 危险红）；③ EmptyStateCard 单独处理——实测发现 Qt 6.11.1 普通 QWidget 背景绘制路径上**任何** `palette(角色)` 均坍缩为 Window 色（固定颜色正常渲染），故卡片改用主题中性 `rgba()` 半透明方案（明暗主题均可见 tint/边框/圆角），并补 `WA_StyledBackground`；证据与警告已写入模块 docstring 防回改。 |
-| 测试防线（AUDIT-UI-002） | 新增两层行为验证：① **Qt 解析捕获**——`test_production_stylesheet_parses_without_qt_warning`（生产样式表零解析警告）+ 负向对照 `test_broken_palette_syntax_is_detected_by_warning_capture`（故意注入旧点语法必须触发捕获，防检测器失效）；② **渲染像素探针**——primary 命中 palette(Highlight) 且异于普通按钮、danger 精确 #c62828、disabled 双角色脱离角色色且互相同色、焦点环聚焦边框==Highlight 且异于未聚焦、空态卡片背景/边框/圆角三重像素断言。静态守卫增强：`\bpalette\.[A-Za-z_]+` 与 `palette(Disabled` 双禁。负向实证：把样式表改回点语法后 primary==normal、danger 不红、焦点环消失——探针必然失败。专项 18 passed；presentation+导出+取消集成 335 passed。 |
-| 桌面复验（DV） | 真实 MainWindow（真实 bootstrap + 生产装配点 apply_visual_system）探针：DV-01 空库概览唯一 CTA=primary 且命中 Highlight、普通按钮非 Highlight = PASS；DV-02 Tab 遍历焦点移动 ≥3 且全部聚焦控件边框=Highlight = PASS；DV-06 归档确认试运行=primary/正式写入=danger红+取消默认 = PASS；DV-07 删除确认 OK=danger红+取消默认焦点 = PASS。首版探针取样点落在文字抗锯齿区导致误报，已改取顶部无文字条带；探针脚本存 `logs/probe/`（gitignored）。 |
-| 当前质量门 | 提交前实测（本轮）：`ruff check src tests` 通过；`mypy src` **201 source files** 无问题；完整 pytest **1043 passed / 6 skipped / 0 failed，205.45s，103 warnings**。 |
-| 工作区 | main；单提交入库（fix(ui)，2 files，+226/−21）；工作树干净、**未推送**（push 属 owner，GIT-020）。探针脚本不入库。 |
-| Remaining | **独立重新审计**（本任务单要求的下一步；不自行宣布 Batch 0–7 最终验收通过）· owner 按 `docs/development/ui-acceptance-script.md` 人工验收 · v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 待 owner 签核 · A-1 CURRENT_BATCH 导出挂起 · A-3 代码签名证书采购决策 · 上游 PySide6 issue 是否提交 · A-2 大库分块枚举（硬前置：上游并发缺陷结论）· 第 4 轮全面体检候审。 |
+| 时间 | 2026-09-20（本地 Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；AUDIT-UI 修复提交（`3d2e71d`）与验收自动化脚本（`30dedd2`）之后，owner 人工验收反馈两问题后立项 |
+| 会话范围 | 人工验收只读排查 + 改进项 1/2 修复。①排查：只读检查安装版日志（`%LOCALAPPDATA%\PhotoArchiver\Logs\`）与数据库，实证"识别完成·0条待审核"根因 = `cv2.imread` 不支持中文路径（473 张照片 946=2×473 条 could-not-read 警告，persisted 0）+ 导入名单"整组名字塞一格"成 9 条巨型人员 + `person_embeddings=0`（人脸样本登记能力缺失，产品能力边界）；产出 `docs/development/analysis-import-people.md` 与 `analysis-face-recognition.md`（含实证章节）。②修复改进项 1/2；改进项 3（导入防呆）与 4（人脸样本登记）**待 owner 业务方案**后立项。 |
+| 关键产出 | ① 新增域异常 `ImageUnreadableError`（domain/exceptions，ai 与 application 均可引用）；`InsightFaceDetector._read_and_detect` 改 `np.fromfile`+`cv2.imdecode`（Unicode 安全），不可解码/文件缺失抛异常——"无脸"与"读不了"从此可区分；端口 docstring 声明新契约。② `MatchResult` 新增 `read_failed: bool = False`；`MatchPersonsService._analyze_one` 捕获该异常 → `read_failed=True` 且不落识别记录（串行/并行同契约），新增 `_log_result_summary`（processed/faces_found/unreadable 汇总 INFO 日志）。③ 完成文案：`_on_completed` 对 match 任务追加「处理 N 张 · 检出人脸 M 张 · 无法读取 K 张（文件缺失或路径不可用）」，473/473 失败不再伪装"干净空跑"。④ 端到端实证：真实模型对中文路径照片（复刻验收目录形态）检出 1 张脸（512 维特征）；损坏文件正确抛异常。⑤ 测试：检测器测试重写为真实小图 + 中文路径回归 + 不可解码/文件缺失抛异常（8 项）；服务 read_failed 串行/并行双路径（15 项全绿）；UI 完成计数/无 result 干净路径（12 项）；集成旧契约测试改为新契约。⑥ 分析文档实证章节标注"已修复"。识别器 `extract` 路径的 `cv2.imread` 同型缺陷**未修**（当前生产流程不可达，留待 owner 人脸识别业务方案一并处理）。 |
+| 当前质量门 | 提交前实测（本轮）：`ruff check src tests` 通过（自动修 1 处）；`mypy src` **201 source files** 无问题；完整 pytest **1049 passed / 6 skipped / 0 failed，188.87s，103 warnings**。 |
+| 工作区 | main；修复以单提交入库（fix(recognition)，12 files）；另有分析文档 2 份（docs/development/analysis-*.md）随同入库；工作树干净、**未推送**（push 属 owner，GIT-020）。 |
+| Remaining | **owner：导入方案重设计与人脸识别业务优化（含人脸样本登记、识别器 extract 路径读图同型缺陷）的业务方案** · 人工验收重试（建议：正确格式名单 + 重跑识别观察计数文案）· owner Batch 7 + 整体 UI/UX 收口验收 · v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 签核 · A-1/A-3 决策 · 第 4 轮全面体检候审。 |
 
 ---
 

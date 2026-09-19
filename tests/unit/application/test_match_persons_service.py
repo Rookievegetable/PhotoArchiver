@@ -10,6 +10,7 @@ from photo_archiver.application.services import MatchPersonsService
 from photo_archiver.domain import (
     FaceEmbedding,
     FaceEmbeddingRepository,
+    ImageUnreadableError,
     RecognitionRepository,
 )
 from photo_archiver.domain.value_objects import FaceBox, FaceBoxEmbedding
@@ -455,3 +456,43 @@ def test_match_service_parallel_small_batch_single_final_flush(tmp_path: Path) -
     assert len(results) == 3
     assert recognition_repo.shards == [3]
     assert len(recognition_repo.added) == 3
+
+
+@pytest.mark.parametrize("max_workers", [1, 2])
+def test_match_service_reports_unreadable_images(tmp_path: Path, max_workers: int) -> None:
+    """AUDIT 2026-09-20：不可读文件按 read_failed 上报，不冒充"无脸"静默丢失。
+
+    串行与并行路径同契约：read_failed=True 的照片不产生识别记录，其余照片
+    照常产出；结果顺序不受影响。
+    """
+
+    class _UnreadableDetector(_StubDetector):
+        def detect_with_embeddings(self, image: Path) -> list:
+            if image.name == "broken.jpg":
+                raise ImageUnreadableError(f"could not decode image: {image}")
+            return self._pairs.get(image, [])
+
+    box = FaceBox(x1=0, y1=0, x2=10, y2=10)
+    embedding = FaceEmbedding((0.5,))
+    good = tmp_path / "good.jpg"
+    good.write_bytes(b"")
+    broken = tmp_path / "broken.jpg"
+    broken.write_bytes(b"")
+    recognition_repo = _StubRecognitionRepository()
+    service = MatchPersonsService(
+        detector=_UnreadableDetector({good: [FaceBoxEmbedding(box=box, embedding=embedding)]}),
+        recognizer=_StubRecognizer(embedding),
+        matcher=_StubMatcher(None),
+        face_embedding_repository=_StubFaceEmbeddingRepository({}),
+        recognition_repository=recognition_repo,
+        max_workers=max_workers,
+    )
+    id_good, id_broken = uuid4(), uuid4()
+    command = MatchPersonsCommand(photo_ids=(id_good, id_broken), images=(good, broken))
+
+    results = service.execute(command)
+
+    assert [r.photo_id for r in results] == [id_good, id_broken], "批次照常完成"
+    assert results[0].box == box and results[0].read_failed is False
+    assert results[1].read_failed is True and results[1].box is None
+    assert [r.photo_id for r in recognition_repo.added] == [id_good], "仅可读照片产生识别记录"

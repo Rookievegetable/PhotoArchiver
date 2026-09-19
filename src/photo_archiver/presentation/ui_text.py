@@ -37,6 +37,9 @@ TASK_LABELS = {
 STATUS_READY = "就绪"
 STATUS_TASK_STARTED = "{label}已开始"
 STATUS_TASK_COMPLETED = "{label}完成"
+# AUDIT 2026-09-20：识别完成必须区分"无脸"与"读图失败"，不得静默吞掉不可读照片。
+STATUS_MATCH_SUMMARY = "处理 {processed} 张 · 检出人脸 {faces} 张"
+STATUS_MATCH_UNREADABLE = "无法读取 {unreadable} 张（文件缺失或路径不可用）"
 STATUS_TASK_FAILED = "{label}失败。"
 STATUS_TASK_CANCELLED = "{label}已取消。"
 STATUS_CANCELLING = "正在请求取消；当前处理单元完成后停止，已完成部分会保留"

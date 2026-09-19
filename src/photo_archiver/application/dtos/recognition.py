@@ -69,9 +69,16 @@ class MatchCandidate:
 
 @dataclass(frozen=True, slots=True)
 class MatchResult:
-    """Outcome of matching one face embedding against known persons."""
+    """Outcome of matching one face embedding against known persons.
+
+    ``read_failed`` distinguishes an unreadable image file (input problem the
+    user can act on) from a successfully analysed photo with no detected face
+    (AUDIT 2026-09-20: both previously surfaced as ``box=None`` and 473/473
+    unreadable photos were silently reported as "识别完成 · 0 条待审核").
+    """
 
     photo_id: UUID
     box: FaceBox | None = None
     best: MatchCandidate | None = None
     candidates: tuple[MatchCandidate, ...] = field(default_factory=tuple)
+    read_failed: bool = False

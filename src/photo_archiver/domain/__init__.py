@@ -10,6 +10,7 @@ from photo_archiver.domain.entities import (
     RecognitionResult,
 )
 from photo_archiver.domain.exceptions import (
+    ImageUnreadableError,
     PhotoArchiverDomainError,
     RepositoryError,
     ValidationError,
@@ -62,6 +63,7 @@ __all__ = [
     "UnmatchedSentinel",
     "RecognitionRepository",
     "RecognitionResult",
+    "ImageUnreadableError",
     "RepositoryError",
     "ValidationError",
 ]

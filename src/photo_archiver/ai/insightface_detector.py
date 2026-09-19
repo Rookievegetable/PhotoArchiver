@@ -16,10 +16,12 @@ legacy ``detect`` method is retained for callers that only need boxes.
 from pathlib import Path
 
 import cv2
+import numpy as np
 from insightface.app import FaceAnalysis  # type: ignore[import-untyped]
 from loguru import logger
 
 from photo_archiver.ai.insightface_types import InsightFaceFace
+from photo_archiver.domain.exceptions import ImageUnreadableError
 from photo_archiver.domain.value_objects import FaceBox, FaceBoxEmbedding, FaceEmbedding
 
 
@@ -59,6 +61,9 @@ class InsightFaceDetector:
         Returns:
             A list of :class:`FaceBox` instances, possibly empty. The order
             matches InsightFace's internal detection order for a given input.
+
+        Raises:
+            ImageUnreadableError: When the file cannot be read or decoded.
         """
         faces = self._read_and_detect(image)
         boxes = [_to_face_box(face) for face in faces]
@@ -80,6 +85,9 @@ class InsightFaceDetector:
             A list of :class:`FaceBoxEmbedding` pairs, possibly empty. The
             order matches InsightFace's internal detection order for a given
             input and is consistent with :meth:`detect`.
+
+        Raises:
+            ImageUnreadableError: When the file cannot be read or decoded.
         """
         faces = self._read_and_detect(image)
         pairs = [
@@ -97,14 +105,25 @@ class InsightFaceDetector:
         """Read the image bytes and run the model once, returning InsightFace faces.
 
         Shared by :meth:`detect` and :meth:`detect_with_embeddings` so the
-        imread + ``analysis.get`` cost is paid exactly once per call. An
-        unreadable image returns an empty list rather than raising so callers
-        can treat "no face" and "unreadable" uniformly.
+        imread + ``analysis.get`` cost is paid exactly once per call.
+
+        AUDIT 2026-09-20 fix: the file is read with
+        ``np.fromfile`` + ``cv2.imdecode`` because ``cv2.imread`` cannot open
+        non-ASCII (e.g. Chinese) paths on Windows — every photo under a
+        Chinese directory silently returned None and was treated as
+        "no face". An undecodable file now raises
+        :class:`ImageUnreadableError` so the recognition pipeline can report
+        it honestly instead of dropping the photo; "no face detected" stays
+        an empty return.
         """
-        image_bytes = cv2.imread(str(image))
+        try:
+            encoded = np.fromfile(str(image), dtype=np.uint8)
+        except OSError as exc:
+            raise ImageUnreadableError(f"could not read image file: {image}") from exc
+        image_bytes = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
         if image_bytes is None:
-            logger.warning("InsightFaceDetector could not read image: {}", image)
-            return []
+            logger.warning("InsightFaceDetector could not decode image: {}", image)
+            raise ImageUnreadableError(f"could not decode image: {image}")
         return self._analysis.get(image_bytes, max_num=0)
 
 

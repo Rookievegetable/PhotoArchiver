@@ -32,6 +32,7 @@ from photo_archiver.application.use_cases import MatchPersonsUseCase
 from photo_archiver.domain import (
     FaceEmbedding,
     FaceEmbeddingRepository,
+    ImageUnreadableError,
     RecognitionRepository,
     RecognitionResult,
 )
@@ -129,7 +130,24 @@ class MatchPersonsService(MatchPersonsUseCase):
             total,
             len(candidates),
         )
+        self._log_result_summary(results)
         return tuple(results)
+
+    def _log_result_summary(self, results: tuple[MatchResult, ...] | list[MatchResult]) -> None:
+        """Log the processed/found/unreadable counts for one finished batch.
+
+        AUDIT 2026-09-20: read failures must be visible in the log even when
+        the UI path misses them — 473/473 unreadable photos previously left
+        only per-photo WARNINGs behind a "completed" run.
+        """
+        faces_found = sum(1 for result in results if result.box is not None)
+        unreadable = sum(1 for result in results if result.read_failed)
+        logger.info(
+            "MatchPersonsService summary: processed={}, faces_found={}, unreadable={}",
+            len(results),
+            faces_found,
+            unreadable,
+        )
 
     def _build_candidate_embeddings(self) -> dict[UUID, FaceEmbedding]:
         """Return ``person_id → embedding`` for every known person.
@@ -164,8 +182,9 @@ class MatchPersonsService(MatchPersonsUseCase):
         threads: ``candidates`` is a read-only snapshot shared by the whole
         batch and the InsightFace analysis session is thread-safe for
         inference. Returns ``(match_result, recognition_result)`` where
-        ``recognition_result`` is ``None`` when no face was detected —
-        mirroring the sequential path, which persists nothing in that case.
+        ``recognition_result`` is ``None`` when no face was detected or the
+        image was unreadable — mirroring the sequential path, which persists
+        nothing in those cases.
 
         ISSUE-001 fix retained: ``detect_with_embeddings`` does detection and
         embedding extraction in a single ``FaceAnalysis.get`` pass — the
@@ -175,37 +194,44 @@ class MatchPersonsService(MatchPersonsUseCase):
         """
         try:
             pairs = self._detector.detect_with_embeddings(image)
-            if not pairs:
-                logger.debug("No faces detected in photo {}", photo_id)
-                return MatchResult(photo_id=photo_id, box=None), None
-
-            best_pair = max(pairs, key=lambda p: p.box.confidence or 0.0)
-            embedding = best_pair.embedding
-            match = self._matcher.match(embedding, candidates)
-
-            person_id: UUID | None = None
-            confidence = 0.0
-            if match is not None:
-                person_id, confidence = match
-
-            logger.debug(
-                "Photo {} matched person={} confidence={:.3f}",
-                photo_id,
-                person_id,
-                confidence,
-            )
-            recognition = RecognitionResult(
-                photo_id=photo_id,
-                confidence=confidence,
-                person_id=person_id,
-            )
-            return MatchResult(photo_id=photo_id, box=best_pair.box), recognition
+        except ImageUnreadableError:
+            # AUDIT 2026-09-20: an unreadable file is an input problem the
+            # user can act on — surface it per photo (MatchResult.read_failed)
+            # instead of silently treating it as a faceless photo.
+            logger.warning("Photo {} image unreadable — reported as read failure", photo_id)
+            return MatchResult(photo_id=photo_id, box=None, read_failed=True), None
         except Exception:
             # §4.4 失败隔离——单张分析异常（模型推理/图像解码等）不中断整批：
             # 该照片降级为「无脸」结果（box=None、无识别记录，审批 UI 中保持
             # pending），批次其余照片照常完成。契约：本方法 never raises。
             logger.exception("Face analysis failed for photo {} — isolated", photo_id)
             return MatchResult(photo_id=photo_id, box=None), None
+
+        if not pairs:
+            logger.debug("No faces detected in photo {}", photo_id)
+            return MatchResult(photo_id=photo_id, box=None), None
+
+        best_pair = max(pairs, key=lambda p: p.box.confidence or 0.0)
+        embedding = best_pair.embedding
+        match = self._matcher.match(embedding, candidates)
+
+        person_id: UUID | None = None
+        confidence = 0.0
+        if match is not None:
+            person_id, confidence = match
+
+        logger.debug(
+            "Photo {} matched person={} confidence={:.3f}",
+            photo_id,
+            person_id,
+            confidence,
+        )
+        recognition = RecognitionResult(
+            photo_id=photo_id,
+            confidence=confidence,
+            person_id=person_id,
+        )
+        return MatchResult(photo_id=photo_id, box=best_pair.box), recognition
 
     def _execute_parallel(
         self,
@@ -265,6 +291,7 @@ class MatchPersonsService(MatchPersonsUseCase):
             total,
             len(candidates),
         )
+        self._log_result_summary(results)
         return tuple(results)
 
     def _report(self, current: int, total: int, message: str) -> None:

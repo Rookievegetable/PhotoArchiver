@@ -243,3 +243,43 @@ def test_cancel_action_forwards_cancellation_to_runnable(qtbot, tmp_path, monkey
     assert window._cancel_action.isEnabled() is False
     assert "正在请求取消；当前处理单元完成后停止，已完成部分会保留" in window._status_label.text()
 
+
+
+def test_completed_status_carries_match_counts(qtbot, tmp_path, monkeypatch) -> None:
+    """AUDIT 2026-09-20：完成文案必须携带 处理/检出人脸/无法读取 计数。
+
+    473/473 张读取失败曾与"干净空跑"显示完全相同（"识别完成 · 0 条待审核"），
+    读图失败不得再从完成状态里消失。
+    """
+    from uuid import uuid4
+
+    from photo_archiver.application.dtos import MatchResult
+
+    window = _make_window(qtbot, tmp_path, monkeypatch)
+    _, runnable = _stub_start(window, monkeypatch)
+    window._match_action.trigger()
+
+    results = (
+        MatchResult(photo_id=uuid4()),
+        MatchResult(photo_id=uuid4(), read_failed=True),
+        MatchResult(photo_id=uuid4(), read_failed=True),
+    )
+    runnable.signals.completed.emit(TaskCompleted("match_persons", "task_1", results))
+
+    status = window._status_label.text()
+    assert "处理 3 张" in status
+    assert "检出人脸 0 张" in status
+    assert "无法读取 2 张" in status
+    assert "待审核" in status  # 既有待审核计数仍保留
+
+
+def test_completed_status_without_result_stays_clean(qtbot, tmp_path, monkeypatch) -> None:
+    """无 result 的 completed（其余任务/旧替身）不得附加识别摘要。"""
+    window = _make_window(qtbot, tmp_path, monkeypatch)
+    _, runnable = _stub_start(window, monkeypatch)
+    window._match_action.trigger()
+
+    runnable.signals.completed.emit(TaskCompleted("match_persons", "task_1"))
+
+    status = window._status_label.text()
+    assert "处理" not in status and "无法读取" not in status
