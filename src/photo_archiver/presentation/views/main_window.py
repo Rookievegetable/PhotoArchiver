@@ -108,7 +108,12 @@ from photo_archiver.presentation.ui_text import (
     STATUS_CANCELLING,
     STATUS_CANCEL_FAILED,
     STATUS_EXPORTING,
-    STATUS_IMPORTING_FILE,
+    STATUS_IMPORT_CONFIRMED,
+    STATUS_IMPORT_CONFIRM_ERRORS,
+    STATUS_IMPORT_CONFIRM_WORKER,
+    STATUS_IMPORT_DRAFT_PARSED,
+    IMPORT_PREVIEW_TITLE,
+    IMPORT_PREVIEW_EMPTY_FILE,
     STATUS_MATCH_SUMMARY,
     STATUS_MATCH_UNAVAILABLE,
     STATUS_MATCH_UNREADABLE,
@@ -123,9 +128,18 @@ from photo_archiver.presentation.ui_text import (
     task_label,
 )
 from photo_archiver.presentation.views.archive_preview_dialog import ArchivePreviewDialog
-from photo_archiver.application.commands import DeletePersonCommand, DeletePhotosCommand
+from photo_archiver.application.commands import (
+    ConfirmImportCommand,
+    DeletePersonCommand,
+    DeletePhotosCommand,
+    ParseImportDraftCommand,
+)
 from photo_archiver.presentation.views.export_dialog import ExportDialog
 from photo_archiver.presentation.views.filter_bar import FilterBar
+from photo_archiver.presentation.views.import_preview_dialog import (
+    CONFIRM_SYNC_LIMIT,
+    ImportPreviewDialog,
+)
 from photo_archiver.presentation.views.person_deletion_dialog import PersonDeletionDialog
 from photo_archiver.presentation.views.photo_deletion_confirm_dialog import (
     PhotoDeletionConfirmDialog,
@@ -145,7 +159,7 @@ from photo_archiver.presentation.views.photo_list_model import (
 from photo_archiver.presentation.views.review_dialog import ReviewDialog
 from photo_archiver.presentation.views.settings_dialog import SettingsDialog
 from photo_archiver.plugins import PluginRegistry
-from photo_archiver.workers import QtWorkerRunnable
+from photo_archiver.workers import ConfirmImportTask, QtWorkerRunnable
 from photo_archiver.workers.events import (
     TaskCancelled,
     TaskCompleted,
@@ -884,8 +898,10 @@ class MainWindow(QMainWindow):
     def _refresh_task_results(self, task_name: str) -> None:
         # Failed/cancelled tasks may already have persisted a partial batch.
         try:
-            if task_name == "import_people":
-                # Refill the catalog without set_persons emitting transient criteria.
+            if task_name in ("import_people", "import_confirm"):
+                # Stage A: the large-roster confirm task reports as
+                # ``import_confirm`` (D6) — both names must refill the catalog
+                # without set_persons emitting transient criteria.
                 with QSignalBlocker(self._filter_bar):
                     self._refresh_filter_persons()
             self._refresh_photo_list()
@@ -982,16 +998,54 @@ class MainWindow(QMainWindow):
 
     @_exclusive(task_label("import_people"))
     def _on_import_clicked(self) -> None:
-        """Open a file picker and start the people-import workflow."""
+        """Open a file picker, parse a draft, preview, then confirm (stage A).
+
+        两段式：解析为草稿（同步，名单文件小且快）→ 预览对话框编辑/拆分/跳过
+        → 确认。确认 ≤500 行同步执行；>500 行提交 ConfirmImportTask 走 Worker
+        （D6）。取消（reject）保留草稿，不写正式人员。
+        """
         path, _ = QFileDialog.getOpenFileName(
             self, DIALOG_SELECT_PEOPLE_FILE, "", PEOPLE_FILE_FILTER
         )
         if not path:
             return
-        self._progress.setValue(0)
-        self._status_label.setText(STATUS_IMPORTING_FILE.format(path=path))
-        runnable = self._import_controller.import_from(Path(path))
-        self._connect_task_signals(runnable)
+        draft = self._context.services.parse_import_draft.execute(
+            ParseImportDraftCommand(Path(path)),
+        )
+        if not draft.rows:
+            QMessageBox.information(
+                self, IMPORT_PREVIEW_TITLE, IMPORT_PREVIEW_EMPTY_FILE,
+            )
+            return
+        dialog = ImportPreviewDialog(draft, self._context.services, Path(path), self)
+        if not dialog.exec():
+            # 取消：草稿保留（可回看），正式人员名单不变。
+            self._status_label.setText(STATUS_IMPORT_DRAFT_PARSED.format(rows=len(draft.rows)))
+            return
+        self._confirm_import(dialog.batch_id, dialog.row_count)
+
+    def _confirm_import(self, batch_id: UUID, row_count: int) -> None:
+        """Confirm a draft batch synchronously or via worker (D6 threshold)."""
+        if row_count > CONFIRM_SYNC_LIMIT:
+            runnable = self._context.worker_executor.submit(ConfirmImportTask(
+                self._context.services.confirm_import,
+                ConfirmImportCommand(batch_id),
+            ))  # type: ignore[arg-type]  # WorkerTask generics variance
+            self._progress.setRange(0, 0)
+            self._status_label.setText(STATUS_IMPORT_CONFIRM_WORKER)
+            self._connect_task_signals(runnable)
+            return
+        result = self._context.services.confirm_import.execute(ConfirmImportCommand(batch_id))
+        self._status_label.setText(STATUS_IMPORT_CONFIRMED.format(
+            imported=result.imported_count,
+            merged=result.merged_count,
+            skipped=result.skipped_count,
+        ) + (
+            STATUS_IMPORT_CONFIRM_ERRORS.format(count=len(result.errors))
+            if result.errors else ""
+        ))
+        self._refresh_filter_persons()
+        self._refresh_workspace_state()
 
     @_exclusive(ACTION_REVIEW_PENDING)
     def _on_review_clicked(self) -> None:

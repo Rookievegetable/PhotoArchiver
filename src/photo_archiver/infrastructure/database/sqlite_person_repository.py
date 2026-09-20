@@ -19,14 +19,17 @@ class SQLitePersonRepository(PersonRepository):
         with self._connection_provider.connect() as connection:
             connection.execute(
                 """
-                INSERT INTO people (id, name, identity, department, note, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO people (id, name, identity, department, note, created_at,
+                                    roster_order, source_batch_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     identity = excluded.identity,
                     department = excluded.department,
                     note = excluded.note,
-                    created_at = excluded.created_at
+                    created_at = excluded.created_at,
+                    roster_order = excluded.roster_order,
+                    source_batch_id = excluded.source_batch_id
                 """,
                 (
                     str(person.id),
@@ -35,6 +38,8 @@ class SQLitePersonRepository(PersonRepository):
                     person.department,
                     person.note,
                     datetime_to_text(person.created_at),  # type: ignore[arg-type]  # guaranteed non-None
+                    person.roster_order,
+                    str(person.source_batch_id) if person.source_batch_id is not None else None,
                 ),
             )
 
@@ -75,16 +80,19 @@ class SQLitePersonRepository(PersonRepository):
         return person_from_row(row) if row is not None else None
 
     def list_all(self) -> list[Person]:
-        """Return all known people in a stable order.
+        """Return all known people in a stable, roster-aware order.
 
-        Phase C (LIMIT-005): ``datetime.now()`` granularity on Windows makes
-        same-batch imports share a ``created_at`` — the old UUID tiebreak then
-        ordered the person axis randomly per launch (the "misplaced" filter
-        entries behind the Excel closed-loop flake). Names break ties
-        deterministically and survive VACUUM rewrites.
+        Stage A: people with a confirmed ``roster_order`` come first in that
+        order; legacy people (``roster_order IS NULL``, stage F will backfill)
+        follow in the pre-existing ``created_at, name, id`` order — which also
+        breaks ties deterministically (Phase C, LIMIT-005).
         """
         with self._connection_provider.connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM people ORDER BY created_at, name, id"
+                """
+                SELECT * FROM people
+                ORDER BY CASE WHEN roster_order IS NULL THEN 1 ELSE 0 END,
+                         roster_order, created_at, name, id
+                """
             ).fetchall()
         return [person_from_row(row) for row in rows]

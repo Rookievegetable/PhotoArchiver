@@ -32,8 +32,13 @@ def columns_to_path(raw_path: str, path_base: str) -> PhotoPath:
 
 
 def person_from_row(row: Row) -> Person:
-    """Convert a SQLite row to a Person entity."""
+    """Convert a SQLite row to a Person entity.
+
+    ``roster_order``/``source_batch_id`` are stage-A columns; the ``in row.keys()``
+    guards keep the mapper usable over hand-built rows in older tests.
+    """
     identity = PersonIdentity(row["identity"]) if row["identity"] is not None else None
+    source_batch = row["source_batch_id"] if "source_batch_id" in row.keys() else None
     return Person(
         id=UUID(row["id"]),
         name=row["name"],
@@ -41,6 +46,8 @@ def person_from_row(row: Row) -> Person:
         department=row["department"],
         note=row["note"],
         created_at=text_to_datetime(row["created_at"]),
+        roster_order=row["roster_order"] if "roster_order" in row.keys() else None,
+        source_batch_id=UUID(source_batch) if source_batch else None,
     )
 
 

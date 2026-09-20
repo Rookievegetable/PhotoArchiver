@@ -7,6 +7,8 @@ from pathlib import Path
 from photo_archiver.app.repositories import ApplicationRepositories
 from photo_archiver.application import (
     ArchiveExecutor,
+    ConfirmImportService,
+    ParseImportDraftService,
     ArchivePathBuilderService,
     ArchivePhotosService,
     ArchivePlanner,
@@ -34,6 +36,7 @@ from photo_archiver.application.services.workspace_readiness import WorkspaceRea
 from photo_archiver.infrastructure import (
     DispatchingPersonImportReader,
     ExcelPersonImportReader,
+    FileRosterTableReader,
     InMemoryUserSettingsStore,
     LocalPhotoFileScanner,
     PillowPhotoMetadataReader,
@@ -49,6 +52,8 @@ class ApplicationServices:
     """Use case services assembled for application runtime."""
 
     import_people: ImportPeopleService
+    parse_import_draft: ParseImportDraftService
+    confirm_import: ConfirmImportService
     register_photo: RegisterPhotoService
     scan_photo_folder: ScanPhotoFolderService
     scan_and_register_photos: ScanAndRegisterPhotosService
@@ -226,6 +231,16 @@ def build_application_services(
                 excel_reader=ExcelPersonImportReader(),
                 text_reader=TxtPersonImportReader(),
             ),
+            repositories.people,
+            unit_of_work=unit_of_work,
+        ),
+        parse_import_draft=ParseImportDraftService(
+            FileRosterTableReader(),
+            repositories.import_batches,
+            repositories.people,
+        ),
+        confirm_import=ConfirmImportService(
+            repositories.import_batches,
             repositories.people,
             unit_of_work=unit_of_work,
         ),

@@ -20,6 +20,11 @@ from photo_archiver.application.dtos.deletion import (
 )
 from photo_archiver.application.dtos.duplicates import DuplicateGroup, DuplicateReport
 from photo_archiver.application.dtos.export import ExportData, ExportScope
+from photo_archiver.application.dtos.import_draft import (
+    ImportConfirmResult,
+    ImportDraft,
+    RawRosterTable,
+)
 from photo_archiver.application.dtos.import_people import ImportPeopleResult, PersonImportRow
 from photo_archiver.application.dtos.photo_scan import PhotoScanItem, ScanPhotoFolderResult
 from photo_archiver.application.dtos.plugin_action_result import ActionResult, PluginReport
@@ -83,6 +88,8 @@ __all__ = [
     "FaceDetectionResult",
     "FaceRecognitionItem",
     "FaceRecognitionResult",
+    "ImportConfirmResult",
+    "ImportDraft",
     "ImportPeopleResult",
     "InvalidPreferencesError",
     "MAX_MATCH_THRESHOLD",
@@ -90,6 +97,7 @@ __all__ = [
     "MIN_MATCH_THRESHOLD",
     "MIN_MAX_WORKERS",
     "MatchCandidate",
+    "RawRosterTable",
     "MatchResult",
     "MissingPhotoItem",
     "PersonDeletionPreview",

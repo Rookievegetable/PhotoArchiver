@@ -8,6 +8,7 @@ from photo_archiver.infrastructure.database.sqlite_face_embedding_repository imp
     SQLiteFaceEmbeddingRepository,
 )
 from photo_archiver.infrastructure.database.sqlite_folder_repository import SQLiteFolderRepository
+from photo_archiver.infrastructure.database.sqlite_import_batch_repository import SQLiteImportBatchRepository
 from photo_archiver.infrastructure.database.sqlite_person_repository import SQLitePersonRepository
 from photo_archiver.infrastructure.database.sqlite_photo_repository import SQLitePhotoRepository
 from photo_archiver.infrastructure.database.sqlite_recognition_repository import (
@@ -20,6 +21,7 @@ __all__ = [
     "SQLiteConnectionProvider",
     "SQLiteFaceEmbeddingRepository",
     "SQLiteFolderRepository",
+    "SQLiteImportBatchRepository",
     "SQLitePersonRepository",
     "SQLitePhotoRepository",
     "SQLiteRecognitionRepository",

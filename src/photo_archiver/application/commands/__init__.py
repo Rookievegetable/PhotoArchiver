@@ -8,6 +8,11 @@ from photo_archiver.application.commands.deletion import (
     DisposeDuplicatesCommand,
     PruneMissingCommand,
 )
+from photo_archiver.application.commands.import_draft import (
+    ConfirmImportCommand,
+    ParseImportDraftCommand,
+    ReparseImportDraftCommand,
+)
 from photo_archiver.application.commands.import_people import ImportPeopleCommand
 from photo_archiver.application.commands.match_persons import MatchPersonsCommand
 from photo_archiver.application.commands.register_photo import RegisterPhotoCommand
@@ -20,7 +25,10 @@ __all__ = [
     "DeletePersonCommand",
     "DeletePhotosCommand",
     "DisposeDuplicatesCommand",
+    "ConfirmImportCommand",
     "ImportPeopleCommand",
+    "ParseImportDraftCommand",
+    "ReparseImportDraftCommand",
     "MatchPersonsCommand",
     "PruneMissingCommand",
     "RegisterPhotoCommand",

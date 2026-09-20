@@ -9,6 +9,7 @@ from photo_archiver.infrastructure.database import (
     SQLiteConnectionProvider,
     SQLiteFaceEmbeddingRepository,
     SQLiteFolderRepository,
+    SQLiteImportBatchRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
     SQLiteRecognitionRepository,
@@ -27,6 +28,7 @@ from photo_archiver.infrastructure.image import (
 from photo_archiver.infrastructure.importers import (
     DispatchingPersonImportReader,
     ExcelPersonImportReader,
+    FileRosterTableReader,
     TxtPersonImportReader,
 )
 from photo_archiver.infrastructure.persistence import (
@@ -42,6 +44,8 @@ __all__ = [
     "ContentHashCalculator",
     "CsvExporter",
     "DispatchingPersonImportReader",
+    "FileRosterTableReader",
+    "FileRosterTableReader",
     "ExcelExporter",
     "ExcelPersonImportReader",
     "InMemoryFolderRepository",
@@ -57,6 +61,7 @@ __all__ = [
     "SQLiteConnectionProvider",
     "SQLiteFaceEmbeddingRepository",
     "SQLiteFolderRepository",
+    "SQLiteImportBatchRepository",
     "SQLitePersonRepository",
     "SQLitePhotoRepository",
     "SQLiteRecognitionRepository",

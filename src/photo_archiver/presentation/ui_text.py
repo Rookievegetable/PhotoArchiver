@@ -29,6 +29,7 @@ ACTION_CANCEL_TASK = "取消任务"
 # WorkerTask.name（逻辑标识）→ 用户可见任务标签。
 TASK_LABELS = {
     "import_people": "人员导入",
+    "import_confirm": "导入确认",
     "scan_and_register_photos": "扫描",
     "match_persons": "人脸识别",
     "archive_photos": "归档",
@@ -37,6 +38,46 @@ TASK_LABELS = {
 STATUS_READY = "就绪"
 STATUS_TASK_STARTED = "{label}已开始"
 STATUS_TASK_COMPLETED = "{label}完成"
+
+# ---- 导入预览与确认（人员导入重设计 阶段 A） ----
+IMPORT_PREVIEW_TITLE = "导入预览与确认"
+IMPORT_PREVIEW_FILE_LABEL = "文件："
+IMPORT_PREVIEW_ENCODING_LABEL = "编码："
+IMPORT_PREVIEW_DELIMITER_LABEL = "分隔符："
+IMPORT_PREVIEW_SHEET_LABEL = "工作表："
+IMPORT_PREVIEW_HEADER_LABEL = "首行为表头"
+IMPORT_PREVIEW_REPARSE_BUTTON = "重新解析"
+IMPORT_PREVIEW_COL_RAW = "原始内容"
+IMPORT_PREVIEW_COL_NAME = "姓名"
+IMPORT_PREVIEW_COL_IDENTITY = "工号"
+IMPORT_PREVIEW_COL_DEPARTMENT = "部门"
+IMPORT_PREVIEW_COL_NOTE = "备注"
+IMPORT_PREVIEW_COL_WARNINGS = "告警"
+IMPORT_PREVIEW_COL_ACTION = "处理动作"
+IMPORT_PREVIEW_ACTION_CREATE = "新建人员"
+IMPORT_PREVIEW_ACTION_MERGE = "合并到已有人员"
+IMPORT_PREVIEW_ACTION_SKIP = "跳过"
+IMPORT_PREVIEW_SPLIT_BUTTON = "拆分"
+IMPORT_PREVIEW_COUNTS = "将新建 {create} · 合并 {merge} · 跳过 {skip} · 告警 {warnings}"
+IMPORT_PREVIEW_CONFIRM_BUTTON = "确认导入"
+IMPORT_PREVIEW_CANCEL_BUTTON = "取消"
+IMPORT_PREVIEW_EMPTY_FILE = "文件中没有可导入的数据行。"
+IMPORT_PREVIEW_CONFIRM_LARGE = "名单超过 {limit} 行，确认将在后台执行，完成后状态栏显示结果。"
+# 告警 code → 中文模板（与解析服务的结构化告警一一对应）
+IMPORT_WARNING_TEXTS = {
+    "empty_name": "姓名为空，默认跳过",
+    "multi_name": "该单元格疑似包含 {detail} 个姓名，可点击「拆分」",
+    "group_title": "疑似组标题（{detail}），默认跳过，不作为人员写入",
+    "identity_duplicate_in_file": "工号在名单内重复（强冲突）：{detail}，默认跳过",
+    "identity_duplicate_db": "工号与库内已有人员重复（强冲突），将合并名单顺序",
+    "name_department_duplicate_in_file": "姓名+部门在名单内重复（弱冲突）",
+    "name_department_duplicate_db": "姓名+部门与库内已有人员重复（弱冲突），将合并名单顺序",
+}
+IMPORT_PREVIEW_DEFAULT_WARNING = "{code}: {detail}"  # 未知告警兜底
+STATUS_IMPORT_DRAFT_PARSED = "已解析 {rows} 行草稿，请在预览中确认。"
+STATUS_IMPORT_CONFIRMED = "导入完成：新建 {imported} · 合并 {merged} · 跳过 {skipped}"
+STATUS_IMPORT_CONFIRM_ERRORS = "；{count} 行失败（详情见日志）"
+STATUS_IMPORT_CONFIRM_WORKER = "导入确认已提交后台执行，完成后显示结果。"
 # AUDIT 2026-09-20：识别完成必须区分"无脸"与"读图失败"，不得静默吞掉不可读照片。
 STATUS_MATCH_SUMMARY = "处理 {processed} 张 · 检出人脸 {faces} 张"
 STATUS_MATCH_UNREADABLE = "无法读取 {unreadable} 张（文件缺失或路径不可用）"
@@ -56,7 +97,7 @@ STATUS_PENDING_REVIEW_COUNT = "{count} 条识别结果待审核"
 # ---- 主窗口 · 对话框与流程提示 ----
 DIALOG_SELECT_PHOTO_FOLDER = "选择照片文件夹"
 DIALOG_SELECT_PEOPLE_FILE = "选择人员文件"
-PEOPLE_FILE_FILTER = "人员文件 (*.txt *.csv *.xlsx *.xlsm)"
+PEOPLE_FILE_FILTER = "人员文件 (*.csv *.tsv *.txt *.xlsx *.xlsm *.xls)"
 STATUS_SCANNING_FOLDER = "正在扫描 {folder} …"
 STATUS_IMPORTING_FILE = "正在导入 {path} …"
 STATUS_ARCHIVING = "正在归档…"

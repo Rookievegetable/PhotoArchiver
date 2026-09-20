@@ -6,9 +6,11 @@ from photo_archiver.application.services.archive_photos_service import ArchivePh
 from photo_archiver.application.services.archive_planner import ArchivePlanner
 from photo_archiver.application.services.backfill_capture_time_service import BackfillCaptureTimeService
 from photo_archiver.application.services.backfill_content_hash_service import BackfillContentHashService
+from photo_archiver.application.services.confirm_import_service import ConfirmImportService
 from photo_archiver.application.services.delete_person_service import DeletePersonService
 from photo_archiver.application.services.delete_photos_service import DeletePhotosService
 from photo_archiver.application.services.detect_duplicates_service import DetectDuplicatesService
+from photo_archiver.application.services.parse_import_draft_service import ParseImportDraftService
 from photo_archiver.application.services.dispose_duplicates_service import DisposeDuplicatesService
 from photo_archiver.application.services.export_service import ExportService
 from photo_archiver.application.services.import_people_service import ImportPeopleService
@@ -40,10 +42,12 @@ __all__ = [
     "DeletePhotosService",
     "DetectDuplicatesService",
     "DisposeDuplicatesService",
+    "ConfirmImportService",
     "ExportService",
     "ImportPeopleService",
     "ListPersonsService",
     "MatchPersonsService",
+    "ParseImportDraftService",
     "PluginContextService",
     "CleanupThumbnailCacheService",
     "PruneMissingPhotosService",

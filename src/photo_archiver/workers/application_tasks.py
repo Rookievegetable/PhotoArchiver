@@ -8,6 +8,7 @@ from photo_archiver.application.commands import (
 )
 from photo_archiver.application.dtos import (
     ArchiveResult,
+    ImportConfirmResult,
     ImportPeopleResult,
     MatchResult,
     ScanAndRegisterPhotosResult,
@@ -77,6 +78,34 @@ class ScanAndRegisterPhotosTask(WorkerTask[ScanAndRegisterPhotosResult]):
             "Photo scan finished",
             current=result.registered_count + result.skipped_count + result.failed_count,
             total=result.discovered_count,
+        )
+        return result
+
+
+class ConfirmImportTask(WorkerTask[ImportConfirmResult]):
+    """Confirm a draft import batch as a worker task (batches > 500 rows).
+
+    Stage A of the people-import redesign: the confirmation writes people in
+    one transaction; large rosters run off the UI thread through the shared
+    worker executor while small ones confirm synchronously in the dialog.
+    """
+
+    def __init__(self, use_case, command) -> None:  # noqa: ANN001
+        """Initialize with the confirm use case and the batch command."""
+        super().__init__("import_confirm")
+        self._use_case = use_case
+        self._command = command
+
+    def execute(self) -> "ImportConfirmResult":
+        """Execute the confirmation and emit a finish progress marker."""
+        self.raise_if_cancelled()
+        self.report_progress("Confirming imported people")
+        result = self._use_case.execute(self._command)
+        self.raise_if_cancelled()
+        self.report_progress(
+            "Import confirmation finished",
+            current=result.imported_count + result.merged_count,
+            total=result.imported_count + result.merged_count + result.skipped_count,
         )
         return result
 

@@ -7,6 +7,7 @@ from photo_archiver.domain import (
     ArchiveRecordRepository,
     FaceEmbeddingRepository,
     FolderRepository,
+    ImportBatchRepository,
     PersonRepository,
     PhotoRepository,
     RecognitionRepository,
@@ -16,6 +17,7 @@ from photo_archiver.infrastructure import (
     SQLiteConnectionProvider,
     SQLiteFaceEmbeddingRepository,
     SQLiteFolderRepository,
+    SQLiteImportBatchRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
     SQLiteRecognitionRepository,
@@ -33,6 +35,7 @@ class ApplicationRepositories:
     archive_records: ArchiveRecordRepository
     recognition: RecognitionRepository
     face_embeddings: FaceEmbeddingRepository
+    import_batches: ImportBatchRepository
 
 
 def build_sqlite_repositories(database_path: Path) -> ApplicationRepositories:
@@ -52,4 +55,5 @@ def build_sqlite_repositories(database_path: Path) -> ApplicationRepositories:
         archive_records=SQLiteArchiveRecordRepository(connection_provider),
         recognition=SQLiteRecognitionRepository(connection_provider),
         face_embeddings=SQLiteFaceEmbeddingRepository(connection_provider),
+        import_batches=SQLiteImportBatchRepository(connection_provider),
     )

@@ -4,6 +4,8 @@ from photo_archiver.domain.entities import (
     ArchiveRecord,
     ArchiveStatus,
     Folder,
+    ImportBatch,
+    ImportDraftRow,
     MatchStatus,
     Person,
     Photo,
@@ -17,6 +19,7 @@ from photo_archiver.domain.exceptions import (
 )
 from photo_archiver.domain.repositories import (
     ArchiveRecordRepository,
+    ImportBatchRepository,
     FaceEmbeddingRepository,
     FolderRepository,
     PersonRepository,
@@ -41,6 +44,7 @@ __all__ = [
     "ArchivePath",
     "ArchiveRecord",
     "ArchiveRecordRepository",
+    "ImportBatchRepository",
     "ArchiveStatus",
     "FaceBox",
     "FaceBoxEmbedding",
@@ -48,6 +52,8 @@ __all__ = [
     "FaceEmbeddingRepository",
     "Folder",
     "FolderRepository",
+    "ImportBatch",
+    "ImportDraftRow",
     "MatchStatus",
     "Person",
     "PersonIdentity",

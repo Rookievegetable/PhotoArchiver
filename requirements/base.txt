@@ -10,6 +10,9 @@ PySide6==6.11.1
 # Step 14 Export uses openpyxl directly. pandas reserved for future stats/reporting.
 pandas==2.3.1
 openpyxl==3.1.5
+# xlrd: legacy .xls roster support (D1, owner-approved 2026-09-20) —
+# openpyxl cannot read the binary .xls format. Binary roster parsing only.
+xlrd==2.0.1
 
 # ---------- Image ----------
 # numpy: direct runtime dependency — hard requirement of opencv-python and

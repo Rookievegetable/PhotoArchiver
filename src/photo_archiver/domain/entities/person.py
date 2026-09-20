@@ -10,7 +10,12 @@ from photo_archiver.domain.value_objects import PersonIdentity
 
 @dataclass(slots=True)
 class Person:
-    """Represent a person whose photos can be archived."""
+    """Represent a person whose photos can be archived.
+
+    ``roster_order`` is the user-confirmed roster sequence (import redesign
+    stage A; ``None`` for legacy people until stage F backfills it) and
+    ``source_batch_id`` traces the import batch a person came from.
+    """
 
     name: str
     id: UUID | None = None
@@ -18,6 +23,8 @@ class Person:
     department: str | None = None
     note: str | None = None
     created_at: datetime | None = None
+    roster_order: int | None = None
+    source_batch_id: UUID | None = None
 
     def __post_init__(self) -> None:
         """Validate person fields and initialize generated values."""
