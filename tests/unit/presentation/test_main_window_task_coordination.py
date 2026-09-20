@@ -13,11 +13,14 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from photo_archiver.app import bootstrap_application
 from photo_archiver.application.dtos.export import ExportScope
+from photo_archiver.application.dtos.import_draft import ImportDraft
 from photo_archiver.application.dtos.workspace import ModelAvailability, WorkspaceStatus
 from photo_archiver.domain import MatchStatus, PhotoSearchCriteria
+from photo_archiver.domain.entities import ImportBatch, ImportDraftRow
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.presentation.ui_text import STATUS_CANCELLING, TASK_LABELS
 from photo_archiver.presentation.views import main_window as module
+from photo_archiver.presentation.views.import_preview_dialog import CONFIRM_SYNC_LIMIT
 from photo_archiver.presentation.views.main_window import MainWindow
 from photo_archiver.workers.events import TaskCancelled, TaskCompleted, TaskFailed, TaskProgress
 from photo_archiver.workers.qt_executor import QtWorkerSignals
@@ -72,6 +75,33 @@ def window(qtbot, tmp_path, monkeypatch):
     return window
 
 
+def _stage_a_parse_and_dialog_doubles(window, monkeypatch):
+    """Stage A two-stage doubles for the import entry.
+
+    The parse service is faked to a persisted-looking draft with
+    ``CONFIRM_SYNC_LIMIT + 1`` rows, so the window's confirm takes the Worker
+    path (submission via ``worker_executor.submit``) — the point these tests
+    stub. The preview dialog auto-accepts (same modal doubling policy as the
+    export/archive dialogs above).
+    """
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: ("people.txt", ""))
+    batch = ImportBatch(file_name="people.txt", file_hash="stub", source_type="txt")
+    rows = [
+        ImportDraftRow(batch_id=batch.id, source_row=index, parsed_name=f"人员{index}")
+        for index in range(1, CONFIRM_SYNC_LIMIT + 2)
+    ]
+    draft = ImportDraft(batch=batch, rows=rows, header=None, field_mapping={"name": 0})
+    monkeypatch.setattr(
+        window._context.services.parse_import_draft, "execute", lambda command: draft,
+    )
+    monkeypatch.setattr(
+        module, "ImportPreviewDialog",
+        lambda *a, **k: SimpleNamespace(
+            exec=lambda: 1, batch_id=batch.id, row_count=len(rows),
+        ),
+    )
+
+
 def prepare(window, monkeypatch, tmp_path, name, runnable):
     """Use real controller wiring, stub only submission/preparation."""
     dialog = SimpleNamespace(
@@ -79,8 +109,10 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
         format_name="csv", conflict_strategy="skip", dry_run=False,
     )
     if name == "import_people":
-        monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a: ("people.txt", ""))
-        controller, method, entry = window._import_controller, "import_from", "import"
+        # Stage A: parse/dialog doubled; confirm (>CONFIRM_SYNC_LIMIT rows)
+        # submits ConfirmImportTask through the shared worker executor.
+        _stage_a_parse_and_dialog_doubles(window, monkeypatch)
+        controller, method, entry = window._context.worker_executor, "submit", "import"
     elif name == "scan_and_register_photos":
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a: str(tmp_path))
         controller, method, entry = window._scan_controller, "scan_folder", "scan"
@@ -100,7 +132,7 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
     return getattr(window, f"_on_{entry}_clicked"), submit
 
 
-@pytest.mark.parametrize("name", list(TASK_LABELS))
+@pytest.mark.parametrize("name", [n for n in TASK_LABELS if n != "import_confirm"])
 def test_five_tasks_block_every_conflicting_entry_and_cancel_correctly(
     window, monkeypatch, tmp_path, name,
 ):
@@ -135,7 +167,7 @@ def test_five_tasks_block_every_conflicting_entry_and_cancel_correctly(
     assert [(a.isEnabled(), a.toolTip()) for a in window._conflicting_actions] == original
 
 
-@pytest.mark.parametrize("name", list(TASK_LABELS))
+@pytest.mark.parametrize("name", [n for n in TASK_LABELS if n != "import_confirm"])
 @pytest.mark.parametrize("kind", ["completed", "failed", "cancelled"])
 def test_all_early_terminals_release_and_refresh_once(window, monkeypatch, tmp_path, name, kind):
     event = {"completed": TaskCompleted(name), "failed": TaskFailed(name, ValueError("bad")),

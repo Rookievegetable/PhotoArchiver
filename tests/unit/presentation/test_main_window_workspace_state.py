@@ -12,10 +12,13 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QPushButton
 
+from photo_archiver.application.dtos.import_draft import ImportDraft
 from photo_archiver.application.dtos.workspace import ModelAvailability, WorkspaceStatus
 from photo_archiver.domain import Photo, PhotoPath
+from photo_archiver.domain.entities import ImportBatch, ImportDraftRow
 from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.views import main_window as module
+from photo_archiver.presentation.views.import_preview_dialog import CONFIRM_SYNC_LIMIT
 from photo_archiver.presentation.views.main_window import MainWindow
 from photo_archiver.workers.events import TaskCancelled, TaskCompleted, TaskFailed
 from photo_archiver.workers.qt_executor import QtWorkerSignals
@@ -134,8 +137,7 @@ def test_cancel_tooltip_transitions_preserve_one_shot_request(workspace, monkeyp
     window = workspace.window
     assert window._cancel_action.toolTip() == text.WORKSPACE_CANCEL_IDLE
     runnable = Runnable()
-    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *args: ("people.txt", ""))
-    monkeypatch.setattr(window._import_controller, "import_from", Mock(return_value=runnable))
+    _stage_a_import_doubles(window, monkeypatch, runnable)
     window._on_import_clicked()
     assert window._cancel_action.isEnabled()
     assert window._cancel_action.toolTip() == text.WORKSPACE_CANCEL_READY
@@ -179,6 +181,35 @@ class Runnable:
         pass
 
 
+def _stage_a_import_doubles(window, monkeypatch, runnable) -> None:
+    """Stage A two-stage doubles for the import entry.
+
+    The parse service is faked to a draft with ``CONFIRM_SYNC_LIMIT + 1`` rows
+    so the confirm submits through ``worker_executor.submit`` (which this
+    helper re-stubs to return the test runnable, overriding the fixture's
+    no-worker guard for this specific flow); the preview dialog auto-accepts.
+    """
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *args, **kwargs: ("people.txt", ""))
+    batch = ImportBatch(file_name="people.txt", file_hash="stub", source_type="txt")
+    rows = [
+        ImportDraftRow(batch_id=batch.id, source_row=index, parsed_name=f"人员{index}")
+        for index in range(1, CONFIRM_SYNC_LIMIT + 2)
+    ]
+    draft = ImportDraft(batch=batch, rows=rows, header=None, field_mapping={"name": 0})
+    monkeypatch.setattr(
+        window._context.services.parse_import_draft, "execute", lambda command: draft,
+    )
+    monkeypatch.setattr(
+        module, "ImportPreviewDialog",
+        lambda *a, **k: SimpleNamespace(
+            exec=lambda: 1, batch_id=batch.id, row_count=len(rows),
+        ),
+    )
+    monkeypatch.setattr(
+        window._context.worker_executor, "submit", Mock(return_value=runnable),
+    )
+
+
 @pytest.mark.parametrize("kind", ["completed", "failed", "cancelled"])
 @pytest.mark.parametrize("initial, latest", [(EMPTY, READY), (READY, EMPTY)])
 def test_terminal_refresh_restores_latest_not_pre_task_action_state(
@@ -189,8 +220,7 @@ def test_terminal_refresh_restores_latest_not_pre_task_action_state(
     workspace.state.value = initial
     window._refresh_workspace_state()
     runnable = Runnable()
-    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *args: ("people.txt", ""))
-    monkeypatch.setattr(window._import_controller, "import_from", Mock(return_value=runnable))
+    _stage_a_import_doubles(window, monkeypatch, runnable)
     window._on_import_clicked()
     assert window._task_coordinator.is_busy
     assert all(not action.isEnabled() for action in window._conflicting_actions)

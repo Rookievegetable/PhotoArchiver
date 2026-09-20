@@ -105,9 +105,30 @@ def test_loaded_plugin_action_obeys_window_admission(
     execute = Mock(return_value=ActionResult(status="success", message="done"))
     monkeypatch.setattr(plugin, "execute_action", execute)
     monkeypatch.setattr(QMessageBox, "information", Mock(return_value=0))
-    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a: ("people.txt", ""))
-    runnable = SimpleNamespace(signals=QtWorkerSignals(), replay_pending_terminal=lambda: None)
-    monkeypatch.setattr(window._import_controller, "import_from", lambda *a: runnable)
+    monkeypatch.setattr(QMessageBox, "warning", Mock(return_value=0))
+
+    # 阶段 A 两段式导入入口：文件选择器 + 预览对话框为既有模态边界替身；编写
+    # >CONFIRM_SYNC_LIMIT 行以确保确认走 Worker 提交点（本测试替身以确定性
+    # 控制终态时点，否则同步确认会阻塞窗口线程）。
+    from photo_archiver.presentation.views import main_window as main_window_module
+    from photo_archiver.presentation.views.import_preview_dialog import CONFIRM_SYNC_LIMIT
+
+    people_txt = tmp_path / "people_501.txt"
+    lines = ["姓名,工号"] + [
+        f"人员{index:04d},T{index:04d}" for index in range(1, CONFIRM_SYNC_LIMIT + 2)
+    ]
+    people_txt.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a: (str(people_txt), ""))
+
+    class _AutoAcceptPreviewDialog(main_window_module.ImportPreviewDialog):
+        def exec(self) -> int:
+            return 1
+
+    monkeypatch.setattr(main_window_module, "ImportPreviewDialog", _AutoAcceptPreviewDialog)
+    runnable = SimpleNamespace(
+        signals=QtWorkerSignals(), replay_pending_terminal=lambda: None,
+    )
+    monkeypatch.setattr(window._context.worker_executor, "submit", lambda task: runnable)
     window._on_import_clicked()
     assert not action.isEnabled()
     assert "人员导入" in action.toolTip()

@@ -1,16 +1,17 @@
 """P0-3 Excel import UI closed loop (real chain, integration).
 
-Proves the real production path from the user entry to visible state:
+Proves the real production path from the user entry to visible state
+(people-import redesign stage A: two-stage draft flow):
 
     real .xlsx file → real "导入人员" QAction → real file-picker boundary
-    (modal double) → real ImportPeopleController → real worker task → real
-    ImportPeopleService → real DispatchingPersonImportReader → real
-    ExcelPersonImportReader (openpyxl) → real Person domain mapping → real
+    (modal double) → real ParseImportDraftService → real
+    FileRosterTableReader (openpyxl) → real ImportPreviewDialog (modal exec
+    double, real construction) → real ConfirmImportService → real
     SQLitePersonRepository → real SQLite → real repository reads → real
     FilterBar person-combo refresh.
 
-Nothing in the core chain is mocked; only the modal QFileDialog is doubled,
-per the established test policy for modal dialogs.
+Nothing in the core chain is mocked; only the two modal boundaries
+(file picker, dialog.exec) are doubled, per the established test policy.
 """
 
 import pytest
@@ -68,23 +69,25 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
         lambda *args, **kwargs: (picked.append(args) or workbook_path, FILTER_DIALOG_TITLE),
     )
 
+    # Stage A modal boundary: the preview dialog constructs for real (parse
+    # already ran synchronously) but exec() accepts immediately — the window
+    # then confirms synchronously (2 rows ≤ CONFIRM_SYNC_LIMIT).
+    class _AutoAcceptDialog(main_window_module.ImportPreviewDialog):
+        def exec(self) -> int:
+            return 1
+
+    monkeypatch.setattr(
+        main_window_module, "ImportPreviewDialog", _AutoAcceptDialog,
+    )
+
     # Trigger the REAL user entry: the Import People toolbar action.
     toolbar = window.findChild(QToolBar, "Main")
     assert toolbar is not None
     import_action = next(a for a in toolbar.actions() if a.text() == "导入人员")
     import_action.trigger()
 
-    # Phase C (LIMIT-005): wait for the task TERMINAL first. With batched
-    # persistence (P0-7) the commit and the queued TaskCompleted land
-    # near-simultaneously; asserting persistence/UI before the terminal made
-    # this test load-sensitive. Terminal-first makes the sequence
-    # deterministic, then persistence, then the UI refresh.
-    runnable = window._active_runnable
-    assert runnable is not None
-    qtbot.waitSignal(runnable.signals.completed, timeout=30000)
-
     # Real persistence proof via the repository protocol (not ad-hoc SQL):
-    # the worker chain must land both Excel rows in SQLite.
+    # the synchronous confirm must land both Excel rows in SQLite.
     people_repository = context.repositories.people
     qtbot.waitUntil(lambda: len(people_repository.list_all()) == 2, timeout=15000)
 
@@ -110,11 +113,9 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
         if time.monotonic() > deadline:
             pytest.fail(
                 "person combo never refreshed after import: "
-                f"task_cancel={runnable.task.is_cancel_requested} "
                 f"people={[p.name for p in people_repository.list_all()]} "
                 f"combo={[person_combo.itemText(i) for i in range(person_combo.count())]} "
-                f"status={window._status_label.text()!r} "
-                f"scan_running={window._scan_controller.is_running}"
+                f"status={window._status_label.text()!r}"
             )
         qtbot.wait(50)
 

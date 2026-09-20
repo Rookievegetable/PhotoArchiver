@@ -1,15 +1,18 @@
 """N1 大批量人员导入闭环（真实链路，B13/B14 自动化等价物）.
 
-1200 行名单经真实 MainWindow 链路（导入动作 → ImportPeopleController →
-worker task → ImportPeopleService 分批（500/500/200 三个原子批）→
-DispatchingPersonImportReader → SQLite）落库，验证：
+1200 行名单经真实 MainWindow 链路（导入动作 → ParseImportDraftService →
+FileRosterTableReader → ImportPreviewDialog（模态 exec 替身，真实构造）→
+ConfirmImportTask worker（1200 > CONFIRM_SYNC_LIMIT）→ ConfirmImportService
+单事务 → SQLite）落库，验证：
 
-- B13：一次导入 1200 / 跳过 0 / 错误 0，`people` 表 +1200，筛选栏人员轴刷新；
-- B14：同一文件二次导入全部按 identity 查重跳过（跨批幂等，0 / 1200）。
+- B13：一次导入 1200 / 合并 0 / 跳过 0 / 错误 0，`people` 表 +1200，
+  roster_order 与草稿顺序一致，筛选栏人员轴刷新；
+- B14：同一文件二次导入全部按 identity 查重合并到既有人员
+  （跨批幂等，0 新建 / 1200 合并 / 0 错误）。
 
-仅模态文件对话框为替身（既定策略）；不依赖 InsightFace 模型（LIMIT-001 /
-CI Principle 3）。取代桌面清单 B13/B14 的手工环节——人工仅余导入期间
-UI 冻结感的观感抽查。
+模态边界替身（既定策略）：文件对话框与预览对话框 exec()；不依赖
+InsightFace 模型（LIMIT-001 / CI Principle 3）。取代桌面清单 B13/B14 的
+手工环节——人工仅余导入期间 UI 冻结感的观感抽查。
 """
 
 import pytest
@@ -27,8 +30,16 @@ from PySide6.QtWidgets import QToolBar
 from photo_archiver.presentation.views import main_window as main_window_module
 from photo_archiver.presentation.views.main_window import MainWindow
 
-ROW_COUNT = 1200  # 跨 500/500/200 三个原子批
+ROW_COUNT = 1200  # > CONFIRM_SYNC_LIMIT：确认走 ConfirmImportTask worker
 _FILTER_DIALOG_TITLE = "选择人员文件"
+
+
+class _AutoAcceptPreviewDialog(main_window_module.ImportPreviewDialog):
+    """Stage A modal boundary double: the dialog is real, exec() accepts."""
+
+    def exec(self) -> int:
+        """Accept immediately (same doubling policy as the file picker)."""
+        return 1
 
 
 def _write_people_txt(path: Path) -> Path:
@@ -67,13 +78,19 @@ def _capture_terminal_events(window: MainWindow, monkeypatch) -> list:
 
 
 def _trigger_import(window: MainWindow, path: Path, monkeypatch) -> list:
-    """Trigger the real Import People action with the picker doubled; return
-    the captured terminal-event list (caller waits on its length)."""
+    """Trigger the real Import People action with the modal boundaries doubled.
+
+    Stage A two-stage flow: the file picker is stubbed to the roster path and
+    the preview dialog's ``exec()`` accepts immediately (the dialog itself is
+    constructed for real over the real parsed draft). Returns the captured
+    terminal-event list (caller waits on its length).
+    """
     monkeypatch.setattr(
         main_window_module.QFileDialog,
         "getOpenFileName",
         lambda *args, **kwargs: (path, _FILTER_DIALOG_TITLE),
     )
+    monkeypatch.setattr(main_window_module, "ImportPreviewDialog", _AutoAcceptPreviewDialog)
     toolbar = window.findChild(QToolBar, "Main")
     assert toolbar is not None
     import_action = next(a for a in toolbar.actions() if a.text() == "导入人员")
@@ -85,14 +102,14 @@ def _trigger_import(window: MainWindow, path: Path, monkeypatch) -> list:
 def test_bulk_import_1200_rows_persists_refreshes_and_dedupes(
     qtbot, make_sqlite_context, tmp_path: Path, monkeypatch
 ) -> None:
-    """B13/B14：1200 行真实导入 + 二次导入跨批幂等全跳。"""
+    """B13/B14：1200 行真实导入 + 二次导入跨批幂等合并到既有人员。"""
     people_txt = _write_people_txt(tmp_path / "people_1200.txt")
     context = make_sqlite_context("bulk.db")
     window = MainWindow(context)
     qtbot.addWidget(window)
     people_repository = context.repositories.people
 
-    # ---- 第一次导入：1200 / 0 / 0（跨 500/500/200 三个原子批） ----
+    # ---- 第一次导入：1200 新建 / 0 合并 / 0 跳过（单事务写入 roster 顺序） ----
     results = _trigger_import(window, people_txt, monkeypatch)
     qtbot.waitUntil(lambda: len(results) >= 1, timeout=60000)
     event = results[0]
@@ -102,6 +119,7 @@ def test_bulk_import_1200_rows_persists_refreshes_and_dedupes(
     assert len(results) == 1
     import_result = event.result
     assert import_result.imported_count == ROW_COUNT
+    assert import_result.merged_count == 0
     assert import_result.skipped_count == 0
     assert list(import_result.errors) == []
 
@@ -116,7 +134,7 @@ def test_bulk_import_1200_rows_persists_refreshes_and_dedupes(
     assert person_combo.itemText(0) == "批量人员_0001"
     assert person_combo.itemText(ROW_COUNT - 1) == "批量人员_1200"
 
-    # ---- 第二次导入：B14 跨批幂等——0 导入 / 1200 跳过 / 0 错误 ----
+    # ---- 第二次导入：B14 跨批幂等——0 新建 / 1200 合并 / 0 跳过 / 0 错误 ----
     results = _trigger_import(window, people_txt, monkeypatch)
     qtbot.waitUntil(lambda: len(results) >= 1, timeout=60000)
     event = results[0]
@@ -125,6 +143,7 @@ def test_bulk_import_1200_rows_persists_refreshes_and_dedupes(
     assert len(results) == 1
     dedupe_result = event.result
     assert dedupe_result.imported_count == 0
-    assert dedupe_result.skipped_count == ROW_COUNT
+    assert dedupe_result.merged_count == ROW_COUNT
+    assert dedupe_result.skipped_count == 0
     assert list(dedupe_result.errors) == []
     assert len(people_repository.list_all()) == ROW_COUNT  # 库计数不变
