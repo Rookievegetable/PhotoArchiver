@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.27.0 · Last Updated: 2026-09-20 · Status: Live
+> Version: 1.28.0 · Last Updated: 2026-09-20 · Status: Live
 
 ---
 
@@ -20,11 +20,13 @@
 | 12–14 | Main UI、Settings、Export | ✅ Completed |
 | 15 | Plugin System | ✅ Completed |
 
-M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 均已落地。此后进入发布工程与桌面验收驱动的迭代修复（已发布至 v2.8.0）。
+M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 均已落地。此后进入发布工程与桌面验收驱动的迭代修复（已发布至 v2.8.0）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**（业务方案 `docs/development/people-import-face-clustering-development-plan.md` + 工程执行计划 `...-execution-plan.md`），阶段 A（导入草稿与稳定名单顺序）已实施完成，阶段 B–F 待逐阶段立项。
 
 ---
 
 ## 2. Current Step（当前开发阶段）
+
+**人员名单导入与人脸分组匹配 · 阶段 A：导入草稿与稳定名单顺序（2026-09-20 实施，待 owner 验收）**——把「选文件即入库」改为**两段式导入**：选文件 → 解析为可编辑**草稿**（`import_batches`/`import_draft_rows`）→「导入预览与确认」对话框核对/编辑/拆分/跳过 → 确认才在单事务写入 `people`，并记录用户确认的 `roster_order`（人员筛选下拉按该顺序展示）；取消不写正式人员、草稿保留可回溯。**Schema**：迁移 `003_import_batches_and_roster`（两张草稿表 + `people.roster_order`/`people.source_batch_id` 扩列 + 两索引，`upgrade`/`downgrade` 双向实现）。**Domain**：`ImportBatch`/`ImportDraftRow` 实体 + `ImportBatchRepository` Protocol + `Person` 扩字段（可空、向后兼容）。**Application**：`ParseImportDraftService`（编码阶梯 BOM 感知 utf-8-sig/utf-16/utf-8/gb18030/latin-1、分隔符频率探测、表头关键词字段映射、多人顿号/逗号串联**拆分建议**、组标题告警「N组/第N组/名单」默认跳过、工号强冲突与姓名+部门弱冲突分类）、`ConfirmImportService`（单 UoW 事务、TOCTOU 二次查重降级为合并、行级错误隔离带行号）。**Infrastructure**：`FileRosterTableReader`（openpyxl `.xlsx/.xlsm`、**新增 `xlrd==2.0.1` 读 `.xls`（D1 owner 批准）**、文本编码阶梯）、`SQLiteImportBatchRepository`。**Workers**：`ConfirmImportTask`（>500 行走 Worker，同步阈值 `CONFIRM_SYNC_LIMIT=500`）。**Presentation**：`ImportPreviewDialog`（原始内容/解析结果/告警/动作四区 + 表头·工作表重解析 + 计数 + 超 500 行后台提示）、MainWindow 两段式入口、`ui_text` 文案 22 项、D6 `TASK_LABELS["import_confirm"]` 注册且终态刷新人员轴。**兼容**：旧 `ImportPeopleService` 与 CLI `import-people` 直通路径保留（插件 `import_people` 写路径 ADR-028 不变）；`recognition_results`/归档/审核/导出/就绪语义零改动。本阶段同时修复上一轮全量测试**死锁式超时**（新模态对话框未被既有测试替身，pytest 永久阻塞）并完成 24 项既有测试的两段式适配。质量门与验收证据见 §5；未发布安装包。
 
 **UI/UX Batch 7：视觉体系、键盘可用性与最终验收（2026-09-19 实施，待 owner 验收）**——新增 `presentation/visual_style.py` 作为集中视觉体系唯一替换点：主/次/危险按钮层级经动态属性 `styleRole` + 应用级 QSS 选择器表达（唯一 `setStyleSheet` 调用点在 `app/application.py` 装配处，静态守卫测试确保零散布）；焦点环覆盖按钮/输入/日期/列表控件；空态页走共享 `EmptyStateCard` objectName 卡片样式。角色赋值：概览 CTA、照片库空态扫描 CTA、批量归档 = primary；移除登记、删除登记确认、删除人员确认 = danger；归档确认按钮随试运行切换 primary↔danger（配合 Batch 6 的默认焦点规则）。可访问性：状态栏取消按钮补 accessible name；全局无仅图标控件（工具栏动作均带文本）；快捷键仅 Ctrl+,（设置）无冲突；状态语义全部文字化（文字角标 + ✓/○ 清单标记）非仅颜色；Qt6 原生高 DPI 缩放 + palette 驱动的 QSS 保证浅/深主题无需固定色（危险色除外）。新增 `docs/development/ui-acceptance-script.md` 面向验收人员的端到端手工脚本（§1–§8 覆盖蓝图九场景，§9 如实列出 LIMIT-001/002/004/006 验证边界），手册 §4 链接。未改业务逻辑、前序交互契约、Schema/CLI/CI/打包配置；未新增图标与依赖（resources/icons 仍空置，文本符号复用）。
 
@@ -79,7 +81,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 ### 数据库 Schema
 
-Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGMA user_version = 4`。本版未改 Schema。
+Alembic 管理（`001_initial_v4` + `002_split_create_ddl` + `003_import_batches_and_roster`，ADR-027）；`PRAGMA user_version = 4`。003 新增 `import_batches`/`import_draft_rows` 两表与 `people.roster_order`/`people.source_batch_id` 两列（阶段 A，见 §2）。
 
 ---
 
@@ -96,6 +98,7 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 | UI / Settings / Export | ✅ | 主窗口、设置闭环（含归档根目录，G-2）、Excel/CSV/HTML 导出、照片墙网格布局 |
 | 人员筛选 | ✅ | 三轴组合筛选 + 人员轴键入即时搜索（`presentation/person_matcher.py` 四级智能排名） |
 | Plugins | ✅ | 发现/加载/生命周期 + PluginContext 读方法 + import_people 写方法；`PLUGINS_DIRECTORY` 配置后启动自动加载并挂载工具栏动作（ADR-038）；示例插件仍不自动加载 |
+| 人员名单导入（阶段 A 两段式） | ✅ 实施完成、待验收 | `application/services/parse_import_draft_service.py`、`confirm_import_service.py`、`infrastructure/importers/roster_table_reader.py`、`presentation/views/import_preview_dialog.py`、`alembic/versions/003_import_batches_and_roster.py`；旧直通路径（GUI 之外：插件 / CLI）保留 |
 
 ---
 
@@ -103,12 +106,25 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-20（本地 Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；AUDIT-UI 修复提交（`3d2e71d`）与验收自动化脚本（`30dedd2`）之后，owner 人工验收反馈两问题后立项 |
-| 会话范围 | 人工验收只读排查 + 改进项 1/2 修复。①排查：只读检查安装版日志（`%LOCALAPPDATA%\PhotoArchiver\Logs\`）与数据库，实证"识别完成·0条待审核"根因 = `cv2.imread` 不支持中文路径（473 张照片 946=2×473 条 could-not-read 警告，persisted 0）+ 导入名单"整组名字塞一格"成 9 条巨型人员 + `person_embeddings=0`（人脸样本登记能力缺失，产品能力边界）；产出 `docs/development/analysis-import-people.md` 与 `analysis-face-recognition.md`（含实证章节）。②修复改进项 1/2；改进项 3（导入防呆）与 4（人脸样本登记）**待 owner 业务方案**后立项。 |
-| 关键产出 | ① 新增域异常 `ImageUnreadableError`（domain/exceptions，ai 与 application 均可引用）；`InsightFaceDetector._read_and_detect` 改 `np.fromfile`+`cv2.imdecode`（Unicode 安全），不可解码/文件缺失抛异常——"无脸"与"读不了"从此可区分；端口 docstring 声明新契约。② `MatchResult` 新增 `read_failed: bool = False`；`MatchPersonsService._analyze_one` 捕获该异常 → `read_failed=True` 且不落识别记录（串行/并行同契约），新增 `_log_result_summary`（processed/faces_found/unreadable 汇总 INFO 日志）。③ 完成文案：`_on_completed` 对 match 任务追加「处理 N 张 · 检出人脸 M 张 · 无法读取 K 张（文件缺失或路径不可用）」，473/473 失败不再伪装"干净空跑"。④ 端到端实证：真实模型对中文路径照片（复刻验收目录形态）检出 1 张脸（512 维特征）；损坏文件正确抛异常。⑤ 测试：检测器测试重写为真实小图 + 中文路径回归 + 不可解码/文件缺失抛异常（8 项）；服务 read_failed 串行/并行双路径（15 项全绿）；UI 完成计数/无 result 干净路径（12 项）；集成旧契约测试改为新契约。⑥ 分析文档实证章节标注"已修复"。识别器 `extract` 路径的 `cv2.imread` 同型缺陷**未修**（当前生产流程不可达，留待 owner 人脸识别业务方案一并处理）。 |
-| 当前质量门 | 提交前实测（本轮）：`ruff check src tests` 通过（自动修 1 处）；`mypy src` **201 source files** 无问题；完整 pytest **1049 passed / 6 skipped / 0 failed，188.87s，103 warnings**。 |
-| 工作区 | main；修复以单提交入库（fix(recognition)，12 files）；另有分析文档 2 份（docs/development/analysis-*.md）随同入库；工作树干净、**未推送**（push 属 owner，GIT-020）。 |
-| Remaining | **owner：导入方案重设计与人脸识别业务优化（含人脸样本登记、识别器 extract 路径读图同型缺陷）的业务方案** · 人工验收重试（建议：正确格式名单 + 重跑识别观察计数文案）· owner Batch 7 + 整体 UI/UX 收口验收 · v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 签核 · A-1/A-3 决策 · 第 4 轮全面体检候审。 |
+| 时间 | 2026-09-20（本地 Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；在 UI/UX 收口（Batch 7 + 验收脚本）与 AUDIT 识别修复（`f7cfe72`）之后，owner 立项「人员名单导入与人脸分组匹配」重设计，本次会话实施**阶段 A**（导入草稿与稳定名单顺序）并收口 A-7/A-8 |
+| 会话范围 | ① 阶段 A-1~A-6 实现（迁移 003 / Domain / Application / Infrastructure / Workers / 预览对话框 + 两段式入口 + ui_text）；② A-7 定向新测试（编码阶梯、拆分、确认原子性、迁移往返、UI）与既有闭环适配；③ **定位并修复全量测试超时**：根因是两段式新弹出的模态 `ImportPreviewDialog.exec()`（及异常路径的 `QMessageBox.warning`）未被既有测试替身 → pytest 永久阻塞（精确挂死点：`test_bulk_people_import_closed_loop` 第 56 项、`test_plugin_directory_loading::…admission` 第 94 项）；④ 24 项既有测试适配新流（任务协调 13 / 工作区状态 7 / 迁移版本 4）；⑤ D6 收尾（`TASK_LABELS["import_confirm"]` + Worker 确认后人员轴刷新 + 超 500 行提示接线）；⑥ A-8 质量门与文档同步 |
+| 关键产出 | ① 迁移 `003_import_batches_and_roster`（`import_batches`/`import_draft_rows` + `people.roster_order`/`source_batch_id` + 两索引，upgrade/downgrade 双实现）；② Domain：`ImportBatch`/`ImportDraftRow`/`ImportBatchRepository`；③ Application：`ParseImportDraftService`（编码阶梯 / 分隔符探测 / 字段映射 / 多人拆分建议 / 组标题告警 / 强·弱重复分类）、`ConfirmImportService`（单事务 + TOCTOU 降级合并 + 行级错误隔离）；④ Infrastructure：`FileRosterTableReader`（`.xlsx/.xlsm` openpyxl、`.xls` **xlrd==2.0.1（D1 owner 批准，`requirements/base.txt` + `lock.txt` 同步）**、文本编码阶梯）、`SQLiteImportBatchRepository`；⑤ Workers：`ConfirmImportTask`；⑥ Presentation：`ImportPreviewDialog`（四区 + 重解析 + 拆分 + 计数 + 大名单提示）、两段式 `_on_import_clicked`/`_confirm_import`、`ui_text` 文案 22 项与 D6 任务标签；⑦ 测试：新增 `test_import_draft_flow.py`（13 项）、`test_import_preview_dialog.py`（7 项），适配 Excel/大批量/取消/插件闭环与任务协调/工作区状态/迁移版本共 6 份文件；⑧ 文档：`manual.md` §① 改写为两段式（含 CLI 直通说明）、执行计划与业务方案入仓 |
+| 当前质量门 | 提交前实测（本轮单次完整套件运行 `python -m pytest -q`）：`ruff check .` **All checks passed**；`mypy src` **211 source files** 无问题；pytest **1066 passed / 6 skipped / 0 failed**，用时 229.6s（unit 941 + integration 125；6 skip = LIMIT-001/006 门控与平台跳过；**全程无挂起**，此前“全量超时”已定位为测试未替身新模态对话框并修复）。 |
+| 工作区 | main；本次变更待提交（建议按 feat(import) / test(import) / docs(status) 三段提交，见提交记录）；`xlrd==2.0.1` 已装入本地 venv 并同步 `requirements/base.txt` + `requirements/lock.txt`；工作树在提交后应保持干净、**未推送**（push 属 owner，GIT-020）。 |
+| Remaining | **owner：阶段 A 验收**（导入预览/拆分/跳过/取消保留草稿/roster 顺序五个验收点）· 阶段 B（人员管理页 + 拖拽排序 + 导航 5→6 项）立项 · 阶段 C（多脸检测与可重跑）立项 · 阶段 E/F 待 A–D 就绪 · UI/UX Batch 7 整体收口验收 · v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 签核 · 第 4 轮全面体检候审。 |
+
+---
+
+### 阶段 A 验收证据与边界
+
+- 迁移：`tests/integration/database/test_alembic_migrations.py`（9 项）——head 记录 `003_import_batches_and_roster`、8 表（002 的 6 + 003 的 2）与 7 个显式索引全在、幂等重跑、`initialize_schema()` 走 Alembic、downgrade 到 `001_initial_v4` 干净回退；`tests/integration/test_import_draft_flow.py::test_migration_003_roundtrip` 直验 003 扩列与回退。
+- Reader 与解析：`test_import_draft_flow.py`——GB18030 CSV 经阶梯解码且分隔符探测为逗号、UTF-16（BOM）+ Tab、`.xls` 经 xlrd 读真实二进制 fixture、组标题行默认跳过、多名单元格生成 `multi_name` 告警与拆分按钮而非静默拆分、库内工号重复 → 默认合并。
+- 确认语义：确认后 `roster_order` 与草稿顺序一致且 `source_batch_id` 可回溯、批次转 `confirmed`；未确认（取消）时正式人员零写入且草稿可回读；行级校验错误隔离（其余行仍写入、错误带 `row N`）。
+- UI：`tests/unit/presentation/test_import_preview_dialog.py`（7 项）——四区渲染与计数/告警、拆分后计数与姓名、动作切换落库、确认写入与顺序、取消不写、未知告警 code 兜底、超 500 行提示仅大名单显示。
+- 闭环：`test_excel_import_ui_closed_loop.py`（真实工具栏动作 → 真实解析 → 真实对话框构造 + `exec()` 替身 → 同步确认 → SQLite → 人员轴刷新）；`test_bulk_people_import_closed_loop.py`（1200 行 → `ConfirmImportTask` Worker → 1200 新建 + 名单顺序；二次导入 1200 合并 / 0 新建 / 库计数不变）。
+- 取消与准入：`test_cancellation_and_ux.py::test_import_cancel_resets_ui`（>500 行走真实 Worker + 阻塞桩，取消后终态复位）；`test_plugin_directory_loading.py::test_loaded_plugin_action_obeys_window_admission`（busy 期间插件动作与全部冲突入口拒绝，tooltip 说明「人员导入」，终态恢复）。
+- 契约适配：`test_main_window_task_coordination.py`（36 项）与 `test_main_window_workspace_state.py`（20 项）以解析/对话框/提交点替身适配两段式；`test_five_tasks_*` 仍覆盖五个宿主入口（`import_confirm` 无独立窗口入口，其标签经进度/状态文案生效）。
+- 边界：≤500 行确认在**窗口线程同步执行**（写入期间 UI 不重绘，>500 行走 Worker 并在预览内提示）；预览中的编辑/拆分/动作切换逐步落库草稿（每步一次草稿写，未确认前不触碰正式人员）；组标题与多名识别为**启发式**（正则），界面只提示不强制；草稿批次暂无自动清理策略（由 B/F 阶段回看入口落地后统一决策）；`downgrade` 的 `DROP COLUMN` 依赖 SQLite ≥3.35（项目基线 Python 3.11 自带满足）；CLI `import-people` 与插件写路径仍为直通导入（无预览）；未做人工桌面视觉验收。
 
 ---
 
@@ -153,9 +169,9 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl`，ADR-027）；`PRAGM
 
 ## 6. Next Step（下一步开发计划）
 
-Batch 7 已完成，**UI/UX 收口批次 0–7 全部实施完毕**（2026-09-19）。**待 owner 按 `docs/development/ui-acceptance-script.md` 执行端到端验收**后签核。v2.8.0 发布与安装包验收事项仍独立保留；本轮没有重新核验远端 CI、Release body 或安装包。后续均需 owner 立项：
+**人员名单导入重设计阶段 A 已实施完成**（2026-09-20，见 §2/§5），**待 owner 验收**（预览四区与计数、多人拆分、组标题/重复默认动作、取消保留草稿、确认后 roster 顺序五个验收点）。UI/UX 收口批次 0–7 全部实施完毕（2026-09-19），待 owner 按 `docs/development/ui-acceptance-script.md` 执行端到端验收。v2.8.0 发布与安装包验收事项仍独立保留；本轮没有重新核验远端 CI、Release body 或安装包。后续均需 owner 立项：
 
-| Next Step | **待 owner**：① 新离线安装包二轮真机验收 + Release body 粘贴 `[2.8.0]` 段后签核；② A-1 CURRENT_BATCH 导出是否解除挂起（解除则先出批次持久化设计文档）；③ A-3 代码签名证书采购决策；④ 是否提交上游 PySide6 issue（草稿就绪）。**可立项**：A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论（枚举回后台线程 = 回到崩溃形态）。**明确不做**：i18n 实装、自动更新、macOS 安装包、批次撤销。 |
+| Next Step | **待 owner**：① 阶段 A 桌面验收（含阶段 A 后新增的两段式导入流程）；② 阶段 B（人员管理页 + 拖拽排序 + 导航 5→6 项）与阶段 C（多脸检测与可重跑）是否立项——B 首次涉及 UI 信息架构变更（计划 D5）；③ 新离线安装包二轮真机验收 + Release body 粘贴 `[2.8.0]` 段后签核；④ A-1 CURRENT_BATCH 导出是否解除挂起（解除则先出批次持久化设计文档）；⑤ A-3 代码签名证书采购决策；⑥ 是否提交上游 PySide6 issue（草稿就绪）。**可立项**：A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论（枚举回后台线程 = 回到崩溃形态）。**明确不做**：i18n 实装、自动更新、macOS 安装包、批次撤销。 |
 
 ---
 
@@ -176,7 +192,9 @@ Batch 7 已完成，**UI/UX 收口批次 0–7 全部实施完毕**（2026-09-19
 | UI 文案表（中文化单一置换点） | `src/photo_archiver/presentation/ui_text.py` |
 | 集中视觉体系（Batch 7 唯一样式点） | `src/photo_archiver/presentation/visual_style.py` |
 | 桌面 GUI 人工验收脚本（UI/UX 收口） | `docs/development/ui-acceptance-script.md` |
-| 数据库初始化/迁移 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`、`alembic_runner.py` |
+| 数据库初始化/迁移 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`、`alembic_runner.py`（迁移链 `001`→`002`→`003`，见 `alembic/versions/`） |
+| 人员导入（阶段 A 两段式） | 解析：`src/photo_archiver/application/services/parse_import_draft_service.py`；确认：`.../confirm_import_service.py`；读表：`src/photo_archiver/infrastructure/importers/roster_table_reader.py`；预览：`src/photo_archiver/presentation/views/import_preview_dialog.py`；草稿仓储：`src/photo_archiver/infrastructure/database/sqlite_import_batch_repository.py` |
+| 人员导入重设计计划（业务 + 工程） | `docs/development/people-import-face-clustering-development-plan.md`、`...-execution-plan.md` |
 | 质量验证 / 发布工作流 | `tests/`、`.github/workflows/ci.yml` / `.github/workflows/release.yml` |
 
 ---
