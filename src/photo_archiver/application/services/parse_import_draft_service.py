@@ -222,7 +222,11 @@ class ParseImportDraftService:
                 existing = self._people.find_by_identity(self._identity_value(identity))
                 if existing is not None:
                     warnings.append(("identity_duplicate_db", identity))
-                    action = DRAFT_ACTION_MERGE_EXISTING
+                    # Owner ruling (LIMIT-008 / acceptance F-A2): a duplicate
+                    # inside the same file keeps priority — both warnings are
+                    # listed, but the row is skipped, not merged.
+                    if action != DRAFT_ACTION_SKIP:
+                        action = DRAFT_ACTION_MERGE_EXISTING
             key = (name, department)
             if name and key in seen_name_departments:
                 warnings.append(("name_department_duplicate_in_file", name))

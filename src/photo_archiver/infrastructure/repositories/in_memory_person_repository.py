@@ -49,3 +49,12 @@ class InMemoryPersonRepository(PersonRepository):
     def list_all(self) -> list[Person]:
         """Return all known people."""
         return list(self._people_by_id.values())
+
+    def max_roster_order(self) -> int | None:
+        """Return the largest confirmed roster order (None when nobody has one)."""
+        orders = [
+            person.roster_order
+            for person in self._people_by_id.values()
+            if person.roster_order is not None
+        ]
+        return max(orders) if orders else None

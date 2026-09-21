@@ -96,3 +96,9 @@ class SQLitePersonRepository(PersonRepository):
                 """
             ).fetchall()
         return [person_from_row(row) for row in rows]
+
+    def max_roster_order(self) -> int | None:
+        """Return the largest confirmed roster order (None when nobody has one)."""
+        with self._connection_provider.connect() as connection:
+            value = connection.execute("SELECT MAX(roster_order) FROM people").fetchone()[0]
+        return value if value is not None else None

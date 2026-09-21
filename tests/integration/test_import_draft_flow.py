@@ -192,6 +192,45 @@ def test_confirm_is_atomic_on_row_error(tmp_path: Path) -> None:
     assert [p.name for p in people.list_all()] == ["张三"]
 
 
+# ── Owner rulings (LIMIT-007 F-A1 / LIMIT-008 F-A2) ─────────────────────────
+
+
+def test_roster_order_continues_globally_across_batches(tmp_path: Path) -> None:
+    """F-A1 裁决：确认从全局 max(roster_order)+1 起编，跨批次单调递增。"""
+    parse, confirm, people = _services(tmp_path / "a.db")
+
+    first = _write_csv(tmp_path / "first.csv", "姓名,工号\n张三,E001\n李四,E002\n")
+    draft1 = parse.execute(ParseImportDraftCommand(first))
+    confirm.execute(ConfirmImportCommand(draft1.batch.id))
+    assert [p.roster_order for p in people.list_all()] == [1, 2]
+
+    second = _write_csv(tmp_path / "second.csv", "姓名,工号\n王五,E003\n")
+    draft2 = parse.execute(ParseImportDraftCommand(second))
+    confirm.execute(ConfirmImportCommand(draft2.batch.id))
+    assert [p.name for p in people.list_all()] == ["张三", "李四", "王五"]
+    assert people.list_all()[-1].roster_order == 3  # 全局续编，不是 1
+
+
+def test_in_file_identity_duplicate_beats_db_merge(tmp_path: Path) -> None:
+    """F-A2 裁决：文件内重复优先跳过——即便库内也存在同工号，行也跳过（告警两类都在）。"""
+    parse, confirm, people = _services(tmp_path / "a.db")
+    first = _write_csv(tmp_path / "first.csv", "姓名,工号\n张三,E001\n")
+    draft1 = parse.execute(ParseImportDraftCommand(first))
+    confirm.execute(ConfirmImportCommand(draft1.batch.id))
+
+    second = _write_csv(tmp_path / "second.csv", "姓名,工号\n张三,E001\n张三,E001\n")
+    draft2 = parse.execute(ParseImportDraftCommand(second))
+    row = draft2.rows[1]  # 第二个张三：文件内重复 + 库内重复（另带姓名+部门弱重复提示）
+    assert row.action == "skip"
+    codes = {code for code, _ in row.warnings}
+    assert {"identity_duplicate_in_file", "identity_duplicate_db"} <= codes
+
+    result = confirm.execute(ConfirmImportCommand(draft2.batch.id))
+    assert result.merged_count == 1  # 只有第一个张三合并
+    assert result.skipped_count == 1
+    assert len(people.list_all()) == 1  # 不重复建档
+
+
 # ── Migration 003 roundtrip ─────────────────────────────────────────────────
 
 

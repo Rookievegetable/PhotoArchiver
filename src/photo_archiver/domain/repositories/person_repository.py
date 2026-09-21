@@ -31,6 +31,14 @@ class PersonRepository(Protocol):
     def list_all(self) -> list[Person]:
         """Return all known people."""
 
+    def max_roster_order(self) -> int | None:
+        """Return the largest confirmed roster order, or None when unset.
+
+        Stage A (owner ruling on LIMIT-007): import confirmations continue the
+        global sequence from this value instead of restarting at 1 per batch,
+        so roster order is globally monotonic and stable across batches.
+        """
+
     def remove(self, person_id: UUID) -> int:
         """Remove the person from the registry; return 1 when removed, else 0.
 

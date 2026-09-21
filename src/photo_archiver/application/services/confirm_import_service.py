@@ -9,7 +9,9 @@ rows touch the formal registry. Actions:
 
 A DB duplicate discovered at confirm time (TOCTOU second line) degrades to a
 merge, never a hard failure; row-level validation errors are isolated with
-row numbers. The whole batch runs in one unit of work.
+row numbers. The whole batch runs in one unit of work. The roster sequence
+continues from the registry's global maximum (owner ruling on LIMIT-007), so
+order is stable and monotonic across batches.
 """
 
 from datetime import datetime
@@ -59,10 +61,14 @@ class ConfirmImportService:
         errors: list[str] = []
         merged_count = 0
         skipped_count = 0
+        # Owner ruling (LIMIT-007 / acceptance F-A1): continue the roster order
+        # from the global maximum instead of restarting at 1 per batch, so the
+        # sequence is globally monotonic and stable across batches.
+        order_base = self._people.max_roster_order() or 0
 
         def _run_batch() -> None:
             nonlocal merged_count, skipped_count
-            order_seq = 0
+            order_seq = order_base
             for row in rows:
                 order_seq += 1
                 if row.action == DRAFT_ACTION_SKIP:
