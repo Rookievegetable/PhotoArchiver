@@ -22,6 +22,7 @@ from photo_archiver.application import (
     ExportService,
     ImportPeopleService,
     ListPersonsService,
+    ManagePeopleService,
     MatchPersonsService,
     PruneMissingPhotosService,
     RegisterPhotoService,
@@ -54,6 +55,7 @@ class ApplicationServices:
     import_people: ImportPeopleService
     parse_import_draft: ParseImportDraftService
     confirm_import: ConfirmImportService
+    manage_people: ManagePeopleService
     register_photo: RegisterPhotoService
     scan_photo_folder: ScanPhotoFolderService
     scan_and_register_photos: ScanAndRegisterPhotosService
@@ -192,6 +194,13 @@ def build_application_services(
     # Phase 9 FEAT-P9-2: read-only person catalog for the FilterBar person axis
     # (Presentation never touches the repository directly — DEP-003/DEP-004).
     list_persons_service = ListPersonsService(repositories.people)
+    # Stage B: roster administration (add / edit / drag reorder / batch review)
+    # over the same person registry; Presentation calls it directly.
+    manage_people_service = ManagePeopleService(
+        repositories.people,
+        repositories.import_batches,
+        unit_of_work=unit_of_work,
+    )
 
     # Phase E E-3 (ADR-034): deletion management services — preview/execute
     # orchestration over the E-2 repository remove capability. Prune needs the
@@ -244,6 +253,7 @@ def build_application_services(
             repositories.people,
             unit_of_work=unit_of_work,
         ),
+        manage_people=manage_people_service,
         register_photo=RegisterPhotoService(repositories.photos, metadata_reader),
         scan_photo_folder=ScanPhotoFolderService(scanner),
         scan_and_register_photos=ScanAndRegisterPhotosService(

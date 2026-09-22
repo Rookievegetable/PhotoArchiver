@@ -1,5 +1,6 @@
 """In-memory implementation of the person repository interface."""
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from photo_archiver.domain import Person, PersonIdentity, PersonRepository
@@ -47,8 +48,21 @@ class InMemoryPersonRepository(PersonRepository):
         )
 
     def list_all(self) -> list[Person]:
-        """Return all known people."""
-        return list(self._people_by_id.values())
+        """Return all known people in the same roster-aware order as SQLite.
+
+        Mirrors the SQL contract (roster_order first, legacy NULL people after,
+        ties by created_at then name) so application tests observe the same
+        ordering they get from the real repository.
+        """
+        def sort_key(person: Person) -> tuple:
+            """Sortable key matching the SQLite ORDER BY contract."""
+            order_key = person.roster_order if person.roster_order is not None else 0
+            created = person.created_at.timestamp() if person.created_at else 0.0
+            return (
+                0 if person.roster_order is not None else 1,
+                order_key, created, person.name,
+            )
+        return sorted(self._people_by_id.values(), key=sort_key)
 
     def max_roster_order(self) -> int | None:
         """Return the largest confirmed roster order (None when nobody has one)."""
@@ -58,3 +72,14 @@ class InMemoryPersonRepository(PersonRepository):
             if person.roster_order is not None
         ]
         return max(orders) if orders else None
+
+    def reorder(self, orders: Sequence[tuple[UUID, int]]) -> int:
+        """Persist roster positions in memory (stage B drag reorder)."""
+        updated = 0
+        for person_id, position in orders:
+            person = self._people_by_id.get(person_id)
+            if person is None:
+                continue
+            person.roster_order = position
+            updated += 1
+        return updated

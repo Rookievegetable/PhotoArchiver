@@ -26,6 +26,7 @@ from photo_archiver.application.dtos.import_draft import (
     RawRosterTable,
 )
 from photo_archiver.application.dtos.import_people import ImportPeopleResult, PersonImportRow
+from photo_archiver.application.dtos.people_admin import ImportBatchSummary, PeopleRoster
 from photo_archiver.application.dtos.photo_scan import PhotoScanItem, ScanPhotoFolderResult
 from photo_archiver.application.dtos.plugin_action_result import ActionResult, PluginReport
 from photo_archiver.application.dtos.plugin_context import (
@@ -89,8 +90,10 @@ __all__ = [
     "FaceRecognitionItem",
     "FaceRecognitionResult",
     "ImportConfirmResult",
+    "ImportBatchSummary",
     "ImportDraft",
     "ImportPeopleResult",
+    "PeopleRoster",
     "InvalidPreferencesError",
     "MAX_MATCH_THRESHOLD",
     "MAX_MAX_WORKERS",

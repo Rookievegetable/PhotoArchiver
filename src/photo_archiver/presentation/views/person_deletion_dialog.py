@@ -43,6 +43,7 @@ class PersonDeletionDialog(QDialog):
         list_persons: ListPersonsService,
         delete_person: "DeletePersonUseCase",
         parent: QWidget | None = None,
+        preselect_id: "UUID | None" = None,
     ) -> None:
         """Initialize the dialog with the catalog reader and the deletion use case.
 
@@ -51,6 +52,8 @@ class PersonDeletionDialog(QDialog):
             delete_person: The deletion use case whose ``preview`` drives the
                 live cascade counters and whose ``execute`` runs on confirm.
             parent: Optional parent widget.
+            preselect_id: Optional person to select on open (stage B lets the
+                people page open this dialog for an already-chosen row).
         """
         super().__init__(parent)
         self.setWindowTitle(PERSON_DELETE_DIALOG_TITLE)
@@ -60,6 +63,15 @@ class PersonDeletionDialog(QDialog):
         self._persons: list[Person] = []
         self._build_ui()
         self._reload_persons()
+        self._select_person(preselect_id)
+
+    def _select_person(self, person_id: "UUID | None") -> None:
+        """Select ``person_id`` when present (no-op otherwise)."""
+        if person_id is None:
+            return
+        index = self._combo.findData(person_id)
+        if index >= 0:
+            self._combo.setCurrentIndex(index)
 
     def _build_ui(self) -> None:
         """Lay out the selector label, person combo, preview, and buttons."""

@@ -1,5 +1,6 @@
 """Person repository interface."""
 
+from collections.abc import Sequence
 from typing import Protocol
 from uuid import UUID
 
@@ -38,6 +39,19 @@ class PersonRepository(Protocol):
         global sequence from this value instead of restarting at 1 per batch,
         so roster order is globally monotonic and stable across batches.
         """
+
+    def reorder(self, orders: Sequence[tuple[UUID, int]]) -> int:
+        """Persist a batch of roster-order assignments (stage B).
+
+        Args:
+            orders: ``(person_id, position)`` pairs; positions are absolute
+                (1-based) values that fully define the roster order.
+
+        Returns:
+            The number of rows actually updated. Unknown ids simply do not
+            match and are not counted (callers validate existence first).
+        """
+
 
     def remove(self, person_id: UUID) -> int:
         """Remove the person from the registry; return 1 when removed, else 0.

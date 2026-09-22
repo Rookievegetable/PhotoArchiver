@@ -1,5 +1,6 @@
 """SQLite implementation of the person repository interface."""
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from photo_archiver.domain import Person, PersonIdentity, PersonRepository
@@ -102,3 +103,15 @@ class SQLitePersonRepository(PersonRepository):
         with self._connection_provider.connect() as connection:
             value = connection.execute("SELECT MAX(roster_order) FROM people").fetchone()[0]
         return value if value is not None else None
+
+    def reorder(self, orders: Sequence[tuple[UUID, int]]) -> int:
+        """Persist roster positions in one transaction (stage B drag reorder)."""
+        updated = 0
+        with self._connection_provider.connect() as connection:
+            for person_id, position in orders:
+                cursor = connection.execute(
+                    "UPDATE people SET roster_order = ? WHERE id = ?",
+                    (position, str(person_id)),
+                )
+                updated += cursor.rowcount
+        return updated

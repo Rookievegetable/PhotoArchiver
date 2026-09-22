@@ -15,16 +15,23 @@ from photo_archiver.application.commands.import_draft import (
 )
 from photo_archiver.application.commands.import_people import ImportPeopleCommand
 from photo_archiver.application.commands.match_persons import MatchPersonsCommand
+from photo_archiver.application.commands.people_admin import (
+    AddPersonCommand,
+    EditPersonCommand,
+    ReorderPeopleCommand,
+)
 from photo_archiver.application.commands.register_photo import RegisterPhotoCommand
 from photo_archiver.application.commands.scan_and_register_photos import ScanAndRegisterPhotosCommand
 from photo_archiver.application.commands.scan_photo_folder import ScanPhotoFolderCommand
 
 __all__ = [
+    "AddPersonCommand",
     "ArchivePhotosCommand",
     "BackfillCaptureTimeCommand",
     "DeletePersonCommand",
     "DeletePhotosCommand",
     "DisposeDuplicatesCommand",
+    "EditPersonCommand",
     "ConfirmImportCommand",
     "ImportPeopleCommand",
     "ParseImportDraftCommand",
@@ -32,6 +39,7 @@ __all__ = [
     "MatchPersonsCommand",
     "PruneMissingCommand",
     "RegisterPhotoCommand",
+    "ReorderPeopleCommand",
     "ScanAndRegisterPhotosCommand",
     "ScanPhotoFolderCommand",
 ]

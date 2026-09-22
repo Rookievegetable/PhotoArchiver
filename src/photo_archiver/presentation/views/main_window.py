@@ -141,6 +141,7 @@ from photo_archiver.presentation.views.import_preview_dialog import (
     ImportPreviewDialog,
 )
 from photo_archiver.presentation.views.person_deletion_dialog import PersonDeletionDialog
+from photo_archiver.presentation.views.people_admin_page import PeopleAdminPage
 from photo_archiver.presentation.views.photo_deletion_confirm_dialog import (
     PhotoDeletionConfirmDialog,
 )
@@ -172,13 +173,13 @@ DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
 _PROGRESS_RESOLUTION = 100
 
-# 导航行 ↔ 页面映射：0 概览 / 1 照片库 / 3 数据工具切页；
-# 行 2（审核中心）与行 4（设置）是触发式导航项（打开模态对话框，不切页）。
-_NAV_ROW_TO_PAGE = {0: 0, 1: 1, 3: 2}
+# 导航行 ↔ 页面映射：0 概览 / 1 照片库 / 2 人员与分组 / 4 数据工具切页；
+# 行 3（审核中心）与行 5（设置）是触发式导航项（打开模态对话框，不切页）。
+_NAV_ROW_TO_PAGE = {0: 0, 1: 1, 2: 2, 4: 3}
 _PAGE_TO_NAV_ROW = {page: row for row, page in _NAV_ROW_TO_PAGE.items()}
 _NAV_LABELS = (
-    text.NAV_OVERVIEW, text.NAV_PHOTO_LIBRARY, text.NAV_REVIEW_CENTER,
-    text.NAV_DATA_TOOLS, text.NAV_SETTINGS,
+    text.NAV_OVERVIEW, text.NAV_PHOTO_LIBRARY, text.NAV_PEOPLE,
+    text.NAV_REVIEW_CENTER, text.NAV_DATA_TOOLS, text.NAV_SETTINGS,
 )
 
 
@@ -444,7 +445,7 @@ class MainWindow(QMainWindow):
         # noop → 不渲染（_add_plugin_actions 已按 id 路由，不应走到）
 
     def _build_central(self) -> None:
-        """Assemble the left navigation and the three stacked pages."""
+        """Assemble the left navigation and the four stacked pages."""
         self._nav_list = QListWidget(self)
         for label in _NAV_LABELS:
             self._nav_list.addItem(label)
@@ -456,7 +457,8 @@ class MainWindow(QMainWindow):
         self._overview_page.primary_clicked.connect(self._on_overview_primary)
         self._pages.addWidget(self._overview_page)  # index 0: 概览
         self._pages.addWidget(self._build_photo_library_page())  # index 1: 照片库
-        self._pages.addWidget(self._build_data_tools_page())  # index 2: 数据工具
+        self._pages.addWidget(self._build_people_page())  # index 2: 人员与分组
+        self._pages.addWidget(self._build_data_tools_page())  # index 3: 数据工具
 
         central = QWidget(self)
         layout = QHBoxLayout(central)
@@ -589,6 +591,33 @@ class MainWindow(QMainWindow):
         self._refresh_filter_persons()
         return page
 
+    def _build_people_page(self) -> QWidget:
+        """Build the people-and-grouping page (stage B, D5).
+
+        The roster page owns its edit surface (add/edit/delete via the existing
+        danger-confirm dialog, drag reorder) and reports mutations through
+        ``people_changed`` so the window refreshes the person filter axis and
+        the readiness snapshot. The page only calls Application services
+        (DEP-010); business rules stay in ``ManagePeopleService``.
+        """
+        page = PeopleAdminPage(
+            self._context.services.manage_people,
+            self._context.services.list_persons,
+            self._context.services.delete_person,
+            parent=self,
+        )
+        page.people_changed.connect(self._on_people_changed)
+        return page
+
+    def _on_people_changed(self) -> None:
+        """Reflect a roster mutation across the window (filter axis, overview)."""
+        page = self._pages.widget(2)
+        message = page.last_message() if isinstance(page, PeopleAdminPage) else ""
+        if message:
+            self._status_label.setText(message)
+        self._refresh_filter_persons()
+        self._refresh_workspace_state()
+
     def _build_data_tools_page(self) -> QWidget:
         """Build the data-tools page (maintenance entries, Batch 3 IA).
 
@@ -620,11 +649,11 @@ class MainWindow(QMainWindow):
         selection snaps back to the current page's row (signals blocked) so
         the nav highlight always mirrors the visible page.
         """
-        if row == 2:  # 审核中心 → 模态对话框
+        if row == 3:  # 审核中心 → 模态对话框
             self._snap_nav_to_page()
             self._on_review_clicked()
             return
-        if row == 4:  # 设置 → 模态对话框
+        if row == 5:  # 设置 → 模态对话框
             self._snap_nav_to_page()
             self._on_settings_clicked()
             return

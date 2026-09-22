@@ -15,6 +15,7 @@ from photo_archiver.application.services.dispose_duplicates_service import Dispo
 from photo_archiver.application.services.export_service import ExportService
 from photo_archiver.application.services.import_people_service import ImportPeopleService
 from photo_archiver.application.services.list_persons_service import ListPersonsService
+from photo_archiver.application.services.manage_people_service import ManagePeopleService
 from photo_archiver.application.services.match_persons_service import MatchPersonsService
 from photo_archiver.application.services.plugin_context_service import PluginContextService
 from photo_archiver.application.services.cleanup_thumbnail_cache_service import (
@@ -46,6 +47,7 @@ __all__ = [
     "ExportService",
     "ImportPeopleService",
     "ListPersonsService",
+    "ManagePeopleService",
     "MatchPersonsService",
     "ParseImportDraftService",
     "PluginContextService",
