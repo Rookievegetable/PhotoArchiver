@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.30.0 · Last Updated: 2026-09-21 · Status: Live
+> Version: 1.31.0 · Last Updated: 2026-09-22 · Status: Live
 
 ---
 
@@ -25,6 +25,8 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 ---
 
 ## 2. Current Step（当前开发阶段）
+
+**人员名单导入与人脸分组匹配 · 阶段 B：人员名单管理（2026-09-22 实施，待 owner 验收）**——新增「**人员与分组**」页（D5：导航 5→6 项 —— 概览 / 照片库 / **人员与分组** / 审核中心 / 数据工具 / 设置；审核中心与设置仍为触发式行），把名单做成**可编辑列表**：表格按 `roster_order` 列出 顺序/姓名/工号/部门/备注/来源批次，**拖拽行或「上移/下移」**即调整顺序并**立即持久化**（单事务整表重排），照片库人员筛选下拉同步；**新增人员**（手工录入，经 `max_roster_order()+1` 排到末尾）、**编辑**（复用 `Person` 实体校验 + 工号唯一性，域错误原文回显）、**删除所选**（复用既有 `PersonDeletionDialog`（新增可选 `preselect_id` 预选行）+ `DeletePersonService` 级联语义：照片保留、识别归属置空）；**来源批次回看**（`ImportBatchRepository.list_batches()` + 每批在册人数，回看态只读、禁拖拽）。**分层**：Domain `PersonRepository` 增 `reorder()`（Protocol + SQLite 单事务 `UPDATE` + InMemory，后者 `list_all` 补齐与 SQL 一致的 roster 排序契约）；Application 新 `ManagePeopleService`（add/edit/reorder/roster）+ `AddPersonCommand`/`EditPersonCommand`/`ReorderPeopleCommand` + DTO `ImportBatchSummary`/`PeopleRoster`，装配进 `ApplicationServices.manage_people`；Presentation 新 `PeopleAdminPage` + `PersonEditDialog`。**未改 Schema、未加依赖**；`recognition_results`/归档/审核/导出/CLI/插件契约零改动。删除级联的 C/E 扩展点（`cluster_person_assignments`/`person_face_embeddings`）已按计划留待 C/E（见 Remaining）。
 
 **人员名单导入与人脸分组匹配 · 阶段 A：导入草稿与稳定名单顺序（2026-09-20 实施，2026-09-21 owner 桌面验收通过 ✅）**——把「选文件即入库」改为**两段式导入**：选文件 → 解析为可编辑**草稿**（`import_batches`/`import_draft_rows`）→「导入预览与确认」对话框核对/编辑/拆分/跳过 → 确认才在单事务写入 `people`，并记录用户确认的 `roster_order`（人员筛选下拉按该顺序展示）；取消不写正式人员、草稿保留可回溯。**Schema**：迁移 `003_import_batches_and_roster`（两张草稿表 + `people.roster_order`/`people.source_batch_id` 扩列 + 两索引，`upgrade`/`downgrade` 双向实现）。**Domain**：`ImportBatch`/`ImportDraftRow` 实体 + `ImportBatchRepository` Protocol + `Person` 扩字段（可空、向后兼容）。**Application**：`ParseImportDraftService`（编码阶梯 BOM 感知 utf-8-sig/utf-16/utf-8/gb18030/latin-1、分隔符频率探测、表头关键词字段映射、多人顿号/逗号串联**拆分建议**、组标题告警「N组/第N组/名单」默认跳过、工号强冲突与姓名+部门弱冲突分类）、`ConfirmImportService`（单 UoW 事务、TOCTOU 二次查重降级为合并、行级错误隔离带行号）。**Infrastructure**：`FileRosterTableReader`（openpyxl `.xlsx/.xlsm`、**新增 `xlrd==2.0.1` 读 `.xls`（D1 owner 批准）**、文本编码阶梯）、`SQLiteImportBatchRepository`。**Workers**：`ConfirmImportTask`（>500 行走 Worker，同步阈值 `CONFIRM_SYNC_LIMIT=500`）。**Presentation**：`ImportPreviewDialog`（原始内容/解析结果/告警/动作四区 + 表头·工作表重解析 + 计数 + 超 500 行后台提示）、MainWindow 两段式入口、`ui_text` 文案 22 项、D6 `TASK_LABELS["import_confirm"]` 注册且终态刷新人员轴。**兼容**：旧 `ImportPeopleService` 与 CLI `import-people` 直通路径保留（插件 `import_people` 写路径 ADR-028 不变）；`recognition_results`/归档/审核/导出/就绪语义零改动。本阶段同时修复上一轮全量测试**死锁式超时**（新模态对话框未被既有测试替身，pytest 永久阻塞）并完成 24 项既有测试的两段式适配。质量门与验收证据见 §5；未发布安装包。**探测驱动的验收准备已完成**：桌面工具包 `PhotoArchiver-阶段A验收\`（样本 + 一键启动）与验收脚本 `docs/development/stage-a-import-acceptance-script.md` 就绪，每个期望值均经真实服务 + SQLite 全序列实测（`logs\probe_full_sequence.txt`）。**owner 桌面验收已通过（2026-09-21，§1–§9 全部 ✅）**，并就探测发现的两项行为作出裁决且已实施：F-A1（LIMIT-007）= 确认时从 `max(既有 roster_order)+1` 全局单调续编（`PersonRepository.max_roster_order()` 新协议方法 + SQLite/InMemory 双实现）；F-A2（LIMIT-008）= 文件内重复优先跳过（`ParseImportDraftService` 判定优先级修正，两类告警均保留）；两项各配定向测试，验收脚本 §9/§10/§11 已回填实测与结论，KNOWN_ISSUES 相应条目按维护规则删除。
 
@@ -98,7 +100,8 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl` + `003_import_batches
 | UI / Settings / Export | ✅ | 主窗口、设置闭环（含归档根目录，G-2）、Excel/CSV/HTML 导出、照片墙网格布局 |
 | 人员筛选 | ✅ | 三轴组合筛选 + 人员轴键入即时搜索（`presentation/person_matcher.py` 四级智能排名） |
 | Plugins | ✅ | 发现/加载/生命周期 + PluginContext 读方法 + import_people 写方法；`PLUGINS_DIRECTORY` 配置后启动自动加载并挂载工具栏动作（ADR-038）；示例插件仍不自动加载 |
-| 人员名单导入（阶段 A 两段式） | ✅ 实施完成、待验收 | `application/services/parse_import_draft_service.py`、`confirm_import_service.py`、`infrastructure/importers/roster_table_reader.py`、`presentation/views/import_preview_dialog.py`、`alembic/versions/003_import_batches_and_roster.py`；旧直通路径（GUI 之外：插件 / CLI）保留 |
+| 人员名单导入（阶段 A 两段式） | ✅ 已验收（2026-09-21） | `application/services/parse_import_draft_service.py`、`confirm_import_service.py`、`infrastructure/importers/roster_table_reader.py`、`presentation/views/import_preview_dialog.py`、`alembic/versions/003_import_batches_and_roster.py`；旧直通路径（GUI 之外：插件 / CLI）保留 |
+| 人员与分组页（阶段 B） | ✅ 实施完成、待验收 | `application/services/manage_people_service.py`、`presentation/views/people_admin_page.py`、`person_edit_dialog.py`；导航 5→6 项（D5）；`PersonRepository.reorder`（SQLite 单事务）；删除复用 `PersonDeletionService` 与既有确认对话框 |
 
 ---
 
@@ -106,12 +109,23 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl` + `003_import_batches
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-21（本地 Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；阶段 A 实施提交（`c7d2caa`/`e0045f6`/`f4a2f74`）之后，owner 执行桌面验收并就 F-A1/F-A2 作出裁决，本次会话实施裁决、回填验收记录并收口 |
-| 会话范围 | ① 阶段 A 桌面验收工具包与验收脚本（探测驱动，期望值全序列实测）；② owner 桌面验收 §1–§9 全部通过；③ F-A1/F-A2 裁决实施：`PersonRepository.max_roster_order()` 新协议方法（SQLite + InMemory 双实现）+ `ConfirmImportService` 全局续编（LIMIT-007）；`ParseImportDraftService` 文件内重复优先跳过（LIMIT-008）；④ 2 项定向测试 + 全量回归；⑤ KNOWN_ISSUES 两项按维护规则删除、验收脚本 §9/§10/§11 回填 |
-| 关键产出 | ① 迁移 `003_import_batches_and_roster`（`import_batches`/`import_draft_rows` + `people.roster_order`/`source_batch_id` + 两索引，upgrade/downgrade 双实现）；② Domain：`ImportBatch`/`ImportDraftRow`/`ImportBatchRepository`；③ Application：`ParseImportDraftService`（编码阶梯 / 分隔符探测 / 字段映射 / 多人拆分建议 / 组标题告警 / 强·弱重复分类）、`ConfirmImportService`（单事务 + TOCTOU 降级合并 + 行级错误隔离）；④ Infrastructure：`FileRosterTableReader`（`.xlsx/.xlsm` openpyxl、`.xls` **xlrd==2.0.1（D1 owner 批准，`requirements/base.txt` + `lock.txt` 同步）**、文本编码阶梯）、`SQLiteImportBatchRepository`；⑤ Workers：`ConfirmImportTask`；⑥ Presentation：`ImportPreviewDialog`（四区 + 重解析 + 拆分 + 计数 + 大名单提示）、两段式 `_on_import_clicked`/`_confirm_import`、`ui_text` 文案 22 项与 D6 任务标签；⑦ 测试：新增 `test_import_draft_flow.py`（13 项）、`test_import_preview_dialog.py`（7 项），适配 Excel/大批量/取消/插件闭环与任务协调/工作区状态/迁移版本共 6 份文件；⑧ 文档：`manual.md` §① 改写为两段式（含 CLI 直通说明）、执行计划与业务方案入仓 |
-| 当前质量门 | 提交前实测（裁决实施后单次完整套件运行 `python -m pytest -q`）：`ruff check .` **All checks passed**；`mypy src` **211 source files** 无问题；pytest **1068 passed / 6 skipped / 0 failed**（unit 943 + integration 125；含 F-A1/F-A2 定向测试 2 项；**全程无挂起**）。 |
-| 工作区 | main；阶段 A 以三段提交入库：`c7d2caa`（feat(import)：migration 003 + Domain/Application/Infrastructure/Workers/Presentation + requirements）、`e0045f6`（test(import)：新测试 2 份 + 既有闭环/迁移/协调/工作区 7 份适配，含全量挂起修复）、`f4a2f74`（docs(status)：PROJECT_STATUS + manual §① + 业务/执行计划入仓）；`xlrd==2.0.1` 已装入本地 venv 并同步 `requirements/base.txt` + `requirements/lock.txt`；工作树干净、**未推送**（push 属 owner，GIT-020）。 |
-| Remaining | **阶段 A 已验收通过（2026-09-21）**；F-A1/F-A2 裁决已实施并回归（见 §2/§5）。**下一步需 owner 立项**：阶段 B（人员管理页 + 拖拽排序 + 导航 5→6 项，注意合并会重写既有人员 roster_order，重排入口在 B 落地）· 阶段 C（多脸检测与可重跑）· 阶段 E/F 待 A–D 就绪 · UI/UX Batch 7 整体收口验收 · v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 签核 · 第 4 轮全面体检候审。 |
+| 时间 | 2026-09-22（本地 Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；阶段 A 验收通过（2026-09-21）之后，本次会话实施**阶段 B**（人员与分组页，D5 导航 5→6） |
+| 会话范围 | ① Domain `PersonRepository.reorder()`（Protocol + SQLite 单事务 + InMemory，并补齐 InMemory `list_all` 的 roster 排序契约）；② Application `ManagePeopleService`（新增/编辑/整表重排/名册+批次汇总）+ 3 命令 + 2 DTO + `ApplicationServices.manage_people` 装配；③ Presentation `PeopleAdminPage`（表格 + 拖拽/上下移即时保存 + 新增/编辑 + 删除复用危险确认 + 来源批次只读回看）+ `PersonEditDialog` + `PersonDeletionDialog` 可选预选；④ MainWindow 导航 5→6 与页索引重排（`_NAV_ROW_TO_PAGE`、触发行 3/5）；⑤ 测试：Application 单测 8 项、SQLite 集成 2 项（重开持久化 + 删除语义回归）、页面 UI 7 项、导航适配 8 项 |
+| 关键产出 | ① Domain：`PersonRepository.reorder()` 协议方法（SQLite 单事务批量 `UPDATE` + InMemory）；InMemory `list_all` 补齐 roster 排序契约（与 SQL `ORDER BY` 一致）；② Application：`ManagePeopleService`（`add_person`/`edit_person`/`reorder_people`/`roster`）、`AddPersonCommand`/`EditPersonCommand`/`ReorderPeopleCommand`、`ImportBatchSummary`/`PeopleRoster` DTO；③ Infrastructure：无新仓储（复用 `ImportBatchRepository.list_batches`）；④ Presentation：`PeopleAdminPage`（顺序列、编辑、拖拽/上下移、删除危险确认、批次回看只读态）、`PersonEditDialog`（姓名必填/工号/部门/备注表单）、`PersonDeletionDialog.preselect_id`；⑤ MainWindow：导航 5→6（`人员与分组` 新页），触发式行从 2/4 移到 3/5；⑥ `ui_text`：人员页文案 22 项；⑦ 手册：§主窗口导航六项 + §① 增「第三步：人员与分组页管理名单」；⑧ 测试：单测 8 项（服务）+ 集成 2 项（重开持久化、删除语义回归）+ 页面 7 项 + 导航适配 8 项 |
+| 当前质量门 | 提交前实测（阶段 B 单次完整套件运行 `python -m pytest -q`）：`ruff check .` **All checks passed**；`mypy src` **216 source files** 无问题；pytest **1085 passed / 6 skipped / 0 failed**（unit 960 + integration 125；含阶段 B 17 项新测试；**全程无挂起**）。 |
+| 工作区 | main；阶段 B 以三段提交入库：`9b48816`（feat(people)：阶段 B 人员与分组页——ManagePeopleService/reorder/导航）、`285ee75`（test(people)：阶段 B 测试与导航适配）、docs(people)（手册 + PROJECT_STATUS 同步，见提交记录）。工作树干净、**未推送**（push 属 owner，GIT-020）。 |
+| Remaining | **阶段 A 已验收通过（2026-09-21）**；阶段 B 实施完成待 owner 验收（新增/编辑/拖拽排序/删除危险确认/批次回看五验收点）。**下一步需 owner 立项**：阶段 C（多脸检测与可重跑）· 阶段 D（聚类 + 时间排序）· 阶段 E/F 待 C/D 就绪 · UI/UX Batch 7 整体收口验收 · v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 签核 · 第 4 轮全面体检候审。 |
+
+---
+
+### 阶段 B 验收证据与边界
+
+- Application 单测：`tests/unit/application/test_manage_people_service.py`（8 项）——新增追加全局序位（F-A1 续编）、空姓名/重复工号拒绝、编辑字段覆盖与自身工号放行、重排绝对位次落库、未知/重复 id 拒绝、批次汇总计数。
+- SQLite 集成：`tests/integration/test_people_admin_flow.py`（2 项）——重开同一库后顺序持久（加→改→重排→重开验证），删除语义回归（照片保留、识别归属置空、人员消失）。
+- 页面 UI：`tests/unit/presentation/test_people_admin_page.py`（7 项）——渲染列与顺序、上移/下移持久化、拖拽重排、批次回看筛选且只读禁拖拽（含来源批次列）、新增成功、域校验错误原文回显且不写入、空库空态文案。
+- 导航：`tests/unit/presentation/test_main_window_navigation.py`（8 项适配）——六项导航顺序、四个页面行切换（含新页 index 2）、审核中心/设置触发行 3/5 回弹、任务面板各页常驻、数据工具页维护动作不变。
+- 质量门：Ruff / MyPy 绿；全量 pytest 1085 passed / 6 skipped / 0 failed（单次完整运行）。
+- 边界：拖拽排序仅在「全部批次」视图生效（回看态只读、拖拽禁用，防歧义）；整表重排为单事务批量 UPDATE（无行级进度）；编辑复用 `add` upsert（无单独 update 路径，协议已含）；删除在「人员与分组」页与「数据工具」页共用同一用例与确认对话框（一处实现两处入口）；批次回看人数为**当前在册**计数（被删除/合并的人不再计入）；阶段 B 不改 Schema、不加依赖、不动 CLI/插件契约。
 
 ---
 
