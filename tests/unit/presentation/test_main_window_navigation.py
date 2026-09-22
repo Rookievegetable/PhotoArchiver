@@ -1,8 +1,9 @@
 """Batch 3 navigation, overview CTA and persistent task panel (no workers).
 
-Information-architecture acceptance: five navigation entries, page stack,
-trigger-style review/settings rows, data-tools page hosting the maintenance
-actions, and a task panel that stays visible on every page.
+Information-architecture acceptance: six navigation entries (stage B adds
+人员与分组), page stack, trigger-style review/settings rows, data-tools page
+hosting the maintenance actions, and a task panel that stays visible on every
+page.
 """
 
 from dataclasses import replace
@@ -110,13 +111,15 @@ def test_overview_cta_routes_through_the_real_import_picker(nav, monkeypatch) ->
     assert not nav.window._task_coordinator.is_busy
 
 
-def test_navigation_switches_between_the_three_pages(nav) -> None:
+def test_navigation_switches_between_the_four_pages(nav) -> None:
     window = nav.window
     assert window._pages.currentIndex() == 0  # 概览是首页
     window._nav_list.setCurrentRow(1)
     assert window._pages.currentIndex() == 1
-    window._nav_list.setCurrentRow(3)
-    assert window._pages.currentIndex() == 2
+    window._nav_list.setCurrentRow(2)
+    assert window._pages.currentIndex() == 2  # 人员与分组（阶段 B 新页）
+    window._nav_list.setCurrentRow(4)
+    assert window._pages.currentIndex() == 3  # 数据工具
     window._nav_list.setCurrentRow(0)
     assert window._pages.currentIndex() == 0
 
@@ -127,7 +130,7 @@ def test_review_center_nav_opens_dialog_and_snaps_back(nav, monkeypatch) -> None
         module, "ReviewDialog", lambda *args, **kwargs: SimpleNamespace(exec=exec_mock),
     )
     window = nav.window
-    window._nav_list.setCurrentRow(2)
+    window._nav_list.setCurrentRow(3)
     exec_mock.assert_called_once()
     assert window._pages.currentIndex() == 0  # 触发式导航不切页
     assert window._nav_list.currentRow() == 0  # 高亮回到当前页
@@ -139,7 +142,7 @@ def test_settings_nav_opens_dialog_and_snaps_back(nav, monkeypatch) -> None:
         module, "SettingsDialog", lambda *args: SimpleNamespace(exec=exec_mock),
     )
     window = nav.window
-    window._nav_list.setCurrentRow(4)
+    window._nav_list.setCurrentRow(5)
     exec_mock.assert_called_once()
     assert window._pages.currentIndex() == 0
     assert window._nav_list.currentRow() == 0
@@ -150,7 +153,7 @@ def test_task_panel_stays_visible_on_every_page(nav) -> None:
     window = nav.window
     cancel_button = window.findChild(QToolButton, "CancelTask")
     assert cancel_button is not None
-    for row in (0, 1, 3, 0):  # 仅页面行；行 2/4 是触发式导航项（会开模态对话框）
+    for row in (0, 1, 2, 4, 0):  # 仅页面行；行 3/5 是触发式导航项（会开模态对话框）
         window._nav_list.setCurrentRow(row)
         assert window._status.isVisible()
         assert window._progress.isVisible()
@@ -172,11 +175,11 @@ def test_busy_disables_data_tools_and_overview_cta_then_restores(nav) -> None:
     assert window._overview_page._primary_button.isEnabled()
 
 
-def test_nav_entries_carry_the_five_labels(nav) -> None:
+def test_nav_entries_carry_the_six_labels(nav) -> None:
     window = nav.window
     labels = [window._nav_list.item(row).text() for row in range(window._nav_list.count())]
     assert labels == [
-        text.NAV_OVERVIEW, text.NAV_PHOTO_LIBRARY, text.NAV_REVIEW_CENTER,
-        text.NAV_DATA_TOOLS, text.NAV_SETTINGS,
+        text.NAV_OVERVIEW, text.NAV_PHOTO_LIBRARY, text.NAV_PEOPLE,
+        text.NAV_REVIEW_CENTER, text.NAV_DATA_TOOLS, text.NAV_SETTINGS,
     ]
 
