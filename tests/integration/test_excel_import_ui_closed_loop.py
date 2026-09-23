@@ -35,7 +35,9 @@ from photo_archiver.presentation.views.main_window import MainWindow
 FILTER_DIALOG_TITLE = "选择人员文件"
 
 
-def _write_people_workbook(path: Path) -> Path:
+def _write_people_workbook(
+    path: Path, rows: list[tuple[str, str, str | None, str | None]] | None = None,
+) -> Path:
     """Create a real .xlsx people file (program-generated fixture)."""
     from openpyxl import Workbook
 
@@ -43,8 +45,11 @@ def _write_people_workbook(path: Path) -> Path:
     worksheet = workbook.active
     worksheet.title = "People"
     worksheet.append(["name", "identity", "department", "note"])
-    worksheet.append(["Alice", "A001", "Archive Dept", "Team lead"])
-    worksheet.append(["Bob", "B002", None, None])
+    for row in rows if rows is not None else (
+        ("Alice", "A001", "Archive Dept", "Team lead"),
+        ("Bob", "B002", None, None),
+    ):
+        worksheet.append(list(row))
     workbook.save(path)
     workbook.close()
     return path
@@ -122,3 +127,55 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
     assert person_combo.placeholderText() == "全部人员"
     assert person_combo.currentIndex() == -1  # unselected = no constraint
     assert person_combo.count() == 2  # Alice + Bob — real entries only
+
+
+def test_second_import_refreshes_the_people_page_without_restart(
+    qtbot, tmp_path: Path, monkeypatch
+) -> None:
+    """Stage-B review #4: the people page must show every batch right away.
+
+    The page was already open when the second file was imported, so nothing but
+    the window's refresh path can bring the new roster in — the regression was
+    a page that stayed on the first batch until the application restarted.
+    """
+    first = _write_people_workbook(tmp_path / "first.xlsx")
+    second = _write_people_workbook(
+        tmp_path / "second.xlsx", rows=[("Carol", "C003", None, None)],
+    )
+    settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'people_page.db'}")
+    settings.ensure_runtime_directories()
+    context = bootstrap_application(settings)
+    window = MainWindow(context)
+    qtbot.addWidget(window)
+
+    window._nav_list.setCurrentRow(2)  # 打开「人员与分组」页
+    page = window._people_admin_page
+    assert page._table.rowCount() == 0
+
+    pending = [first, second]
+    monkeypatch.setattr(
+        main_window_module.QFileDialog,
+        "getOpenFileName",
+        lambda *args, **kwargs: (pending.pop(0), FILTER_DIALOG_TITLE),
+    )
+
+    class _AutoAcceptDialog(main_window_module.ImportPreviewDialog):
+        def exec(self) -> int:
+            return 1
+
+    monkeypatch.setattr(main_window_module, "ImportPreviewDialog", _AutoAcceptDialog)
+
+    toolbar = window.findChild(QToolBar, "Main")
+    assert toolbar is not None
+    import_action = next(a for a in toolbar.actions() if a.text() == "导入人员")
+
+    import_action.trigger()
+    qtbot.waitUntil(lambda: page._table.rowCount() == 2, timeout=15000)
+    assert [page._table.item(row, 1).text() for row in range(2)] == ["Alice", "Bob"]
+
+    import_action.trigger()  # 第二批：页面必须当场显示 3 人
+    qtbot.waitUntil(lambda: page._table.rowCount() == 3, timeout=15000)
+    assert [page._table.item(row, 1).text() for row in range(3)] == [
+        "Alice", "Bob", "Carol",
+    ]
+    assert page._table.item(2, 5).text() == "second.xlsx"  # 来源批次列同步

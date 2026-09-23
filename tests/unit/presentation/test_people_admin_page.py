@@ -2,6 +2,10 @@
 
 The page is exercised over real SQLite services (like the stage-A preview
 dialog tests); no modal is opened — edits and actions are driven directly.
+The stage-B desktop review fixes have their own section at the end: row drops
+must reorder through the real viewport receive path without leaving a blank
+row, the danger dialog must arrive with the chosen person selected, and every
+rejection must read in Chinese.
 """
 
 from pathlib import Path
@@ -12,8 +16,9 @@ import pytest
 pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QMessageBox
+from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt
+from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox
 
 from photo_archiver.app.repositories import build_sqlite_repositories
 from photo_archiver.application.commands import AddPersonCommand
@@ -22,7 +27,9 @@ from photo_archiver.application.services import (
     ListPersonsService,
     ManagePeopleService,
 )
+from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.views.people_admin_page import PeopleAdminPage
+from photo_archiver.presentation.views.person_deletion_dialog import PersonDeletionDialog
 
 
 def _services(tmp_path: Path):
@@ -153,3 +160,202 @@ def test_empty_page_shows_empty_hint(tmp_path: Path, qtbot) -> None:
     labels = [w.text() for w in page.findChildren(QLabel)]
     assert any("名单为空" in t for t in labels)
     assert page._table.rowCount() == 0
+
+
+# ── Stage-B desktop review fixes ──────────────────────────────────────────
+
+_ROW_MIME_TYPE = "application/x-qabstractitemmodeldatalist"
+
+
+def _row_payload() -> QMimeData:
+    """Return the mime data a Qt item-view row drag carries."""
+    mime = QMimeData()
+    mime.setData(_ROW_MIME_TYPE, b"row-payload")
+    return mime
+
+
+def _row_center(table, row: int) -> QPoint:
+    """Return a real viewport point inside ``row``'s cells."""
+    return table.visualItemRect(table.item(row, 1)).center()
+
+
+def test_table_keeps_row_drops_enabled_for_reordering(populated) -> None:
+    """验收 #2：拖拽模式必须真的接收落点（``DragOnly`` 会关掉 acceptDrops）。"""
+    table = populated[0]._table
+    assert table.dragEnabled()
+    assert table.acceptDrops()
+    assert table.viewport().acceptDrops()
+
+
+def test_row_drop_reorders_the_roster_without_a_blank_row(populated) -> None:
+    """验收 #2：拖拽重排后目标行仍在——Qt 内部行移动曾把它删成空白行。"""
+    page, _, repositories = populated
+    page.resize(900, 360)
+    page.show()
+    table = page._table
+    source_point = _row_center(table, 2)  # 王五
+    target_point = _row_center(table, 0)  # 拖到最前
+    assert table.indexAt(source_point).row() == 2
+    assert table.indexAt(target_point).row() == 0
+
+    mime = _row_payload()
+    possible = Qt.DropAction.CopyAction | Qt.DropAction.MoveAction  # 真实拖拽给出的动作集
+    enter = QDragEnterEvent(
+        target_point, possible, mime,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    )
+    move = QDragMoveEvent(
+        target_point, possible, mime,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(table.viewport(), enter)
+    QApplication.sendEvent(table.viewport(), move)
+    assert enter.isAccepted()
+    assert move.isAccepted()  # 落点被接收，用户能看到可放置状态
+
+    table._drag_source_row = 2  # startDrag 记录的源行
+    drop = QDropEvent(
+        QPointF(target_point), possible, mime,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(table.viewport(), drop)
+
+    assert drop.isAccepted()
+    assert drop.dropAction() == Qt.DropAction.CopyAction  # Qt 不得再自行改模型
+    assert [p.name for p in repositories.people.list_all()] == ["王五", "张三", "李四"]
+    assert [p.roster_order for p in repositories.people.list_all()] == [1, 2, 3]
+    assert table.rowCount() == 3
+    assert [table.item(row, 1).text() for row in range(3)] == ["王五", "张三", "李四"]
+    assert all(table.cellWidget(row, 6) is not None for row in range(3))  # 操作列不空
+    assert not table.selectionModel().selectedRows()  # 不留可被内部移动吃掉的旧选区
+
+
+def test_move_only_drop_leaves_no_stale_selection(populated) -> None:
+    """落点无法降级为复制时，旧选区必须清空（内部移动就删不到任何行）。"""
+    page, _, repositories = populated
+    page.resize(900, 360)
+    page.show()
+    table = page._table
+    table.selectRow(0)
+    assert table.selectionModel().selectedRows()
+
+    target_point = _row_center(table, 0)
+    assert table.indexAt(target_point).row() == 0
+    mime = _row_payload()
+    QApplication.sendEvent(table.viewport(), QDragEnterEvent(
+        target_point, Qt.DropAction.MoveAction, mime,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    ))
+
+    table._drag_source_row = 2
+    drop = QDropEvent(
+        QPointF(target_point), Qt.DropAction.MoveAction, mime,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(table.viewport(), drop)
+
+    assert drop.isAccepted()
+    assert [p.name for p in repositories.people.list_all()] == ["王五", "张三", "李四"]
+    assert table.rowCount() == 3
+    assert not table.selectionModel().selectedRows()
+
+
+def test_foreign_drag_payload_never_reorders_the_roster(populated) -> None:
+    """验收 #2：外部拖拽载荷（文本等）不得被当作重排请求。"""
+    page, _, repositories = populated
+    page.resize(900, 360)
+    page.show()
+    table = page._table
+    mime = QMimeData()
+    mime.setText("外部文本")
+    enter = QDragEnterEvent(
+        _row_center(table, 0), Qt.DropAction.CopyAction, mime,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(table.viewport(), enter)
+
+    assert not enter.isAccepted()
+    assert [p.name for p in repositories.people.list_all()] == ["张三", "李四", "王五"]
+
+
+def test_batch_review_disables_row_drops(populated) -> None:
+    """回看态只读：拖拽载荷在禁用拖拽时一律不接受。"""
+    page, _, _ = populated
+    page.resize(900, 360)
+    page.show()
+    table = page._table
+    table.setDragEnabled(False)  # _render_rows 在批次回看态设置
+    enter = QDragEnterEvent(
+        _row_center(table, 1), Qt.DropAction.MoveAction, _row_payload(),
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(table.viewport(), enter)
+
+    assert not enter.isAccepted()
+
+
+def test_delete_selected_row_preselects_it_in_the_confirm_dialog(populated, monkeypatch) -> None:
+    """验收 #3：确认对话框必须预选表格里选中的那位，不再要求二次选择。"""
+    page, _, _ = populated
+    captured: dict[str, object] = {}
+
+    class _StubDialog:
+        def __init__(self, *args, **kwargs) -> None:
+            captured.update(kwargs)
+
+        def exec(self) -> int:
+            return 0  # 取消：不得删除
+
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.people_admin_page.PersonDeletionDialog",
+        _StubDialog,
+    )
+    page._table.selectRow(1)
+    page._delete_button.click()
+
+    assert captured["preselect_id"] == page.visible_people()[1].id
+    assert captured["parent"] is page
+
+
+def test_deletion_dialog_selects_and_focuses_the_requested_person(tmp_path, qtbot) -> None:
+    """验收 #3：对话框构造即选中并聚焦目标人员（预览同步）。"""
+    manage, list_persons, delete_person, _ = _services(tmp_path)
+    for name in ("张三", "李四", "王五"):
+        manage.add_person(AddPersonCommand(name=name))
+    third = list_persons.execute()[2]
+
+    dialog = PersonDeletionDialog(list_persons, delete_person, preselect_id=third.id)
+    qtbot.addWidget(dialog)
+
+    assert dialog.selected_person_id() == third.id
+    assert dialog.selected_person_name().startswith("王五")
+    assert dialog.result_preview() is not None  # 预览已按所选人员渲染
+
+    dialog.show()
+    assert dialog.focusWidget() is dialog._combo  # 选择项开局即聚焦
+
+
+def test_identity_conflict_is_reported_in_chinese(populated, monkeypatch) -> None:
+    """验收 #1：工号被占用时报中文原因，且不再出现英文原文。"""
+    page, manage, repositories = populated
+    manage.add_person(AddPersonCommand(name="赵六", identity="E100"))
+    shown = Mock(return_value=0)
+    monkeypatch.setattr(QMessageBox, "warning", shown)
+    dialog_stub = type("D", (), {
+        "exec": lambda self: 1,
+        "values": lambda self: {
+            "name": "钱七", "identity": "E100", "department": "", "note": "",
+        },
+    })()
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.people_admin_page.PersonEditDialog",
+        lambda *a, **k: dialog_stub,
+    )
+
+    page._add_button.click()
+
+    assert len(repositories.people.list_all()) == 4  # 未写入
+    title, message = shown.call_args.args[1], shown.call_args.args[2]
+    assert title == text.PEOPLE_PAGE_SAVE_FAILED_TITLE
+    assert "工号已被其他人员占用：E100" in message
+    assert "identity already registered" not in message

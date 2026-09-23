@@ -49,14 +49,30 @@ def test_add_person_appends_to_the_global_roster_order() -> None:
 def test_add_person_rejects_duplicate_identity() -> None:
     service, _ = _service()
     service.add_person(AddPersonCommand(name="张三", identity="E001"))
-    with pytest.raises(ValidationError, match="identity already registered"):
+    with pytest.raises(ValidationError, match="工号已被其他人员占用"):
         service.add_person(AddPersonCommand(name="李四", identity="E001"))
 
 
 def test_add_person_rejects_empty_name() -> None:
     service, _ = _service()
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="姓名不能为空"):
         service.add_person(AddPersonCommand(name="  "))
+
+
+def test_empty_name_rejection_is_chinese_on_both_write_paths() -> None:
+    """阶段 B 验收 #1：界面原文回显的校验消息必须是中文（不再出现英文原文）。"""
+    service, _ = _service()
+    person = service.add_person(AddPersonCommand(name="张三"))
+
+    with pytest.raises(ValidationError) as added:
+        service.add_person(AddPersonCommand(name=""))
+    with pytest.raises(ValidationError) as edited:
+        service.edit_person(EditPersonCommand(person_id=person.id, name="   "))
+
+    assert str(added.value) == "姓名不能为空"
+    assert str(edited.value) == "姓名不能为空"
+    assert "must not be empty" not in str(added.value)
+    assert "must not be empty" not in str(edited.value)
 
 
 def test_edit_person_updates_fields_and_rejects_unknown_person() -> None:
@@ -70,7 +86,7 @@ def test_edit_person_updates_fields_and_rejects_unknown_person() -> None:
     assert updated.department == "财务部"
     assert people.find_by_id(person.id).department == "财务部"
 
-    with pytest.raises(ValidationError, match="person not found"):
+    with pytest.raises(ValidationError, match="人员不存在"):
         service.edit_person(EditPersonCommand(person_id=uuid4(), name="没人"))
 
 
@@ -79,7 +95,7 @@ def test_edit_person_identity_uniqueness_excludes_self() -> None:
     first = service.add_person(AddPersonCommand(name="张三", identity="E001"))
     second = service.add_person(AddPersonCommand(name="李四", identity="E002"))
 
-    with pytest.raises(ValidationError, match="identity already registered"):
+    with pytest.raises(ValidationError, match="工号已被其他人员占用"):
         service.edit_person(EditPersonCommand(person_id=second.id, name="李四", identity="E001"))
 
     updated = service.edit_person(EditPersonCommand(person_id=first.id, name="张三", identity="E001"))
@@ -102,9 +118,9 @@ def test_reorder_people_rejects_unknown_or_duplicate_ids() -> None:
     service, _ = _service()
     person = service.add_person(AddPersonCommand(name="张三"))
 
-    with pytest.raises(ValidationError, match="not found"):
+    with pytest.raises(ValidationError, match="重排序目标不存在"):
         service.reorder_people(ReorderPeopleCommand(ordered_ids=(person.id, uuid4())))
-    with pytest.raises(ValidationError, match="duplicate"):
+    with pytest.raises(ValidationError, match="重排序列表包含重复的人员"):
         service.reorder_people(ReorderPeopleCommand(ordered_ids=(person.id, person.id)))
 
 
