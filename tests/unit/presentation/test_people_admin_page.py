@@ -213,6 +213,7 @@ def test_row_drop_reorders_the_roster_without_a_blank_row(populated) -> None:
     assert enter.isAccepted()
     assert move.isAccepted()  # 落点被接收，用户能看到可放置状态
 
+    table.selectRow(2)  # 真实拖拽总是先按下源行
     table._drag_source_row = 2  # startDrag 记录的源行
     drop = QDropEvent(
         QPointF(target_point), possible, mime,
@@ -227,16 +228,17 @@ def test_row_drop_reorders_the_roster_without_a_blank_row(populated) -> None:
     assert table.rowCount() == 3
     assert [table.item(row, 1).text() for row in range(3)] == ["王五", "张三", "李四"]
     assert all(table.cellWidget(row, 6) is not None for row in range(3))  # 操作列不空
-    assert not table.selectionModel().selectedRows()  # 不留可被内部移动吃掉的旧选区
+    # 落点降级成功：Qt 不会动模型，被拖动的人在自己的新位置保持选中
+    assert [index.row() for index in table.selectionModel().selectedRows()] == [0]
 
 
 def test_move_only_drop_leaves_no_stale_selection(populated) -> None:
-    """落点无法降级为复制时，旧选区必须清空（内部移动就删不到任何行）。"""
+    """落点无法降级为复制时，选区必须清空（内部移动就删不到任何行）。"""
     page, _, repositories = populated
     page.resize(900, 360)
     page.show()
     table = page._table
-    table.selectRow(0)
+    table.selectRow(2)
     assert table.selectionModel().selectedRows()
 
     target_point = _row_center(table, 0)
@@ -333,6 +335,74 @@ def test_deletion_dialog_selects_and_focuses_the_requested_person(tmp_path, qtbo
 
     dialog.show()
     assert dialog.focusWidget() is dialog._combo  # 选择项开局即聚焦
+
+
+def test_move_buttons_keep_the_person_selected_at_the_new_position(populated) -> None:
+    """复审追问：上移/下移后高亮必须跟着人走，不能留在原行号。"""
+    page, _, repositories = populated
+    page._table.selectRow(1)  # 李四
+    page._move_down_button.click()
+
+    assert [p.name for p in repositories.people.list_all()] == ["张三", "王五", "李四"]
+    assert page._table.item(2, 1).text() == "李四"
+    assert [index.row() for index in page._table.selectionModel().selectedRows()] == [2]
+    assert page._table.currentRow() == 2
+    assert not page._move_down_button.isEnabled()  # 已到末尾：置灰而非静默无效
+
+    page._move_up_button.click()  # 李四 回退一行
+    assert [p.name for p in repositories.people.list_all()] == ["张三", "李四", "王五"]
+    assert [index.row() for index in page._table.selectionModel().selectedRows()] == [1]
+    assert page._move_up_button.isEnabled()
+
+    page._move_up_button.click()  # 再退一行：李四 到开头
+    assert [p.name for p in repositories.people.list_all()] == ["李四", "张三", "王五"]
+    assert [index.row() for index in page._table.selectionModel().selectedRows()] == [0]
+    assert page._table.item(0, 1).text() == "李四"
+    assert not page._move_up_button.isEnabled()  # 已到开头
+
+
+def test_repeated_move_clicks_move_the_same_person(populated) -> None:
+    """连续两次下移必须移动同一个人（旧行为第二次移动的是取而代之的那位）。"""
+    page, _, repositories = populated
+    page._table.selectRow(0)  # 张三
+    page._move_down_button.click()
+    page._move_down_button.click()
+
+    assert [p.name for p in repositories.people.list_all()] == ["李四", "王五", "张三"]
+    assert [index.row() for index in page._table.selectionModel().selectedRows()] == [2]
+    assert page._table.item(2, 1).text() == "张三"
+
+
+def test_move_buttons_grey_out_at_the_roster_edges(populated) -> None:
+    """边界态：首行不能上移、末行不能下移、无选区两个都禁用。"""
+    page, _, _ = populated
+    page._table.selectRow(0)
+    assert not page._move_up_button.isEnabled()
+    assert page._move_down_button.isEnabled()
+
+    page._table.selectRow(2)
+    assert page._move_up_button.isEnabled()
+    assert not page._move_down_button.isEnabled()
+
+    page._table.clearSelection()
+    assert not page._move_up_button.isEnabled()
+    assert not page._move_down_button.isEnabled()
+    assert not page._delete_button.isEnabled()
+
+
+def test_selection_follows_the_person_across_refreshes(populated) -> None:
+    """任何重载（导入/删除/排序）后仍锁定同一个人，而不是同一个行号。"""
+    page, manage, _ = populated
+    page._table.selectRow(2)  # 王五
+    manage.add_person(AddPersonCommand(name="赵六"))  # 名单变化（窗口会重载本页）
+    page.refresh()
+
+    assert [index.row() for index in page._table.selectionModel().selectedRows()] == [2]
+    assert page._table.item(2, 1).text() == "王五"
+
+    page.move_row(2, 0)  # 王五挪到最前
+    assert [index.row() for index in page._table.selectionModel().selectedRows()] == [0]
+    assert page._table.item(0, 1).text() == "王五"
 
 
 def test_identity_conflict_is_reported_in_chinese(populated, monkeypatch) -> None:
