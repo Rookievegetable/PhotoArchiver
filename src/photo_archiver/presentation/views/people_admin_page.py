@@ -15,7 +15,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from loguru import logger
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QSignalBlocker, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -146,7 +146,10 @@ class _ReorderableTable(QTableWidget):
 class PeopleAdminPage(QWidget):
     """Ordered roster table with add/edit/delete and drag reordering."""
 
-    people_changed = Signal()
+    # structure_changed=False marks a pure reorder: the roster contents are
+    # unchanged, so the window leaves the filter axis and the readiness
+    # snapshot alone (the page has already re-rendered itself by then).
+    people_changed = Signal(bool)
 
     def __init__(
         self,
@@ -303,38 +306,50 @@ class PeopleAdminPage(QWidget):
         self._batch_combo.blockSignals(False)
 
     def _render_rows(self) -> None:
-        """Render the (filtered) roster into the table."""
+        """Render the (filtered) roster into the table.
+
+        The rebuild runs with updates frozen and table signals blocked:
+        per-row ``setItem``/``setCellWidget`` would otherwise repaint and fire
+        selection signals row by row (probe ④ dominated every click at 300+
+        rows). Row positions come from an id→position map instead of
+        ``list.index`` — an equality scan per row made the loop O(N²).
+        """
         batch_names = {summary.batch.id: summary.batch.file_name for summary in self._batches}
         people = self.visible_people()
-        self._table.setRowCount(len(people))
-        for row_index, person in enumerate(people):
-            position = self._rows.index(person) + 1
-            values = (
-                str(position),
-                person.name,
-                person.identity.value if person.identity else "",
-                person.department or "",
-                person.note or "",
-                batch_names.get(person.source_batch_id, text.PEOPLE_PAGE_MANUAL_SOURCE)
-                if person.source_batch_id is not None else text.PEOPLE_PAGE_MANUAL_SOURCE,
-            )
-            for column, value in enumerate(values):
-                item = QTableWidgetItem(value)
-                item.setToolTip(value)
-                self._table.setItem(row_index, column, item)
-            edit_button = QPushButton(text.PEOPLE_PAGE_EDIT_BUTTON, self._table)
-            edit_button.clicked.connect(
-                lambda _checked=False, person=person: self._on_edit_clicked(person),
-            )
-            self._table.setCellWidget(row_index, len(_COLUMNS) - 1, edit_button)
-        if people:
-            self._empty_label.clear()
-        else:
-            self._empty_label.setText(
-                text.PEOPLE_PAGE_EMPTY if not self._rows else text.PEOPLE_PAGE_EMPTY_FILTERED
-            )
-        self._table.setDragEnabled(self._batch_filter is None)
-        self._batch_hint.setVisible(self._batch_filter is not None)
+        positions = {person.id: index + 1 for index, person in enumerate(self._rows)}
+        self._table.setUpdatesEnabled(False)
+        try:
+            with QSignalBlocker(self._table):
+                self._table.setRowCount(len(people))
+                for row_index, person in enumerate(people):
+                    values = (
+                        str(positions[person.id]),
+                        person.name,
+                        person.identity.value if person.identity else "",
+                        person.department or "",
+                        person.note or "",
+                        batch_names.get(person.source_batch_id, text.PEOPLE_PAGE_MANUAL_SOURCE)
+                        if person.source_batch_id is not None else text.PEOPLE_PAGE_MANUAL_SOURCE,
+                    )
+                    for column, value in enumerate(values):
+                        item = QTableWidgetItem(value)
+                        item.setToolTip(value)
+                        self._table.setItem(row_index, column, item)
+                    edit_button = QPushButton(text.PEOPLE_PAGE_EDIT_BUTTON, self._table)
+                    edit_button.clicked.connect(
+                        lambda _checked=False, person=person: self._on_edit_clicked(person),
+                    )
+                    self._table.setCellWidget(row_index, len(_COLUMNS) - 1, edit_button)
+                if people:
+                    self._empty_label.clear()
+                else:
+                    self._empty_label.setText(
+                        text.PEOPLE_PAGE_EMPTY if not self._rows else text.PEOPLE_PAGE_EMPTY_FILTERED
+                    )
+                self._table.setDragEnabled(self._batch_filter is None)
+                self._batch_hint.setVisible(self._batch_filter is not None)
+        finally:
+            self._table.setUpdatesEnabled(True)
         self._render_action_state()
 
     def _render_action_state(self) -> None:
@@ -473,15 +488,22 @@ class PeopleAdminPage(QWidget):
             self.refresh()
             return
         logger.info("People page reordered {} people", updated)
-        self._after_mutation(text.PEOPLE_PAGE_REORDERED.format(count=updated))
+        self._after_mutation(
+            text.PEOPLE_PAGE_REORDERED.format(count=updated), structure_changed=False,
+        )
 
     # ── Shared helpers ──────────────────────────────────────────────────
 
-    def _after_mutation(self, message: str) -> None:
-        """Reload the page, then let the window refresh dependent surfaces."""
+    def _after_mutation(self, message: str, *, structure_changed: bool = True) -> None:
+        """Reload the page, then let the window refresh dependent surfaces.
+
+        ``structure_changed=False`` marks a pure reorder: the page has already
+        re-rendered here, and the window skips its filter-axis / snapshot
+        cascade — its extra ``refresh()`` used to double every table rebuild.
+        """
         self.refresh()
         self._status_message = message
-        self.people_changed.emit()
+        self.people_changed.emit(structure_changed)
 
     def last_message(self) -> str:
         """Return the message of the last successful mutation (window status)."""

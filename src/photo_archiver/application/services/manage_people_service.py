@@ -120,7 +120,11 @@ class ManagePeopleService:
         ordered_ids = command.ordered_ids
         if len(set(ordered_ids)) != len(ordered_ids):
             raise ValidationError("重排序列表包含重复的人员")
-        missing = [pid for pid in ordered_ids if self._people.find_by_id(pid) is None]
+        # One roster read instead of N point lookups: the SQLite adapter opens
+        # a fresh connection per find_by_id (probe ①a — the per-id loop was
+        # ~80% of the write phase at 300+ people, while the UPDATE itself is ms).
+        existing_ids = {person.id for person in self._people.list_all()}
+        missing = [pid for pid in ordered_ids if pid not in existing_ids]
         if missing:
             raise ValidationError(f"重排序目标不存在：{missing}")
         orders = [(person_id, position) for position, person_id in enumerate(ordered_ids, 1)]

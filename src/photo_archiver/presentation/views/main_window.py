@@ -610,13 +610,21 @@ class MainWindow(QMainWindow):
         self._people_admin_page = page
         return page
 
-    def _on_people_changed(self) -> None:
-        """Reflect a roster mutation across the window (filter axis, overview)."""
+    def _on_people_changed(self, structure_changed: bool = True) -> None:
+        """Reflect a roster mutation across the window (filter axis, overview).
+
+        Tiered by change kind: a pure reorder touches neither the person
+        catalog nor the readiness snapshot, and the page has already
+        re-rendered itself before emitting — refreshing any of them again
+        doubled every 上移/下移 click (probe ⑥).
+        """
         page = self._pages.widget(2)
         message = page.last_message() if isinstance(page, PeopleAdminPage) else ""
         if message:
             self._status_label.setText(message)
-        self._refresh_filter_persons()
+        if not structure_changed:
+            return
+        self._refresh_filter_persons(refresh_page=False)
         self._refresh_workspace_state()
 
     def _build_data_tools_page(self) -> QWidget:
@@ -974,7 +982,7 @@ class MainWindow(QMainWindow):
             summary += " · " + STATUS_MATCH_UNREADABLE.format(unreadable=unreadable)
         self._status_label.setText(self._status_label.text() + " · " + summary)
 
-    def _refresh_filter_persons(self) -> None:
+    def _refresh_filter_persons(self, *, refresh_page: bool = True) -> None:
         """Load the FilterBar person axis through the Application layer.
 
         Thin read-only use case (``ListPersonsService`` over
@@ -984,9 +992,13 @@ class MainWindow(QMainWindow):
         Stage B: the people page shares the same registry, so every refresh of
         the person axis (import confirm, deletion, plugin import, …) reloads
         the roster table too — otherwise the page went stale until restart.
+
+        ``refresh_page=False`` is for the page's own ``people_changed`` path,
+        where the page reloaded itself before emitting; refreshing it again
+        would rebuild the whole table a second time per click.
         """
         self._filter_bar.set_persons(self._context.services.list_persons.execute())
-        if getattr(self, "_people_admin_page", None) is not None:
+        if refresh_page and getattr(self, "_people_admin_page", None) is not None:
             self._people_admin_page.refresh()
 
     def _on_failed(self, event: TaskFailed) -> None:
