@@ -128,9 +128,12 @@ class _ReorderableTable(QTableWidget):
         if source_row < 0 or target_row < 0 or source_row == target_row:
             return
         self.rows_dropped.emit(source_row, target_row)
-        # The page re-rendered the rows above, so any selection Qt still holds
-        # is stale — it must never feed a later internal move.
-        self.clearSelection()
+        if event.dropAction() != Qt.DropAction.CopyAction:
+            # Qt could not downgrade this drop, so its internal clearOrRemove()
+            # is about to delete the selected row from the model: no row (and
+            # in particular not the freshly re-selected moved one) may stay
+            # selected.
+            self.clearSelection()
 
     def _is_row_drag(self, event) -> bool:  # noqa: ANN001  # Qt signature
         """Return True while one of our own draggable rows is over the table."""
@@ -230,18 +233,59 @@ class PeopleAdminPage(QWidget):
     # ── Data + rendering ────────────────────────────────────────────────
 
     def refresh(self) -> None:
-        """Reload the roster from Application and re-render everything."""
+        """Reload the roster from Application and re-render everything.
+
+        The selection is anchored to the selected *person*, not to a row index:
+        every re-render (import, deletion, reorder, the window's own refresh)
+        keeps that person selected wherever the roster now puts them. Stage-B
+        review follow-up: the highlight used to stay on the old row index,
+        which after 「上移/下移」 is somebody else — so the next click moved the
+        wrong person.
+        """
+        selected_id = self._selected_person_id()
         roster = self._manage_people.roster()
         self._rows = list(roster.people)
         self._batches = roster.batches
         self._render_batch_combo()
         self._render_rows()
+        self._restore_selection(selected_id)
 
     def visible_people(self) -> list[Person]:
         """Return the rows the table currently shows (batch filter applied)."""
         if self._batch_filter is None:
             return list(self._rows)
         return [person for person in self._rows if person.source_batch_id == self._batch_filter]
+
+    def _selected_person_id(self) -> UUID | None:
+        """Return the id of the person behind the selected row, or ``None``."""
+        person = self._selected_person()
+        return person.id if person is not None else None
+
+    def _restore_selection(self, person_id: UUID | None) -> None:
+        """Re-select ``person_id`` when it is still part of the visible roster."""
+        if person_id is None:
+            return
+        for index, person in enumerate(self.visible_people()):
+            if person.id == person_id:
+                self._focus_row(index)
+                return
+
+    def _focus_row(self, index: int) -> None:
+        """Select row ``index``, make it the current row and reveal it.
+
+        Focus is only taken when the table already owned it — a move started
+        from the 「上移/下移」 buttons must leave those buttons keyboard-usable.
+        """
+        if not (0 <= index < self._table.rowCount()):
+            return
+        item = self._table.item(index, 1)
+        if item is None:
+            return
+        self._table.setCurrentCell(index, 1)
+        self._table.selectRow(index)
+        self._table.scrollToItem(item)
+        if self._table.hasFocus() or self._table.viewport().hasFocus():
+            self._table.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _render_batch_combo(self) -> None:
         """Refill the batch selector, preserving the active filter."""
@@ -294,10 +338,16 @@ class PeopleAdminPage(QWidget):
         self._render_action_state()
 
     def _render_action_state(self) -> None:
-        """Reordering needs a full-roster view and a selected row."""
-        reorderable = self._batch_filter is None and self._selected_row_index() >= 0
-        self._move_up_button.setEnabled(reorderable)
-        self._move_down_button.setEnabled(reorderable)
+        """Reordering needs a full-roster view and a selected, movable row.
+
+        The move buttons grey out at the roster edges instead of silently doing
+        nothing when the selected person is already first/last.
+        """
+        index = self._selected_row_index()
+        reorderable = self._batch_filter is None and index >= 0
+        last_index = self._table.rowCount() - 1
+        self._move_up_button.setEnabled(reorderable and index > 0)
+        self._move_down_button.setEnabled(reorderable and 0 <= index < last_index)
         self._delete_button.setEnabled(self._selected_person() is not None)
 
     def _selected_row_index(self) -> int:
@@ -384,14 +434,19 @@ class PeopleAdminPage(QWidget):
     # ── Reordering ──────────────────────────────────────────────────────
 
     def move_selected(self, offset: int) -> None:
-        """Move the selected row by ``offset`` places and persist the roster."""
+        """Move the selected row by ``offset`` places and persist the roster.
+
+        The person stays selected at their new position (``refresh`` re-anchors
+        the selection to the person), so pressing 「上移/下移」 again keeps moving
+        the same person instead of whoever the old row index now holds.
+        """
         index = self._selected_row_index()
         if index < 0 or self._batch_filter is not None:
             return
         self.move_row(index, index + offset)
 
     def move_row(self, source_index: int, target_index: int) -> None:
-        """Reorder the roster rows and persist the new sequence in one call."""
+        """Reorder the roster rows, persist the sequence and keep the row selected."""
         people = self.visible_people()
         if not (0 <= source_index < len(people)) or not (0 <= target_index < len(people)):
             return
