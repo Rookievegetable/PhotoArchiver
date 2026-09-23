@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.33.0 · Last Updated: 2026-09-23 · Status: Live
+> Version: 1.34.0 · Last Updated: 2026-09-23 · Status: Live
 
 ---
 
@@ -25,6 +25,8 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 ---
 
 ## 2. Current Step（当前开发阶段）
+
+**人员名单导入与人脸分组匹配 · 阶段 B 重排性能优化 P0（2026-09-23 实施，探针实测验证，待 owner 桌面体感复验）**——探测驱动（`logs/probe_perf.py`：真实 SQLite + offscreen Qt，50/300/1000 人 × 连续下移 20 次，逐阶段计时）：基线单次点击总耗时 **88/477/2132ms**，热点与此前假设不同——① `reorder_people` 逐 id `find_by_id` 校验（每查开一条新连接，占写库段 ~80%；真正的 N 行 UPDATE+提交仅 ~8ms@300，「只写受影响行」假设被证伪）；② 页面自刷新 + 窗口级联再刷新的**双重整表重建**（`_render_rows` ×2.0/点击）；③ 渲染循环 `list.index` O(N²) 行查找与逐行信号/重绘。修复三箭：**P0-1** 校验改一次 `list_all()` + 集合比对（行为与错误文案零变化）；**P0-2** `people_changed` 信号带 `structure_changed` 分级——纯顺序变化只更新状态栏（页面发射信号前已自刷新），不再重建筛选轴/就绪快照、不再二次 `page.refresh()`；结构变化（增/删/改）级联完整保留，但同样跳过对「已自刷新页面」的第二次刷新；**P0-3** `_render_rows` 以 `setUpdatesEnabled(False)` + `QSignalBlocker` 包裹重建，行位次改 id→位次字典。**同口径复测：50 人 88.9→21.7ms（4.1×）、300 人 476.4→115.6ms（4.1×）、1000 人 1757.4→391.0ms（4.5×）**；④ ×2.0→×1.0/点击、①a ×N→×0、⑥c 消除。回归测试 +5 项。未改 Schema/依赖/CLI/插件契约；保存即时性语义不变（单事务毫秒级，防抖确认为不需要）。**边界**：1000 人档剩余 ~391ms 中 ~261ms 为整表 `setItem`+逐行按钮重建（P1 增量两行交换 / P2 delegate 按钮**待 owner 立项**）；探针修正记录——手动 `processEvents()` 不投递 DeferredDelete，`setCellWidget` 替换的旧按钮以可见子控件累积并线性拖慢重绘（探针伪影，真实 `exec()` 事件循环持续投递、应用无此问题），修正后基线由 2132ms 修正为 1757ms。
 
 **人员名单导入与人脸分组匹配 · 阶段 B 桌面复审修复（2026-09-23 实施，待 owner 复验）**——owner 桌面验收 §1–§9 通过并提出四项问题（⑤ 为复审追问后追加），均已修复且各配回归测试：① **校验消息中文化**：`ManagePeopleService` 面向用户的校验文案改为中文（「工号已被其他人员占用：X」「姓名不能为空」「人员不存在」「重排序列表包含重复的人员 / 重排序目标不存在」），域实体保持语言中立、由 Application 层映射已知规则、未知消息原样透传；保存失败/删除失败对话框标题从「新增人员」改为「无法保存名单修改」/「无法删除人员」。② **拖拽重排不再出现空白行**（根因：`InternalMove` 下 Qt 在页面按域重渲染**之后**才执行 `QAbstractItemView::startDrag` 的 `clearOrRemove()`，把源行从视图模型删掉而行内按钮不跟随 → 目标行空白；修复：拖拽模式改 `DragOnly` 并在模式设置**之后**为视图与视口重新开启 `acceptDrops`（`setDragDropMode` 会复位该标志）、`startDrag` 记录源行、自绘 `dragEnter/dragMove` 仅接受本表行载荷（外部/文本载荷与回看态禁拖拽时一律拒绝）、落点显式降级为 `CopyAction`（表拖拽动作集为 Copy|Move）+ 清空陈旧选区兜底）。③ **删除确认对话框进入即预选**：`preselect_id` 按字符串比对选中目标行，`showEvent` 聚焦选择器（默认按钮仍为「取消」，误按回车不会删除）。④ **导入后「人员与分组」页无需重启即刷新**：`_refresh_filter_persons` 作为人员轴刷新汇聚点同步 `page.refresh()`，覆盖同步导入、后台 `import_confirm`、插件导入、删除与页面自身改动（来源批次下拉与「来源批次」列同步更新）。⑤ **上移/下移（含拖拽落点）后高亮跟随被移动的人**（复审追问：移动后选区停留在原行号 → 连续点击移动的是「取而代之」的另一人；修复：`refresh()` 把选区锚定到「人」——重渲染前记下选中人员的 id、渲染后按 id 找回并 `setCurrentCell`/`selectRow`/`scrollToItem`，覆盖按钮移动、拖拽落点与窗口人员轴刷新汇聚路径；仅在表格原本持有焦点时归还焦点，按钮键盘可用性不受影响；「上移/下移」在首/末行置灰替代静默无效；`dropEvent` 的「清空陈旧选区」兜底改为仅在落点未能降级为 `CopyAction` 时执行，正常拖拽后被拖行在新位置保持选中）。未改 Schema、未加依赖、未改删除级联与 CLI/插件契约。
 
@@ -111,12 +113,12 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl` + `003_import_batches
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-23（本地 Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；阶段 B owner 桌面验收（2026-09-23，§1–§9 通过）之后，本次会话实施**阶段 B 四项复审修复**，同日继续修复复审追问（上移/下移后高亮跟随被移动的人） |
+| 时间 | 2026-09-23（本地 Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；阶段 B owner 桌面验收（2026-09-23，§1–§9 通过）之后，本次会话实施**阶段 B 四项复审修复**，同日继续修复复审追问（上移/下移后高亮跟随被移动的人）；当日晚些会话实施**重排性能优化 P0**（探测定位 → P0-1/P0-2/P0-3 → 探针复测闭环） |
 | 会话范围 | ① 人员页校验消息中文化（Application 映射已知域规则 + 两个对话框标题）；② 拖拽重排「空白行」根因修复（`DragOnly` + 视口 `acceptDrops` + 自绘 `dragEnter/dragMove/drop` + 落点降级 `CopyAction` + 陈旧选区清空 + `startDrag` 源行）；③ 删除确认对话框预选与聚焦；④ 导入后「人员与分组」页即时刷新（人员轴刷新汇聚点）；⑤ 回归测试与探测：空白行回归 4 项 + 服务 1 项 + 导入闭环 1 项，既有 2 项断言改中文，探测脚本 3 份（Qt 拖放语义 / `findData` 对象比对 / 上移下移选区行为）；⑥ 复审追问修复：上移/下移与拖拽落点后选区锚定到「人」并跟随到新位置、首/末行按钮置灰、`dropEvent` 清空选区改条件化；新增回归 4 项 + 拖拽 2 项断言更新；用户手册同步新行为 |
-| 关键产出 | ① Application：`manage_people_service.py` 增 `_ENTITY_MESSAGES`（已知域规则中文映射）与 `_localized_validation()`，`add_person`/`edit_person` 两条写入路径经映射后抛中文，模块 docstring 记录「域保持语言中立、Application 拥有 UI 文案」；② Presentation：`people_admin_page.py` 的 `_ReorderableTable` 拖拽实现重写（`_ROW_MIME_TYPE` + `startDrag` 记录源行 + `dragEnterEvent`/`dragMoveEvent`/`dropEvent`/`_is_row_drag`，落点显式降级 `CopyAction` 后清空陈旧选区；`DragOnly` 之后重新开启视图与视口 `acceptDrops`）与 `_warn(message, title)`；`person_deletion_dialog.py` 的 `_select_person` 改字符串比对 + 新增 `showEvent` 聚焦选择器；③ `ui_text.py` 新增 `PEOPLE_PAGE_SAVE_FAILED_TITLE`/`PEOPLE_PAGE_DELETE_FAILED_TITLE`；④ 测试：页面 8 项 + 服务 1 项 + 导入闭环 1 项（既有空姓名/占用断言改中文匹配）；⑤ 探测脚本 `logs/probe_drag.py`/`logs/probe_combo.py`（不入库）；⑥ 复审追问修复：`refresh()` 选区锚定到人员 id（`_selected_person_id`/`_restore_selection`/`_focus_row`，仅表格原本持焦时归还焦点）、`_render_action_state` 首/末行置灰、`dropEvent` 清空选区改为仅落点未降级 `CopyAction` 时执行；页面回归 +4 项（19 项）、拖拽 2 项断言改为「被拖行在新位置保持选中 / 仅兜底清空」；`docs/user-guide/manual.md` 同步「保持选中 + 边界置灰 + 删除预选」；探测 `logs/probe_move.py`（不入库） |
-| 当前质量门 | 提交前实测：`ruff check src tests` **All checks passed**；`mypy src` **216 source files** 无问题；pytest **全量 1099 passed / 6 skipped**（3:52，unit 969 + integration 130，0 failed、全程无挂起）；复审追问修复单测：页面页 19 项 + 相关集成/服务 13 项共 32 项全绿 |
-| 工作区 | main；阶段 B 复审修复以三段提交入库：`fix(people)`（四项源码修复 + 两个标题常量）、`test(people)`（10 项回归测试）、`docs(status)`（PROJECT_STATUS 同步）；复审追问修复另三段：`fix(people)`（上移/下移选区跟随 + 边界置灰 + `dropEvent` 条件清空）、`test(people)`（新增 4 项 + 拖拽 2 项断言更新）、`docs(people)`（手册 + PROJECT_STATUS 同步 v1.33.0）；**未推送**（push 属 owner，GIT-020）。 |
-| Remaining | **阶段 A 已验收通过（2026-09-21）**；**阶段 B §1–§9 已通过（2026-09-23）**，四项复审问题已修复并追加复审追问修复，**待 owner 复验**（① 工号占用提示中文；② 拖拽排序无空白行；③ 删除确认进入即预选并聚焦；④ 导入后人员页无需重启刷新；⑤ 上移/下移（含拖拽）后高亮跟随被移动的人、首/末行按钮置灰）。**下一步需 owner 立项**：阶段 C（多脸检测与可重跑）· 阶段 D（聚类 + 时间排序）· 阶段 E/F 待 C/D 就绪 · UI/UX Batch 7 整体收口验收 · v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 签核 · 第 4 轮全面体检候审。 |
+| 关键产出 | ① Application：`manage_people_service.py` 增 `_ENTITY_MESSAGES`（已知域规则中文映射）与 `_localized_validation()`，`add_person`/`edit_person` 两条写入路径经映射后抛中文，模块 docstring 记录「域保持语言中立、Application 拥有 UI 文案」；② Presentation：`people_admin_page.py` 的 `_ReorderableTable` 拖拽实现重写（`_ROW_MIME_TYPE` + `startDrag` 记录源行 + `dragEnterEvent`/`dragMoveEvent`/`dropEvent`/`_is_row_drag`，落点显式降级 `CopyAction` 后清空陈旧选区；`DragOnly` 之后重新开启视图与视口 `acceptDrops`）与 `_warn(message, title)`；`person_deletion_dialog.py` 的 `_select_person` 改字符串比对 + 新增 `showEvent` 聚焦选择器；③ `ui_text.py` 新增 `PEOPLE_PAGE_SAVE_FAILED_TITLE`/`PEOPLE_PAGE_DELETE_FAILED_TITLE`；④ 测试：页面 8 项 + 服务 1 项 + 导入闭环 1 项（既有空姓名/占用断言改中文匹配）；⑤ 探测脚本 `logs/probe_drag.py`/`logs/probe_combo.py`（不入库）；⑥ 复审追问修复：`refresh()` 选区锚定到人员 id（`_selected_person_id`/`_restore_selection`/`_focus_row`，仅表格原本持焦时归还焦点）、`_render_action_state` 首/末行置灰、`dropEvent` 清空选区改为仅落点未降级 `CopyAction` 时执行；页面回归 +4 项（19 项）、拖拽 2 项断言改为「被拖行在新位置保持选中 / 仅兜底清空」；`docs/user-guide/manual.md` 同步「保持选中 + 边界置灰 + 删除预选」；探测 `logs/probe_move.py`（不入库）；⑦ 性能 P0：`manage_people_service.py` 重排校验单读化、`people_admin_page.py` 信号分级 + `_render_rows` 冻结/阻塞/O(N) 位次、`main_window.py` 级联分层（`_on_people_changed(structure_changed)` + `_refresh_filter_persons(refresh_page=)`）；回归 +5 项；探针 `logs/probe_perf.py` 建基线并复测（修正 DeferredDelete 投递伪影后同口径对比），诊断探针 `probe_perf_debug.py`/`probe_widget_leak.py`（均不入库） |
+| 当前质量门 | 提交前实测：`ruff check src tests` **All checks passed**；`mypy src` **216 source files** 无问题；pytest **全量 1104 passed / 6 skipped**（4:21，0 failed、全程无挂起）；P0 目标测试 55 项（服务 + 页面 + 窗口 + 集成）单跑全绿 |
+| 工作区 | main；阶段 B 复审修复以三段提交入库：`fix(people)`（四项源码修复 + 两个标题常量）、`test(people)`（10 项回归测试）、`docs(status)`（PROJECT_STATUS 同步）；复审追问修复另三段：`fix(people)`（上移/下移选区跟随 + 边界置灰 + `dropEvent` 条件清空）、`test(people)`（新增 4 项 + 拖拽 2 项断言更新）、`docs(people)`（手册 + PROJECT_STATUS 同步 v1.33.0）；性能 P0 另两段：`8bf2af8 perf(people)`（P0-1/P0-2/P0-3 三处源码）、`0067993 test(people)`（回归 +5 项）；**未推送**（push 属 owner，GIT-020）。 |
+| Remaining | **阶段 A 已验收通过（2026-09-21）**；**阶段 B §1–§9 已通过（2026-09-23）**，四项复审问题已修复并追加复审追问修复，**待 owner 复验**（① 工号占用提示中文；② 拖拽排序无空白行；③ 删除确认进入即预选并聚焦；④ 导入后人员页无需重启刷新；⑤ 上移/下移（含拖拽）后高亮跟随被移动的人、首/末行按钮置灰）；**重排性能 P0 已实施并探针实测（50/300/1000 人单次点击 21.7/115.6/391.0ms），待 owner 桌面体感复验**。**下一步需 owner 立项**：重排性能 P1（增量两行交换，1000 人档预计 <100ms）/P2（delegate 按钮，仅当千人名单真实存在）· 阶段 C（多脸检测与可重跑）· 阶段 D（聚类 + 时间排序）· 阶段 E/F 待 C/D 就绪 · UI/UX Batch 7 整体收口验收 · v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 签核 · 第 4 轮全面体检候审。 |
 
 ---
 
@@ -140,6 +142,15 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl` + `003_import_batches
 - 导入后即时刷新：`tests/integration/test_excel_import_ui_closed_loop.py::test_second_import_refreshes_the_people_page_without_restart`（真实 .xlsx 连续两批导入 → 页面无需重启显示 3 人，「来源批次」列显示第二批文件名）。
 - 边界：拖拽仍仅在「全部批次」视图生效；落点降级依赖表拖拽动作集含 `CopyAction`（当前 PySide6 实测为 Copy|Move），若未来模型不再提供 Copy 则由「清空陈旧选区」兜底（不保证光标语义）；选区跟随仅在人员仍在可见名单时恢复（批次回看过滤后自然清空；回看态本身禁移动）；中文化仅覆盖**已知**域规则映射（`_ENTITY_MESSAGES`），新增域规则需同步登记，未知消息原样透传不静默改写；未做人工桌面复验（待 owner 按复审五点复验）。
 - 探测脚本（`logs/`，不入库）：`probe_drag.py`（Qt 拖放语义：`setDragDropMode` 复位 `acceptDrops`、表拖拽动作集、事件投递路径）、`probe_combo.py`（`findData` 与 Python 对象比对）、`probe_move.py`（上移/下移选区跟随的修复前后行为对照）。
+
+---
+
+### 阶段 B 重排性能优化 P0 证据与边界
+
+- 性能回归：`tests/unit/application/test_manage_people_service.py::test_reorder_people_validates_with_a_single_roster_read`（校验期间 `find_by_id` 调用归零，顺序与返回值不变）；`tests/unit/presentation/test_people_admin_page.py::test_move_renders_the_table_exactly_once`（一次移动 `_render_rows` 恰一次且 `people_changed` 发 `structure_changed=False`）、`test_structural_mutation_marks_people_changed_as_structural`（新增发 `True`）；`tests/unit/presentation/test_main_window_workspace_state.py` 新增两项——纯顺序变化时筛选轴/就绪快照/页面重渲染全部不触发，结构变化时筛选轴与快照各一次且不再二次 `page.refresh()`。
+- 探针数字（`logs/probe_perf.py` 同口径 before/after，均修正 DeferredDelete 投递后）：50 人 88.9→21.7ms、300 人 476.4→115.6ms、1000 人 1757.4→391.0ms；阶段调用次数 ④ ×2.0→×1.0、①a ×N→×0、⑥c ×1.0→×0.0；原始日志 `logs/perf_probe.log`（旧基线）/ `perf_probe_before_fixed.log`（同口径基线）/ `perf_probe_after.log`（P0 后）。
+- 边界：`people_changed` 信号签名由 `Signal()` 变 `Signal(bool)`（唯一连接点 `_on_people_changed`，默认参数兼容直接调用）；纯顺序变化后照片库人员筛选下拉的排列顺序在下一次结构变化/重启前保持旧序（内容与选中不受影响，裁决接受的取舍）；结构变化级联仍会经 `set_persons` 重发 criteria 触发照片列表重查（删除人员后筛选回落「全部人员」的语义依赖此路径，保留）；P0-3 的冻结/阻塞只作用于渲染窗口内，选区恢复与按钮态刷新在其后正常执行；探针伪影（`processEvents()` 不投递 DeferredDelete 导致旧行内按钮累积）仅影响无真实事件循环的探测环境，应用 `exec()` 下不存在；P1/P2 未实施（待立项）。
+- 诊断探针（`logs/`，不入库）：`probe_perf_debug.py`（逐点击分解定位累积伪影）、`probe_widget_leak.py`（四变体对照证明旧按钮不回收与 P0-3 无关 + DeferredDelete 显式冲刷验证）。
 
 ---
 
@@ -199,7 +210,7 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl` + `003_import_batches
 
 **人员名单导入重设计阶段 A 已实施并验收通过**（2026-09-20 实施 / 2026-09-21 owner 桌面验收 §1–§9 全部通过，见 §2/§5 与 `docs/development/stage-a-import-acceptance-script.md` §11；F-A1/F-A2 裁决已实施并回归）。**阶段 B 已实施并完成 owner 桌面验收（2026-09-23，§1–§9 通过），四项复审问题与复审追问已修复（中文校验文案 / 拖拽无空白行 / 删除确认预选聚焦 / 导入后人员页即时刷新 / 移动后高亮跟随被移动的人），待 owner 复验**（见 §2/§5「阶段 B 复审修复证据与边界」）。UI/UX 收口批次 0–7 全部实施完毕（2026-09-19），待 owner 按 `docs/development/ui-acceptance-script.md` 执行端到端验收。v2.8.0 发布与安装包验收事项仍独立保留；本轮没有重新核验远端 CI、Release body 或安装包。后续均需 owner 立项：
 
-| Next Step | **待 owner**：① **阶段 B 复审五点复验**（工号占用提示中文 / 拖拽排序无空白行 / 删除确认进入即预选并聚焦 / 导入后人员页无需重启刷新 / 上移下移（含拖拽）后高亮跟随被移动的人）与阶段 C（多脸检测与可重跑）是否立项；② 新离线安装包二轮真机验收 + Release body 粘贴 `[2.8.0]` 段后签核；③ A-1 CURRENT_BATCH 导出是否解除挂起（解除则先出批次持久化设计文档）；④ A-3 代码签名证书采购决策；⑤ 是否提交上游 PySide6 issue（草稿就绪）。**可立项**：A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论（枚举回后台线程 = 回到崩溃形态）。**明确不做**：i18n 实装、自动更新、macOS 安装包、批次撤销。 |
+| Next Step | **待 owner**：① **阶段 B 复审五点复验**（工号占用提示中文 / 拖拽排序无空白行 / 删除确认进入即预选并聚焦 / 导入后人员页无需重启刷新 / 上移下移（含拖拽）后高亮跟随被移动的人）+ **重排性能 P0 桌面体感复验**（探针实测 300 人 116ms/点击）与阶段 C（多脸检测与可重跑）是否立项；①b 重排性能 P1（增量两行交换）/P2（delegate 按钮）是否立项（仅当 ~1000 人名单为真实场景）；② 新离线安装包二轮真机验收 + Release body 粘贴 `[2.8.0]` 段后签核；③ A-1 CURRENT_BATCH 导出是否解除挂起（解除则先出批次持久化设计文档）；④ A-3 代码签名证书采购决策；⑤ 是否提交上游 PySide6 issue（草稿就绪）。**可立项**：A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论（枚举回后台线程 = 回到崩溃形态）。**明确不做**：i18n 实装、自动更新、macOS 安装包、批次撤销。 |
 
 ---
 
