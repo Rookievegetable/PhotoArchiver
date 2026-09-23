@@ -14,6 +14,10 @@ re-sequences people. Design notes:
   the page's drag action defines the complete order;
 - batch review reads ``ImportBatchRepository.list_batches()`` and counts the
   people still pointing at each batch, so a person always shows its origin.
+
+Wording: the ``Person`` entity keeps language-neutral messages, while the
+messages this service raises are the ones the UI shows verbatim — so the roster
+rules (including the entity's name rule) are surfaced in Chinese here.
 """
 
 from uuid import UUID
@@ -31,6 +35,12 @@ from photo_archiver.domain.entities import Person
 from photo_archiver.domain.exceptions import ValidationError
 from photo_archiver.domain.repositories import ImportBatchRepository, PersonRepository
 from photo_archiver.domain.value_objects import PersonIdentity
+
+
+_ENTITY_MESSAGES = {
+    "Person name must not be empty": "姓名不能为空",
+}
+"""Chinese wording for the entity rules a user can hit (stage-B review fix #1)."""
 
 
 class ManagePeopleService:
@@ -62,13 +72,16 @@ class ManagePeopleService:
         """
         identity = self._identity_or_none(command.identity)
         self._ensure_identity_available(identity)
-        person = Person(
-            name=command.name,
-            identity=identity,
-            department=command.department,
-            note=command.note,
-            roster_order=(self._people.max_roster_order() or 0) + 1,
-        )
+        try:
+            person = Person(
+                name=command.name,
+                identity=identity,
+                department=command.department,
+                note=command.note,
+                roster_order=(self._people.max_roster_order() or 0) + 1,
+            )
+        except ValidationError as exc:
+            raise self._localized_validation(exc) from exc
         self._people.add(person)
         logger.info("AUDIT add-person actor=local-user person_id={} name={}", person.id, person.name)
         return person
@@ -82,14 +95,17 @@ class ManagePeopleService:
         """
         person = self._people.find_by_id(command.person_id)
         if person is None:
-            raise ValidationError(f"person not found: {command.person_id}")
+            raise ValidationError(f"人员不存在：{command.person_id}")
         identity = self._identity_or_none(command.identity)
         self._ensure_identity_available(identity, owner_id=command.person_id)
         person.name = command.name
         person.identity = identity
         person.department = command.department
         person.note = command.note
-        person.__post_init__()  # re-run entity normalization + validation in place
+        try:
+            person.__post_init__()  # re-run entity normalization + validation in place
+        except ValidationError as exc:
+            raise self._localized_validation(exc) from exc
         self._people.add(person)
         logger.info("AUDIT edit-person actor=local-user person_id={} name={}", person.id, person.name)
         return person
@@ -103,10 +119,10 @@ class ManagePeopleService:
         """
         ordered_ids = command.ordered_ids
         if len(set(ordered_ids)) != len(ordered_ids):
-            raise ValidationError("reorder list contains duplicate ids")
+            raise ValidationError("重排序列表包含重复的人员")
         missing = [pid for pid in ordered_ids if self._people.find_by_id(pid) is None]
         if missing:
-            raise ValidationError(f"reorder targets not found: {missing}")
+            raise ValidationError(f"重排序目标不存在：{missing}")
         orders = [(person_id, position) for position, person_id in enumerate(ordered_ids, 1)]
         if self._unit_of_work is not None:
             with self._unit_of_work:
@@ -133,6 +149,17 @@ class ManagePeopleService:
         return PeopleRoster(people=people, batches=batches)
 
     @staticmethod
+    def _localized_validation(exc: ValidationError) -> ValidationError:
+        """Return the user-facing (Chinese) form of an entity validation error.
+
+        The entity stays language-neutral; the Application layer owns the
+        wording the Presentation shows verbatim, so a rule the user can hit
+        (an empty name) is translated here. Unknown messages pass through
+        unchanged — a new entity rule is never silently reworded.
+        """
+        return ValidationError(_ENTITY_MESSAGES.get(str(exc), str(exc)))
+
+    @staticmethod
     def _identity_or_none(raw_identity: str | None) -> PersonIdentity | None:
         """Normalize the optional identity cell into a value object."""
         text = (raw_identity or "").strip()
@@ -146,4 +173,4 @@ class ManagePeopleService:
             return
         existing = self._people.find_by_identity(identity)
         if existing is not None and existing.id != owner_id:
-            raise ValidationError(f"identity already registered: {identity.value}")
+            raise ValidationError(f"工号已被其他人员占用：{identity.value}")

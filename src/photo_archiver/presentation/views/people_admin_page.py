@@ -15,7 +15,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from loguru import logger
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -56,32 +56,88 @@ _COLUMNS = (
 )
 
 
+_ROW_MIME_TYPE = "application/x-qabstractitemmodeldatalist"
+
+
 class _ReorderableTable(QTableWidget):
-    """Table whose rows can be dragged to re-ask the page for a new order."""
+    """Table whose rows can be dragged to re-ask the page for a new order.
+
+    A drag is a *positional request*, never a model edit: the page re-renders
+    from the domain roster after the drop, so the table model stays the single
+    source of truth. Two Qt details make that work (both verified against the
+    shipped PySide6 build — stage-B review fix #2):
+
+    - ``setDragDropMode(DragOnly)`` turns ``acceptDrops`` back off, so drops
+      arrive only when the view *and* its viewport re-enable it after the mode
+      call;
+    - accepting a drop with its proposed ``MoveAction`` makes
+      ``QAbstractItemView::startDrag`` run its internal ``clearOrRemove()``
+      afterwards, removing the source row from the model *after* the page had
+      re-rendered — exactly the blank row of the stage-B review. The drop is
+      accepted as ``CopyAction`` instead (a table drag offers ``Copy|Move``, so
+      the downgrade always applies), and the stale selection is cleared as a
+      second guard for a drag that could not be downgraded.
+    """
 
     rows_dropped = Signal(int, int)  # (source_row, target_row)
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Configure the table for single-row selection with internal drag."""
+        """Configure the table for single-row selection with row dragging."""
         super().__init__(parent)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._drag_source_row: int | None = None
         self.setDragEnabled(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        # Order matters: the mode call above turns both drop flags back off.
         self.setAcceptDrops(True)
-        self.setDropIndicatorShown(True)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.viewport().setAcceptDrops(True)
+        self.setDropIndicatorShown(False)
+
+    def startDrag(self, supported_actions) -> None:  # noqa: ANN001  # Qt signature
+        """Remember which row the drag started from, then run Qt's drag loop."""
+        self._drag_source_row = self.currentRow()
+        super().startDrag(supported_actions)
+
+    def dragEnterEvent(self, event) -> None:  # noqa: ANN001  # Qt signature
+        """Accept this table's own row payload; ignore every foreign drag."""
+        if self._is_row_drag(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event) -> None:  # noqa: ANN001  # Qt signature
+        """Keep one of our own row drags alive while it is over the viewport."""
+        if self._is_row_drag(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
     def dropEvent(self, event) -> None:  # noqa: ANN001  # Qt signature
         """Translate a row drop into a reorder request instead of a copy."""
-        source_row = self.currentRow()
+        source_row = self._drag_source_row
+        self._drag_source_row = None
+        if source_row is None:
+            source_row = self.currentRow()
         target_row = self.indexAt(event.position().toPoint()).row()
-        if target_row < 0:
+        if target_row < 0:  # dropped in the empty area below the last row
             target_row = self.rowCount() - 1
+        event.setDropAction(Qt.DropAction.CopyAction)
         event.accept()
-        if source_row < 0 or source_row == target_row:
+        if source_row < 0 or target_row < 0 or source_row == target_row:
             return
         self.rows_dropped.emit(source_row, target_row)
+        # The page re-rendered the rows above, so any selection Qt still holds
+        # is stale — it must never feed a later internal move.
+        self.clearSelection()
+
+    def _is_row_drag(self, event) -> bool:  # noqa: ANN001  # Qt signature
+        """Return True while one of our own draggable rows is over the table."""
+        if not self.dragEnabled() or not event.mimeData().hasFormat(_ROW_MIME_TYPE):
+            return False
+        source = event.source()
+        return source is None or source is self or source is self.viewport()
 
 
 class PeopleAdminPage(QWidget):
@@ -314,7 +370,10 @@ class PeopleAdminPage(QWidget):
             )
         except Exception as exc:  # noqa: BLE001  # UI boundary: show, log the detail
             logger.exception("People page deletion failed")
-            self._warn(text.PEOPLE_PAGE_DELETE_FAILED.format(detail=exc))
+            self._warn(
+                text.PEOPLE_PAGE_DELETE_FAILED.format(detail=exc),
+                text.PEOPLE_PAGE_DELETE_FAILED_TITLE,
+            )
             return
         logger.info(
             "People page deleted person {} (embedded={} orphaned={})",
@@ -373,6 +432,6 @@ class PeopleAdminPage(QWidget):
         """Return the message of the last successful mutation (window status)."""
         return getattr(self, "_status_message", "")
 
-    def _warn(self, message: str) -> None:
+    def _warn(self, message: str, title: str = text.PEOPLE_PAGE_SAVE_FAILED_TITLE) -> None:
         """Show a non-destructive warning for a rejected operation."""
-        QMessageBox.warning(self, text.PEOPLE_PAGE_ADD_BUTTON, message)
+        QMessageBox.warning(self, title, message)

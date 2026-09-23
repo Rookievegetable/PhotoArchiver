@@ -66,12 +66,29 @@ class PersonDeletionDialog(QDialog):
         self._select_person(preselect_id)
 
     def _select_person(self, person_id: "UUID | None") -> None:
-        """Select ``person_id`` when present (no-op otherwise)."""
+        """Select ``person_id`` when present (no-op otherwise).
+
+        The combo stores the raw ``UUID`` as item data; matching the stringified
+        form keeps the lookup independent of Qt's object comparison inside a
+        ``QVariant`` and picks the row the page asked for (stage-B review #3).
+        """
         if person_id is None:
             return
-        index = self._combo.findData(person_id)
-        if index >= 0:
-            self._combo.setCurrentIndex(index)
+        target = str(person_id)
+        for index in range(self._combo.count()):
+            if str(self._combo.itemData(index)) == target:
+                self._combo.setCurrentIndex(index)
+                return
+
+    def showEvent(self, event) -> None:  # noqa: ANN001  # Qt signature
+        """Focus the selector on open so the preselected person is actable.
+
+        Stage-B review #3: entering the confirm dialog must not ask for a
+        second selection — the chosen person is already selected *and* focused
+        (the default button stays 「取消」, so a stray Enter still cancels).
+        """
+        super().showEvent(event)
+        self._combo.setFocus()
 
     def _build_ui(self) -> None:
         """Lay out the selector label, person combo, preview, and buttons."""

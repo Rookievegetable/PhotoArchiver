@@ -607,6 +607,7 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         page.people_changed.connect(self._on_people_changed)
+        self._people_admin_page = page
         return page
 
     def _on_people_changed(self) -> None:
@@ -979,8 +980,14 @@ class MainWindow(QMainWindow):
         Thin read-only use case (``ListPersonsService`` over
         ``PersonRepository.list_all``) — Presentation never touches the
         repository directly (DEP-003/DEP-004).
+
+        Stage B: the people page shares the same registry, so every refresh of
+        the person axis (import confirm, deletion, plugin import, …) reloads
+        the roster table too — otherwise the page went stale until restart.
         """
         self._filter_bar.set_persons(self._context.services.list_persons.execute())
+        if getattr(self, "_people_admin_page", None) is not None:
+            self._people_admin_page.refresh()
 
     def _on_failed(self, event: TaskFailed) -> None:
         """Refresh partial results before showing the concrete worker failure."""
