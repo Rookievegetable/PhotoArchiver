@@ -310,3 +310,37 @@ def test_model_next_button_shows_help_without_starting_recognition(workspace, mo
     window._on_match_clicked()  # Disabled QAction must not be the only model gate.
     start.assert_not_called()
     assert not window._task_coordinator.is_busy
+
+
+def test_order_only_people_change_skips_filter_axis_and_snapshot(workspace, monkeypatch):
+    """P0-2 回归：纯顺序变化（上移/下移、拖拽）只更新状态栏——筛选轴、就绪快照与
+    页面重渲染全部跳过（页面在发射信号前已自行刷新）。"""
+    window = workspace.window
+    workspace.query.reset_mock()
+    filter_refresh = Mock()
+    page_refresh = Mock()
+    monkeypatch.setattr(window._filter_bar, "set_persons", filter_refresh)
+    monkeypatch.setattr(window._people_admin_page, "refresh", page_refresh)
+
+    window._on_people_changed(False)
+
+    filter_refresh.assert_not_called()
+    page_refresh.assert_not_called()
+    workspace.query.assert_not_called()
+
+
+def test_structural_people_change_skips_the_pages_own_second_refresh(workspace, monkeypatch):
+    """P0-2 回归：结构变化（增/删/改）仍刷新筛选轴与快照，但不再对「已自行刷新」
+    的页面做第二次整表重建。"""
+    window = workspace.window
+    workspace.query.reset_mock()
+    filter_refresh = Mock()
+    page_refresh = Mock()
+    monkeypatch.setattr(window._filter_bar, "set_persons", filter_refresh)
+    monkeypatch.setattr(window._people_admin_page, "refresh", page_refresh)
+
+    window._on_people_changed(True)
+
+    filter_refresh.assert_called_once()
+    page_refresh.assert_not_called()
+    workspace.query.assert_called_once_with(workspace.root)

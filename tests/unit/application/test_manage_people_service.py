@@ -124,6 +124,28 @@ def test_reorder_people_rejects_unknown_or_duplicate_ids() -> None:
         service.reorder_people(ReorderPeopleCommand(ordered_ids=(person.id, person.id)))
 
 
+def test_reorder_people_validates_with_a_single_roster_read(monkeypatch) -> None:
+    """P0-1 回归：存在性校验一次 list_all 完成，不再逐 id find_by_id（每查开一次连接）。"""
+    service, people = _service()
+    a = service.add_person(AddPersonCommand(name="张三"))
+    b = service.add_person(AddPersonCommand(name="李四"))
+    calls = 0
+    original_find = people.find_by_id
+
+    def counting_find(person_id):
+        nonlocal calls
+        calls += 1
+        return original_find(person_id)
+
+    monkeypatch.setattr(people, "find_by_id", counting_find)
+
+    updated = service.reorder_people(ReorderPeopleCommand(ordered_ids=(b.id, a.id)))
+
+    assert updated == 2
+    assert calls == 0
+    assert [p.name for p in people.list_all()] == ["李四", "张三"]
+
+
 def test_roster_counts_people_per_source_batch() -> None:
     batch = ImportBatch(file_name="roster.csv", file_hash="hash", source_type="csv")
     service, _ = _service(batches=[batch])

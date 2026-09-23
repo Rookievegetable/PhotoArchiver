@@ -429,3 +429,47 @@ def test_identity_conflict_is_reported_in_chinese(populated, monkeypatch) -> Non
     assert title == text.PEOPLE_PAGE_SAVE_FAILED_TITLE
     assert "工号已被其他人员占用：E100" in message
     assert "identity already registered" not in message
+
+
+# ── Performance regressions (P0: 拖拽/上移下移延迟优化) ─────────────────────
+
+
+def test_move_renders_the_table_exactly_once(populated, monkeypatch) -> None:
+    """一次移动只整表重建一次，且重排发出的是「纯顺序变化」信号（窗口不再级联重建）。"""
+    page, _, _ = populated
+    renders = 0
+    original_render = page._render_rows
+
+    def counting_render() -> None:
+        nonlocal renders
+        renders += 1
+        original_render()
+
+    monkeypatch.setattr(page, "_render_rows", counting_render)
+    emissions: list[bool] = []
+    page.people_changed.connect(emissions.append)
+
+    page._table.selectRow(0)
+    page.move_selected(1)
+
+    assert renders == 1
+    assert emissions == [False]
+
+
+def test_structural_mutation_marks_people_changed_as_structural(populated, monkeypatch) -> None:
+    """新增属于结构变化：信号 structure_changed=True，窗口据此刷新筛选轴与就绪快照。"""
+    page, _, _ = populated
+    emissions: list[bool] = []
+    page.people_changed.connect(emissions.append)
+    dialog_stub = type("D", (), {
+        "exec": lambda self: 1,
+        "values": lambda self: {"name": "赵六", "identity": "", "department": "", "note": ""},
+    })()
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.people_admin_page.PersonEditDialog",
+        lambda *a, **k: dialog_stub,
+    )
+
+    page._add_button.click()
+
+    assert emissions == [True]
