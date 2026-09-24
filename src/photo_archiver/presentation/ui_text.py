@@ -32,6 +32,7 @@ TASK_LABELS = {
     "import_confirm": "导入确认",
     "scan_and_register_photos": "扫描",
     "match_persons": "人脸识别",
+    "run_recognition": "人脸识别",
     "archive_photos": "归档",
     "export": "导出",
 }
@@ -121,6 +122,12 @@ PEOPLE_PAGE_DELETE_FAILED_TITLE = "无法删除人员"
 # AUDIT 2026-09-20：识别完成必须区分"无脸"与"读图失败"，不得静默吞掉不可读照片。
 STATUS_MATCH_SUMMARY = "处理 {processed} 张 · 检出人脸 {faces} 张"
 STATUS_MATCH_UNREADABLE = "无法读取 {unreadable} 张（文件缺失或路径不可用）"
+# 阶段 C Commit 3：新识别运行（RecognitionRun）完成摘要——五类计数一次给全，
+# 与 run 统计列同口径（face/unreadable/no_face/error/in_scope/out_of_scope）。
+STATUS_RUN_SUMMARY = (
+    "检出人脸 {faces} 张 · 无法读取 {unreadable} 张 · 无脸 {no_face} 张 · 检测异常 {errors} 张"
+)
+STATUS_RUN_SCOPE_SUMMARY = "范围内 {in_scope} 张 · 范围外 {out_of_scope} 张"
 STATUS_TASK_FAILED = "{label}失败。"
 STATUS_TASK_CANCELLED = "{label}已取消。"
 STATUS_CANCELLING = "正在请求取消；当前处理单元完成后停止，已完成部分会保留"
@@ -363,6 +370,22 @@ WORKSPACE_MODEL_HELP = (
 )
 WORKSPACE_MODEL_HELP_TITLE = "模型配置说明"
 WORKSPACE_MATCH_READY = "有 {count} 张照片待识别。"
+# 阶段 C Commit 3：重跑是一等公民——已全部识别的照片不再拒绝识别入口。
+WORKSPACE_REANALYSIS_READY = (
+    "所有照片均已有识别结果；再次运行将创建新的识别运行（可重新分析）。"
+)
+
+# ---- 识别范围选择对话框（阶段 C Commit 3） ----
+RECOGNITION_SCOPE_DIALOG_TITLE = "识别范围选择"
+RECOGNITION_SCOPE_OK_BUTTON = "确定"
+RECOGNITION_SCOPE_PHOTO_GROUP = "照片选择范围"
+RECOGNITION_SCOPE_RANGE_GROUP = "人脸数量范围"
+RECOGNITION_SCOPE_ALL_PHOTOS = "全部照片"
+RECOGNITION_SCOPE_SELECTED_PHOTOS = "仅选中照片（{count} 张）"
+RECOGNITION_SCOPE_RANGE_HINT = (
+    "只对检出人脸数落在选中范围的照片给出识别归属；范围外照片仍会保存全部人脸检测记录。"
+)
+RECOGNITION_SCOPE_AT_LEAST_ONE = "请至少选择一个人脸数量范围。"
 WORKSPACE_ROOT_UNAVAILABLE = "归档根目录未配置或不可用；请前往「设置」选择可写目录。"
 WORKSPACE_ARCHIVE_EMPTY = "暂无可归档照片；请前往「审核待处理」批准识别结果。已归档照片不会重复归档。"
 WORKSPACE_ARCHIVE_READY = "有 {count} 张照片可归档；选中照片时仅归档选区。"

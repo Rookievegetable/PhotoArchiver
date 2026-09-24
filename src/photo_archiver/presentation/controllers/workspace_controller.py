@@ -40,7 +40,13 @@ class WorkspaceController:
         return self.status
 
     def match_guidance(self) -> ActionGuidance:
-        """Explain the first unmet recognition prerequisite."""
+        """Explain the first unmet recognition prerequisite.
+
+        阶段 C Commit 3: recognition is rerunnable — photos that already carry
+        recognition results no longer block the entry; running again creates a
+        fresh ``RecognitionRun``. The all-matched state stays enabled with a
+        re-analysis hint and keeps ``review`` as the next-step pointer.
+        """
         status = self.status
         if status is None:
             return ActionGuidance(False, text.WORKSPACE_UNKNOWN)
@@ -48,13 +54,13 @@ class WorkspaceController:
             return ActionGuidance(False, text.REFUSAL_NO_PERSONS, "import")
         if not status.has_photos:
             return ActionGuidance(False, text.REFUSAL_NO_PHOTOS, "scan")
-        if not status.pending_match_count:
-            return ActionGuidance(False, text.WORKSPACE_ALL_MATCHED, "review")
         if status.model_availability is not ModelAvailability.AVAILABLE:
             reason = (text.WORKSPACE_MODEL_MISSING
                       if status.model_availability is ModelAvailability.MISSING
                       else text.WORKSPACE_MODEL_UNKNOWN)
             return ActionGuidance(False, reason, "model")
+        if not status.pending_match_count:
+            return ActionGuidance(True, text.WORKSPACE_REANALYSIS_READY, "review")
         return ActionGuidance(True, text.WORKSPACE_MATCH_READY.format(count=status.pending_match_count))
 
     def archive_guidance(self) -> ActionGuidance:

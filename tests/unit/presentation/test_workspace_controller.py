@@ -31,12 +31,15 @@ READY = WorkspaceStatus(
       "model_availability": ModelAvailability.MISSING},
      ActionGuidance(False, text.REFUSAL_NO_PHOTOS, "scan")),
     ({"pending_match_count": 0, "model_availability": ModelAvailability.MISSING},
-     ActionGuidance(False, text.WORKSPACE_ALL_MATCHED, "review")),
+     ActionGuidance(False, text.WORKSPACE_MODEL_MISSING, "model")),
     ({"model_availability": ModelAvailability.MISSING},
      ActionGuidance(False, text.WORKSPACE_MODEL_MISSING, "model")),
     ({"model_availability": ModelAvailability.UNKNOWN},
      ActionGuidance(False, text.WORKSPACE_MODEL_UNKNOWN, "model")),
     ({}, ActionGuidance(True, text.WORKSPACE_MATCH_READY.format(count=3))),
+    # 阶段 C Commit 3：全部已识别不再拒绝——识别可重跑，审核是下一步指引。
+    ({"pending_match_count": 0},
+     ActionGuidance(True, text.WORKSPACE_REANALYSIS_READY, "review")),
 ])
 def test_match_prerequisite_matrix(changes, expected):
     query = Mock()

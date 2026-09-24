@@ -117,7 +117,9 @@ class OverviewPresenter:
                 else text.OVERVIEW_STEP_ARCHIVE_NOTE,
             ),
         )
-        if match_guidance.enabled:
+        if match_guidance.enabled and status.pending_match_count:
+            # 阶段 C：识别可重跑后，全部已识别不再把识别当主 CTA——流程的
+            # 下一个未完成步骤（审核/归档）优先，重跑仍可从工具栏发起。
             primary: PrimaryActionId = "match"
         elif match_guidance.next_action == "model":
             primary = "model"

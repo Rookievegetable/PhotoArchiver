@@ -116,8 +116,13 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
     elif name == "scan_and_register_photos":
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a: str(tmp_path))
         controller, method, entry = window._scan_controller, "scan_folder", "scan"
-    elif name == "match_persons":
-        controller, method, entry = window._match_controller, "start_match", "match"
+    elif name == "run_recognition":
+        # 阶段 C Commit 3: the entry opens the scope dialog, then submits via
+        # RecognitionRunController.start_run — both are doubled here.
+        monkeypatch.setattr(module, "RecognitionScopeDialog", lambda *a, **k: SimpleNamespace(
+            exec=lambda: 1, selected_ranges=(), photo_scope_selected_only=False,
+        ))
+        controller, method, entry = window._recognition_run_controller, "start_run", "match"
     elif name == "archive_photos":
         monkeypatch.setattr(window, "_effective_archive_root", lambda: tmp_path)
         monkeypatch.setattr(window._archive_controller, "preview",
@@ -132,7 +137,7 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
     return getattr(window, f"_on_{entry}_clicked"), submit
 
 
-@pytest.mark.parametrize("name", [n for n in TASK_LABELS if n != "import_confirm"])
+@pytest.mark.parametrize("name", [n for n in TASK_LABELS if n not in ("import_confirm", "match_persons")])
 def test_five_tasks_block_every_conflicting_entry_and_cancel_correctly(
     window, monkeypatch, tmp_path, name,
 ):
@@ -167,7 +172,7 @@ def test_five_tasks_block_every_conflicting_entry_and_cancel_correctly(
     assert [(a.isEnabled(), a.toolTip()) for a in window._conflicting_actions] == original
 
 
-@pytest.mark.parametrize("name", [n for n in TASK_LABELS if n != "import_confirm"])
+@pytest.mark.parametrize("name", [n for n in TASK_LABELS if n not in ("import_confirm", "match_persons")])
 @pytest.mark.parametrize("kind", ["completed", "failed", "cancelled"])
 def test_all_early_terminals_release_and_refresh_once(window, monkeypatch, tmp_path, name, kind):
     event = {"completed": TaskCompleted(name), "failed": TaskFailed(name, ValueError("bad")),
@@ -212,7 +217,9 @@ def test_double_import_during_picker_and_submission_is_reserved(window, monkeypa
                                   "delete_person", "plugin"])
 def test_sync_modal_path_blocks_reentrant_task(window, monkeypatch, path):
     start = Mock()
-    monkeypatch.setattr(window._match_controller, "start_match", start)
+    # 阶段 C：识别入口先开范围对话框；忙态下 @_exclusive 在对话框之前拦截，
+    # 因此这里只桩提交入口验证「忙时不重入」。
+    monkeypatch.setattr(window._recognition_run_controller, "start_run", start)
 
     def nested(*args, **kwargs):
         loop = QEventLoop()

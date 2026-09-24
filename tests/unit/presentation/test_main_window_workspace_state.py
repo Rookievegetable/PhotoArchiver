@@ -78,20 +78,21 @@ def test_initial_snapshot_queries_effective_root_and_explains_empty_actions(work
     assert not window._cancel_action.isEnabled()
 
 
-@pytest.mark.parametrize("status, match_tooltip, next_action", [
-    (replace(READY, has_photos=False, pending_match_count=0), text.REFUSAL_NO_PHOTOS, "scan"),
-    (replace(READY, pending_match_count=0), text.WORKSPACE_ALL_MATCHED, "review"),
-    (replace(READY, model_availability=ModelAvailability.MISSING), text.WORKSPACE_MODEL_MISSING, "model"),
-    (replace(READY, model_availability=ModelAvailability.UNKNOWN), text.WORKSPACE_MODEL_UNKNOWN, "model"),
+@pytest.mark.parametrize("status, match_tooltip, next_action, match_enabled", [
+    (replace(READY, has_photos=False, pending_match_count=0), text.REFUSAL_NO_PHOTOS, "scan", False),
+    # 阶段 C Commit 3：全部已识别 → 识别入口保持可用（可重跑），下一步指向审核。
+    (replace(READY, pending_match_count=0), text.WORKSPACE_REANALYSIS_READY, "review", True),
+    (replace(READY, model_availability=ModelAvailability.MISSING), text.WORKSPACE_MODEL_MISSING, "model", False),
+    (replace(READY, model_availability=ModelAvailability.UNKNOWN), text.WORKSPACE_MODEL_UNKNOWN, "model", False),
 ])
 def test_refresh_replaces_tooltips_and_next_step_then_hides_ready_buttons(
-    workspace, status, match_tooltip, next_action,
+    workspace, status, match_tooltip, next_action, match_enabled,
 ):
     window = workspace.window
     window._nav_list.setCurrentRow(1)  # next 引导按钮的宿主页（Batch 3 IA）
     workspace.state.value = replace(status, archivable_count=0)
     window._refresh_workspace_state()
-    assert not window._match_action.isEnabled()
+    assert window._match_action.isEnabled() is match_enabled
     assert window._match_action.toolTip() == match_tooltip
     assert window._match_next_button.isVisible()
     assert window._match_next_button.property("next_action") == next_action
@@ -302,7 +303,7 @@ def test_model_next_button_shows_help_without_starting_recognition(workspace, mo
     workspace.state.value = replace(READY, model_availability=ModelAvailability.MISSING)
     window._refresh_workspace_state()
     start = Mock()
-    monkeypatch.setattr(window._match_controller, "start_match", start)
+    monkeypatch.setattr(window._recognition_run_controller, "start_run", start)
     qtbot.mouseClick(window._match_next_button, Qt.MouseButton.LeftButton)
     QMessageBox.information.assert_called_once_with(
         window, text.WORKSPACE_MODEL_HELP_TITLE, text.WORKSPACE_MODEL_HELP,

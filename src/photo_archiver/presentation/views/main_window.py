@@ -48,11 +48,11 @@ if TYPE_CHECKING:
     from photo_archiver.app.context import ApplicationContext
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.application.dtos.plugin_action_result import ActionResult
-from photo_archiver.domain import Photo, PhotoSearchCriteria
+from photo_archiver.domain import Photo, PhotoSearchCriteria, RecognitionRun
 from photo_archiver.presentation.controllers import (
     ArchiveController,
     ImportPeopleController,
-    MatchPersonsController,
+    RecognitionRunController,
     ScanController,
 )
 from photo_archiver.presentation.controllers.overview_presenter import (
@@ -119,6 +119,8 @@ from photo_archiver.presentation.ui_text import (
     STATUS_MATCH_UNREADABLE,
     STATUS_PENDING_REVIEW_COUNT,
     STATUS_READY,
+    STATUS_RUN_SCOPE_SUMMARY,
+    STATUS_RUN_SUMMARY,
     STATUS_SCAN_UNAVAILABLE,
     STATUS_SCANNING_FOLDER,
     STATUS_TASK_CANCELLED,
@@ -154,6 +156,7 @@ from photo_archiver.presentation.visual_style import (
     style_empty_state_card,
 )
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
+from photo_archiver.presentation.views.recognition_scope_dialog import RecognitionScopeDialog
 from photo_archiver.presentation.views.photo_list_model import (
     PHOTO_ID_ROLE, PhotoListModel, STATUS_BADGE_ROLE, THUMBNAIL_ROLE,
 )
@@ -264,16 +267,14 @@ class MainWindow(QMainWindow):
             self._context.worker_executor,
             parent=self,
         )
-        # Phase 4.2 Commit 3: MatchPersonsController is worker-backed and needs
-        # the recognition repos + match service + worker executor, so it is
-        # built here like Scan/Import/Archive (view-site constructor injection).
-        # The model pack is optional at bootstrap — a missing pack surfaces as
-        # TaskFailed during execution, never blocking window construction.
-        self._match_controller = MatchPersonsController(
+        # 阶段 C Commit 3: the recognition entry runs the traceable
+        # RecognitionRun flow (RunRecognitionUseCase on the worker); the old
+        # MatchPersonsController is no longer wired into any UI entry.
+        # The model pack is optional at bootstrap — run_recognition is None
+        # then, and the controller refuses submissions with a clear reason.
+        self._recognition_run_controller = RecognitionRunController(
             photos=self._context.repositories.photos,
-            people=self._context.repositories.people,
-            recognition=self._context.repositories.recognition,
-            use_case=self._context.services.match_persons,  # type: ignore[arg-type]  # MatchPersonsService satisfies the MatchPersonsUseCase protocol
+            use_case=self._context.services.run_recognition,
             executor=self._context.worker_executor,
             parent=self,
         )
@@ -943,7 +944,7 @@ class MainWindow(QMainWindow):
                 with QSignalBlocker(self._filter_bar):
                     self._refresh_filter_persons()
             self._refresh_photo_list()
-            if task_name == "match_persons":
+            if task_name in ("match_persons", "run_recognition"):
                 self._refresh_review_pending()
             self._refresh_workspace_state()
         except Exception:  # noqa: BLE001 - terminal feedback must survive read failures
@@ -965,13 +966,20 @@ class MainWindow(QMainWindow):
         self._refresh_task_results(event.task_name)
 
     def _append_match_summary(self, event: TaskCompleted) -> None:
-        """Append processed/found/unreadable counts after a match batch finishes.
+        """Append run statistics after a recognition task finishes.
 
         AUDIT 2026-09-20: 473/473 unreadable photos used to look identical to
         a clean empty run ("识别完成 · 0 条待审核"); the completion status must
-        carry the counts so read failures can never hide again.
+        carry the counts so read failures can never hide again. The traceable
+        run flow (阶段 C) reports a ``RecognitionRun`` whose stats carry the
+        five counters + scope split; the legacy match-persons branch stays for
+        compatibility with the retired task shape.
         """
         results = event.result
+        if event.task_name == "run_recognition":
+            if isinstance(results, RecognitionRun):
+                self._append_run_summary(results)
+            return
         if event.task_name != "match_persons" or not isinstance(results, tuple):
             return
         processed = len(results)
@@ -980,6 +988,21 @@ class MainWindow(QMainWindow):
         summary = STATUS_MATCH_SUMMARY.format(processed=processed, faces=faces)
         if unreadable:
             summary += " · " + STATUS_MATCH_UNREADABLE.format(unreadable=unreadable)
+        self._status_label.setText(self._status_label.text() + " · " + summary)
+
+    def _append_run_summary(self, run: RecognitionRun) -> None:
+        """Append the recognition-run counters (same taxonomy as the run row)."""
+        summary = STATUS_RUN_SUMMARY.format(
+            faces=run.face_count,
+            unreadable=run.unreadable_count,
+            no_face=run.no_face_count,
+            errors=run.error_count,
+        )
+        if run.in_scope_photo_count or run.out_of_scope_photo_count:
+            summary += " · " + STATUS_RUN_SCOPE_SUMMARY.format(
+                in_scope=run.in_scope_photo_count,
+                out_of_scope=run.out_of_scope_photo_count,
+            )
         self._status_label.setText(self._status_label.text() + " · " + summary)
 
     def _refresh_filter_persons(self, *, refresh_page: bool = True) -> None:
@@ -1348,23 +1371,21 @@ class MainWindow(QMainWindow):
             ),
         )
 
-    # ---- Face recognition (match persons) ----
+    # ---- Face recognition (traceable recognition runs) ----
 
-    @_exclusive(task_label("match_persons"))
+    @_exclusive(task_label("run_recognition"))
     def _on_match_clicked(self) -> None:
-        """Start the face-recognition (match persons) workflow on click.
+        """Start one recognition run through the RecognitionRun flow (阶段 C).
 
-        Delegates to MatchPersonsController which owns the single-flight guard
-        (AC-014) — the window never re-implements running state. When the
-        controller refuses (already running / no persons / no photos / all
-        photos already matched) it returns ``None`` with a human-readable
-        ``last_refusal_reason`` surfaced in the status bar. A submitted
-        runnable disables this action until a terminal signal (completed /
-        failed / cancelled) re-enables it and releases the controller guard.
-
-        Batch 2: a cached readiness gate runs first so a missing model or
-        empty workspace is refused with guidance before any worker submission;
-        the controller's own refusals remain the authoritative second line.
+        Flow: cached readiness gate → RecognitionScopeDialog (photo scope +
+        face-count ranges) → RecognitionRunController.start_run(). Every
+        accepted submission creates a fresh RecognitionRun — existing
+        recognition results never block or trim the run (the compatibility
+        dedup lives inside the service). The controller owns the single-flight
+        guard; a refusal (already running / model pack missing / empty
+        snapshot) returns ``None`` with ``last_refusal_reason`` surfaced in
+        the status bar. A submitted runnable disables this action until a
+        terminal signal (completed / failed / cancelled) re-enables it.
         """
         guidance = self._workspace_controller.match_guidance()
         if not guidance.enabled:
@@ -1372,13 +1393,24 @@ class MainWindow(QMainWindow):
             # the authoritative second line (TOCTOU).
             self._status_label.setText(guidance.tooltip)
             return
-        runnable = self._match_controller.start_match()
+        dialog = RecognitionScopeDialog(
+            selected_count=len(self._collect_selected_photo_ids()), parent=self,
+        )
+        if not dialog.exec():
+            return
+        runnable = self._recognition_run_controller.start_run(
+            dialog.selected_ranges,
+            photo_ids=(
+                self._collect_selected_photo_ids()
+                if dialog.photo_scope_selected_only else None
+            ),
+        )
         if runnable is None:
-            reason = self._match_controller.last_refusal_reason
+            reason = self._recognition_run_controller.last_refusal_reason
             self._status_label.setText(reason or STATUS_MATCH_UNAVAILABLE)
             return
-        self._status_label.setText(STATUS_TASK_PREPARING.format(label=task_label("match_persons")))
-        self._connect_task_signals(runnable, self._match_controller.connect_signals)
+        self._status_label.setText(STATUS_TASK_PREPARING.format(label=task_label("run_recognition")))
+        self._connect_task_signals(runnable, self._recognition_run_controller.connect_signals)
 
     # ------------------------------------------------------------------
     # Phase 5 Commit 1: Export UI wiring
