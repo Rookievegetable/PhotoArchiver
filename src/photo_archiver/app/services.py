@@ -24,6 +24,7 @@ from photo_archiver.application import (
     ListPersonsService,
     ManagePeopleService,
     MatchPersonsService,
+    RunRecognitionService,
     PruneMissingPhotosService,
     RegisterPhotoService,
     ReviewRecognitionService,
@@ -60,6 +61,7 @@ class ApplicationServices:
     scan_photo_folder: ScanPhotoFolderService
     scan_and_register_photos: ScanAndRegisterPhotosService
     match_persons: MatchPersonsService
+    run_recognition: RunRecognitionService | None
     archive_photos: ArchivePhotosService
     review_recognition: ReviewRecognitionService
     settings: SettingsService
@@ -169,7 +171,7 @@ def build_application_services(
         user_settings_store=InMemoryUserSettingsStore(),
         system_settings=None,
     )
-    match_service = _build_match_service(repositories, settings)
+    match_service, run_recognition_service = _build_recognition_services(repositories, settings)
     export_service = ExportService(
         person_repository=repositories.people,
         photo_repository=repositories.photos,
@@ -264,6 +266,7 @@ def build_application_services(
             unit_of_work=unit_of_work,
         ),
         match_persons=match_service,
+        run_recognition=run_recognition_service,
         workspace_readiness=WorkspaceReadinessService(
             repositories.recognition,
             archive_root_probe=archive_root_available,
@@ -293,37 +296,30 @@ def build_application_services(
     )
 
 
-def _build_match_service(
+def _build_recognition_services(
     repositories: ApplicationRepositories,
     settings: AppSettings,
-) -> MatchPersonsService:
-    """Assemble the recognition pipeline, falling back when the model pack is absent.
-
-    Imported lazily so CLI / CI / unit-test contexts that never call Match do not
-    pay the ~3s InsightFace import + model prepare cost, and so environments
-    without the model pack do not crash at bootstrap. The Match service is
-    constructed against the real InsightFace detector / recognizer only when
-    the pack is available; otherwise a placeholder service raises
-    ``ModelPackMissing`` on first execute() so the UI can surface the error
-    honestly rather than crashing startup.
-    """
+) -> tuple[MatchPersonsService, RunRecognitionService | None]:
+    """Build both recognition pipelines from one model-pack probe/load."""
     from photo_archiver.ai import InsightFaceDetector, InsightFaceRecognizer
     from photo_archiver.ai.similarity_matcher import CosinePersonMatcher
     from photo_archiver.infrastructure.ai import InsightFaceLoader
 
     loader = InsightFaceLoader(model_root=settings.model_path)
     if not loader.is_available():
-        return _UnavailableMatchService(
+        match_service: MatchPersonsService = _UnavailableMatchService(
             ModelPackMissing(
                 f"InsightFace model pack not found at {loader.pack_path}; "
                 "run scripts/download_models.py to fetch it"
             )
         )
+        return match_service, None
+
     analysis = loader.load()
     detector = InsightFaceDetector(analysis)
     recognizer = InsightFaceRecognizer(analysis)
     matcher = CosinePersonMatcher(threshold=settings.match_threshold)
-    return MatchPersonsService(
+    match_service = MatchPersonsService(
         detector=detector,
         recognizer=recognizer,
         matcher=matcher,
@@ -331,6 +327,18 @@ def _build_match_service(
         recognition_repository=repositories.recognition,
         max_workers=settings.max_workers,
     )
+    run_service = RunRecognitionService(
+        detector=detector,
+        matcher=matcher,
+        face_embedding_repository=repositories.face_embeddings,
+        recognition_repository=repositories.recognition,
+        recognition_run_repository=repositories.recognition_runs,
+        face_observation_repository=repositories.face_observations,
+        max_workers=settings.max_workers,
+    )
+    return match_service, run_service
+
+
 
 
 class ModelPackMissing(Exception):

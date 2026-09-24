@@ -36,18 +36,19 @@ class SQLiteRecognitionRunRepository(RecognitionRunRepository):
                 """
                 INSERT INTO recognition_runs (
                     id, status, parameters, face_count, unreadable_count, no_face_count,
-                    in_scope_photo_count, out_of_scope_photo_count, error,
+                    error_count, in_scope_photo_count, out_of_scope_photo_count, error,
                     created_at, finished_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(run.id),
                     run.status,
-                    json.dumps(run.parameters, ensure_ascii=False, sort_keys=True),
+                    json.dumps(dict(run.parameters), ensure_ascii=False, sort_keys=True),
                     run.face_count,
                     run.unreadable_count,
                     run.no_face_count,
+                    run.error_count,
                     run.in_scope_photo_count,
                     run.out_of_scope_photo_count,
                     run.error,
@@ -91,6 +92,7 @@ class SQLiteRecognitionRunRepository(RecognitionRunRepository):
                     face_count = ?,
                     unreadable_count = ?,
                     no_face_count = ?,
+                    error_count = ?,
                     in_scope_photo_count = ?,
                     out_of_scope_photo_count = ?,
                     error = ?,
@@ -102,6 +104,7 @@ class SQLiteRecognitionRunRepository(RecognitionRunRepository):
                     run.face_count,
                     run.unreadable_count,
                     run.no_face_count,
+                    run.error_count,
                     run.in_scope_photo_count,
                     run.out_of_scope_photo_count,
                     run.error,

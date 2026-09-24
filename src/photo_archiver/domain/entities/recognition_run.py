@@ -12,7 +12,9 @@ owner 任务书阶段 C（多脸检测、识别范围选择与可重跑）Commit
   照片删除时按 FK CASCADE 一并删除，不为绕过照片删除而永久保存。
 """
 
+from copy import deepcopy
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -48,13 +50,14 @@ class RecognitionRunStats:
     """运行结果统计——与 parameters 配置快照分离的独立结构（C-SEM-3）.
 
     五个计数器对应任务书 Summary 字段：faces / unreadable / no_face /
-    in_scope / out_of_scope（processed 由仓储按 run_photos 快照求得，
+    error / in_scope / out_of_scope（processed 由仓储按 run_photos 快照求得，
     不重复存储）。仅允许非负整数。
     """
 
     face_count: int = 0
     unreadable_count: int = 0
     no_face_count: int = 0
+    error_count: int = 0
     in_scope_photo_count: int = 0
     out_of_scope_photo_count: int = 0
 
@@ -64,6 +67,7 @@ class RecognitionRunStats:
             "face_count",
             "unreadable_count",
             "no_face_count",
+            "error_count",
             "in_scope_photo_count",
             "out_of_scope_photo_count",
         ):
@@ -89,6 +93,7 @@ class RecognitionRun:
     face_count: int = 0
     unreadable_count: int = 0
     no_face_count: int = 0
+    error_count: int = 0
     in_scope_photo_count: int = 0
     out_of_scope_photo_count: int = 0
 
@@ -98,6 +103,7 @@ class RecognitionRun:
             self.id = uuid4()
         if self.created_at is None:
             self.created_at = datetime.now()
+        object.__setattr__(self, "parameters", MappingProxyType(deepcopy(dict(self.parameters))))
         if self.status not in RUN_STATUSES:
             raise ValidationError(f"Unknown RecognitionRun status: {self.status}")
 
@@ -137,6 +143,7 @@ class RecognitionRun:
         self.face_count = stats.face_count
         self.unreadable_count = stats.unreadable_count
         self.no_face_count = stats.no_face_count
+        self.error_count = stats.error_count
         self.in_scope_photo_count = stats.in_scope_photo_count
         self.out_of_scope_photo_count = stats.out_of_scope_photo_count
 

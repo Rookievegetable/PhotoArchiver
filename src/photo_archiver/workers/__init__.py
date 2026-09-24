@@ -5,6 +5,7 @@ from photo_archiver.workers.application_tasks import (
     ConfirmImportTask,
     ImportPeopleTask,
     MatchPersonsTask,
+    RunRecognitionTask,
     ScanAndRegisterPhotosTask,
 )
 from photo_archiver.workers.export_task import ExportTask
@@ -26,6 +27,7 @@ __all__ = [
     "ConfirmImportTask",
     "ImportPeopleTask",
     "MatchPersonsTask",
+    "RunRecognitionTask",
     "QtWorkerExecutor",
     "QtWorkerRunnable",
     "QtWorkerSignals",

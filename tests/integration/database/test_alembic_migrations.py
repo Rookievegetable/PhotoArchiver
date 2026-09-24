@@ -123,7 +123,7 @@ def test_migration_upgrade_stamps_head_revision(tmp_db: Path) -> None:
     command.upgrade(cfg, "head")
 
     with sqlite3.connect(str(tmp_db)) as conn:
-        assert _alembic_version(conn) == "004_recognition_runs_and_observations"
+        assert _alembic_version(conn) == "005_recognition_run_error_count"
 
 
 # ── migration down 可执行 ──────────────────────────────────────────────────
@@ -167,7 +167,7 @@ def test_migration_upgrade_idempotent(tmp_db: Path) -> None:
     command.upgrade(cfg, "head")
 
     with sqlite3.connect(str(tmp_db)) as conn:
-        assert _alembic_version(conn) == "004_recognition_runs_and_observations"
+        assert _alembic_version(conn) == "005_recognition_run_error_count"
         # 表仍存在不重复创建
         tables = _list_tables(conn)
         assert len(tables) == 13  # 12 tables + alembic_version
@@ -182,7 +182,7 @@ def test_schema_version_consistent_after_upgrade(tmp_db: Path) -> None:
     command.upgrade(cfg, "head")
 
     with sqlite3.connect(str(tmp_db)) as conn:
-        assert _alembic_version(conn) == "004_recognition_runs_and_observations"
+        assert _alembic_version(conn) == "005_recognition_run_error_count"
         tables = _list_tables(conn)
         assert set(_ALL_TABLES).issubset(set(tables))
         indexes = _list_indexes(conn)
@@ -239,7 +239,7 @@ def test_initialize_schema_uses_alembic_not_raw_sql(tmp_db: Path) -> None:
         assert "alembic_version" in tables, (
             "initialize_schema() should trigger Alembic migration (alembic_version table exists)"
         )
-        assert _alembic_version(conn) == "004_recognition_runs_and_observations"
+        assert _alembic_version(conn) == "005_recognition_run_error_count"
         # 全部业务表全在（migration 真接管 DDL）
         for table in _ALL_TABLES:
             assert table in tables, f"initialize_schema() via Alembic should create table '{table}'"

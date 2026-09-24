@@ -23,6 +23,7 @@ from photo_archiver.application.commands.people_admin import (
 from photo_archiver.application.commands.register_photo import RegisterPhotoCommand
 from photo_archiver.application.commands.scan_and_register_photos import ScanAndRegisterPhotosCommand
 from photo_archiver.application.commands.scan_photo_folder import ScanPhotoFolderCommand
+from photo_archiver.application.commands.start_recognition_run import StartRecognitionRunCommand
 
 __all__ = [
     "AddPersonCommand",
@@ -42,4 +43,5 @@ __all__ = [
     "ReorderPeopleCommand",
     "ScanAndRegisterPhotosCommand",
     "ScanPhotoFolderCommand",
+    "StartRecognitionRunCommand",
 ]

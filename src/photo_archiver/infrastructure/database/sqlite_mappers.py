@@ -184,6 +184,7 @@ def recognition_run_from_row(row: Row) -> RecognitionRun:
         face_count=row["face_count"],
         unreadable_count=row["unreadable_count"],
         no_face_count=row["no_face_count"],
+        error_count=row["error_count"],
         in_scope_photo_count=row["in_scope_photo_count"],
         out_of_scope_photo_count=row["out_of_scope_photo_count"],
         error=row["error"],

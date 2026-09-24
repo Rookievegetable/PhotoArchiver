@@ -11,6 +11,7 @@ from loguru import logger
 from photo_archiver.application.commands import (
     ImportPeopleCommand,
     MatchPersonsCommand,
+    StartRecognitionRunCommand,
     ScanAndRegisterPhotosCommand,
 )
 from photo_archiver.application.dtos import (
@@ -23,6 +24,7 @@ from photo_archiver.workers import (
     ImportPeopleTask,
     MatchPersonsTask,
     QtWorkerExecutor,
+    RunRecognitionTask,
     TaskCancelled,
     ScanAndRegisterPhotosTask,
     TaskCompleted,
@@ -559,6 +561,28 @@ def test_match_persons_task_detects_mid_batch_cancellation() -> None:
     assert cancellable.commands == [command]
     assert [type(event) for event in events] == [TaskStarted, TaskProgress, TaskCancelled]
     assert events[-1].reason == "user stopped mid-batch"
+
+
+def test_run_recognition_task_propagates_cancellation_to_use_case() -> None:
+    class CancellableRecognitionUseCase:
+        def __init__(self) -> None:
+            self.cancelled = False
+
+        def execute(self, command):
+            return command
+
+        def cancel(self) -> None:
+            self.cancelled = True
+
+    use_case = CancellableRecognitionUseCase()
+    command = StartRecognitionRunCommand((), ())
+    task = RunRecognitionTask(use_case, command)  # type: ignore[arg-type]
+    task.cancel("stop run")
+
+    with pytest.raises(WorkerTaskCancelled, match="stop run"):
+        task.run()
+
+    assert use_case.cancelled is True
 
 
 def test_replay_pending_terminal_rescues_fast_fail_before_wiring() -> None:

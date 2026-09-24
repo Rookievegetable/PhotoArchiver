@@ -4,6 +4,7 @@ from photo_archiver.application.commands import (
     ArchivePhotosCommand,
     ImportPeopleCommand,
     MatchPersonsCommand,
+    StartRecognitionRunCommand,
     ScanAndRegisterPhotosCommand,
 )
 from photo_archiver.application.dtos import (
@@ -17,8 +18,10 @@ from photo_archiver.application.use_cases import (
     ArchivePhotosUseCase,
     ImportPeopleUseCase,
     MatchPersonsUseCase,
+    RunRecognitionUseCase,
     ScanAndRegisterPhotosUseCase,
 )
+from photo_archiver.domain import RecognitionRun
 from photo_archiver.workers.task import WorkerTask
 
 
@@ -148,6 +151,34 @@ class MatchPersonsTask(WorkerTask[tuple[MatchResult, ...]]):
             total=len(results),
         )
         return results
+
+
+class RunRecognitionTask(WorkerTask[RecognitionRun]):
+    """Run a traceable recognition run and forward cooperative cancellation."""
+
+    def __init__(self, use_case: RunRecognitionUseCase,
+                 command: StartRecognitionRunCommand) -> None:
+        super().__init__("run_recognition")
+        self._use_case = use_case
+        self._command = command
+
+    def execute(self) -> RecognitionRun:
+        self.raise_if_cancelled()
+        self.report_progress("Starting recognition run")
+        binder = getattr(self._use_case, "bind_progress_reporter", None)
+        if binder is None:
+            return self._use_case.execute(self._command)
+        with binder(self):
+            result = self._use_case.execute(self._command)
+        self.raise_if_cancelled()
+        self.report_progress("Recognition run finished", current=1, total=1)
+        return result
+
+    def cancel(self, reason: str = "") -> None:
+        super().cancel(reason)
+        cancel = getattr(self._use_case, "cancel", None)
+        if cancel is not None:
+            cancel()
 
 
 class ArchivePhotosTask(WorkerTask[ArchiveResult]):
