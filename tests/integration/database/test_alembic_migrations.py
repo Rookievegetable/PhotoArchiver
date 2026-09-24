@@ -23,7 +23,7 @@ from alembic.config import Config
 _ALEMBIC_CFG = Path(__file__).resolve().parent.parent.parent.parent / "alembic.ini"
 _ALEMBIC_SCRIPT = _ALEMBIC_CFG.resolve().parent / "alembic"
 
-# 6 基础表（002_split_create_ddl）+ 阶段 A 2 表（003_import_batches_and_roster）
+# 8 基础表（002 的 6 基础表 + 003 的导入草稿 2 表）+ 004 的 4 张 run 表
 _ALL_TABLES = (
     "people",
     "folders",
@@ -33,6 +33,10 @@ _ALL_TABLES = (
     "archive_records",
     "import_batches",
     "import_draft_rows",
+    "recognition_runs",
+    "recognition_run_photos",
+    "recognition_run_scopes",
+    "face_observations",
 )
 # 显式命名索引（002 的 5 个 + 003 的 2 个；SQLite UNIQUE 自动索引不计入）
 _ALL_INDEXES = (
@@ -43,6 +47,10 @@ _ALL_INDEXES = (
     "idx_archive_records_status",
     "idx_import_draft_rows_batch",
     "idx_people_roster_order",
+    "idx_recognition_runs_created_at",
+    "idx_recognition_run_photos_photo_id",
+    "idx_face_observations_photo_id",
+    "idx_face_observations_run_id",
 )
 
 
@@ -110,12 +118,12 @@ def test_migration_upgrade_creates_all_indexes(tmp_db: Path) -> None:
 
 
 def test_migration_upgrade_stamps_head_revision(tmp_db: Path) -> None:
-    """upgrade head 后 alembic_version 表记录 '003_import_batches_and_roster'."""
+    """upgrade head 后 alembic_version 表记录 004。"""
     cfg = _make_alembic_config(tmp_db)
     command.upgrade(cfg, "head")
 
     with sqlite3.connect(str(tmp_db)) as conn:
-        assert _alembic_version(conn) == "003_import_batches_and_roster"
+        assert _alembic_version(conn) == "004_recognition_runs_and_observations"
 
 
 # ── migration down 可执行 ──────────────────────────────────────────────────
@@ -159,22 +167,22 @@ def test_migration_upgrade_idempotent(tmp_db: Path) -> None:
     command.upgrade(cfg, "head")
 
     with sqlite3.connect(str(tmp_db)) as conn:
-        assert _alembic_version(conn) == "003_import_batches_and_roster"
+        assert _alembic_version(conn) == "004_recognition_runs_and_observations"
         # 表仍存在不重复创建
         tables = _list_tables(conn)
-        assert len(tables) == 9  # 8 表 + alembic_version
+        assert len(tables) == 13  # 12 tables + alembic_version
 
 
 # ── Schema 版本一致 ─────────────────────────────────────────────────────────
 
 
 def test_schema_version_consistent_after_upgrade(tmp_db: Path) -> None:
-    """upgrade head 后 Schema 版本一致——alembic_version=003 + 8 表 + 索引全在."""
+    """upgrade head 后 Schema 版本一致——alembic_version=004 + 全部表与索引。"""
     cfg = _make_alembic_config(tmp_db)
     command.upgrade(cfg, "head")
 
     with sqlite3.connect(str(tmp_db)) as conn:
-        assert _alembic_version(conn) == "003_import_batches_and_roster"
+        assert _alembic_version(conn) == "004_recognition_runs_and_observations"
         tables = _list_tables(conn)
         assert set(_ALL_TABLES).issubset(set(tables))
         indexes = _list_indexes(conn)
@@ -223,7 +231,7 @@ def test_initialize_schema_uses_alembic_not_raw_sql(tmp_db: Path) -> None:
 
     provider = SQLiteConnectionProvider(tmp_db)
     # initialize_schema() 应通过 Alembic migration 创建表——不持 raw SQL DDL
-    # 验：调用后表存在（migration 执行了），且 alembic_version 表记录 003
+    # 验：调用后表存在（migration 执行了），且 alembic_version 表记录 004
     provider.initialize_schema()
 
     with sqlite3.connect(str(tmp_db)) as conn:
@@ -231,7 +239,7 @@ def test_initialize_schema_uses_alembic_not_raw_sql(tmp_db: Path) -> None:
         assert "alembic_version" in tables, (
             "initialize_schema() should trigger Alembic migration (alembic_version table exists)"
         )
-        assert _alembic_version(conn) == "003_import_batches_and_roster"
-        # 8 表全在（migration 真接管 DDL）
+        assert _alembic_version(conn) == "004_recognition_runs_and_observations"
+        # 全部业务表全在（migration 真接管 DDL）
         for table in _ALL_TABLES:
             assert table in tables, f"initialize_schema() via Alembic should create table '{table}'"

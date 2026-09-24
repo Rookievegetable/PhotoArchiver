@@ -8,11 +8,13 @@ from photo_archiver.infrastructure.database import (
     SQLiteArchiveRecordRepository,
     SQLiteConnectionProvider,
     SQLiteFaceEmbeddingRepository,
+    SQLiteFaceObservationRepository,
     SQLiteFolderRepository,
     SQLiteImportBatchRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
     SQLiteRecognitionRepository,
+    SQLiteRecognitionRunRepository,
     SQLiteUnitOfWork,
 )
 from photo_archiver.infrastructure.exporters import CsvExporter, ExcelExporter
@@ -35,9 +37,11 @@ from photo_archiver.infrastructure.persistence import (
     InMemoryUserSettingsStore,
 )
 from photo_archiver.infrastructure.repositories import (
+    InMemoryFaceObservationRepository,
     InMemoryFolderRepository,
     InMemoryPersonRepository,
     InMemoryPhotoRepository,
+    InMemoryRecognitionRunRepository,
 )
 
 __all__ = [
@@ -48,7 +52,9 @@ __all__ = [
     "FileRosterTableReader",
     "ExcelExporter",
     "ExcelPersonImportReader",
+    "InMemoryFaceObservationRepository",
     "InMemoryFolderRepository",
+    "InMemoryRecognitionRunRepository",
     "InMemoryPersonRepository",
     "InMemoryPhotoRepository",
     "InMemoryUserSettingsStore",
@@ -60,11 +66,13 @@ __all__ = [
     "SQLiteArchiveRecordRepository",
     "SQLiteConnectionProvider",
     "SQLiteFaceEmbeddingRepository",
+    "SQLiteFaceObservationRepository",
     "SQLiteFolderRepository",
     "SQLiteImportBatchRepository",
     "SQLitePersonRepository",
     "SQLitePhotoRepository",
     "SQLiteRecognitionRepository",
+    "SQLiteRecognitionRunRepository",
     "SQLiteUnitOfWork",
     "TxtPersonImportReader",
     "ThumbnailCache",

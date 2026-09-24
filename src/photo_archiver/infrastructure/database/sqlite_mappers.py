@@ -1,14 +1,20 @@
 """Mapping helpers between SQLite rows and domain entities."""
 
+import json
 from datetime import datetime
 from pathlib import Path
 from sqlite3 import Row
 from uuid import UUID
 
 from photo_archiver.domain import Folder, Person, PersonIdentity, Photo, PhotoMetadata, PhotoPath
-from photo_archiver.domain.entities import MatchStatus, RecognitionResult
+from photo_archiver.domain.entities import (
+    FaceObservation,
+    MatchStatus,
+    RecognitionResult,
+    RecognitionRun,
+)
 from photo_archiver.domain.entities.archive import ArchiveRecord, ArchiveStatus
-from photo_archiver.domain.value_objects import PhotoPathBase
+from photo_archiver.domain.value_objects import FaceBox, FaceEmbedding, PhotoPathBase
 
 
 def datetime_to_text(value: datetime) -> str:
@@ -160,3 +166,51 @@ def archive_record_from_row(row: Row) -> ArchiveRecord:
     record.archived_at = archived_at
     record.error = row["error"]
     return record
+
+
+def recognition_run_from_row(row: Row) -> RecognitionRun:
+    """Convert a SQLite row to a RecognitionRun entity（阶段 C）.
+
+    经**正常构造器**重建——RecognitionRun 构造器接受任意合法 status
+    （历史 run 读回不重演生命周期；状态机守护在 start/complete/fail/
+    cancel 方法上），因此无需 ``__new__`` 反射。``parameters`` 以 JSON
+    读回配置快照；统计列原样还原。
+    """
+    finished_at = row["finished_at"]
+    return RecognitionRun(
+        id=UUID(row["id"]),
+        status=row["status"],
+        parameters=json.loads(row["parameters"]),
+        face_count=row["face_count"],
+        unreadable_count=row["unreadable_count"],
+        no_face_count=row["no_face_count"],
+        in_scope_photo_count=row["in_scope_photo_count"],
+        out_of_scope_photo_count=row["out_of_scope_photo_count"],
+        error=row["error"],
+        created_at=text_to_datetime(row["created_at"]),
+        finished_at=text_to_datetime(finished_at) if finished_at is not None else None,
+    )
+
+
+def face_observation_from_row(row: Row) -> FaceObservation:
+    """Convert a SQLite row to a frozen FaceObservation（阶段 C）.
+
+    FaceObservation 不可变且无状态机方法，正常构造器即可完成重建并
+    顺带重验不变量——刻意不沿用 ``recognition_result_from_row`` 的
+    ``__new__`` 反射技巧（该技巧依赖字段增减时人工同步，较脆弱）。
+    bbox / embedding 以 JSON 文本存储（与 person_embeddings 的 SEC-030
+    决策一致：JSON 是数据专用反序列化，无 pickle 代码执行面）。
+    """
+    x1, y1, x2, y2 = json.loads(row["bbox"])
+    return FaceObservation(
+        id=UUID(row["id"]),
+        run_id=UUID(row["run_id"]),
+        photo_id=UUID(row["photo_id"]),
+        face_index=row["face_index"],
+        photo_face_count=row["photo_face_count"],
+        det_score=row["det_score"],
+        box=FaceBox(x1=x1, y1=y1, x2=x2, y2=y2),
+        embedding=FaceEmbedding(tuple(json.loads(row["embedding"]))),
+        scope_verdict=row["scope_verdict"],
+        quality_score=row["quality_score"],
+    )

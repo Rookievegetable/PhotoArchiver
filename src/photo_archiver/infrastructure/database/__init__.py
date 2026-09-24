@@ -14,6 +14,12 @@ from photo_archiver.infrastructure.database.sqlite_photo_repository import SQLit
 from photo_archiver.infrastructure.database.sqlite_recognition_repository import (
     SQLiteRecognitionRepository,
 )
+from photo_archiver.infrastructure.database.sqlite_recognition_run_repository import (
+    SQLiteRecognitionRunRepository,
+)
+from photo_archiver.infrastructure.database.sqlite_face_observation_repository import (
+    SQLiteFaceObservationRepository,
+)
 from photo_archiver.infrastructure.database.sqlite_unit_of_work import SQLiteUnitOfWork
 
 __all__ = [
@@ -25,5 +31,7 @@ __all__ = [
     "SQLitePersonRepository",
     "SQLitePhotoRepository",
     "SQLiteRecognitionRepository",
+    "SQLiteRecognitionRunRepository",
+    "SQLiteFaceObservationRepository",
     "SQLiteUnitOfWork",
 ]
