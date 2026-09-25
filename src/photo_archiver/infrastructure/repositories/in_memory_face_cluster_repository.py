@@ -86,6 +86,28 @@ class InMemoryFaceClusterRepository(FaceClusterRepository):
             key=lambda cluster: cluster.ordinal,
         )
 
+    def get_cluster(self, cluster_id: UUID) -> FaceCluster | None:
+        return self._clusters.get(cluster_id)
+
+    def update_cluster_status(self, cluster_id: UUID, status: str) -> int:
+        """Stage E：仅迁移 status 字段（词表校验在 FaceCluster 构造器）。"""
+        cluster = self._clusters.get(cluster_id)
+        if cluster is None:
+            return 0
+        cluster.status = status  # 实体不做迁移校验——构造校验实例拒绝非法词
+        FaceCluster(
+            cluster_run_id=cluster.cluster_run_id,
+            run_id=cluster.run_id,
+            ordinal=cluster.ordinal,
+            member_count=cluster.member_count,
+            sort_key=cluster.sort_key,
+            status=status,
+            first_captured_at=cluster.first_captured_at,
+            id=cluster.id,
+            created_at=cluster.created_at,
+        )
+        return 1
+
     def list_members(self, cluster_run_id: UUID) -> list[FaceClusterMember]:
         """Return the cluster run's memberships ordered by ``cluster ordinal, id``."""
         cluster_ordinal = {

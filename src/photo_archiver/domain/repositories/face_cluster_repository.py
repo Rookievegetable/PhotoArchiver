@@ -46,3 +46,13 @@ class FaceClusterRepository(Protocol):
 
     def list_members(self, cluster_run_id: UUID) -> list[FaceClusterMember]:
         """Return the cluster run's memberships ordered by ``cluster ordinal, id``."""
+
+    def get_cluster(self, cluster_id: UUID) -> FaceCluster | None:
+        """Return one cluster or ``None``（Stage E 指派操作的单簇读取）。"""
+
+    def update_cluster_status(self, cluster_id: UUID, status: str) -> int:
+        """Stage E：标记陌生人/忽略组的状态迁移（status 词表由实体校验）。
+
+        只允许生命周期字段迁移，成员关系与排序字段不动（原始聚类数据
+        不被破坏）。Returns 受影响行数（0 = cluster 不存在）。
+        """

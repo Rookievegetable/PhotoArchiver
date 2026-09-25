@@ -398,6 +398,49 @@ CLUSTER_RESULTS_EMPTY_CLUSTERS = "该代聚类没有产生任何簇（范围内�
 CLUSTER_RESULTS_CLUSTER_ENTRY = "第 {ordinal} 组 · {count} 张脸 · 首拍 {time}"
 CLUSTER_RESULTS_NO_CAPTURED = "时间缺失"
 CLUSTER_RESULTS_MEMBER_ENTRY = "{photo} · 脸 {index} · 检测 {det:.2f} · 证据 {conf:.2f}"
+
+# ---- 人物配对工作台（Stage E） ----
+PAIRING_WORKBENCH_TITLE = "人物配对工作台"
+PAIRING_WORKBENCH_ENTRY_BUTTON = "人物配对工作台"
+PAIRING_WORKBENCH_HINT = (
+    "为聚类组指派人员：建议仅作参考（建议状态=待确认），人工确认后才写入"
+    "正式归属并沉淀人脸样本；拒绝/改派不影响原始聚类数据。"
+)
+PAIRING_WORKBENCH_GENERATION_LABEL = "聚类代际"
+PAIRING_WORKBENCH_GENERATION_ENTRY = "{created_at} · {status} · {clusters} 簇"
+PAIRING_WORKBENCH_GENERATE_BUTTON = "生成建议"
+PAIRING_WORKBENCH_CLUSTER_ENTRY = "第 {ordinal} 组 · {count} 张脸 · {assignment}"
+PAIRING_WORKBENCH_ASSIGNMENT_LABEL = {
+    "suggested": "待确认（{source} · {score}）",
+    "confirmed": "已确认：{person}",
+    "rejected": "已拒绝：{person}",
+    "unassigned": "未指派",
+}
+PAIRING_WORKBENCH_SOURCE_LABELS = {
+    "ordered_suggestion": "顺序建议",
+    "sample_match": "样本匹配",
+    "manual": "人工指派",
+}
+PAIRING_WORKBENCH_MEMBER_LABEL = "人员"
+PAIRING_WORKBENCH_CONFIRM_BUTTON = "确认建议"
+PAIRING_WORKBENCH_REJECT_BUTTON = "拒绝建议"
+PAIRING_WORKBENCH_ASSIGN_BUTTON = "指派该人员"
+PAIRING_WORKBENCH_UNASSIGN_BUTTON = "解除映射"
+PAIRING_WORKBENCH_UNKNOWN_BUTTON = "标记陌生人"
+PAIRING_WORKBENCH_IGNORE_BUTTON = "忽略组"
+PAIRING_WORKBENCH_NO_CLUSTERS = "该代没有可指派的簇。"
+PAIRING_WORKBENCH_NO_ASSIGNMENT_HINT = "尚未生成建议；可点击「生成建议」或直接指派人员。"
+PAIRING_WORKBENCH_NO_ROSTER = "人员名单为空；请先导入人员。"
+PAIRING_WORKBENCH_SUGGESTED_DONE = (
+    "已生成 {suggestions} 条建议（样本匹配 {sample_matched} · 顺序配对 {ordered}）"
+)
+PAIRING_WORKBENCH_CONFIRMED = "已确认归属：{person}"
+PAIRING_WORKBENCH_REJECTED = "已拒绝该建议"
+PAIRING_WORKBENCH_ASSIGNED = "已人工指派：{person}"
+PAIRING_WORKBENCH_UNASSIGNED = "已解除映射"
+PAIRING_WORKBENCH_STATE_SET = "已标记为 {state}"
+PAIRING_WORKBENCH_OP_FAILED_TITLE = "配对操作失败"
+
 CLUSTER_RUN_STATUS_LABELS = {
     "created": "已创建",
     "running": "运行中",

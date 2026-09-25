@@ -16,6 +16,7 @@ from photo_archiver.application.dtos.cluster_results import (
     ClusterRunResults,
 )
 from photo_archiver.domain import (
+    ClusterPersonAssignmentRepository,
     FaceClusterMember,
     FaceClusterRepository,
     FaceObservationRepository,
@@ -33,14 +34,22 @@ class ClusterResultsService:
         recognition_run_repository: RecognitionRunRepository,
         face_observation_repository: FaceObservationRepository,
         face_cluster_repository: FaceClusterRepository,
+        assignment_repository: ClusterPersonAssignmentRepository | None = None,
     ) -> None:
         self._run_repository = recognition_run_repository
         self._observation_repository = face_observation_repository
         self._cluster_repository = face_cluster_repository
+        self._assignment_repository = assignment_repository
 
     def list_cluster_runs(self, recognition_run_id: UUID) -> list[FaceClusterRun]:
         """Return the recognition run's clustering generations, newest first."""
         return self._cluster_repository.list_cluster_runs(recognition_run_id)
+
+    def assignments_active(self, cluster_run_id: UUID) -> list:
+        """Return the generation's active (suggested/confirmed) decisions."""
+        if self._assignment_repository is None:
+            return []
+        return self._assignment_repository.list_active_by_cluster_run(cluster_run_id)
 
     def results(self, cluster_run_id: UUID) -> ClusterRunResults | None:
         """Assemble one generation's clusters and members; ``None`` if absent."""

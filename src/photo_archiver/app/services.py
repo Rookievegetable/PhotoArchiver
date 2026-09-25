@@ -19,6 +19,8 @@ from photo_archiver.application import (
     ClusterResultsService,
     DeletePersonService,
     ListRecognitionRunsService,
+    PairingWorkbenchService,
+    SuggestPairingsService,
     DeletePhotosService,
     DetectDuplicatesService,
     DisposeDuplicatesService,
@@ -69,6 +71,8 @@ class ApplicationServices:
     cluster_faces: ClusterFacesService
     list_recognition_runs: ListRecognitionRunsService
     cluster_results: ClusterResultsService
+    suggest_pairings: SuggestPairingsService
+    pairing_workbench: PairingWorkbenchService
     archive_photos: ArchivePhotosService
     review_recognition: ReviewRecognitionService
     settings: SettingsService
@@ -282,10 +286,27 @@ def build_application_services(
             NumpyCosineSimilarityFactory(),
         ),
         list_recognition_runs=ListRecognitionRunsService(repositories.recognition_runs),
+        suggest_pairings=SuggestPairingsService(
+            repositories.face_clusters,
+            repositories.face_observations,
+            repositories.people,
+            repositories.cluster_assignments,
+            repositories.person_face_samples,
+            NumpyCosineSimilarityFactory(),
+        ),
+        pairing_workbench=PairingWorkbenchService(
+            repositories.cluster_assignments,
+            repositories.face_clusters,
+            repositories.face_observations,
+            repositories.people,
+            repositories.recognition,
+            repositories.person_face_samples,
+        ),
         cluster_results=ClusterResultsService(
             repositories.recognition_runs,
             repositories.face_observations,
             repositories.face_clusters,
+            repositories.cluster_assignments,
         ),
         workspace_readiness=WorkspaceReadinessService(
             repositories.recognition,

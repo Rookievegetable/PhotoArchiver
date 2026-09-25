@@ -159,6 +159,7 @@ class PeopleAdminPage(QWidget):
     # D-4 聚类入口：页面只发请求信号，运行/对话框由主窗口按既有任务管线处理。
     cluster_run_requested = Signal()
     cluster_results_requested = Signal()
+    pairing_workbench_requested = Signal()
 
     def __init__(
         self,
@@ -534,6 +535,9 @@ class PeopleAdminPage(QWidget):
         self._cluster_results_button = QPushButton(text.CLUSTER_PAGE_RESULTS_BUTTON, group)
         self._cluster_results_button.clicked.connect(self.cluster_results_requested.emit)
         row.addWidget(self._cluster_results_button)
+        self._pairing_button = QPushButton(text.PAIRING_WORKBENCH_ENTRY_BUTTON, group)
+        self._pairing_button.clicked.connect(self.pairing_workbench_requested.emit)
+        row.addWidget(self._pairing_button)
         row.addStretch()
         group_layout.addLayout(row)
         hint = QLabel(text.CLUSTER_PAGE_HINT, group)
@@ -582,6 +586,7 @@ class PeopleAdminPage(QWidget):
             has_results = bool(self._cluster_results.list_cluster_runs(run_id))
         self._cluster_run_button.setEnabled(run_id is not None)
         self._cluster_results_button.setEnabled(has_results)
+        self._pairing_button.setEnabled(run_id is not None)
         self._cluster_hint.setText(
             "" if run_id is not None else text.CLUSTER_PAGE_NO_RUNS
         )

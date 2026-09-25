@@ -184,6 +184,42 @@ class SQLiteFaceClusterRepository(FaceClusterRepository):
             ).fetchall()
         return [face_cluster_from_row(row) for row in rows]
 
+    def get_cluster(self, cluster_id: UUID) -> FaceCluster | None:
+        with self._connection_provider.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM face_clusters WHERE id = ?", (str(cluster_id),),
+            ).fetchone()
+        return face_cluster_from_row(row) if row is not None else None
+
+    def update_cluster_status(self, cluster_id: UUID, status: str) -> int:
+        """Stage E：仅迁移 status 字段（词表校验在 FaceCluster 构造器）。"""
+        # 构造器校验 status 词表——用一次读回校验，拒绝非法值。
+        with self._connection_provider.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM face_clusters WHERE id = ?", (str(cluster_id),),
+            ).fetchone()
+        if row is None:
+            return 0
+        current = face_cluster_from_row(row)
+        current.status = status  # 触发校验的位置：直接构造校验实例
+        FaceCluster(
+            cluster_run_id=current.cluster_run_id,
+            run_id=current.run_id,
+            ordinal=current.ordinal,
+            member_count=current.member_count,
+            sort_key=current.sort_key,
+            status=status,
+            first_captured_at=current.first_captured_at,
+            id=current.id,
+            created_at=current.created_at,
+        )
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE face_clusters SET status = ? WHERE id = ?",
+                (status, str(cluster_id)),
+            )
+            return cursor.rowcount
+
     def list_members(self, cluster_run_id: UUID) -> list[FaceClusterMember]:
         """Return the cluster run's memberships ordered by ``cluster ordinal, id``."""
         with self._connection_provider.connect() as connection:

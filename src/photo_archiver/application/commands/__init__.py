@@ -15,6 +15,14 @@ from photo_archiver.application.commands.import_draft import (
 )
 from photo_archiver.application.commands.import_people import ImportPeopleCommand
 from photo_archiver.application.commands.cluster_faces import StartClusteringRunCommand
+from photo_archiver.application.commands.pairing import (
+    AssignClusterPersonCommand,
+    ConfirmAssignmentCommand,
+    RejectAssignmentCommand,
+    SetClusterStateCommand,
+    StartSuggestPairingsCommand,
+    UnassignClusterCommand,
+)
 from photo_archiver.application.commands.match_persons import MatchPersonsCommand
 from photo_archiver.application.commands.people_admin import (
     AddPersonCommand,
@@ -45,5 +53,11 @@ __all__ = [
     "ScanAndRegisterPhotosCommand",
     "ScanPhotoFolderCommand",
     "StartClusteringRunCommand",
+    "AssignClusterPersonCommand",
+    "ConfirmAssignmentCommand",
+    "RejectAssignmentCommand",
+    "SetClusterStateCommand",
     "StartRecognitionRunCommand",
+    "StartSuggestPairingsCommand",
+    "UnassignClusterCommand",
 ]

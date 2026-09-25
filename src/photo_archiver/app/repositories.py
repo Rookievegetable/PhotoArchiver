@@ -5,7 +5,9 @@ from pathlib import Path
 
 from photo_archiver.domain import (
     ArchiveRecordRepository,
+    ClusterPersonAssignmentRepository,
     FaceClusterRepository,
+    PersonFaceSampleRepository,
     FaceEmbeddingRepository,
     FolderRepository,
     ImportBatchRepository,
@@ -17,11 +19,13 @@ from photo_archiver.domain import (
 )
 from photo_archiver.infrastructure import (
     SQLiteArchiveRecordRepository,
+    SQLiteClusterPersonAssignmentRepository,
     SQLiteConnectionProvider,
     SQLiteFaceClusterRepository,
     SQLiteFaceEmbeddingRepository,
     SQLiteFolderRepository,
     SQLiteImportBatchRepository,
+    SQLitePersonFaceSampleRepository,
     SQLitePersonRepository,
     SQLitePhotoRepository,
     SQLiteRecognitionRepository,
@@ -44,6 +48,8 @@ class ApplicationRepositories:
     face_observations: FaceObservationRepository
     face_clusters: FaceClusterRepository
     face_embeddings: FaceEmbeddingRepository
+    cluster_assignments: ClusterPersonAssignmentRepository
+    person_face_samples: PersonFaceSampleRepository
     import_batches: ImportBatchRepository
 
 
@@ -66,6 +72,8 @@ def build_sqlite_repositories(database_path: Path) -> ApplicationRepositories:
         recognition_runs=SQLiteRecognitionRunRepository(connection_provider),
         face_observations=SQLiteFaceObservationRepository(connection_provider),
         face_clusters=SQLiteFaceClusterRepository(connection_provider),
+        cluster_assignments=SQLiteClusterPersonAssignmentRepository(connection_provider),
+        person_face_samples=SQLitePersonFaceSampleRepository(connection_provider),
         face_embeddings=SQLiteFaceEmbeddingRepository(connection_provider),
         import_batches=SQLiteImportBatchRepository(connection_provider),
     )

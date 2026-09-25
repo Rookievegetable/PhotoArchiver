@@ -198,3 +198,16 @@ def test_results_button_opens_readonly_dialog(qtbot, tmp_path, monkeypatch) -> N
     window._people_admin_page._cluster_results_button.click()
 
     assert opened == [1]
+
+
+def test_pairing_workbench_button_opens_workbench(qtbot, tmp_path, monkeypatch) -> None:
+    window = _make_window(qtbot, tmp_path, monkeypatch)
+    opened: list[int] = []
+    monkeypatch.setattr(
+        module, "PairingWorkbenchDialog",
+        lambda *a, **k: opened.append(1) or Mock(exec=Mock(return_value=0)),
+    )
+
+    window._people_admin_page._pairing_button.click()
+
+    assert opened == [1]
