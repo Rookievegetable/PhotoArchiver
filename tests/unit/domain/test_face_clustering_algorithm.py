@@ -225,3 +225,120 @@ def test_empty_input_yields_no_clusters() -> None:
 def test_lookup_size_mismatch_rejected() -> None:
     with pytest.raises(ValueError, match="size"):
         cluster_items(_items(2), _ExactLookup([_unit_vector(0.0)]))
+
+
+# ── P1 边界（Stage D 核心验收裁决：合并门为包含语义 ≥） ────────────────────
+
+
+def _two_item_lookup(second_x: float) -> _ExactLookup:
+    """cos(两向量) 精确等于 second_x（v2 = (x, √(1-x²))，单位化）。"""
+    return _ExactLookup([(1.0, 0.0), (second_x, math.sqrt(1.0 - second_x ** 2))])
+
+
+def test_merge_boundary_exactly_at_threshold_merges() -> None:
+    """跨簇两两最小相似度恰好 = 0.4 → 合并（规格包含语义，P1 修复回归）。"""
+    items = _items(2)
+    assignments = cluster_items(
+        items, _two_item_lookup(0.4), consistency_threshold=0.4,
+    )
+
+    assert len(assignments) == 1
+    assert assignments[0].members == (0, 1)
+
+
+def test_merge_boundary_below_stricter_threshold_stays_separate() -> None:
+    """同一对（恰 0.4）在 consistency_threshold=0.5 下 → 不合并。"""
+    items = _items(2)
+    assignments = cluster_items(
+        items, _two_item_lookup(0.4), consistency_threshold=0.5,
+    )
+
+    assert len(assignments) == 2
+
+
+def test_merge_boundary_just_above_threshold_merges() -> None:
+    """0.400001 > 0.4 → 合并（与恰等值用例共同钉死包含边界）。"""
+    items = _items(2)
+    assignments = cluster_items(
+        items, _two_item_lookup(0.400001), consistency_threshold=0.4,
+    )
+
+    assert len(assignments) == 1
+
+
+# ── P2-a：tail-move 分支与多轮合并的常驻确定性回归（只断言最终划分） ────────
+
+
+def _members_of(assignments) -> list[frozenset[int]]:
+    return [frozenset(assignment.members) for assignment in assignments]
+
+
+def test_multi_round_merge_with_tail_move_final_partition() -> None:
+    """四单例两轮合并，首轮即触发 tail-move（right != last）并跨轮复用重键值。
+
+    角度 0°/124°/62°/186°：阶段① 全部单例（两两最大 cos62≈0.469<0.5）；
+    阶段② 首轮合并 (0,2)（right=2 != last=3 → tail-move），第二轮使用
+    重键后的 (1,2)=0.469 合并 (1,3)。最终划分 {{0,2},{1,3}}。
+    """
+    items = _items(4)
+    assignments = cluster_items(items, _lookup_vectors(0.0, 124.0, 62.0, 186.0))
+
+    assert sorted(_members_of(assignments)) == [frozenset({0, 2}), frozenset({1, 3})]
+    by_item = {
+        index: assignment for assignment in assignments for index in assignment.members
+    }
+    expected = round(math.cos(math.radians(62.0)), 6)
+    for absorbed in (2, 3):
+        index = by_item[absorbed].members.index(absorbed)
+        assert by_item[absorbed].confidences[index] == expected  # 并簇证据 = 跨簇最小
+    for seed in (0, 1):
+        index = by_item[seed].members.index(seed)
+        assert by_item[seed].confidences[index] == 1.0
+
+
+def test_five_point_ring_multi_round_merge_uses_rekeyed_cross_values() -> None:
+    """五单例两轮合并（首轮 tail-move，次轮使用重键后的跨簇值）。
+
+    角度 0°/62°/124°/186°/248°：两两最大 cos62≈0.469 全部 < 0.5 → 五单例。
+    阶段② 首轮合并 (0,1)（right=1 != last=4 → tail-move，{4} 重键到
+    idx1，其跨簇值 (3,4)=0.469 重键为 (1,3)）；次轮 (1,3) 正是重键产生
+    的证据对 → 合并 {3,4}。{2} 因 (2,4)=-0.559 的完全链接约束保持单例
+    （环不链式化）。最终 {{0,1},{3,4},{2}}。
+    """
+    items = _items(5)
+    assignments = cluster_items(
+        items, _lookup_vectors(0.0, 62.0, 124.0, 186.0, 248.0),
+    )
+
+    assert sorted(_members_of(assignments)) == [
+        frozenset({0, 1}), frozenset({3, 4}), frozenset({2}),
+    ]
+    by_item = {
+        index: assignment for assignment in assignments for index in assignment.members
+    }
+    expected = round(math.cos(math.radians(62.0)), 6)
+    assert by_item[1].confidences[by_item[1].members.index(1)] == expected
+    assert by_item[3].confidences[by_item[3].members.index(3)] == expected
+    for seed in (0, 4, 2):
+        assert by_item[seed].confidences[by_item[seed].members.index(seed)] == 1.0
+
+
+# ── P2-b：同一 Observation 在同一 ClusterRun 内唯一归属（算法级对抗性） ──────
+
+
+def test_every_item_assigned_exactly_once_across_clusters() -> None:
+    """对抗性断言：全部输入项恰被归属一次——不重复、不遗漏。
+
+    用五点环（多轮合并、tail-move）+ 相似对混合数据，逐簇校验成员索引
+    全局唯一且并集 == 全部输入索引。
+    """
+    items = _items(9)
+    angles = (0.0, 62.0, 124.0, 186.0, 248.0, 5.0, 57.0, 119.0, 181.0)
+    assignments = cluster_items(items, _lookup_vectors(*angles))
+
+    seen: list[int] = []
+    for assignment in assignments:
+        seen.extend(assignment.members)
+        assert len(assignment.members) == len(set(assignment.members))
+    assert len(seen) == len(set(seen)), "同一输入项被归属到多个 Cluster"
+    assert sorted(seen) == list(range(len(items))), "存在未被归属的输入项"

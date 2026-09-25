@@ -304,3 +304,40 @@ def test_progress_reports_coarse_stages():
 
     assert events[-1] == (2, 2, "Persisting clusters")
     assert any("Clustering face observations" in message for _, _, message in events)
+
+
+def test_every_participating_observation_assigned_exactly_once():
+    """P2-b 对抗性：同一 Observation 在同一 ClusterRun 中至多归属一个
+    Cluster，且全部范围内观测都被覆盖（不重不漏）。
+
+    混合数据：三人各跨照片 + 一张范围外观测，多簇多成员场景下逐条校验。
+    """
+    harness = _Harness()
+    run = harness.add_run()
+    harness.add_photo("a", "photos/a.jpg", datetime(2026, 1, 1))
+    harness.add_photo("b", "photos/b.jpg", datetime(2026, 1, 2))
+    harness.add_photo("c", "photos/c.jpg", datetime(2026, 1, 3))
+    # 人1：0°/6°/12°（跨三张照片），人2：90°/96°（跨两张），人3：180°（单张）。
+    harness.add_observation("a", 0, 0.0)
+    harness.add_observation("b", 0, 6.0)
+    harness.add_observation("c", 0, 12.0)
+    harness.add_observation("a", 1, 90.0)
+    harness.add_observation("b", 1, 96.0)
+    harness.add_observation("c", 1, 180.0)
+    harness.add_observation("a", 2, 270.0, scope="out_of_selected_scope")  # 不参与
+
+    cluster_run = harness.service.execute(StartClusteringRunCommand(run.id))
+
+    members = harness.clusters.list_members(cluster_run.id)
+    member_observation_ids = [member.observation_id for member in members]
+    assert len(member_observation_ids) == len(set(member_observation_ids)), (
+        "同一 Observation 被归属到多个 Cluster"
+    )
+    participating_ids = {
+        observation.id for observation in harness.observations.list_by_run(run.id)
+        if observation.scope_verdict == "in_selected_scope"
+    }
+    assert set(member_observation_ids) == participating_ids  # 不重不漏
+    # 每条成员的 cluster 都属于本 cluster run（追溯闭合）。
+    cluster_ids = {cluster.id for cluster in harness.clusters.list_clusters(cluster_run.id)}
+    assert all(member.cluster_id in cluster_ids for member in members)

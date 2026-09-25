@@ -219,3 +219,32 @@ def _reference_centroid(members, target) -> float:
     norm = math.sqrt(sum(a * a for a in centroid))
     target_norm = math.sqrt(sum(b * b for b in target))
     return dot / (norm * target_norm)
+
+
+def test_membership_unique_constraint_boundary(tmp_path: Path) -> None:
+    """P2-b：UNIQUE(cluster_id, observation_id) 的实际约束边界。
+
+    - 同簇重复归属：存储层拒绝（IntegrityError）——专项测试已覆盖，此处
+      与跨簇行为并置对照；
+    - 同一 ClusterRun 内跨簇重复归属：存储层**允许**（唯一键不含
+      cluster_run 维度）——唯一归属由聚类算法结构性保证（每个输入项只
+      进入一个候选簇，见 test_every_item_assigned_exactly_once_across_
+      clusters 与服务级对抗性测试）。生产流程不会产生该形态；若未来要求
+      DB 强制跨簇唯一，属 Schema 变更，需 owner 裁决（本轮不改表）。
+    """
+    provider = _provider(tmp_path)
+    run_id, _, observation = _seed_photo_with_observation(provider)
+    repository = SQLiteFaceClusterRepository(provider)
+    cluster_run = _cluster_run(run_id)
+    repository.add_cluster_run(cluster_run)
+    first = _cluster(cluster_run.id, run_id, ordinal=0)
+    second = _cluster(cluster_run.id, run_id, ordinal=1)
+    repository.add_clusters([first, second])
+
+    repository.add_members([_member(first.id, observation.id)])
+    with pytest.raises(sqlite3.IntegrityError):
+        repository.add_members([_member(first.id, observation.id)])  # 同簇重复
+
+    # 跨簇重复：存储层接受（边界现状），算法层永不产生。
+    repository.add_members([_member(second.id, observation.id)])
+    assert len(repository.list_members(cluster_run.id)) == 2

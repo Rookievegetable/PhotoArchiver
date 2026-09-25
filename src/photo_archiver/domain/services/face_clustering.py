@@ -166,18 +166,21 @@ def _merge_candidates(
 
     ``min(A ∪ B, W) = min(min(A, W), min(B, W))`` keeps the merged cross-min
     an O(1) dictionary combination, so rounds stay cheap without re-scans.
+    扫描以 ``>`` 求最大值（保留首现平局裁决），循环结束后以
+    ``best >= consistency_threshold`` 判定合并——边界为**包含**语义
+    （owner 裁决 §D-2："两两最小相似度 ≥ consistency_threshold 才合并"）。
     """
     cross = _initial_cross_minima(candidates, similarities, low_quality)
     while True:
         if should_cancel is not None and should_cancel():
             raise ClusteringCancelled("cancelled during consistency merging")
-        left, right, best = -1, -1, consistency_threshold
+        left, right, best = -1, -1, _NO_EVIDENCE
         for i in range(len(candidates)):
             for j in range(i + 1, len(candidates)):
                 value = cross.get((i, j), _NO_EVIDENCE)
                 if value > best:
                     left, right, best = i, j, value
-        if left < 0:
+        if left < 0 or best < consistency_threshold:
             return candidates
         _merge_pair(candidates, cross, left, right, best)
 
