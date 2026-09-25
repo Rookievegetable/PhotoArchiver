@@ -8,6 +8,9 @@ from uuid import UUID
 
 from photo_archiver.domain import Folder, Person, PersonIdentity, Photo, PhotoMetadata, PhotoPath
 from photo_archiver.domain.entities import (
+    FaceCluster,
+    FaceClusterMember,
+    FaceClusterRun,
     FaceObservation,
     MatchStatus,
     RecognitionResult,
@@ -214,4 +217,56 @@ def face_observation_from_row(row: Row) -> FaceObservation:
         embedding=FaceEmbedding(tuple(json.loads(row["embedding"]))),
         scope_verdict=row["scope_verdict"],
         quality_score=row["quality_score"],
+    )
+
+
+def face_cluster_run_from_row(row: Row) -> FaceClusterRun:
+    """Convert a SQLite row to a FaceClusterRun entity（阶段 D）.
+
+    与 RecognitionRun 同约定：经正常构造器重建，历史 cluster run 读回
+    不重演生命周期；``parameters`` 以 JSON 读回配置快照。
+    """
+    finished_at = row["finished_at"]
+    return FaceClusterRun(
+        id=UUID(row["id"]),
+        recognition_run_id=UUID(row["recognition_run_id"]),
+        algorithm_version=row["algorithm_version"],
+        parameters=json.loads(row["parameters"]),
+        status=row["status"],
+        created_at=text_to_datetime(row["created_at"]),
+        finished_at=text_to_datetime(finished_at) if finished_at is not None else None,
+        error=row["error"],
+        cluster_count=row["cluster_count"],
+        member_count=row["member_count"],
+        excluded_count=row["excluded_count"],
+    )
+
+
+def face_cluster_from_row(row: Row) -> FaceCluster:
+    """Convert a SQLite row to a FaceCluster entity（阶段 D）."""
+    first_captured_at = row["first_captured_at"]
+    return FaceCluster(
+        id=UUID(row["id"]),
+        cluster_run_id=UUID(row["cluster_run_id"]),
+        run_id=UUID(row["run_id"]),
+        ordinal=row["ordinal"],
+        member_count=row["member_count"],
+        sort_key=row["sort_key"],
+        status=row["status"],
+        first_captured_at=(
+            text_to_datetime(first_captured_at) if first_captured_at is not None else None
+        ),
+        created_at=text_to_datetime(row["created_at"]),
+    )
+
+
+def face_cluster_member_from_row(row: Row) -> FaceClusterMember:
+    """Convert a SQLite row to a FaceClusterMember entity（阶段 D）."""
+    return FaceClusterMember(
+        id=UUID(row["id"]),
+        cluster_id=UUID(row["cluster_id"]),
+        observation_id=UUID(row["observation_id"]),
+        source=row["source"],
+        confidence=row["confidence"],
+        created_at=text_to_datetime(row["created_at"]),
     )

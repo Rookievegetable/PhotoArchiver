@@ -15,6 +15,7 @@ from photo_archiver.application import (
     BackfillCaptureTimeService,
     BackfillContentHashService,
     CleanupThumbnailCacheService,
+    ClusterFacesService,
     DeletePersonService,
     DeletePhotosService,
     DetectDuplicatesService,
@@ -37,6 +38,7 @@ from photo_archiver.application.dtos.workspace import ModelAvailability
 from photo_archiver.application.services.workspace_readiness import WorkspaceReadinessService
 from photo_archiver.infrastructure import (
     DispatchingPersonImportReader,
+    NumpyCosineSimilarityFactory,
     ExcelPersonImportReader,
     FileRosterTableReader,
     InMemoryUserSettingsStore,
@@ -62,6 +64,7 @@ class ApplicationServices:
     scan_and_register_photos: ScanAndRegisterPhotosService
     match_persons: MatchPersonsService
     run_recognition: RunRecognitionService | None
+    cluster_faces: ClusterFacesService
     archive_photos: ArchivePhotosService
     review_recognition: ReviewRecognitionService
     settings: SettingsService
@@ -267,6 +270,13 @@ def build_application_services(
         ),
         match_persons=match_service,
         run_recognition=run_recognition_service,
+        # 聚类只读既有 Observation，不依赖模型包——无模型环境同样可用。
+        cluster_faces=ClusterFacesService(
+            repositories.recognition_runs,
+            repositories.face_observations,
+            repositories.face_clusters,
+            NumpyCosineSimilarityFactory(),
+        ),
         workspace_readiness=WorkspaceReadinessService(
             repositories.recognition,
             archive_root_probe=archive_root_available,

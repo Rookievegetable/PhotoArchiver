@@ -2,6 +2,7 @@
 
 from photo_archiver.workers.application_tasks import (
     ArchivePhotosTask,
+    ClusterFacesTask,
     ConfirmImportTask,
     ImportPeopleTask,
     MatchPersonsTask,
@@ -23,6 +24,7 @@ from photo_archiver.workers.task import WorkerTask, WorkerTaskCancelled
 
 __all__ = [
     "ArchivePhotosTask",
+    "ClusterFacesTask",
     "ExportTask",
     "ConfirmImportTask",
     "ImportPeopleTask",

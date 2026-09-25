@@ -137,7 +137,14 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
     return getattr(window, f"_on_{entry}_clicked"), submit
 
 
-@pytest.mark.parametrize("name", [n for n in TASK_LABELS if n not in ("import_confirm", "match_persons")])
+# face_clustering：阶段 D 只落数据与 Worker，无窗口入口（方案 D-4 UI 后续提交）。
+_WINDOW_TASK_NAMES = [
+    n for n in TASK_LABELS
+    if n not in ("import_confirm", "match_persons", "face_clustering")
+]
+
+
+@pytest.mark.parametrize("name", _WINDOW_TASK_NAMES)
 def test_five_tasks_block_every_conflicting_entry_and_cancel_correctly(
     window, monkeypatch, tmp_path, name,
 ):
@@ -172,7 +179,7 @@ def test_five_tasks_block_every_conflicting_entry_and_cancel_correctly(
     assert [(a.isEnabled(), a.toolTip()) for a in window._conflicting_actions] == original
 
 
-@pytest.mark.parametrize("name", [n for n in TASK_LABELS if n not in ("import_confirm", "match_persons")])
+@pytest.mark.parametrize("name", _WINDOW_TASK_NAMES)
 @pytest.mark.parametrize("kind", ["completed", "failed", "cancelled"])
 def test_all_early_terminals_release_and_refresh_once(window, monkeypatch, tmp_path, name, kind):
     event = {"completed": TaskCompleted(name), "failed": TaskFailed(name, ValueError("bad")),

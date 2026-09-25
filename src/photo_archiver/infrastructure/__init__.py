@@ -4,9 +4,14 @@ from photo_archiver.infrastructure.ai import (
     InsightFaceLoader,
     ModelPackMissing,
 )
+from photo_archiver.infrastructure.cosine_kernel import (
+    NumpyCosineSimilarityFactory,
+    NumpyCosineSimilarityLookup,
+)
 from photo_archiver.infrastructure.database import (
     SQLiteArchiveRecordRepository,
     SQLiteConnectionProvider,
+    SQLiteFaceClusterRepository,
     SQLiteFaceEmbeddingRepository,
     SQLiteFaceObservationRepository,
     SQLiteFolderRepository,
@@ -37,6 +42,7 @@ from photo_archiver.infrastructure.persistence import (
     InMemoryUserSettingsStore,
 )
 from photo_archiver.infrastructure.repositories import (
+    InMemoryFaceClusterRepository,
     InMemoryFaceObservationRepository,
     InMemoryFolderRepository,
     InMemoryPersonRepository,
@@ -52,7 +58,10 @@ __all__ = [
     "FileRosterTableReader",
     "ExcelExporter",
     "ExcelPersonImportReader",
+    "InMemoryFaceClusterRepository",
     "InMemoryFaceObservationRepository",
+    "NumpyCosineSimilarityFactory",
+    "NumpyCosineSimilarityLookup",
     "InMemoryFolderRepository",
     "InMemoryRecognitionRunRepository",
     "InMemoryPersonRepository",
@@ -65,6 +74,7 @@ __all__ = [
     "PillowThumbnailGenerator",
     "SQLiteArchiveRecordRepository",
     "SQLiteConnectionProvider",
+    "SQLiteFaceClusterRepository",
     "SQLiteFaceEmbeddingRepository",
     "SQLiteFaceObservationRepository",
     "SQLiteFolderRepository",

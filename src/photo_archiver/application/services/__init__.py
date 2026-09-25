@@ -18,6 +18,7 @@ from photo_archiver.application.services.list_persons_service import ListPersons
 from photo_archiver.application.services.manage_people_service import ManagePeopleService
 from photo_archiver.application.services.match_persons_service import MatchPersonsService
 from photo_archiver.application.services.face_analysis_task import FaceAnalysisTask
+from photo_archiver.application.services.cluster_faces_service import ClusterFacesService
 from photo_archiver.application.services.run_recognition_service import RunRecognitionService
 from photo_archiver.application.services.plugin_context_service import PluginContextService
 from photo_archiver.application.services.cleanup_thumbnail_cache_service import (
@@ -51,6 +52,7 @@ __all__ = [
     "ListPersonsService",
     "ManagePeopleService",
     "MatchPersonsService",
+    "ClusterFacesService",
     "RunRecognitionService",
     "FaceAnalysisTask",
     "ParseImportDraftService",

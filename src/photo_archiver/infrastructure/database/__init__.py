@@ -4,6 +4,9 @@ from photo_archiver.infrastructure.database.sqlite_archive_record_repository imp
     SQLiteArchiveRecordRepository,
 )
 from photo_archiver.infrastructure.database.sqlite_connection import SQLiteConnectionProvider
+from photo_archiver.infrastructure.database.sqlite_face_cluster_repository import (
+    SQLiteFaceClusterRepository,
+)
 from photo_archiver.infrastructure.database.sqlite_face_embedding_repository import (
     SQLiteFaceEmbeddingRepository,
 )
@@ -25,6 +28,7 @@ from photo_archiver.infrastructure.database.sqlite_unit_of_work import SQLiteUni
 __all__ = [
     "SQLiteArchiveRecordRepository",
     "SQLiteConnectionProvider",
+    "SQLiteFaceClusterRepository",
     "SQLiteFaceEmbeddingRepository",
     "SQLiteFolderRepository",
     "SQLiteImportBatchRepository",

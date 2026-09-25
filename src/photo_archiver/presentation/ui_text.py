@@ -33,6 +33,7 @@ TASK_LABELS = {
     "scan_and_register_photos": "扫描",
     "match_persons": "人脸识别",
     "run_recognition": "人脸识别",
+    "face_clustering": "人脸聚类",
     "archive_photos": "归档",
     "export": "导出",
 }

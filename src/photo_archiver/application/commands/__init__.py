@@ -14,6 +14,7 @@ from photo_archiver.application.commands.import_draft import (
     ReparseImportDraftCommand,
 )
 from photo_archiver.application.commands.import_people import ImportPeopleCommand
+from photo_archiver.application.commands.cluster_faces import StartClusteringRunCommand
 from photo_archiver.application.commands.match_persons import MatchPersonsCommand
 from photo_archiver.application.commands.people_admin import (
     AddPersonCommand,
@@ -43,5 +44,6 @@ __all__ = [
     "ReorderPeopleCommand",
     "ScanAndRegisterPhotosCommand",
     "ScanPhotoFolderCommand",
+    "StartClusteringRunCommand",
     "StartRecognitionRunCommand",
 ]

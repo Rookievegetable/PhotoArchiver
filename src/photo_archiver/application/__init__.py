@@ -2,6 +2,7 @@
 
 from photo_archiver.application.commands import (
     AddPersonCommand,
+    StartClusteringRunCommand,
     ArchivePhotosCommand,
     BackfillCaptureTimeCommand,
     ConfirmImportCommand,
@@ -43,6 +44,7 @@ from photo_archiver.application.dtos import (
 )
 from photo_archiver.application.ports import (
     ArchivePathBuilder,
+    SimilarityKernelFactory,
     PersonImportReader,
     PhotoFileScanner,
     PhotoMetadataReader,
@@ -53,6 +55,7 @@ from photo_archiver.application.ports import (
 )
 from photo_archiver.application.services import (
     ArchiveExecutor,
+    ClusterFacesService,
     ConfirmImportService,
     ArchivePathBuilderService,
     ArchivePhotosService,
@@ -83,6 +86,7 @@ from photo_archiver.application.services import (
 )
 from photo_archiver.application.use_cases import (
     ArchivePhotosUseCase,
+    ClusterFacesUseCase,
     DeletePersonUseCase,
     DeletePhotosUseCase,
     DisposeDuplicatesUseCase,
@@ -100,14 +104,18 @@ from photo_archiver.application.use_cases import (
 __all__ = [
     "ArchiveExecutor",
     "ArchiveOutcome",
+    "ClusterFacesService",
+    "ClusterFacesUseCase",
     "ArchivePathBuilder",
     "ArchivePathBuilderService",
+    "SimilarityKernelFactory",
     "ArchivePhotosCommand",
     "ArchivePhotosService",
     "ArchivePhotosUseCase",
     "ArchivePlan",
     "ArchivePlanItem",
     "AddPersonCommand",
+    "StartClusteringRunCommand",
     "ArchivePlanner",
     "ArchiveResult",
     "BackfillCaptureTimeCommand",

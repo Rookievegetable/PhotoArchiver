@@ -12,6 +12,7 @@ from photo_archiver.application.ports.photo_file_scanner import (
 from photo_archiver.application.ports.photo_metadata_reader import PhotoMetadataReader
 from photo_archiver.application.ports.plugin_context import PluginContext
 from photo_archiver.application.ports.progress_reporter import ProgressReporter
+from photo_archiver.application.ports.similarity_kernel import SimilarityKernelFactory
 from photo_archiver.application.ports.system_settings import SystemSettings
 from photo_archiver.application.ports.thumbnail_cache import (
     DEFAULT_THUMBNAIL_SIZE,
@@ -32,6 +33,7 @@ __all__ = [
     "PhotoMetadataReader",
     "PluginContext",
     "ProgressReporter",
+    "SimilarityKernelFactory",
     "SystemSettings",
     "DEFAULT_THUMBNAIL_SIZE",
     "ThumbnailCache",
