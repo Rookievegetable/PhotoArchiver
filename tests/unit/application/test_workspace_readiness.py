@@ -180,10 +180,13 @@ def test_archive_counts_match_planner_and_deduplicate_photos(
         ArchivePathBuilderService(), repositories.people, repositories.photos,
         repositories.recognition, repositories.archive_records,
     )
-    expected = 0 if archive_status in {
+    # E-SG-6：归档拦截按 (person, photo)——Alice 的成功记录只拦 Alice 的
+    # 归属，Bob 的同照片归属仍可归档（无成功记录）。
+    alice_blocked = archive_status in {
         ArchiveStatus.ARCHIVED, ArchiveStatus.SKIPPED, ArchiveStatus.RENAMED,
         ArchiveStatus.OVERWRITTEN,
-    } else 1
+    }
+    expected = 1 if alice_blocked else 2
     assert planner.plan(str(tmp_path / "archive"), ()).planned_count == expected
     assert repositories.recognition.read_workspace_counts().archivable_count == expected
 

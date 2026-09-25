@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from photo_archiver.application.services import ArchivePlanner
+from photo_archiver.application.services.archive_planner import _ALREADY_ARCHIVED_STATES
 from photo_archiver.domain import (
     ArchiveStatus,
     Person,
@@ -84,6 +85,14 @@ class _FakeArchiveRecordRepository:
     def find_by_photo(self, photo_id):
         return self._existing.get(photo_id)
 
+    def has_successful_for_person(self, photo_id, person_name) -> bool:
+        record = self._existing.get(photo_id)
+        return (
+            record is not None
+            and record.target_person_name == person_name
+            and record.status in _ALREADY_ARCHIVED_STATES
+        )
+
 
 def _make_recognition(photo_id, person_id) -> object:
     """Build a minimal APPROVED-shape object exposing photo_id/person_id."""
@@ -155,8 +164,9 @@ def test_plan_falls_back_to_unknown_date_when_captured_at_none() -> None:
     assert builder.calls[0] == ("Alice", None, "a.jpg")
 
 
-def test_plan_dedupes_photo_across_persons() -> None:
-    """A photo approved under two persons plans once; second is skipped."""
+def test_plan_plans_photo_for_each_person_attribution() -> None:
+    """E-SG-6 #5/#6：归档去重作用域为 (person, photo)——同一照片确认给
+    A、B 两人时，两人各自获得自己的归档计划项（多 Person attribution）。"""
     alice = Person(name="Alice")
     bob = Person(name="Bob")
     photo = _absolute_photo("a.jpg", captured_at=datetime(2024, 5, 1))
@@ -173,9 +183,30 @@ def test_plan_dedupes_photo_across_persons() -> None:
         archive_record_repository=_FakeArchiveRecordRepository(),
     )
     plan = planner.plan("/archive", (alice.id, bob.id))
+    assert plan.planned_count == 2
+    assert plan.skipped_count == 0
+    assert {item.person_name for item in plan.items} == {"Alice", "Bob"}
+    assert all(item.photo_id == photo.id for item in plan.items)
+
+
+def test_plan_dedupes_same_person_photo_pair() -> None:
+    """E-SG-6 #3：同一 (person, photo) 重复行只规划一次。"""
+    alice = Person(name="Alice")
+    photo = _absolute_photo("a.jpg", captured_at=datetime(2024, 5, 1))
+    recognition = _make_recognition(photo.id, alice.id)
+    duplicate = _make_recognition(photo.id, alice.id)
+    planner = ArchivePlanner(
+        path_builder=_FakeArchivePathBuilder(),
+        person_repository=_FakePersonRepository([alice]),
+        photo_repository=_FakePhotoRepository([photo]),
+        recognition_repository=_FakeRecognitionRepository({
+            alice.id: [recognition, duplicate],
+        }),
+        archive_record_repository=_FakeArchiveRecordRepository(),
+    )
+    plan = planner.plan("/archive", (alice.id,))
     assert plan.planned_count == 1
     assert plan.skipped_count == 1
-    assert plan.items[0].person_name == "Alice"  # first APPROVED wins per 1:N Top-1
 
 
 def test_plan_skips_missing_photo() -> None:

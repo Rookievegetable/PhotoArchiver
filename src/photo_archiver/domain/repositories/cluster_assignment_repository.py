@@ -55,5 +55,13 @@ class PersonFaceSampleRepository(Protocol):
     def list_enabled(self) -> list[PersonFaceSample]:
         """Return enabled samples（D4 匹配候选集）——确定性顺序。"""
 
+    def disable_samples(
+        self, person_id: UUID, observation_ids: Sequence[UUID],
+    ) -> int:
+        """Stage E（E-SG-5）：改派/解除后停用旧人员样本（历史保留 enabled=0）。
+
+        停用样本不参与未来候选建议。Returns 停用行数（已停用的不重复计）。
+        """
+
     def list_by_person(self, person_id: UUID) -> list[PersonFaceSample]:
         """Return one person's samples（含停用），确定性顺序。"""

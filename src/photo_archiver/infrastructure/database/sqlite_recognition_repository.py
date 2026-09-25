@@ -188,7 +188,8 @@ class SQLiteRecognitionRepository(RecognitionRepository):
         - pending_match_count：无任何识别行的照片数（NOT EXISTS）。
         - pending_review_count：status=pending 的结果行数——ReviewDialog 按
           结果行展示（同一照片可有多张待审人脸），故意不去重。
-        - archivable_count：与 ArchivePlanner 同语义的去重照片数——绝对路径
+        - archivable_count：与 ArchivePlanner 同语义的可归档 (person, photo)
+          对数（E-SG-6 多 attribution）——绝对路径
           照片（path_base='absolute'，planner 的 ``is_absolute`` 过滤对应列）、
           APPROVED 结果且 person 仍在库内（FK ON DELETE SET NULL 保证
           person_id NULL 即人员已删）、且没有成功态归档记录（ARCHIVED /
@@ -212,18 +213,23 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                         WHERE status = :pending
                     ) AS pending_review_count,
                     (
-                        SELECT COUNT(DISTINCT r.photo_id)
-                        FROM recognition_results r
-                        JOIN photos p ON p.id = r.photo_id
-                        JOIN people person ON person.id = r.person_id
-                        WHERE r.status = :approved
-                          AND p.path_base = 'absolute'
-                          AND r.person_id IS NOT NULL
-                          AND NOT EXISTS (
-                              SELECT 1 FROM archive_records a
-                              WHERE a.photo_id = r.photo_id
-                                AND a.status IN ('archived', 'skipped', 'renamed', 'overwritten')
-                          )
+                        -- E-SG-6：归档去重作用域 (person, photo)——同一照片可
+                        -- 同时归属多个 Person，各自计入可归档数。
+                        SELECT COUNT(*) FROM (
+                            SELECT DISTINCT r.person_id, r.photo_id
+                            FROM recognition_results r
+                            JOIN photos p ON p.id = r.photo_id
+                            JOIN people person ON person.id = r.person_id
+                            WHERE r.status = :approved
+                              AND p.path_base = 'absolute'
+                              AND r.person_id IS NOT NULL
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM archive_records a
+                                  WHERE a.photo_id = r.photo_id
+                                    AND a.target_person_name = person.name
+                                    AND a.status IN ('archived', 'skipped', 'renamed', 'overwritten')
+                              )
+                        )
                     ) AS archivable_count
                 """,
                 {
@@ -264,6 +270,22 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                 (str(person_id), MatchStatus.APPROVED.value),
             ).fetchall()
         return [recognition_result_from_row(row) for row in rows]
+
+    def remove_results_for_person_photos(
+        self, person_id: UUID, photo_ids: Sequence[UUID],
+    ) -> int:
+        """Stage E（E-SG-6）：回收 (person, photo) 的 APPROVED 兼容归属。"""
+        unique_ids = list(dict.fromkeys(photo_ids))
+        if not unique_ids:
+            return 0
+        placeholders = ", ".join("?" for _ in unique_ids)
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM recognition_results WHERE person_id = ? "
+                f"AND status = 'approved' AND photo_id IN ({placeholders})",
+                (str(person_id), *(str(photo_id) for photo_id in unique_ids)),
+            )
+            return cursor.rowcount
 
     def update_status(self, result_id: UUID, status: MatchStatus) -> int:
         """Transition a recognition result's review status.

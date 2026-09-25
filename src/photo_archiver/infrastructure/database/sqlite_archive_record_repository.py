@@ -102,6 +102,20 @@ class SQLiteArchiveRecordRepository(ArchiveRecordRepository):
             ).fetchone()
         return archive_record_from_row(row) if row is not None else None
 
+    def has_successful_for_person(self, photo_id: UUID, person_name: str) -> bool:
+        """Stage E（E-SG-6）：按 (person, photo) 检查成功态归档记录。"""
+        with self._connection_provider.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT 1 FROM archive_records
+                WHERE photo_id = ? AND target_person_name = ?
+                    AND status IN ('archived', 'skipped', 'renamed', 'overwritten')
+                LIMIT 1
+                """,
+                (str(photo_id), person_name),
+            ).fetchone()
+        return row is not None
+
     def list_by_status(self, status: ArchiveStatus) -> list[ArchiveRecord]:
         """Return all archive records in the given lifecycle state."""
         with self._connection_provider.connect() as connection:

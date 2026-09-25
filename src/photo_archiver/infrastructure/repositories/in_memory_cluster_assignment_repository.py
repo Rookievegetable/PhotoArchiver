@@ -126,3 +126,24 @@ class InMemoryPersonFaceSampleRepository(PersonFaceSampleRepository):
             (sample for sample in self._samples.values() if sample.person_id == person_id),
             key=lambda sample: (sample.created_at or sample.id, str(sample.id)),
         )
+
+    def disable_samples(
+        self, person_id: UUID, observation_ids: Sequence[UUID],
+    ) -> int:
+        """Stage E（E-SG-5）：停用旧人员样本（历史保留，enabled=0）。"""
+        targets = set(observation_ids)
+        disabled = 0
+        for sample in self._samples.values():
+            if sample.person_id == person_id and sample.enabled and sample.observation_id in targets:
+                replacement = PersonFaceSample(
+                    person_id=sample.person_id,
+                    observation_id=sample.observation_id,
+                    embedding=sample.embedding,
+                    quality_score=sample.quality_score,
+                    enabled=False,
+                    id=sample.id,
+                    created_at=sample.created_at,
+                )
+                self._samples[sample.id] = replacement
+                disabled += 1
+        return disabled

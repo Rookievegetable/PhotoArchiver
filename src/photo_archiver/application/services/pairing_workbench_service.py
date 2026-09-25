@@ -158,7 +158,16 @@ class PairingWorkbenchService:
             raise ValidationError(
                 f"Assignment {target.id} no longer exists (concurrent delete)"
             )
-        return PairingOperationResult(assignment_id=target.id, status=target.status)
+        retracted = 0
+        if target.person_id is not None:
+            cluster = self._cluster_repository.get_cluster(target.cluster_id)
+            if cluster is not None:
+                retracted = self._retract_confirmation(cluster, target.person_id)
+        return PairingOperationResult(
+            assignment_id=target.id,
+            status=target.status,
+            compat_results_written=retracted,
+        )
 
     # ── 人工改派 / 新增指派 ─────────────────────────────────────────────
 
@@ -173,6 +182,10 @@ class PairingWorkbenchService:
                 raise ValidationError(
                     f"Assignment {active.id} no longer exists (concurrent delete)"
                 )
+            # E-P1-2（E-SG-6 #7）：旧身份的兼容投影与样本随改派同步回收，
+            # 不影响其他 (person, photo) 归属（E-SG-6 #4/#7）。
+            if active.person_id is not None:
+                self._retract_confirmation(cluster, active.person_id)
         assignment = ClusterPersonAssignment(
             cluster_id=command.cluster_id,
             person_id=command.person_id,
@@ -287,7 +300,8 @@ class PairingWorkbenchService:
         ]
         self._sample_repository.add_samples(new_samples)
 
-        # D3 兼容适配：每张照片一条 APPROVED 结果（已有 APPROVED 的照片跳过）。
+        # D3 兼容适配（E-SG-6）：同一 (person, photo) 至多一条当前有效
+        # APPROVED 归属；不同 person 的同照片归属互不覆盖（E-P1-1）。
         compat_written = 0
         seen_photos: set[UUID] = set()
         confidence = max(0.0, min(1.0, assignment.score or 0.0))
@@ -298,7 +312,12 @@ class PairingWorkbenchService:
             existing_results = self._recognition_repository.list_by_photo(
                 observation.photo_id,
             )
-            if any(result.status == MatchStatus.APPROVED for result in existing_results):
+            already_current = any(
+                result.status == MatchStatus.APPROVED
+                and result.person_id == person_id
+                for result in existing_results
+            )
+            if already_current:
                 continue
             self._recognition_repository.add(RecognitionResult(
                 photo_id=observation.photo_id,
@@ -308,3 +327,38 @@ class PairingWorkbenchService:
             ))
             compat_written += 1
         return compat_written, len(new_samples)
+
+    def _retract_confirmation(self, cluster, person_id: UUID) -> int:
+        """E-P1-2（E-SG-6 #7）：回收 (person, 簇成员照片) 的兼容投影并停用样本.
+
+        兼容层是当前指派的投影（主事实原则）：改派/解除时移除旧 person 的
+        APPROVED 行、停用其样本（历史保留 enabled=0）。其他 (person,
+        photo) 归属不受影响。
+        """
+        observations = self._observations_by_run(cluster.run_id)
+        member_observations = [
+            observations[member.observation_id]
+            for member in self._cluster_repository.list_members(cluster.cluster_run_id)
+            if member.cluster_id == cluster.id
+            and member.observation_id in observations
+            and observations[member.observation_id].embedding.vector
+        ]
+        photo_ids = list(dict.fromkeys(o.photo_id for o in member_observations))
+        retracted = self._recognition_repository.remove_results_for_person_photos(
+            person_id, photo_ids,
+        )
+        self._sample_repository.disable_samples(
+            person_id, [o.id for o in member_observations],
+        )
+        logger.info(
+            "PairingWorkbenchService: retracted compat for person {} over {} photo(s) "
+            "of cluster {}",
+            person_id, len(photo_ids), cluster.id,
+        )
+        return retracted
+
+    def _observations_by_run(self, run_id: UUID) -> dict:
+        return {
+            observation.id: observation
+            for observation in self._observation_repository.list_by_run(run_id)
+        }

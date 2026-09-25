@@ -26,6 +26,14 @@ class ArchiveRecordRepository(Protocol):
             this to detect "already archived" before planning a fresh run.
         """
 
+    def has_successful_for_person(self, photo_id: UUID, person_name: str) -> bool:
+        """Stage E（E-SG-6）：该 (person, photo) 是否已有成功态归档记录.
+
+        归档去重作用域为 (person, photo)：一个 person 的成功归档不阻止
+        其他 person 的同照片归属进入归档计划。success = ARCHIVED /
+        SKIPPED / RENAMED / OVERWRITTEN（FAILED/PLANNED/DRY_RUN 不拦）。
+        """
+
     def list_by_status(self, status: ArchiveStatus) -> list[ArchiveRecord]:
         """Return all archive records in the given lifecycle state."""
 

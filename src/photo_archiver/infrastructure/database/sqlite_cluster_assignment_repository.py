@@ -241,6 +241,23 @@ class SQLitePersonFaceSampleRepository(PersonFaceSampleRepository):
             ).fetchall()
         return [_sample_from_row(row) for row in rows]
 
+    def disable_samples(
+        self, person_id: UUID, observation_ids: Sequence[UUID],
+    ) -> int:
+        """Stage E（E-SG-5）：停用旧人员样本（历史保留，enabled=0）。"""
+        unique_ids = list(dict.fromkeys(observation_ids))
+        if not unique_ids:
+            return 0
+        placeholders = ", ".join("?" for _ in unique_ids)
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE person_face_embeddings SET enabled = 0 "
+                "WHERE person_id = ? AND enabled = 1 "
+                f"AND observation_id IN ({placeholders})",
+                (str(person_id), *(str(observation_id) for observation_id in unique_ids)),
+            )
+            return cursor.rowcount
+
 
 def _sample_from_row(row) -> PersonFaceSample:
     return PersonFaceSample(

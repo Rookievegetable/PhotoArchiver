@@ -103,7 +103,9 @@ class ArchivePlanner:
 
         items: list[ArchivePlanItem] = []
         skipped_count = 0
-        seen_photo_ids: set[UUID] = set()
+        # E-SG-6 #5：归档去重作用域为 (person, photo)——同一照片可同时归属
+        # 多个 Person（Stage E 多 attribution），各自进入自己的归档结果。
+        seen_person_photo_pairs: set[tuple[UUID, UUID]] = set()
 
         for person_id in target_person_ids:
             person = self._person_repository.find_by_id(person_id)
@@ -121,11 +123,13 @@ class ArchivePlanner:
                 if photo_id_filter is not None and photo_id not in photo_id_filter:
                     # B3 photo_ids 过滤：跳过不在用户选定集的 APPROVED 项。
                     continue
-                if photo_id in seen_photo_ids:
-                    # 已经为另一个 person 规划了此 photo（1:N Top-1 落地）。
+                pair = (person_id, photo_id)
+                if pair in seen_person_photo_pairs:
+                    # 同一 (person, photo) 只规划一次（E-SG-6 #3：一人一照片
+                    # 一个当前有效归属）；跨 person 不再互斥。
                     skipped_count += 1
                     continue
-                seen_photo_ids.add(photo_id)
+                seen_person_photo_pairs.add(pair)
 
                 item = self._plan_one(
                     archive_root,
@@ -192,12 +196,14 @@ class ArchivePlanner:
             )
             return None
 
-        existing_record = self._archive_record_repository.find_by_photo(photo_id)
-        if existing_record is not None and existing_record.status in _ALREADY_ARCHIVED_STATES:
+        # E-SG-6：成功态归档拦截按 (person, photo) 作用域——一个 person 的
+        # 成功归档不阻止其他 person 的同照片归属。
+        if self._archive_record_repository.has_successful_for_person(
+            photo_id, person_name,
+        ):
             logger.debug(
-                "Archive plan: photo {} already archived as {}, skipping",
-                photo_id,
-                existing_record.status.value,
+                "Archive plan: photo {} already archived for person {}, skipping",
+                photo_id, person_name,
             )
             return None
 

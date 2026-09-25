@@ -111,6 +111,20 @@ class RecognitionRepository(Protocol):
         the planner produces a stable archive ordering under re-invocation.
         """
 
+    def remove_results_for_person_photos(
+        self, person_id: UUID, photo_ids: Sequence[UUID],
+    ) -> int:
+        """Stage E（E-SG-6）：回收 (person, photo) 的 APPROVED 兼容归属.
+
+        改派/解除映射时同步兼容层投影：仅删除 status=APPROVED 且
+        person_id 匹配的行——PENDING/REJECTED 行（review 流程数据）不动。
+        身份决策历史由 ``ClusterPersonAssignment`` 行承载（主事实原则），
+        本方法只维护兼容层与当前指派一致。
+
+        Returns:
+            删除的行数。
+        """
+
     def update_status(self, result_id: UUID, status: MatchStatus) -> int:
         """Transition a recognition result's review status.
 

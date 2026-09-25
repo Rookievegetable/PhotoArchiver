@@ -21,6 +21,7 @@ from photo_archiver.application.services import (
     PairingWorkbenchService,
     SuggestPairingsService,
 )
+from photo_archiver.domain import MatchStatus
 from photo_archiver.infrastructure import (
     InMemoryClusterPersonAssignmentRepository,
     InMemoryFaceClusterRepository,
@@ -163,6 +164,16 @@ class _RecognitionStub:
 
     def list_by_photo(self, photo_id):
         return [row for row in self.rows if row.photo_id == photo_id]
+
+    def remove_results_for_person_photos(self, person_id, photo_ids):
+        targets = set(photo_ids)
+        before = len(self.rows)
+        self.rows = [
+            row for row in self.rows
+            if not (row.person_id == person_id and row.photo_id in targets
+                    and row.status == MatchStatus.APPROVED)
+        ]
+        return before - len(self.rows)
 
 
 def test_clusters_render_with_unassigned_state(qtbot) -> None:
