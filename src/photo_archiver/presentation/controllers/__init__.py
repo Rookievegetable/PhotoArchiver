@@ -1,6 +1,7 @@
 """Presentation controllers for PhotoArchiver UI."""
 
 from photo_archiver.presentation.controllers.archive_controller import ArchiveController
+from photo_archiver.presentation.controllers.cluster_faces_controller import ClusterFacesController
 from photo_archiver.presentation.controllers.detect_duplicates_controller import (
     DetectDuplicatesController,
 )
@@ -17,6 +18,7 @@ from photo_archiver.presentation.controllers.settings_controller import Settings
 
 __all__ = [
     "ArchiveController",
+    "ClusterFacesController",
     "DetectDuplicatesController",
     "ExportController",
     "ImportPeopleController",

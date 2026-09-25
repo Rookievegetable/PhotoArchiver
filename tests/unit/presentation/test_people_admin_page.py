@@ -8,8 +8,10 @@ row, the danger dialog must arrive with the chosen person selected, and every
 rejection must read in Chinese.
 """
 
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock
+from uuid import uuid4
 
 import pytest
 
@@ -23,10 +25,13 @@ from PySide6.QtWidgets import QApplication, QLabel, QMessageBox
 from photo_archiver.app.repositories import build_sqlite_repositories
 from photo_archiver.application.commands import AddPersonCommand
 from photo_archiver.application.services import (
+    ClusterResultsService,
     DeletePersonService,
     ListPersonsService,
+    ListRecognitionRunsService,
     ManagePeopleService,
 )
+from photo_archiver.domain import FaceClusterRun
 from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.views.people_admin_page import PeopleAdminPage
 from photo_archiver.presentation.views.person_deletion_dialog import PersonDeletionDialog
@@ -35,12 +40,23 @@ from photo_archiver.presentation.views.person_deletion_dialog import PersonDelet
 def _services(tmp_path: Path):
     repositories = build_sqlite_repositories(tmp_path / "page.db")
     manage = ManagePeopleService(repositories.people, repositories.import_batches)
-    return manage, ListPersonsService(repositories.people), DeletePersonService(
-        repositories.people,
-        repositories.photos,
-        repositories.recognition,
-        repositories.face_embeddings,
-    ), repositories
+    return (
+        manage,
+        ListPersonsService(repositories.people),
+        DeletePersonService(
+            repositories.people,
+            repositories.photos,
+            repositories.recognition,
+            repositories.face_embeddings,
+        ),
+        ListRecognitionRunsService(repositories.recognition_runs),
+        ClusterResultsService(
+            repositories.recognition_runs,
+            repositories.face_observations,
+            repositories.face_clusters,
+        ),
+        repositories,
+    )
 
 
 @pytest.fixture
@@ -58,6 +74,12 @@ def populated(tmp_path: Path, qtbot):
             repositories.photos,
             repositories.recognition,
             repositories.face_embeddings,
+        ),
+        ListRecognitionRunsService(repositories.recognition_runs),
+        ClusterResultsService(
+            repositories.recognition_runs,
+            repositories.face_observations,
+            repositories.face_clusters,
         ),
     )
     qtbot.addWidget(page)
@@ -154,8 +176,8 @@ def test_validation_error_is_shown_without_write(populated, monkeypatch) -> None
 
 
 def test_empty_page_shows_empty_hint(tmp_path: Path, qtbot) -> None:
-    manage_people, list_persons, delete_person, _ = _services(tmp_path)
-    page = PeopleAdminPage(manage_people, list_persons, delete_person)
+    manage_people, list_persons, delete_person, runs, results, _ = _services(tmp_path)
+    page = PeopleAdminPage(manage_people, list_persons, delete_person, runs, results)
     qtbot.addWidget(page)
     labels = [w.text() for w in page.findChildren(QLabel)]
     assert any("名单为空" in t for t in labels)
@@ -190,7 +212,7 @@ def test_table_keeps_row_drops_enabled_for_reordering(populated) -> None:
 def test_row_drop_reorders_the_roster_without_a_blank_row(populated) -> None:
     """验收 #2：拖拽重排后目标行仍在——Qt 内部行移动曾把它删成空白行。"""
     page, _, repositories = populated
-    page.resize(900, 360)
+    page.resize(900, 620)  # D-4 聚类区加入后页面更高：给表格稳定几何，避免拖拽落点漂移
     page.show()
     table = page._table
     source_point = _row_center(table, 2)  # 王五
@@ -235,7 +257,7 @@ def test_row_drop_reorders_the_roster_without_a_blank_row(populated) -> None:
 def test_move_only_drop_leaves_no_stale_selection(populated) -> None:
     """落点无法降级为复制时，选区必须清空（内部移动就删不到任何行）。"""
     page, _, repositories = populated
-    page.resize(900, 360)
+    page.resize(900, 620)  # D-4 聚类区加入后页面更高：给表格稳定几何，避免拖拽落点漂移
     page.show()
     table = page._table
     table.selectRow(2)
@@ -265,7 +287,7 @@ def test_move_only_drop_leaves_no_stale_selection(populated) -> None:
 def test_foreign_drag_payload_never_reorders_the_roster(populated) -> None:
     """验收 #2：外部拖拽载荷（文本等）不得被当作重排请求。"""
     page, _, repositories = populated
-    page.resize(900, 360)
+    page.resize(900, 620)  # D-4 聚类区加入后页面更高：给表格稳定几何，避免拖拽落点漂移
     page.show()
     table = page._table
     mime = QMimeData()
@@ -321,7 +343,7 @@ def test_delete_selected_row_preselects_it_in_the_confirm_dialog(populated, monk
 
 def test_deletion_dialog_selects_and_focuses_the_requested_person(tmp_path, qtbot) -> None:
     """验收 #3：对话框构造即选中并聚焦目标人员（预览同步）。"""
-    manage, list_persons, delete_person, _ = _services(tmp_path)
+    manage, list_persons, delete_person, _, _, _ = _services(tmp_path)
     for name in ("张三", "李四", "王五"):
         manage.add_person(AddPersonCommand(name=name))
     third = list_persons.execute()[2]
@@ -473,3 +495,87 @@ def test_structural_mutation_marks_people_changed_as_structural(populated, monke
     page._add_button.click()
 
     assert emissions == [True]
+
+
+# ── D-4 聚类入口 ────────────────────────────────────────────────────────────
+
+
+def _seed_recognition_run(repositories, *, captured=None, index=0):
+    from photo_archiver.domain import Photo, PhotoPath, RecognitionRun, RunPhotoSnapshot
+    photo = Photo(path=PhotoPath(f"photos/run-{index}-{uuid4()}.jpg"))
+    repositories.photos.add(photo)
+    run = RecognitionRun(parameters={}, created_at=captured or datetime(2026, 3, 1))
+    repositories.recognition_runs.add_run(run)
+    repositories.recognition_runs.add_run_photos(run.id, [
+        RunPhotoSnapshot(run.id, photo.id, "photos/a.jpg", datetime(2026, 3, 1)),
+    ])
+    assert run.id is not None
+    return run
+
+
+def test_clustering_section_disabled_without_recognition_runs(tmp_path, qtbot) -> None:
+    manage, list_persons, delete_person, runs, results, _ = _services(tmp_path)
+    page = PeopleAdminPage(manage, list_persons, delete_person, runs, results)
+    qtbot.addWidget(page)
+
+    assert page._cluster_run_button.isEnabled() is False
+    assert "尚无识别运行" in page._cluster_hint.text()
+    assert page.selected_recognition_run_id() is None
+
+
+def test_clustering_run_selector_populates_and_keeps_selection(tmp_path, qtbot) -> None:
+    manage, list_persons, delete_person, runs, results, repositories = _services(tmp_path)
+    page = PeopleAdminPage(manage, list_persons, delete_person, runs, results)
+    qtbot.addWidget(page)
+    run_a = _seed_recognition_run(repositories, captured=datetime(2026, 1, 1), index=1)
+    run_b = _seed_recognition_run(repositories, captured=datetime(2026, 2, 1), index=2)
+    page.refresh_clustering()
+
+    assert page._cluster_run_combo.count() == 2
+    assert page._cluster_run_button.isEnabled() is True
+    assert page.selected_recognition_run_id() == run_b.id  # 默认选最新
+
+    page._cluster_run_combo.setCurrentIndex(1)  # 用户选择：第 2 行（run_a）
+    page.refresh_clustering()
+    assert page.selected_recognition_run_id() == run_a.id  # 刷新保持当前选择
+
+
+def test_clustering_results_button_needs_a_generation(tmp_path, qtbot) -> None:
+    manage, list_persons, delete_person, runs, results, repositories = _services(tmp_path)
+    page = PeopleAdminPage(manage, list_persons, delete_person, runs, results)
+    qtbot.addWidget(page)
+    run = _seed_recognition_run(repositories)
+
+    page.refresh_clustering()
+    assert page._cluster_results_button.isEnabled() is False  # 尚无聚类代
+
+    from photo_archiver.domain import FaceClusterRun
+    cluster_run = FaceClusterRun(recognition_run_id=run.id, algorithm_version="v1")
+    repositories.face_clusters.add_cluster_run(cluster_run)
+    cluster_run.start()
+    cluster_run.complete(1, 1, 0)
+    page.refresh_clustering()
+    assert page._cluster_results_button.isEnabled() is True
+
+
+def test_clustering_buttons_emit_request_signals(tmp_path, qtbot) -> None:
+    manage, list_persons, delete_person, runs, results, repositories = _services(tmp_path)
+    page = PeopleAdminPage(manage, list_persons, delete_person, runs, results)
+    qtbot.addWidget(page)
+    run = _seed_recognition_run(repositories)
+    cluster_run = FaceClusterRun(recognition_run_id=run.id, algorithm_version="v1")
+    repositories.face_clusters.add_cluster_run(cluster_run)
+    cluster_run.start()
+    cluster_run.complete(1, 1, 0)
+    page.refresh_clustering()
+    assert page._cluster_run_button.isEnabled()
+    assert page._cluster_results_button.isEnabled()
+    runs_requested, results_requested = [], []
+    page.cluster_run_requested.connect(lambda: runs_requested.append(1))
+    page.cluster_results_requested.connect(lambda: results_requested.append(1))
+
+    page._cluster_run_button.click()
+    page._cluster_results_button.click()
+
+    assert runs_requested == [1]
+    assert results_requested == [1]

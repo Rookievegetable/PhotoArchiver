@@ -56,6 +56,8 @@ from photo_archiver.application.ports import (
 from photo_archiver.application.services import (
     ArchiveExecutor,
     ClusterFacesService,
+    ClusterResultsService,
+    ListRecognitionRunsService,
     ConfirmImportService,
     ArchivePathBuilderService,
     ArchivePhotosService,
@@ -106,6 +108,8 @@ __all__ = [
     "ArchiveOutcome",
     "ClusterFacesService",
     "ClusterFacesUseCase",
+    "ClusterResultsService",
+    "ListRecognitionRunsService",
     "ArchivePathBuilder",
     "ArchivePathBuilderService",
     "SimilarityKernelFactory",

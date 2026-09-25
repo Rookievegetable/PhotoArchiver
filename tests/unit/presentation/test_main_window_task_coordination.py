@@ -15,7 +15,7 @@ from photo_archiver.app import bootstrap_application
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.application.dtos.import_draft import ImportDraft
 from photo_archiver.application.dtos.workspace import ModelAvailability, WorkspaceStatus
-from photo_archiver.domain import MatchStatus, PhotoSearchCriteria
+from photo_archiver.domain import MatchStatus, PhotoSearchCriteria, RecognitionRun
 from photo_archiver.domain.entities import ImportBatch, ImportDraftRow
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.presentation.ui_text import STATUS_CANCELLING, TASK_LABELS
@@ -123,6 +123,13 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
             exec=lambda: 1, selected_ranges=(), photo_scope_selected_only=False,
         ))
         controller, method, entry = window._recognition_run_controller, "start_run", "match"
+    elif name == "face_clustering":
+        # D-4：入口在「人员与分组」页聚类区——种一个识别运行供选择器，提交经
+        # ClusterFacesController.start_cluster。
+        run = RecognitionRun(parameters={})
+        window._context.repositories.recognition_runs.add_run(run)
+        window._people_admin_page.refresh_clustering()
+        controller, method, entry = window._cluster_controller, "start_cluster", "cluster_run"
     elif name == "archive_photos":
         monkeypatch.setattr(window, "_effective_archive_root", lambda: tmp_path)
         monkeypatch.setattr(window._archive_controller, "preview",
@@ -137,11 +144,8 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
     return getattr(window, f"_on_{entry}_clicked"), submit
 
 
-# face_clustering：阶段 D 只落数据与 Worker，无窗口入口（方案 D-4 UI 后续提交）。
-_WINDOW_TASK_NAMES = [
-    n for n in TASK_LABELS
-    if n not in ("import_confirm", "match_persons", "face_clustering")
-]
+# match_persons：旧识别任务已退出 UI（阶段 C Commit 3），窗口入口为 run_recognition。
+_WINDOW_TASK_NAMES = [n for n in TASK_LABELS if n not in ("import_confirm", "match_persons")]
 
 
 @pytest.mark.parametrize("name", _WINDOW_TASK_NAMES)

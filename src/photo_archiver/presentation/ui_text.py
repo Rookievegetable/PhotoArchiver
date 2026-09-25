@@ -376,6 +376,43 @@ WORKSPACE_REANALYSIS_READY = (
     "所有照片均已有识别结果；再次运行将创建新的识别运行（可重新分析）。"
 )
 
+# ---- 人脸聚类入口与结果（D-4） ----
+REFUSAL_CLUSTER_IN_FLIGHT = "已有人脸聚类任务正在进行。"
+CLUSTER_UNAVAILABLE = "人脸聚类不可用。"
+CLUSTER_PAGE_GROUP = "人脸聚类"
+CLUSTER_PAGE_RUN_LABEL = "识别运行"
+CLUSTER_PAGE_RUN_BUTTON = "运行人脸聚类"
+CLUSTER_PAGE_RESULTS_BUTTON = "查看聚类结果"
+CLUSTER_PAGE_HINT = (
+    "对选定识别运行的人脸观测执行聚类；聚类只读已有检测数据，不重新识别，"
+    "也不会产生人员归属（人员配对属后续阶段）。重新运行会生成新的聚类代际，"
+    "历史结果保留。"
+)
+CLUSTER_PAGE_RUN_ENTRY = "{created_at} · {status} · {faces} 张脸"
+CLUSTER_PAGE_NO_RUNS = "尚无识别运行；请先运行人脸识别。"
+CLUSTER_RESULTS_TITLE = "人脸聚类结果"
+CLUSTER_RESULTS_GENERATION_LABEL = "聚类代际"
+CLUSTER_RESULTS_GENERATION_ENTRY = "{created_at} · {status} · {clusters} 簇 / {members} 张脸"
+CLUSTER_RESULTS_EMPTY = "该识别运行尚无聚类结果；请先运行人脸聚类。"
+CLUSTER_RESULTS_EMPTY_CLUSTERS = "该代聚类没有产生任何簇（范围内无人脸观测）。"
+CLUSTER_RESULTS_CLUSTER_ENTRY = "第 {ordinal} 组 · {count} 张脸 · 首拍 {time}"
+CLUSTER_RESULTS_NO_CAPTURED = "时间缺失"
+CLUSTER_RESULTS_MEMBER_ENTRY = "{photo} · 脸 {index} · 检测 {det:.2f} · 证据 {conf:.2f}"
+CLUSTER_RUN_STATUS_LABELS = {
+    "created": "已创建",
+    "running": "运行中",
+    "completed": "已完成",
+    "failed": "已失败",
+    "cancelled": "已取消",
+}
+STATUS_CLUSTER_SUMMARY = "{clusters} 簇 · {members} 张脸 · 排除 {excluded} 张观测"
+
+
+def cluster_run_status_label(status: str) -> str:
+    """Map a FaceClusterRun status to its user-visible label (fallback: raw)."""
+    return CLUSTER_RUN_STATUS_LABELS.get(status, status)
+
+
 # ---- 识别范围选择对话框（阶段 C Commit 3） ----
 RECOGNITION_SCOPE_DIALOG_TITLE = "识别范围选择"
 RECOGNITION_SCOPE_OK_BUTTON = "确定"

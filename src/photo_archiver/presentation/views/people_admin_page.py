@@ -19,6 +19,7 @@ from PySide6.QtCore import Qt, QSignalBlocker, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -37,7 +38,12 @@ from photo_archiver.application.commands import (
     ReorderPeopleCommand,
 )
 from photo_archiver.application.dtos import ImportBatchSummary, PersonDeletionResult
-from photo_archiver.application.services import ListPersonsService, ManagePeopleService
+from photo_archiver.application.services import (
+    ClusterResultsService,
+    ListPersonsService,
+    ListRecognitionRunsService,
+    ManagePeopleService,
+)
 from photo_archiver.domain import Person
 from photo_archiver.domain.exceptions import ValidationError
 from photo_archiver.presentation import ui_text as text
@@ -150,12 +156,17 @@ class PeopleAdminPage(QWidget):
     # unchanged, so the window leaves the filter axis and the readiness
     # snapshot alone (the page has already re-rendered itself by then).
     people_changed = Signal(bool)
+    # D-4 聚类入口：页面只发请求信号，运行/对话框由主窗口按既有任务管线处理。
+    cluster_run_requested = Signal()
+    cluster_results_requested = Signal()
 
     def __init__(
         self,
         manage_people: ManagePeopleService,
         list_persons: ListPersonsService,
         delete_person,
+        list_recognition_runs: ListRecognitionRunsService,
+        cluster_results: ClusterResultsService,
         parent: QWidget | None = None,
     ) -> None:
         """Initialize the page with its Application services.
@@ -166,12 +177,18 @@ class PeopleAdminPage(QWidget):
                 (the deletion use case is not on ``ManagePeopleService``).
             delete_person: The existing deletion use case (preview + execute),
                 reused so cascade semantics stay in one place.
+            list_recognition_runs: Read-only recognition runs for the D-4
+                clustering entry's run selector.
+            cluster_results: Read-only cluster generations/results for the
+                clustering section's availability and results dialog.
             parent: Optional parent widget.
         """
         super().__init__(parent)
         self._manage_people = manage_people
         self._list_persons = list_persons
         self._delete_person = delete_person
+        self._list_recognition_runs = list_recognition_runs
+        self._cluster_results = cluster_results
         self._rows: list[Person] = []
         self._batches: tuple[ImportBatchSummary, ...] = ()
         self._batch_filter: UUID | None = None
@@ -233,6 +250,8 @@ class PeopleAdminPage(QWidget):
         self._empty_label.setWordWrap(True)
         layout.addWidget(self._empty_label)
 
+        self._build_clustering_ui(layout)
+
     # ── Data + rendering ────────────────────────────────────────────────
 
     def refresh(self) -> None:
@@ -252,6 +271,7 @@ class PeopleAdminPage(QWidget):
         self._render_batch_combo()
         self._render_rows()
         self._restore_selection(selected_id)
+        self.refresh_clustering()
 
     def visible_people(self) -> list[Person]:
         """Return the rows the table currently shows (batch filter applied)."""
@@ -491,6 +511,85 @@ class PeopleAdminPage(QWidget):
         self._after_mutation(
             text.PEOPLE_PAGE_REORDERED.format(count=updated), structure_changed=False,
         )
+
+    # ── D-4 聚类入口 ───────────────────────────────────────────────────
+
+    def _build_clustering_ui(self, layout: QVBoxLayout) -> None:
+        """Build the clustering group: run selector, run + results buttons.
+
+        页面只发请求信号——运行走主窗口的 TaskCoordinator 管线（互斥/取消/
+        状态栏），结果对话框由主窗口打开（父窗口与缩略图通道注入）。
+        """
+        group = QGroupBox(text.CLUSTER_PAGE_GROUP, self)
+        group_layout = QVBoxLayout(group)
+        row = QHBoxLayout()
+        row.addWidget(QLabel(text.CLUSTER_PAGE_RUN_LABEL, group))
+        self._cluster_run_combo = QComboBox(group)
+        self._cluster_run_combo.setMinimumWidth(280)
+        row.addWidget(self._cluster_run_combo)
+        self._cluster_run_button = QPushButton(text.CLUSTER_PAGE_RUN_BUTTON, group)
+        self._cluster_run_button.clicked.connect(self.cluster_run_requested.emit)
+        assign_role(self._cluster_run_button, ROLE_PRIMARY)
+        row.addWidget(self._cluster_run_button)
+        self._cluster_results_button = QPushButton(text.CLUSTER_PAGE_RESULTS_BUTTON, group)
+        self._cluster_results_button.clicked.connect(self.cluster_results_requested.emit)
+        row.addWidget(self._cluster_results_button)
+        row.addStretch()
+        group_layout.addLayout(row)
+        hint = QLabel(text.CLUSTER_PAGE_HINT, group)
+        hint.setWordWrap(True)
+        group_layout.addWidget(hint)
+        self._cluster_hint = QLabel("", group)
+        self._cluster_hint.setWordWrap(True)
+        group_layout.addWidget(self._cluster_hint)
+        layout.addWidget(group)
+
+    def refresh_clustering(self) -> None:
+        """Reload the recognition-run selector and clustering availability.
+
+        选择按 run id 锚定（刷新后保持合理当前选择）；无运行时按钮禁用并
+        给出明确空态文案。
+        """
+        selected = self.selected_recognition_run_id()
+        runs = self._list_recognition_runs.execute()
+        self._cluster_run_combo.blockSignals(True)
+        self._cluster_run_combo.clear()
+        for run in runs:
+            self._cluster_run_combo.addItem(
+                text.CLUSTER_PAGE_RUN_ENTRY.format(
+                    created_at=run.created_at.strftime("%Y-%m-%d %H:%M")
+                    if run.created_at is not None else "—",
+                    status=text.cluster_run_status_label(run.status),
+                    faces=run.face_count,
+                ),
+                run.id,
+            )
+        self._cluster_run_combo.blockSignals(False)
+        if selected is not None:
+            # findData 对值相等但非同一实例的 UUID 不可靠（QVariant 比较），
+            # 这里用值扫描保持刷新后的当前选择。
+            for index in range(self._cluster_run_combo.count()):
+                if self._cluster_run_combo.itemData(index) == selected:
+                    self._cluster_run_combo.setCurrentIndex(index)
+                    break
+        self._render_cluster_availability()
+
+    def _render_cluster_availability(self) -> None:
+        """Enable the run button on a selected run; results need a generation."""
+        run_id = self.selected_recognition_run_id()
+        has_results = False
+        if run_id is not None:
+            has_results = bool(self._cluster_results.list_cluster_runs(run_id))
+        self._cluster_run_button.setEnabled(run_id is not None)
+        self._cluster_results_button.setEnabled(has_results)
+        self._cluster_hint.setText(
+            "" if run_id is not None else text.CLUSTER_PAGE_NO_RUNS
+        )
+
+    def selected_recognition_run_id(self) -> UUID | None:
+        """Return the recognition run id behind the selector, or ``None``."""
+        data = self._cluster_run_combo.currentData()
+        return data if isinstance(data, UUID) else None
 
     # ── Shared helpers ──────────────────────────────────────────────────
 

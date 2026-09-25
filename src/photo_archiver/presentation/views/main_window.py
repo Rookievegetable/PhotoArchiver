@@ -48,9 +48,10 @@ if TYPE_CHECKING:
     from photo_archiver.app.context import ApplicationContext
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.application.dtos.plugin_action_result import ActionResult
-from photo_archiver.domain import Photo, PhotoSearchCriteria, RecognitionRun
+from photo_archiver.domain import FaceClusterRun, Photo, PhotoSearchCriteria, RecognitionRun
 from photo_archiver.presentation.controllers import (
     ArchiveController,
+    ClusterFacesController,
     ImportPeopleController,
     RecognitionRunController,
     ScanController,
@@ -119,6 +120,7 @@ from photo_archiver.presentation.ui_text import (
     STATUS_MATCH_UNREADABLE,
     STATUS_PENDING_REVIEW_COUNT,
     STATUS_READY,
+    STATUS_CLUSTER_SUMMARY,
     STATUS_RUN_SCOPE_SUMMARY,
     STATUS_RUN_SUMMARY,
     STATUS_SCAN_UNAVAILABLE,
@@ -156,6 +158,7 @@ from photo_archiver.presentation.visual_style import (
     style_empty_state_card,
 )
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
+from photo_archiver.presentation.views.cluster_results_dialog import ClusterResultsDialog
 from photo_archiver.presentation.views.recognition_scope_dialog import RecognitionScopeDialog
 from photo_archiver.presentation.views.photo_list_model import (
     PHOTO_ID_ROLE, PhotoListModel, STATUS_BADGE_ROLE, THUMBNAIL_ROLE,
@@ -275,6 +278,13 @@ class MainWindow(QMainWindow):
         self._recognition_run_controller = RecognitionRunController(
             photos=self._context.repositories.photos,
             use_case=self._context.services.run_recognition,
+            executor=self._context.worker_executor,
+            parent=self,
+        )
+        # D-4: clustering entry — same worker/single-flight pipeline; the use
+        # case is always assembled (clustering reads persisted observations).
+        self._cluster_controller = ClusterFacesController(
+            use_case=self._context.services.cluster_faces,
             executor=self._context.worker_executor,
             parent=self,
         )
@@ -605,9 +615,14 @@ class MainWindow(QMainWindow):
             self._context.services.manage_people,
             self._context.services.list_persons,
             self._context.services.delete_person,
+            self._context.services.list_recognition_runs,
+            self._context.services.cluster_results,
             parent=self,
         )
         page.people_changed.connect(self._on_people_changed)
+        # D-4 聚类入口：页面发请求信号，主窗口经 TaskCoordinator 统一准入。
+        page.cluster_run_requested.connect(self._on_cluster_run_clicked)
+        page.cluster_results_requested.connect(self._on_cluster_results_clicked)
         self._people_admin_page = page
         return page
 
@@ -946,6 +961,8 @@ class MainWindow(QMainWindow):
             self._refresh_photo_list()
             if task_name in ("match_persons", "run_recognition"):
                 self._refresh_review_pending()
+            if task_name == "face_clustering":
+                self._people_admin_page.refresh_clustering()
             self._refresh_workspace_state()
         except Exception:  # noqa: BLE001 - terminal feedback must survive read failures
             logger.exception("Unable to refresh task results for {}", task_name)
@@ -979,6 +996,16 @@ class MainWindow(QMainWindow):
         if event.task_name == "run_recognition":
             if isinstance(results, RecognitionRun):
                 self._append_run_summary(results)
+            return
+        if event.task_name == "face_clustering":
+            if isinstance(results, FaceClusterRun):
+                self._status_label.setText(self._status_label.text() + " · " + (
+                    STATUS_CLUSTER_SUMMARY.format(
+                        clusters=results.cluster_count,
+                        members=results.member_count,
+                        excluded=results.excluded_count,
+                    )
+                ))
             return
         if event.task_name != "match_persons" or not isinstance(results, tuple):
             return
@@ -1411,6 +1438,45 @@ class MainWindow(QMainWindow):
             return
         self._status_label.setText(STATUS_TASK_PREPARING.format(label=task_label("run_recognition")))
         self._connect_task_signals(runnable, self._recognition_run_controller.connect_signals)
+
+    # ---- Face clustering (D-4) ----
+
+    @_exclusive(task_label("face_clustering"))
+    def _on_cluster_run_clicked(self) -> None:
+        """Start one clustering execution over the page-selected recognition run.
+
+        Follows the shared task pipeline (mutex admission, cancel, status
+        bar); the people page owns the run selector and re-renders its
+        availability on every terminal. Reruns always create a new
+        ClusterRun generation — existing generations stay.
+        """
+        run_id = self._people_admin_page.selected_recognition_run_id()
+        if run_id is None:
+            self._status_label.setText(text.CLUSTER_PAGE_NO_RUNS)
+            return
+        runnable = self._cluster_controller.start_cluster(run_id)
+        if runnable is None:
+            reason = self._cluster_controller.last_refusal_reason
+            self._status_label.setText(reason or text.CLUSTER_UNAVAILABLE)
+            return
+        self._status_label.setText(
+            STATUS_TASK_PREPARING.format(label=task_label("face_clustering")),
+        )
+        self._connect_task_signals(runnable, self._cluster_controller.connect_signals)
+
+    @_exclusive(text.CLUSTER_RESULTS_TITLE)
+    def _on_cluster_results_clicked(self) -> None:
+        """Open the read-only cluster results dialog for the selected run."""
+        run_id = self._people_admin_page.selected_recognition_run_id()
+        if run_id is None:
+            self._status_label.setText(text.CLUSTER_PAGE_NO_RUNS)
+            return
+        ClusterResultsDialog(
+            self._context.services.cluster_results,
+            run_id,
+            parent=self,
+            thumbnail_source=self._photo_list_controller,
+        ).exec()
 
     # ------------------------------------------------------------------
     # Phase 5 Commit 1: Export UI wiring
