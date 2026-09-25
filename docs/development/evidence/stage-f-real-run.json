@@ -1,0 +1,100 @@
+{
+  "photo_dir": "E:\\BaiduNetdiskDownload\\测试Photo",
+  "db": "C:\\Users\\hq\\AppData\\Local\\Temp\\stage_f_validation_82txypf3\\stage_f_validation.sqlite3",
+  "limit": 0,
+  "photos": 473,
+  "recognition": {
+    "wall_s": 83.05,
+    "photos_per_s": 5.7,
+    "workers": 4,
+    "status": "completed",
+    "face_count": 1441,
+    "unreadable_count": 0,
+    "no_face_count": 1,
+    "error_count": 0,
+    "in_scope_photo_count": 472,
+    "out_of_scope_photo_count": 0
+  },
+  "clustering_first": {
+    "wall_s": 8.29,
+    "tracemalloc_peak_mb": 70.21,
+    "status": "completed",
+    "cluster_count": 44,
+    "member_count": 1441,
+    "excluded_count": 0,
+    "singleton_clusters": 4,
+    "size_buckets": {
+      "1": 4,
+      "2-5": 1,
+      "6-10": 3,
+      "11-20": 0,
+      "21-50": 36,
+      "51+": 0
+    }
+  },
+  "clustering_rerun": {
+    "generation_count": 2,
+    "first_cluster_count": 44,
+    "second_cluster_count": 44,
+    "history_preserved": true
+  },
+  "calibration": {
+    "det_score": {
+      "p10": 0.836502,
+      "p25": 0.853689,
+      "p50": 0.872399,
+      "p75": 0.894406,
+      "p90": 0.907662,
+      "bands": {
+        "<0.30": 0,
+        "0.30-0.50": 0,
+        "0.50-0.70": 0,
+        "0.70-0.90": 1174,
+        ">=0.90": 267
+      }
+    },
+    "quality_score": {
+      "p10": 0.836502,
+      "p25": 0.853689,
+      "p50": 0.872399,
+      "p75": 0.894406,
+      "p90": 0.907662,
+      "bands": {
+        "<0.30": 0,
+        "0.30-0.50": 0,
+        "0.50-0.70": 0,
+        "0.70-0.90": 1174,
+        ">=0.90": 267
+      }
+    },
+    "faces_per_photo": {
+      "0": 1,
+      "1": 399,
+      "3": 2,
+      "7": 43,
+      "8": 4,
+      "11": 5,
+      "13": 1,
+      "23": 1,
+      "36": 17
+    },
+    "observations": 1441
+  },
+  "stage_e_suggestions": {
+    "suggestions": 10,
+    "ordered": 10,
+    "sample_matched": 0,
+    "unmatched_clusters": 34,
+    "roster_size": 10
+  },
+  "stage_e_confirmation": {
+    "confirmed": 6,
+    "compat_approved_rows": 199,
+    "samples_total": 199
+  },
+  "archive_planner": {
+    "confirmed_persons": 6,
+    "planned_count": 199,
+    "skipped_count": 0
+  }
+}
