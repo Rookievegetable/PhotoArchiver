@@ -18,8 +18,10 @@ from photo_archiver.application import (
     ClusterFacesService,
     ClusterResultsService,
     DeletePersonService,
+    BackfillHistoricalPeopleService,
     ListRecognitionRunsService,
     PairingWorkbenchService,
+    RecognitionFailureService,
     SuggestPairingsService,
     DeletePhotosService,
     DetectDuplicatesService,
@@ -73,6 +75,8 @@ class ApplicationServices:
     cluster_results: ClusterResultsService
     suggest_pairings: SuggestPairingsService
     pairing_workbench: PairingWorkbenchService
+    recognition_failures: RecognitionFailureService
+    backfill_historical_people: BackfillHistoricalPeopleService
     archive_photos: ArchivePhotosService
     review_recognition: ReviewRecognitionService
     settings: SettingsService
@@ -301,6 +305,15 @@ def build_application_services(
             repositories.people,
             repositories.recognition,
             repositories.person_face_samples,
+        ),
+        recognition_failures=RecognitionFailureService(
+            repositories.recognition_runs,
+            repositories.face_observations,
+        ),
+        backfill_historical_people=BackfillHistoricalPeopleService(
+            repositories.people,
+            repositories.import_batches,
+            unit_of_work,
         ),
         cluster_results=ClusterResultsService(
             repositories.recognition_runs,

@@ -61,6 +61,7 @@ class RecognitionRunController(QObject):
         self,
         selected_ranges: tuple[FaceCountRange, ...],
         photo_ids: tuple[UUID, ...] | None = None,
+        scope_label: str | None = None,
     ) -> QtWorkerRunnable | None:
         """Start one recognition run and return its runnable handle.
 
@@ -96,7 +97,8 @@ class RecognitionRunController(QObject):
             images=tuple(raw_path for _, raw_path in snapshot),
             selected_ranges=tuple(selected_ranges),
             parameters={
-                "photo_scope": scope,
+                # Stage F：scope_label（retry/selected/all）进参数快照，重试运行可追溯。
+                "photo_scope": scope_label or scope,
                 "photo_count": len(snapshot),
                 "face_count_ranges": [str(face_range) for face_range in selected_ranges],
             },

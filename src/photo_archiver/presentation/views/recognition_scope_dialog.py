@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QRadioButton,
     QVBoxLayout,
     QWidget,
@@ -42,12 +43,27 @@ _SCOPE_PRESETS: tuple[FaceCountRange, ...] = (
 class RecognitionScopeDialog(QDialog):
     """Collect the photo scope and face-count ranges for one recognition run."""
 
-    def __init__(self, selected_count: int = 0, parent: QWidget | None = None) -> None:
-        """Build the dialog; ``selected_count`` drives the photo-scope radios."""
+    def __init__(
+        self,
+        selected_count: int = 0,
+        parent: QWidget | None = None,
+        retryable_count: int = 0,
+        failure_service=None,
+        latest_run_id=None,
+    ) -> None:
+        """Build the dialog; counts drive the photo-scope radio availability.
+
+        ``retryable_count``（Stage F）：最近一次识别运行中未产出观测的照片数
+        ——为 0 时「仅重试失败照片」不可选。``failure_service`` +
+        ``latest_run_id`` 支撑「导出上次失败清单」只读入口。
+        """
         super().__init__(parent)
         self.setWindowTitle(text.RECOGNITION_SCOPE_DIALOG_TITLE)
         self.setMinimumWidth(420)
         self._selected_count = selected_count
+        self._retryable_count = retryable_count
+        self._failure_service = failure_service
+        self._latest_run_id = latest_run_id
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -66,6 +82,13 @@ class RecognitionScopeDialog(QDialog):
         # 无选区时"仅选中照片"不可选——照片选择范围只能落在真实选区上。
         self._selected_photos_radio.setEnabled(self._selected_count > 0)
         photo_layout.addWidget(self._selected_photos_radio)
+        self._retry_radio = QRadioButton(
+            text.RECOGNITION_SCOPE_RETRY_PHOTOS.format(count=self._retryable_count),
+            photo_group,
+        )
+        # Stage F：重试上次失败照片——无失败时不可选。
+        self._retry_radio.setEnabled(self._retryable_count > 0)
+        photo_layout.addWidget(self._retry_radio)
         layout.addWidget(photo_group)
 
         range_group = QGroupBox(text.RECOGNITION_SCOPE_RANGE_GROUP, self)
@@ -83,6 +106,11 @@ class RecognitionScopeDialog(QDialog):
         hint = QLabel(text.RECOGNITION_SCOPE_RANGE_HINT, self)
         hint.setWordWrap(True)
         layout.addWidget(hint)
+
+        self._export_button = QPushButton(text.RECOGNITION_SCOPE_EXPORT_FAILURES, self)
+        self._export_button.setEnabled(self._retryable_count > 0)
+        self._export_button.clicked.connect(self._on_export_failures_clicked)
+        layout.addWidget(self._export_button)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -110,6 +138,33 @@ class RecognitionScopeDialog(QDialog):
     def photo_scope_selected_only(self) -> bool:
         """Whether the run should cover only the library selection."""
         return self._selected_photos_radio.isChecked()
+
+    @property
+    def photo_scope(self) -> str:
+        """Return the photo scope: "all" | "selected" | "retry"（Stage F）。"""
+        if self._retry_radio.isChecked():
+            return "retry"
+        if self._selected_photos_radio.isChecked():
+            return "selected"
+        return "all"
+
+    def _on_export_failures_clicked(self) -> None:
+        """Stage F：导出上次失败清单（只读 CSV，不改业务状态）。"""
+        if self._failure_service is None or self._latest_run_id is None:
+            return
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+        target, _ = QFileDialog.getSaveFileName(
+            self, text.RECOGNITION_FAILURE_EXPORT_TITLE,
+            "recognition_failures.csv", "CSV (*.csv)",
+        )
+        if not target:
+            return
+        rows = self._failure_service.export_csv(self._latest_run_id, target)
+        QMessageBox.information(
+            self, text.RECOGNITION_FAILURE_EXPORT_TITLE,
+            text.RECOGNITION_FAILURE_EXPORT_DONE.format(count=rows, path=target),
+        )
 
     @property
     def selected_ranges(self) -> tuple[FaceCountRange, ...]:

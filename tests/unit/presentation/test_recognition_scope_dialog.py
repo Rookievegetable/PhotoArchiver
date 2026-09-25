@@ -6,6 +6,8 @@ radios (all photos vs. the library selection). The dialog only collects
 input — FaceCountRange construction is the domain mapping under test.
 """
 
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("pytestqt")
@@ -87,3 +89,68 @@ def test_reject_default_button_wiring(qtbot) -> None:
     qtbot.addWidget(dialog)
     buttons = dialog.findChild(QDialogButtonBox)
     assert buttons is not None
+# ── Stage F：重试选项与失败清单导出入口 ─────────────────────────────────────
+
+
+def test_retry_radio_disabled_without_retryables(qtbot) -> None:
+    dialog = RecognitionScopeDialog(retryable_count=0)
+    qtbot.addWidget(dialog)
+    assert dialog._retry_radio.isEnabled() is False
+    assert dialog.photo_scope == "all"
+
+
+def test_retry_radio_enabled_with_count_and_scope_property(qtbot) -> None:
+    dialog = RecognitionScopeDialog(retryable_count=7)
+    qtbot.addWidget(dialog)
+    assert dialog._retry_radio.isEnabled() is True
+    assert "7" in dialog._retry_radio.text()
+
+    dialog._retry_radio.setChecked(True)
+    assert dialog.photo_scope == "retry"
+
+
+def test_photo_scope_reflects_selected_radio(qtbot) -> None:
+    dialog = RecognitionScopeDialog(selected_count=3)
+    qtbot.addWidget(dialog)
+    dialog._selected_photos_radio.setChecked(True)
+    assert dialog.photo_scope == "selected"
+
+
+def test_export_button_disabled_without_failures(qtbot) -> None:
+    dialog = RecognitionScopeDialog(retryable_count=0)
+    qtbot.addWidget(dialog)
+    assert dialog._export_button.isEnabled() is False
+
+
+def test_export_button_invokes_service_with_run_id(qtbot, tmp_path, monkeypatch) -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    run_id = uuid4()
+    calls: list[tuple] = []
+
+    def _fake_export_csv(rid, path):
+        calls.append((rid, path))
+        Path(path).write_text("photo_id,raw_path,classification,recognition_run_id",
+                              encoding="utf-8-sig")
+        return 2
+
+    service = SimpleNamespace(export_csv=_fake_export_csv)
+    dialog = RecognitionScopeDialog(
+        retryable_count=2, failure_service=service, latest_run_id=run_id,
+    )
+    qtbot.addWidget(dialog)
+    assert dialog._export_button.isEnabled() is True
+
+    target = tmp_path / "failures.csv"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: (str(target), "")))
+    monkeypatch.setattr(QMessageBox, "information",
+                        staticmethod(lambda *a, **k: 0))
+
+    dialog._on_export_failures_clicked()
+
+    assert calls == [(run_id, str(target))]  # QFileDialog 返回 str 路径
+    assert target.exists()

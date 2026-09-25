@@ -1422,17 +1422,35 @@ class MainWindow(QMainWindow):
             # the authoritative second line (TOCTOU).
             self._status_label.setText(guidance.tooltip)
             return
+        failure_service = self._context.services.recognition_failures
+        latest_run_id = failure_service.latest_resumable_run_id()
+        retryable_count = (
+            failure_service.report(latest_run_id).retryable_count
+            if latest_run_id is not None else 0
+        )
         dialog = RecognitionScopeDialog(
-            selected_count=len(self._collect_selected_photo_ids()), parent=self,
+            selected_count=len(self._collect_selected_photo_ids()),
+            parent=self,
+            retryable_count=retryable_count,
+            failure_service=failure_service,
+            latest_run_id=latest_run_id,
         )
         if not dialog.exec():
             return
+        photo_ids: tuple[UUID, ...] | None = None
+        if dialog.photo_scope == "retry":
+            photo_ids = (
+                failure_service.report(latest_run_id).retryable_photo_ids
+                if latest_run_id is not None else ()
+            )
+            if not photo_ids:
+                self._status_label.setText(text.RECOGNITION_SCOPE_NO_FAILURES)
+                return
+        elif dialog.photo_scope == "selected":
+            photo_ids = self._collect_selected_photo_ids()
         runnable = self._recognition_run_controller.start_run(
             dialog.selected_ranges,
-            photo_ids=(
-                self._collect_selected_photo_ids()
-                if dialog.photo_scope_selected_only else None
-            ),
+            photo_ids=photo_ids,
         )
         if runnable is None:
             reason = self._recognition_run_controller.last_refusal_reason

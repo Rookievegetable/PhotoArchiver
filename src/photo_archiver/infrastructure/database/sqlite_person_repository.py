@@ -50,6 +50,24 @@ class SQLitePersonRepository(PersonRepository):
             row = connection.execute("SELECT * FROM people WHERE id = ?", (str(person_id),)).fetchone()
         return person_from_row(row) if row is not None else None
 
+    def apply_historical_backfill(
+        self, person_id: UUID, source_batch_id: UUID, roster_order: int | None,
+    ) -> int:
+        """Stage F 历史回填：COALESCE 保序（已有 roster_order 不覆盖）。"""
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE people
+                SET source_batch_id = ?,
+                    roster_order = COALESCE(roster_order, ?)
+                WHERE id = ?
+                """,
+                (str(source_batch_id),
+                 roster_order if roster_order is not None else None,
+                 str(person_id)),
+            )
+            return cursor.rowcount
+
     def remove(self, person_id: UUID) -> int:
         """Remove the person; return 1 when removed, else 0 (idempotent).
 

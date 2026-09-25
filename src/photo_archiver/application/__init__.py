@@ -61,10 +61,12 @@ from photo_archiver.application.ports import (
 )
 from photo_archiver.application.services import (
     ArchiveExecutor,
+    BackfillHistoricalPeopleService,
     ClusterFacesService,
     ClusterResultsService,
     ListRecognitionRunsService,
     PairingWorkbenchService,
+    RecognitionFailureService,
     SuggestPairingsService,
     ConfirmImportService,
     ArchivePathBuilderService,
@@ -114,6 +116,8 @@ from photo_archiver.application.use_cases import (
 __all__ = [
     "ArchiveExecutor",
     "ArchiveOutcome",
+    "BackfillHistoricalPeopleService",
+    "RecognitionFailureService",
     "ClusterFacesService",
     "ClusterFacesUseCase",
     "ClusterResultsService",

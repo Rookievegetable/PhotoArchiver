@@ -53,6 +53,15 @@ class PersonRepository(Protocol):
         """
 
 
+    def apply_historical_backfill(
+        self, person_id: UUID, source_batch_id: UUID, roster_order: int | None,
+    ) -> int:
+        """Stage F 历史回填：链接历史批次并补齐缺失的名单顺序.
+
+        ``roster_order=None`` 表示保留现有顺序（COALESCE 语义）——已有
+        人工排序不被覆盖。Returns 受影响行数（1 命中 / 0 不存在）。
+        """
+
     def remove(self, person_id: UUID) -> int:
         """Remove the person from the registry; return 1 when removed, else 0.
 

@@ -17,6 +17,18 @@ class InMemoryPersonRepository(PersonRepository):
         """Persist a person entity in memory."""
         self._people_by_id[person.id] = person  # type: ignore[index]  # UUID | None guarantee
 
+    def apply_historical_backfill(
+        self, person_id: UUID, source_batch_id: UUID, roster_order: int | None,
+    ) -> int:
+        """Stage F 历史回填：COALESCE 保序（已有 roster_order 不覆盖）。"""
+        person = self._people_by_id.get(person_id)
+        if person is None:
+            return 0
+        person.source_batch_id = source_batch_id
+        if person.roster_order is None:
+            person.roster_order = roster_order
+        return 1
+
     def remove(self, person_id: UUID) -> int:
         """Remove the person from memory; return 1 when removed, else 0.
 

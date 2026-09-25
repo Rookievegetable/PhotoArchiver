@@ -97,6 +97,7 @@ def _stub_scope_dialog(window, monkeypatch, *, accepted=True,
         exec=lambda: 1 if accepted else 0,
         selected_ranges=ranges,
         photo_scope_selected_only=selected_only,
+        photo_scope="selected" if selected_only else "all",
     )
     opened: list[dict] = []
     monkeypatch.setattr(

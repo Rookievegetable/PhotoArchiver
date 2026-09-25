@@ -19,7 +19,11 @@ from photo_archiver.application.services.manage_people_service import ManagePeop
 from photo_archiver.application.services.match_persons_service import MatchPersonsService
 from photo_archiver.application.services.face_analysis_task import FaceAnalysisTask
 from photo_archiver.application.services.cluster_faces_service import ClusterFacesService
+from photo_archiver.application.services.backfill_historical_people_service import (
+    BackfillHistoricalPeopleService,
+)
 from photo_archiver.application.services.cluster_results_service import ClusterResultsService
+from photo_archiver.application.services.recognition_failure_service import RecognitionFailureService
 from photo_archiver.application.services.list_recognition_runs_service import ListRecognitionRunsService
 from photo_archiver.application.services.pairing_workbench_service import PairingWorkbenchService
 from photo_archiver.application.services.suggest_pairings_service import SuggestPairingsService
@@ -57,7 +61,9 @@ __all__ = [
     "ManagePeopleService",
     "MatchPersonsService",
     "ClusterFacesService",
+    "BackfillHistoricalPeopleService",
     "ClusterResultsService",
+    "RecognitionFailureService",
     "ListRecognitionRunsService",
     "PairingWorkbenchService",
     "SuggestPairingsService",

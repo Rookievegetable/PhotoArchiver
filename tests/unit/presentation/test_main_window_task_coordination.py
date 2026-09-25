@@ -121,6 +121,7 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
         # RecognitionRunController.start_run — both are doubled here.
         monkeypatch.setattr(module, "RecognitionScopeDialog", lambda *a, **k: SimpleNamespace(
             exec=lambda: 1, selected_ranges=(), photo_scope_selected_only=False,
+            photo_scope="all",
         ))
         controller, method, entry = window._recognition_run_controller, "start_run", "match"
     elif name == "face_clustering":
