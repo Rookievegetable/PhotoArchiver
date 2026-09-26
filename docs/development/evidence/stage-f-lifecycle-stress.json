@@ -1,0 +1,33 @@
+{
+  "photos": 1000,
+  "workers": 4,
+  "phase1_cancel": {
+    "run_id": "43dfbd06-df61-40df-8d68-e53d06235d59",
+    "status": "cancelled",
+    "cancel_latency_s": 60.0,
+    "elapsed_s": 90.0,
+    "observations": 337,
+    "unreadable": 0,
+    "no_face": 0,
+    "error": 0
+  },
+  "phase2_retry": {
+    "run_id": "43dfbd06-df61-40df-8d68-e53d06235d59",
+    "retryable_count": 663,
+    "run_id_new": "30db31a7-7d64-407e-9f81-86d38ebc829d",
+    "status": "completed",
+    "elapsed_s": 63.33,
+    "observations": 663
+  },
+  "phase3_consistency": {
+    "run_rows": 2,
+    "distinct_run_ids": 2,
+    "photo_rows": 1000,
+    "run1_observations": 337,
+    "run2_observations": 663,
+    "cross_run_photo_overlap": 0,
+    "duplicate_face_index_pairs": 0,
+    "coverage": 1000,
+    "tracemalloc_peak_mb": 79.16
+  }
+}

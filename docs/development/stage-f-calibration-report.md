@@ -70,6 +70,41 @@ faces_per_photo 分布：1 脸 ×399、7 脸 ×43、8×4、11×5、13×1、23×1
 相似度为 10k+ 库的记录在案后续项，**当前不构成阻塞，未做优化**
 （无证据支持现在重构）。
 
+## 3.4 千级生命周期压力（Stage F Wave 3，2026-09-26）
+
+`tools/stress_lifecycle_stage_f.py`，真实 InsightFace + 真实 SQLite，1000 张
+单脸样本（唯一像素变体，确保内容哈希去重后 1000 张全部登记），4 workers：
+
+| 阶段 | 结果 |
+|---|---|
+| Phase 1 取消（t+30s） | status=**cancelled**；取消传播 60.0s（协作式：当前检测批完成后返回）；elapsed 90.0s；**已保留 337 条观测**（已消费并提交的批次） |
+| Phase 2 重试（663 张剩余） | status=**completed**；63.3s；663 条观测；**新 run id**（历史 run 未被覆盖） |
+| Phase 3 一致性 | run_rows=2 / distinct_run_ids=2；photo_rows=1000；跨 run 照片重叠 **0**；重复 (run, photo, face_index) **0**；两代观测并集覆盖 **1000/1000**；tracemalloc 峰值 **79.2 MB** |
+
+结论：取消为协作式传播（无死锁、无锁泄漏、无重复终态）；重试按 Stage F
+语义只处理未产出观测的照片并创建新运行；历史运行及其 337 条观测完整保留。
+
+## 3.5 老旧数据库升级完整性（Stage F Wave 3，2026-09-26）
+
+`tools/verify_upgrade_integrity.py`：生产库**副本**（源库只读、零触碰，
+版本 alembic 003、546 人 / 473 照片 / 472 识别结果 / 3 导入批次 / 544 草稿行）
+→ alembic upgrade head：
+
+| 检查 | 结果 |
+|---|---|
+| 版本 | 003 → **007_assignments_and_person_samples** |
+| 既有表计数 | 全部不变（people 546 / photos 473 / recognition_results 472 / import_batches 3 / import_draft_rows 544） |
+| people 关键字段（id/name/created_at/roster_order/source_batch_id 抽样 20） | **零未授权变化** |
+| Stage C/D/E 新表 | 9 张全部空初始化 = 预期（非数据丢失） |
+| FK 检查 | 升级前 0 违规 / 升级后 **0 违规** |
+| 历史人员回填交互 | 8 人回填成功（538 已关联者跳过），roster_order 追加不覆盖，**重复执行 no-op** |
+
+确定性回归测试：`tests/integration/test_upgrade_integrity.py`（3 项：逐行
+对比零丢失 / 新表空初始化 / 升级→回填交互幂等）与
+`tests/unit/application/test_stage_f_lifecycle.py`（5 项：1200 张完整运行、
+中途取消部分保留、重试建新 run、连续 cancel/retry/complete 循环、
+unreadable/error 亦可重试）。
+
 ## 4. 数据一致性证据
 
 - rerun：两代并存、首代簇数不变 ✅

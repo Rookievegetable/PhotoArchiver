@@ -1,0 +1,106 @@
+{
+  "source": "C:\\Users\\hq\\AppData\\Local\\PhotoArchiver\\photo_archiver.db",
+  "copy": "C:\\Users\\hq\\AppData\\Local\\Temp\\stage_f_upgrade_ifgxpeyu\\upgrade_copy.sqlite3",
+  "before": {
+    "alembic_version": "003_import_batches_and_roster",
+    "tables": {
+      "people": 546,
+      "photos": 473,
+      "recognition_results": 472,
+      "archive_records": 0,
+      "import_batches": 3,
+      "import_draft_rows": 544,
+      "person_embeddings": 0,
+      "recognition_runs": null,
+      "recognition_run_photos": null,
+      "recognition_run_scopes": null,
+      "face_observations": null,
+      "face_cluster_runs": null,
+      "face_clusters": null,
+      "face_cluster_members": null,
+      "cluster_person_assignments": null,
+      "person_face_embeddings": null
+    }
+  },
+  "after": {
+    "alembic_version": "007_assignments_and_person_samples",
+    "tables": {
+      "people": 546,
+      "photos": 473,
+      "recognition_results": 472,
+      "archive_records": 0,
+      "import_batches": 3,
+      "import_draft_rows": 544,
+      "person_embeddings": 0,
+      "recognition_runs": 0,
+      "recognition_run_photos": 0,
+      "recognition_run_scopes": 0,
+      "face_observations": 0,
+      "face_cluster_runs": 0,
+      "face_clusters": 0,
+      "face_cluster_members": 0,
+      "cluster_person_assignments": 0,
+      "person_face_embeddings": 0
+    }
+  },
+  "diff": {
+    "tables": {
+      "recognition_runs": {
+        "before": null,
+        "after": 0,
+        "expected": "新表空初始化（0→0 不变）"
+      },
+      "recognition_run_photos": {
+        "before": null,
+        "after": 0,
+        "expected": "新表空初始化（0→0 不变）"
+      },
+      "recognition_run_scopes": {
+        "before": null,
+        "after": 0,
+        "expected": "新表空初始化（0→0 不变）"
+      },
+      "face_observations": {
+        "before": null,
+        "after": 0,
+        "expected": "新表空初始化（0→0 不变）"
+      },
+      "face_cluster_runs": {
+        "before": null,
+        "after": 0,
+        "expected": "新表空初始化（0→0 不变）"
+      },
+      "face_clusters": {
+        "before": null,
+        "after": 0,
+        "expected": "新表空初始化（0→0 不变）"
+      },
+      "face_cluster_members": {
+        "before": null,
+        "after": 0,
+        "expected": "新表空初始化（0→0 不变）"
+      },
+      "cluster_person_assignments": {
+        "before": null,
+        "after": 0,
+        "expected": "新表空初始化（0→0 不变）"
+      },
+      "person_face_embeddings": {
+        "before": null,
+        "after": 0,
+        "expected": "新表空初始化（0→0 不变）"
+      }
+    },
+    "people_rows_changed": false
+  },
+  "backfill": {
+    "first": {
+      "batch_id": "9c8c28e5-b983-4661-a667-01a420a7cd08",
+      "backfilled": 8,
+      "already_linked": 538,
+      "failures": []
+    },
+    "second_noop": true
+  },
+  "integrity_ok": true
+}
