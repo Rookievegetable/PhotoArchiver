@@ -135,9 +135,11 @@ def test_approve_all_confirmed_batch_approves_everything(qtbot, monkeypatch) -> 
     dialog.show()
 
     expected_ids = tuple(r.id for r in pending)
-    controller.bulk_approve.side_effect = lambda ids: pending.clear()
+    # Stage 4 D-1: the second positional arg is the human-decided identity
+    # (None here — the picker is left unresolved and the warning confirmed).
+    controller.bulk_approve.side_effect = lambda ids, person_id=None: pending.clear()
     dialog._approve_all.click()
-    controller.bulk_approve.assert_called_once_with(expected_ids)
+    controller.bulk_approve.assert_called_once_with(expected_ids, None)
     assert dialog._list.count() == 0  # queue refreshed after the batch
 
 

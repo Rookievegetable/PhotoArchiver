@@ -26,12 +26,22 @@ class ArchiveRecordRepository(Protocol):
             this to detect "already archived" before planning a fresh run.
         """
 
-    def has_successful_for_person(self, photo_id: UUID, person_name: str) -> bool:
+    def has_successful_for_person(
+        self,
+        photo_id: UUID,
+        person_id: UUID | None,
+        person_name: str,
+    ) -> bool:
         """Stage E（E-SG-6）：该 (person, photo) 是否已有成功态归档记录.
 
-        归档去重作用域为 (person, photo)：一个 person 的成功归档不阻止
-        其他 person 的同照片归属进入归档计划。success = ARCHIVED /
-        SKIPPED / RENAMED / OVERWRITTEN（FAILED/PLANNED/DRY_RUN 不拦）。
+        **去重按稳定 Person identity 判定**（Stage 4 BLK-1 修复）：优先按
+        ``person_id`` 匹配，避免 (a) 跨部门同名的两个 person 互相抑制归档、
+        (b) person 改名后同一张照片被重复归档。``person_id IS NULL`` 的存量行
+        （迁移回填前或重名无法唯一反查）回退到 ``target_person_name`` 匹配，
+        保证升级后既有去重行为不退化。
+
+        success = ARCHIVED / SKIPPED / RENAMED / OVERWRITTEN
+        （FAILED / PLANNED / DRY_RUN 不拦）。
         """
 
     def list_by_status(self, status: ArchiveStatus) -> list[ArchiveRecord]:

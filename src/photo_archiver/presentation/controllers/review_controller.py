@@ -90,17 +90,48 @@ class ReviewController(QObject):
         """Return all recognition results awaiting user review."""
         return self._recognition_repository.list_pending()
 
-    def approve(self, result_id: UUID) -> RecognitionResult | None:
-        """Mark a single pending result as approved; return the transitioned result."""
-        return self._use_case.approve(result_id)
+    def list_persons(self) -> list[tuple[UUID, str]]:
+        """Return ``(person_id, display name)`` pairs for the D-1 identity picker.
+
+        Stage 4 D-1: the new recognition chain projects ``person_id = NULL``, so
+        a reviewer must be able to *name* the person when approving. Returns an
+        empty list when no person repository was injected (caller disables the
+        picker rather than blocking the queue outright).
+        """
+        if self._person_repository is None:
+            return []
+        pairs: list[tuple[UUID, str]] = []
+        for person in self._person_repository.list_all():
+            if person.id is not None:
+                pairs.append((person.id, person.name))
+        return pairs
+
+    def approve(
+        self,
+        result_id: UUID,
+        person_id: UUID | None = None,
+    ) -> RecognitionResult | None:
+        """Mark a single pending result as approved; return the transitioned result.
+
+        ``person_id`` (Stage 4 D-1) carries the human-decided identity so the
+        approved row stays reachable by the archive planner.
+        """
+        return self._use_case.approve(result_id, person_id)
 
     def reject(self, result_id: UUID) -> RecognitionResult | None:
         """Mark a single pending result as rejected; return the transitioned result."""
         return self._use_case.reject(result_id)
 
-    def bulk_approve(self, result_ids: tuple[UUID, ...]) -> int:
-        """Approve each pending result in the batch; return how many transitioned."""
-        return self._use_case.bulk_approve(result_ids)
+    def bulk_approve(
+        self,
+        result_ids: tuple[UUID, ...],
+        person_id: UUID | None = None,
+    ) -> int:
+        """Approve each pending result in the batch; return how many transitioned.
+
+        ``person_id`` (Stage 4 D-1) only fills rows without an identity yet.
+        """
+        return self._use_case.bulk_approve(result_ids, person_id)
 
     def bulk_reject(self, result_ids: tuple[UUID, ...]) -> int:
         """Reject each pending result in the batch; return how many transitioned."""

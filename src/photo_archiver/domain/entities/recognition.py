@@ -31,6 +31,12 @@ class RecognitionResult:
     or ``REJECTED`` via the explicit state-transition methods, which keeps the
     invariant that a finalized result cannot be re-opened.
 
+    ``confidence`` 三态语义（Stage 4 BLK-5 修复）：
+    - ``float`` —— 该归属**有**相似度证据（识别期 Top-1 匹配分，或配对确认时
+      的样本余弦）；
+    - ``None`` —— 该归属**无**相似度证据（按位置配对 / 人工指派确认）。
+      此时**不得**写成 ``0.0``——"无证据"与"相似度为零"语义完全不同。
+
     ISSUE-006 resolution: ``id`` is now typed ``UUID`` (not ``UUID | None``)
     with ``field(default_factory=uuid4)`` so the type signature honestly
     expresses the post-init non-null guarantee — mypy and callers no longer
@@ -38,7 +44,7 @@ class RecognitionResult:
     """
 
     photo_id: UUID
-    confidence: float
+    confidence: float | None
     id: UUID = field(default_factory=uuid4)
     person_id: UUID | None = None
     status: MatchStatus = MatchStatus.PENDING
@@ -46,7 +52,7 @@ class RecognitionResult:
 
     def __post_init__(self) -> None:
         """Validate fields and initialize generated values."""
-        if not 0.0 <= self.confidence <= 1.0:
+        if self.confidence is not None and not 0.0 <= self.confidence <= 1.0:
             raise ValidationError("RecognitionResult confidence must be in [0.0, 1.0]")
         if self.created_at is None:
             self.created_at = datetime.now()

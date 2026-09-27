@@ -48,14 +48,27 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
         self._recognition_repository = recognition_repository
         self._unit_of_work = unit_of_work
 
-    def approve(self, result_id: UUID) -> RecognitionResult | None:
+    def approve(
+        self,
+        result_id: UUID,
+        person_id: UUID | None = None,
+    ) -> RecognitionResult | None:
         """Mark a single pending result as approved and persist the transition.
+
+        ``person_id`` (Stage 4 D-1) records the **human-decided identity** in
+        the same write. The new recognition chain always projects
+        ``person_id = NULL`` (no ``person_embeddings`` producer), so approving
+        without an identity used to yield an APPROVED row the archive planner
+        could never select (``WHERE person_id = ? AND status = 'approved'``) —
+        i.e. a "final" human result that silently never archives. Callers that
+        genuinely have no identity to record pass ``None`` and should surface
+        the row as not-yet-archivable rather than imply it is settled.
 
         Returns:
             The refreshed aggregate after approval, or ``None`` when the result
             was missing or already finalized.
         """
-        return self._transition(result_id, MatchStatus.APPROVED)
+        return self._transition(result_id, MatchStatus.APPROVED, person_id=person_id)
 
     def reject(self, result_id: UUID) -> RecognitionResult | None:
         """Mark a single pending result as rejected and persist the transition.
@@ -66,17 +79,24 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
         """
         return self._transition(result_id, MatchStatus.REJECTED)
 
-    def bulk_approve(self, result_ids: tuple[UUID, ...]) -> int:
+    def bulk_approve(
+        self,
+        result_ids: tuple[UUID, ...],
+        person_id: UUID | None = None,
+    ) -> int:
         """Approve each pending result in the batch.
 
         Args:
             result_ids: Recognition result identifiers to approve.
+            person_id: Stage 4 D-1 — human-decided identity written alongside
+                the approval. Rows that already carry an identity keep their
+                own; passing ``None`` leaves every row's identity untouched.
 
         Returns:
             How many results actually transitioned (missing or finalized ones
             are skipped silently so the operation is idempotent).
         """
-        return self._bulk_transition(result_ids, MatchStatus.APPROVED)
+        return self._bulk_transition(result_ids, MatchStatus.APPROVED, person_id=person_id)
 
     def bulk_reject(self, result_ids: tuple[UUID, ...]) -> int:
         """Reject each pending result in the batch.
@@ -93,12 +113,15 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
         self,
         result_id: UUID,
         target: MatchStatus,
+        person_id: UUID | None = None,
     ) -> RecognitionResult | None:
         """Persist a status transition for a single result.
 
         Args:
             result_id: The recognition result identifier.
             target: The desired final status.
+            person_id: Stage 4 D-1 — the human-decided identity to write with
+                an approval. ``None`` leaves the column untouched.
 
         Returns:
             The refreshed aggregate, or ``None`` when the result is missing or
@@ -117,6 +140,10 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
             return None
         if target is MatchStatus.APPROVED:
             result.approve()
+            if person_id is not None:
+                # Keep the in-memory aggregate honest about what the DB will
+                # hold, so the returned entity matches the persisted row.
+                result.person_id = person_id
         else:
             result.reject()
         # ISSUE-005 fix: wrap the DB persist in a UoW so an exception after the
@@ -126,9 +153,9 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
         # None (in-memory test path) the call runs bare as before.
         if self._unit_of_work is not None:
             with self._unit_of_work:
-                affected = self._persist_status(result, target)
+                affected = self._persist_status(result, target, person_id)
         else:
-            affected = self._persist_status(result, target)
+            affected = self._persist_status(result, target, person_id)
         if affected == 0:
             # Concurrent deletion between find_by_id and update_status: roll back
             # the in-memory transition so the returned aggregate stays honest.
@@ -148,26 +175,41 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
         self,
         result: RecognitionResult,
         target: MatchStatus,
+        person_id: UUID | None = None,
     ) -> int:
-        """Persist the status column for the transitioned aggregate.
+        """Persist the status (and optional identity) for the transitioned row.
 
-        ``update_status`` persists only the status column, avoiding the wider
-        upsert that ``add()`` would perform (which could overwrite photo_id/person_id).
+        ``update_status`` writes only the status column by default, avoiding the
+        wider upsert that ``add()`` would perform (which could overwrite
+        photo_id/confidence). Stage 4 D-1 passes ``person_id`` so a manual
+        approval can record the decided identity in the same statement.
         """
         return self._recognition_repository.update_status(
             result.id,  # type: ignore[arg-type]  # RecognitionResult.__post_init__ guarantees id is set
             target,
+            person_id,
         )
 
     def _bulk_transition(
         self,
         result_ids: tuple[UUID, ...],
         target: MatchStatus,
+        person_id: UUID | None = None,
     ) -> int:
-        """Persist status transitions for a batch, returning how many transitioned."""
+        """Persist status transitions for a batch, returning how many transitioned.
+
+        Stage 4 D-1: a single ``person_id`` applies only to rows that do not
+        already carry an identity — an explicit per-row human decision recorded
+        earlier must never be overwritten by a later bulk default.
+        """
         transitioned = 0
         for result_id in result_ids:
-            if self._transition(result_id, target) is not None:
+            effective = person_id
+            if effective is not None:
+                existing = self._recognition_repository.find_by_id(result_id)
+                if existing is not None and existing.person_id is not None:
+                    effective = None
+            if self._transition(result_id, target, person_id=effective) is not None:
                 transitioned += 1
         logger.info(
             "Bulk {} transitioned {}/{} result(s)",

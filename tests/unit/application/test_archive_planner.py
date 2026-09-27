@@ -85,13 +85,19 @@ class _FakeArchiveRecordRepository:
     def find_by_photo(self, photo_id):
         return self._existing.get(photo_id)
 
-    def has_successful_for_person(self, photo_id, person_name) -> bool:
+    def has_successful_for_person(self, photo_id, person_id, person_name) -> bool:
+        """Mirror the SQLite dedup: prefer stable identity, fall back to name.
+
+        Stage 4 BLK-1 — a legacy record (person_id None) still matches by name,
+        so the fake exercises the same two-layer semantics as production.
+        """
         record = self._existing.get(photo_id)
-        return (
-            record is not None
-            and record.target_person_name == person_name
-            and record.status in _ALREADY_ARCHIVED_STATES
-        )
+        if record is None or record.status not in _ALREADY_ARCHIVED_STATES:
+            return False
+        record_person_id = getattr(record, "person_id", None)
+        if record_person_id is not None:
+            return record_person_id == person_id
+        return record.target_person_name == person_name
 
 
 def _make_recognition(photo_id, person_id) -> object:

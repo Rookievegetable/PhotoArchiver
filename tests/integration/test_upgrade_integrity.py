@@ -16,6 +16,8 @@ from alembic import command
 
 _ALEMBIC_CFG = Path(__file__).resolve().parents[2] / "alembic.ini"
 _OLD_REVISION = "003_import_batches_and_roster"
+# Stage 4：008 之后 alembic head。
+_HEAD_REVISION = "008_archive_identity_and_confidence"
 
 
 def _load_backfill_service(db_path: Path):
@@ -135,7 +137,7 @@ def test_upgrade_preserves_all_existing_data(old_db: Path) -> None:
     _upgrade_to_head(old_db)
     after = _snapshot(old_db)
 
-    assert _alembic_version(old_db) == "007_assignments_and_person_samples"
+    assert _alembic_version(old_db) == _HEAD_REVISION
     # 既有表逐行零丢失、零字段变化。
     for table in before:
         assert after[table] == before[table], f"table {table} changed during upgrade"

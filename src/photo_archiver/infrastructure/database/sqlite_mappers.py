@@ -168,6 +168,8 @@ def archive_record_from_row(row: Row) -> ArchiveRecord:
     record.id = UUID(row["id"])
     record.archived_at = archived_at
     record.error = row["error"]
+    # Stage 4 BLK-1：稳定 Person identity（存量行可能为 NULL）。
+    record.person_id = UUID(row["person_id"]) if row["person_id"] is not None else None
     return record
 
 

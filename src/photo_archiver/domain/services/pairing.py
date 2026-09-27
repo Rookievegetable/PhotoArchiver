@@ -4,8 +4,9 @@
 
 1. **已确认样本高置信匹配优先**：对每个尚无有效指派的组，用该组成员
    观测嵌入 vs 已确认人员样本（启用态）的最大余弦（D4：多样本取最大）
-   匹配；≥ ``sample_match_threshold``（0.40，F 校准）→ source=
-   ``sample_match`` 的 suggested 建议。被该组拒绝过的人员不参与。
+   匹配；``>= sample_match_threshold``（0.40，F 校准；**恰等于阈值即命中**，
+   Stage 4 D-2 裁决）→ source=``sample_match`` 的 suggested 建议。
+   被该组拒绝过的人员不参与。
 2. **排除已明确拒绝的映射**：全程跳过 rejected (cluster, person) 对。
 3. **剩余按排序位置一对一**：剩余组（sort_key 升序）× 剩余人员
    （roster_order 升序，排除已被①消耗/已在别处确认的人员）取
@@ -88,13 +89,15 @@ def suggest_pairings(
     outcomes: list[SuggestionOutcome] = []
     consumed_persons: set[UUID] = set()
 
-    # ① sample match（优先）。
+    # ① sample match（优先）。D-2（Stage 4 裁决）：命中边界统一为
+    # score >= sample_match_threshold——恰等于阈值（0.40）**命中**。
+    # 阈值与"当前最优"分离，避免用 best_score 兼任阈值时把 > 与 >= 混淆。
     sample_offset = member_count
     for cluster in ordered_clusters:
         if cluster.cluster_id in clusters_with_active:
             continue
         best_person: UUID | None = None
-        best_score = sample_match_threshold
+        best_score: float | None = None
         for sample_index_offset, owner in enumerate(sample_person_ids):
             if owner is None or owner in consumed_persons:
                 continue
@@ -103,7 +106,9 @@ def suggest_pairings(
             score = _max_member_sample_similarity(
                 cluster.member_vector_indices, sample_offset + sample_index_offset, similarity,
             )
-            if score is not None and score > best_score:
+            if score is None or score < sample_match_threshold:
+                continue
+            if best_score is None or score > best_score:
                 best_person, best_score = owner, score
         if best_person is not None:
             outcomes.append(SuggestionOutcome(

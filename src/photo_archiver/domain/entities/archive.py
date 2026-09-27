@@ -36,6 +36,11 @@ class ArchiveRecord:
     created in the ``PLANNED`` state by ArchivePlanner and transitioned by
     ArchiveExecutor as the file operation completes.
 
+    ``person_id`` 是**稳定身份**（Stage 4 BLK-1）：成功态去重按 Person identity
+    而非 ``target_person_name`` 字符串——否则跨部门同名的两个 person 会互相
+    抑制归档，且 person 改名后同一张照片会被重复归档。可空仅出现在**迁移回填
+    前的存量行**（重名无法唯一反查，见 migration 008），此时去重回退姓名匹配。
+
     Fragility note: ``target_*`` 字段拆段存储以保持 Domain 零 pathlib.Path 依赖，
     与 ``ArchivePath`` 值对象一一对应；SQLite mapper 必须按序落七列。
     """
@@ -51,6 +56,8 @@ class ArchiveRecord:
     # OVERWRITTEN/DRY_RUN/FAILED) set it via the mark_* transition methods.
     archived_at: datetime | None = None
     error: str | None = None
+    # 稳定 Person identity（BLK-1）；NULL = 存量回填前/重名无法唯一反查的行。
+    person_id: UUID | None = None
 
     def __post_init__(self) -> None:
         """Validate fields and initialize generated values."""

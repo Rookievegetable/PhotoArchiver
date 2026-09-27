@@ -125,8 +125,20 @@ class RecognitionRepository(Protocol):
             删除的行数。
         """
 
-    def update_status(self, result_id: UUID, status: MatchStatus) -> int:
+    def update_status(
+        self,
+        result_id: UUID,
+        status: MatchStatus,
+        person_id: UUID | None = None,
+    ) -> int:
         """Transition a recognition result's review status.
+
+        ``person_id``（Stage 4 D-1）：人工审核批准时**同时**写入身份归属。
+        新识别链路的兼容行 ``person_id`` 恒为 NULL（``person_embeddings`` 无
+        生产者），若只改 ``status``，批准后仍是 ``person_id IS NULL`` 的
+        APPROVED 行——而归档只消费 ``person_id = ? AND status='approved'``，
+        该行永远进不了归档计划，"人工批准的最终结果"与归档链路不一致。
+        传 ``None`` 表示不触碰该列（拒绝路径不需要身份）。
 
         Returns:
             The number of rows affected (1 on hit, 0 when the result id is

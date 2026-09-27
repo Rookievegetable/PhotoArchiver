@@ -33,12 +33,14 @@ class _RecordingRecognitionRepository(RecognitionRepository):
     def list_pending(self) -> list:
         raise NotImplementedError
 
-    def update_status(self, result_id, status) -> int:
+    def update_status(self, result_id, status, person_id=None) -> int:
         result = self._results.get(result_id)
         if result is None:
             return 0
         # Bypass approve()/reject() guards — service already transitioned the entity.
         result.status = status
+        if person_id is not None:
+            result.person_id = person_id
         self.added.append(result)
         return 1
 
@@ -111,7 +113,7 @@ def test_approve_returns_none_when_update_affects_zero_rows() -> None:
     """approve must return None when update_status signals concurrent deletion (0 rows)."""
 
     class _VanishingRepo(_RecordingRecognitionRepository):
-        def update_status(self, result_id, status) -> int:
+        def update_status(self, result_id, status, person_id=None) -> int:
             return 0  # simulate concurrent deletion
 
     result = _make_result()
@@ -212,7 +214,7 @@ def test_approve_with_uow_rolls_back_when_update_raises() -> None:
     """
 
     class _RaisingRepo(_RecordingRecognitionRepository):
-        def update_status(self, result_id, status) -> int:
+        def update_status(self, result_id, status, person_id=None) -> int:
             raise RuntimeError("simulated DB outage")
 
     result = _make_result()

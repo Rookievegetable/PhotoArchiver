@@ -13,7 +13,9 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from alembic import command
@@ -65,7 +67,11 @@ _ALL_INDEXES = (
     "idx_cluster_person_assignments_person_id",
     "idx_person_face_embeddings_person_id",
     "idx_person_face_embeddings_observation_id",
+    "idx_archive_records_person_id",
 )
+
+# Stage 4：008 之后 alembic head（BLK-1 / BLK-5 schema 变更）。
+_HEAD = "008_archive_identity_and_confidence"
 
 
 @pytest.fixture
@@ -132,12 +138,12 @@ def test_migration_upgrade_creates_all_indexes(tmp_db: Path) -> None:
 
 
 def test_migration_upgrade_stamps_head_revision(tmp_db: Path) -> None:
-    """upgrade head 后 alembic_version 表记录 004。"""
+    """upgrade head 后 alembic_version 表记录 008。"""
     cfg = _make_alembic_config(tmp_db)
     command.upgrade(cfg, "head")
 
     with sqlite3.connect(str(tmp_db)) as conn:
-        assert _alembic_version(conn) == "007_assignments_and_person_samples"
+        assert _alembic_version(conn) == _HEAD
 
 
 # ── migration down 可执行 ──────────────────────────────────────────────────
@@ -181,7 +187,7 @@ def test_migration_upgrade_idempotent(tmp_db: Path) -> None:
     command.upgrade(cfg, "head")
 
     with sqlite3.connect(str(tmp_db)) as conn:
-        assert _alembic_version(conn) == "007_assignments_and_person_samples"
+        assert _alembic_version(conn) == _HEAD
         # 表仍存在不重复创建
         tables = _list_tables(conn)
         assert len(tables) == 18  # 17 tables + alembic_version
@@ -191,12 +197,12 @@ def test_migration_upgrade_idempotent(tmp_db: Path) -> None:
 
 
 def test_schema_version_consistent_after_upgrade(tmp_db: Path) -> None:
-    """upgrade head 后 Schema 版本一致——alembic_version=004 + 全部表与索引。"""
+    """upgrade head 后 Schema 版本一致——alembic_version=008 + 全部表与索引。"""
     cfg = _make_alembic_config(tmp_db)
     command.upgrade(cfg, "head")
 
     with sqlite3.connect(str(tmp_db)) as conn:
-        assert _alembic_version(conn) == "007_assignments_and_person_samples"
+        assert _alembic_version(conn) == _HEAD
         tables = _list_tables(conn)
         assert set(_ALL_TABLES).issubset(set(tables))
         indexes = _list_indexes(conn)
@@ -245,7 +251,7 @@ def test_initialize_schema_uses_alembic_not_raw_sql(tmp_db: Path) -> None:
 
     provider = SQLiteConnectionProvider(tmp_db)
     # initialize_schema() 应通过 Alembic migration 创建表——不持 raw SQL DDL
-    # 验：调用后表存在（migration 执行了），且 alembic_version 表记录 004
+    # 验：调用后表存在（migration 执行了），且 alembic_version 表记录 head
     provider.initialize_schema()
 
     with sqlite3.connect(str(tmp_db)) as conn:
@@ -253,7 +259,74 @@ def test_initialize_schema_uses_alembic_not_raw_sql(tmp_db: Path) -> None:
         assert "alembic_version" in tables, (
             "initialize_schema() should trigger Alembic migration (alembic_version table exists)"
         )
-        assert _alembic_version(conn) == "007_assignments_and_person_samples"
+        assert _alembic_version(conn) == _HEAD
         # 全部业务表全在（migration 真接管 DDL）
         for table in _ALL_TABLES:
             assert table in tables, f"initialize_schema() via Alembic should create table '{table}'"
+
+
+# ── 008：BLK-1 身份列 / BLK-5 可空 confidence ────────────────────────────────
+
+
+def _columns(conn, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def test_008_adds_archive_person_id_and_nullable_confidence(tmp_db: Path) -> None:
+    """008 为 archive_records 增稳定身份列，并放宽 recognition_results.confidence。"""
+    cfg = _make_alembic_config(tmp_db)
+    command.upgrade(cfg, "head")
+
+    with sqlite3.connect(str(tmp_db)) as conn:
+        assert "person_id" in _columns(conn, "archive_records")
+        assert "person_id" in _columns(conn, "recognition_results")
+        # confidence 必须可空（NOT NULL 会拒绝"无相似度证据"行）。
+        notnull = {
+            row[1]: row[3] for row in conn.execute("PRAGMA table_info(recognition_results)")
+        }
+        assert notnull["confidence"] == 0
+        assert "idx_archive_records_person_id" in _list_indexes(conn)
+
+
+def test_008_backfills_archive_person_id_by_unique_name(tmp_db: Path) -> None:
+    """008 升级存量数据：姓名唯一命中时回填 person_id；重名保持 NULL。
+
+    重名回填会把 A 的归档记到 B 头上，故必须留空并回退姓名匹配。
+    """
+    cfg = _make_alembic_config(tmp_db)
+    command.upgrade(cfg, "007_assignments_and_person_samples")
+
+    now = datetime.now().isoformat()
+    unique_id, duplicated_name = str(uuid4()), "同名人员"
+    with sqlite3.connect(str(tmp_db)) as conn:
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("INSERT INTO people (id, name, created_at) VALUES (?,?,?)",
+                     (unique_id, "唯一人员", now))
+        conn.execute("INSERT INTO people (id, name, created_at) VALUES (?,?,?)",
+                     (str(uuid4()), duplicated_name, now))
+        conn.execute("INSERT INTO people (id, name, created_at) VALUES (?,?,?)",
+                     (str(uuid4()), duplicated_name, now))
+        photo_unique, photo_dup = str(uuid4()), str(uuid4())
+        for pid in (photo_unique, photo_dup):
+            conn.execute(
+                "INSERT INTO photos (id, raw_path, path_base, original_name, created_at)"
+                " VALUES (?,?,'absolute','x.jpg',?)",
+                (pid, f"/tmp/{pid}.jpg", now),
+            )
+        for pid, name in ((photo_unique, "唯一人员"), (photo_dup, duplicated_name)):
+            conn.execute(
+                "INSERT INTO archive_records (id, photo_id, target_archive_root,"
+                " target_person_name, target_event_or_date, target_original_name,"
+                " status, archived_at) VALUES (?,?,?,?,?,?,'archived',?)",
+                (str(uuid4()), pid, "/a", name, "2024-05-01", "x.jpg", now),
+            )
+        conn.commit()
+
+    command.upgrade(cfg, "head")
+
+    with sqlite3.connect(str(tmp_db)) as conn:
+        rows = dict(conn.execute(
+            "SELECT photo_id, person_id FROM archive_records",
+        ).fetchall())
+        assert rows[photo_unique] == unique_id, "唯一姓名应回填身份"
+        assert rows[photo_dup] is None, "重名行必须留空（不猜身份）"

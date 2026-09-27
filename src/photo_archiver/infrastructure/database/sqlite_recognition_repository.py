@@ -195,6 +195,10 @@ class SQLiteRecognitionRepository(RecognitionRepository):
           person_id NULL 即人员已删）、且没有成功态归档记录（ARCHIVED /
           SKIPPED / RENAMED / OVERWRITTEN；FAILED/PLANNED/DRY_RUN 不拦重试，
           与 find_by_photo / planner 的 review M-2 语义一致）。
+          Stage 4 BLK-1：成功态归档去重与 planner 一样**按 person_id 稳定身份**
+          判定（``a.person_id = r.person_id``），``a.person_id IS NULL`` 的存量行
+          回退按姓名匹配——与 ``has_successful_for_person`` 保持同一口径，
+          否则计数会与实际可归档项脱节。
         """
         with self._connection_provider.connect() as connection:
             row = connection.execute(
@@ -226,8 +230,12 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                               AND NOT EXISTS (
                                   SELECT 1 FROM archive_records a
                                   WHERE a.photo_id = r.photo_id
-                                    AND a.target_person_name = person.name
                                     AND a.status IN ('archived', 'skipped', 'renamed', 'overwritten')
+                                    AND (
+                                        a.person_id = r.person_id
+                                        OR (a.person_id IS NULL
+                                            AND a.target_person_name = person.name)
+                                    )
                               )
                         )
                     ) AS archivable_count
@@ -287,18 +295,38 @@ class SQLiteRecognitionRepository(RecognitionRepository):
             )
             return cursor.rowcount
 
-    def update_status(self, result_id: UUID, status: MatchStatus) -> int:
+    def update_status(
+        self,
+        result_id: UUID,
+        status: MatchStatus,
+        person_id: UUID | None = None,
+    ) -> int:
         """Transition a recognition result's review status.
+
+        ``person_id`` (Stage 4 D-1) is written **alongside** the status when
+        supplied, so a manual approval can also record the decided identity —
+        otherwise the approved row keeps ``person_id IS NULL`` and the archive
+        planner (``WHERE person_id = ? AND status = 'approved'``) can never
+        consume it. ``None`` leaves the column untouched (reject path).
 
         Returns:
             The number of rows affected (1 on hit, 0 when the result id is
             missing). A 0 signals concurrent deletion rather than silent success.
         """
         with self._connection_provider.connect() as connection:
-            cursor = connection.execute(
-                "UPDATE recognition_results SET status = ? WHERE id = ?",
-                (status.value, str(result_id)),
-            )
+            if person_id is None:
+                cursor = connection.execute(
+                    "UPDATE recognition_results SET status = ? WHERE id = ?",
+                    (status.value, str(result_id)),
+                )
+            else:
+                # COALESCE-free: an explicit human decision always wins over a
+                # stale automated attribution on the same pending row.
+                cursor = connection.execute(
+                    "UPDATE recognition_results SET status = ?, person_id = ? "
+                    "WHERE id = ?",
+                    (status.value, str(person_id), str(result_id)),
+                )
             return cursor.rowcount
 
     @staticmethod

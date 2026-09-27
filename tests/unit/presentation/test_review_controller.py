@@ -26,20 +26,24 @@ class _FakeReviewUseCase:
 
     def __init__(self) -> None:
         self.approve_calls: list = []
+        self.approve_identity_calls: list = []
         self.reject_calls: list = []
         self.bulk_approve_calls: list = []
+        self.bulk_approve_identity_calls: list = []
         self.bulk_reject_calls: list = []
 
-    def approve(self, result_id):
+    def approve(self, result_id, person_id=None):
         self.approve_calls.append(result_id)
+        self.approve_identity_calls.append(person_id)
         return None
 
     def reject(self, result_id):
         self.reject_calls.append(result_id)
         return None
 
-    def bulk_approve(self, result_ids):
+    def bulk_approve(self, result_ids, person_id=None):
         self.bulk_approve_calls.append(result_ids)
+        self.bulk_approve_identity_calls.append(person_id)
         return len(result_ids)
 
     def bulk_reject(self, result_ids):

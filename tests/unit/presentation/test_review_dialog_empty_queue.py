@@ -50,7 +50,13 @@ def test_selection_and_queue_transition_to_empty_stays_open(qtbot, button_name, 
     controller = Mock()
     controller.list_pending.side_effect = lambda: list(pending)
     controller.resolve_row_labels.return_value = ("portrait.jpg", "Alice")
-    getattr(controller, method).side_effect = lambda ids: pending.clear()
+    # Stage 4 D-1: bulk_approve now takes the human-decided identity as a
+    # second positional argument (None when the picker is left unresolved);
+    # bulk_reject is unchanged — rejecting needs no identity.
+    expected_identity = (None,) if method == "bulk_approve" else ()
+    getattr(controller, method).side_effect = (
+        lambda ids, person_id=None: pending.clear()
+    )
     dialog = ReviewDialog(controller)
     qtbot.addWidget(dialog)
     dialog.show()
@@ -68,7 +74,9 @@ def test_selection_and_queue_transition_to_empty_stays_open(qtbot, button_name, 
     assert not dialog._reject_selected.isEnabled()
     dialog._list.item(0).setSelected(True)
     qtbot.mouseClick(getattr(dialog, button_name), Qt.MouseButton.LeftButton)
-    getattr(controller, method).assert_called_once_with((result.id,))
+    getattr(controller, method).assert_called_once_with(
+        (result.id,), *expected_identity,
+    )
     accepted.assert_not_called()
     assert dialog.isVisible()
     assert dialog._status.text() == REVIEW_EMPTY

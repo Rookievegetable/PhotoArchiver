@@ -56,6 +56,17 @@ from photo_archiver.domain.repositories.cluster_assignment_repository import (
 from photo_archiver.domain.repositories.recognition_repository import RecognitionRepository
 
 
+def clamp_unit(score: float) -> float:
+    """Clamp a similarity score into the ``[0.0, 1.0]`` recognition band.
+
+    ``RecognitionResult.confidence`` stores *similarity evidence*; cosine may
+    land slightly outside the unit range, so it is clamped. Callers pass
+    ``None`` through untouched to mean "no similarity evidence" (Stage 4
+    BLK-5) rather than fabricating a ``0.0``.
+    """
+    return max(0.0, min(1.0, score))
+
+
 @dataclass(frozen=True, slots=True)
 class PairingOperationResult:
     """Outcome of one workbench operation（追溯用）。"""
@@ -302,9 +313,14 @@ class PairingWorkbenchService:
 
         # D3 兼容适配（E-SG-6）：同一 (person, photo) 至多一条当前有效
         # APPROVED 归属；不同 person 的同照片归属互不覆盖（E-P1-1）。
+        # Stage 4 BLK-5：confidence 表达"相似度证据"。按位置配对
+        # （ordered_suggestion）与人工指派（manual）没有余弦证据 ->
+        # 写 NULL（无证据），**不是 0.0**；样本匹配（sample_match）写真实余弦。
         compat_written = 0
         seen_photos: set[UUID] = set()
-        confidence = max(0.0, min(1.0, assignment.score or 0.0))
+        confidence = (
+            clamp_unit(assignment.score) if assignment.score is not None else None
+        )
         for observation in member_observations:
             if observation.photo_id in seen_photos:
                 continue

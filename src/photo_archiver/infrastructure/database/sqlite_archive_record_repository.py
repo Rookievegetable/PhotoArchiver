@@ -40,14 +40,15 @@ class SQLiteArchiveRecordRepository(ArchiveRecordRepository):
             connection.execute(
                 """
                 INSERT INTO archive_records (
-                    id, photo_id,
+                    id, photo_id, person_id,
                     target_archive_root, target_person_name,
                     target_event_or_date, target_original_name,
                     status, archived_at, error
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     photo_id = excluded.photo_id,
+                    person_id = excluded.person_id,
                     target_archive_root = excluded.target_archive_root,
                     target_person_name = excluded.target_person_name,
                     target_event_or_date = excluded.target_event_or_date,
@@ -59,6 +60,7 @@ class SQLiteArchiveRecordRepository(ArchiveRecordRepository):
                 (
                     str(record.id),
                     str(record.photo_id),
+                    str(record.person_id) if record.person_id is not None else None,
                     record.target_archive_root,
                     record.target_person_name,
                     record.target_event_or_date,
@@ -102,17 +104,36 @@ class SQLiteArchiveRecordRepository(ArchiveRecordRepository):
             ).fetchone()
         return archive_record_from_row(row) if row is not None else None
 
-    def has_successful_for_person(self, photo_id: UUID, person_name: str) -> bool:
-        """Stage E（E-SG-6）：按 (person, photo) 检查成功态归档记录。"""
+    def has_successful_for_person(
+        self,
+        photo_id: UUID,
+        person_id: UUID | None,
+        person_name: str,
+    ) -> bool:
+        """Stage E（E-SG-6）：按 (person, photo) 检查成功态归档记录.
+
+        Stage 4 BLK-1：优先按 ``person_id`` 匹配（稳定身份）。``person_id IS
+        NULL`` 的存量行回退到 ``target_person_name``——保证重名无法回填的行
+        仍沿用升级前的去重行为，不会因为新增身份列而漏判。
+        """
         with self._connection_provider.connect() as connection:
             row = connection.execute(
                 """
                 SELECT 1 FROM archive_records
-                WHERE photo_id = ? AND target_person_name = ?
+                WHERE photo_id = ?
                     AND status IN ('archived', 'skipped', 'renamed', 'overwritten')
+                    AND (
+                        (? IS NOT NULL AND person_id = ?)
+                        OR (person_id IS NULL AND target_person_name = ?)
+                    )
                 LIMIT 1
                 """,
-                (str(photo_id), person_name),
+                (
+                    str(photo_id),
+                    str(person_id) if person_id is not None else None,
+                    str(person_id) if person_id is not None else None,
+                    person_name,
+                ),
             ).fetchone()
         return row is not None
 

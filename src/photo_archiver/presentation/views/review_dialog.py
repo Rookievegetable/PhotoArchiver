@@ -39,6 +39,7 @@ from uuid import UUID
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -64,9 +65,14 @@ from photo_archiver.presentation.ui_text import (
     REVIEW_CONFIDENCE_HIGH,
     REVIEW_CONFIDENCE_LOW,
     REVIEW_CONFIDENCE_MEDIUM,
+    REVIEW_CONFIDENCE_NO_EVIDENCE,
     REVIEW_CONFIDENCE_VERY_HIGH,
     REVIEW_DIALOG_TITLE,
     REVIEW_EMPTY,
+    REVIEW_IDENTITY_HINT,
+    REVIEW_IDENTITY_LABEL,
+    REVIEW_IDENTITY_UNRESOLVED,
+    REVIEW_NO_IDENTITY_WARNING,
     REVIEW_REJECT_SELECTED,
     REVIEW_REJECT_SELECTED_COUNTED,
     REVIEW_ROW_DETAIL_FORMAT,
@@ -87,8 +93,15 @@ _CONFIDENCE_HIGH_FLOOR = 0.75
 _CONFIDENCE_MEDIUM_FLOOR = 0.60
 
 
-def confidence_band(confidence: float) -> str:
-    """Return the textual band for a match confidence (Batch 5 wording only)."""
+def confidence_band(confidence: float | None) -> str:
+    """Return the textual band for a match confidence (Batch 5 wording only).
+
+    Stage 4 BLK-5: ``None`` means "no similarity evidence" (positional pairing
+    or manual assignment) and is stated as such — it must never be rendered as
+    a numeric ``0.00``, which would claim a measured similarity of zero.
+    """
+    if confidence is None:
+        return REVIEW_CONFIDENCE_NO_EVIDENCE
     if confidence >= _CONFIDENCE_VERY_HIGH_FLOOR:
         return REVIEW_CONFIDENCE_VERY_HIGH
     if confidence >= _CONFIDENCE_HIGH_FLOOR:
@@ -146,6 +159,21 @@ class ReviewDialog(QDialog):
         self._approve_all = QPushButton(REVIEW_APPROVE_ALL, self)
         self._approve_all.clicked.connect(self._on_approve_all)
 
+        # Stage 4 D-1：新识别链路的兼容行 person_id 恒 NULL，仅靠「通过」不会
+        # 写入身份，批准结果永远进不了归档。这里给审核人一个显式身份选择器，
+        # 让"人工最终结果"能真正落到 person_id 上。
+        self._identity_combo = QComboBox(self)
+        self._identity_combo.addItem(REVIEW_IDENTITY_UNRESOLVED, None)
+        for person_id, name in self._available_persons():
+            self._identity_combo.addItem(name, person_id)
+        self._identity_label = QLabel(REVIEW_IDENTITY_LABEL, self)
+        self._identity_hint = QLabel(REVIEW_IDENTITY_HINT, self)
+        self._identity_hint.setWordWrap(True)
+
+        identity_row = QHBoxLayout()
+        identity_row.addWidget(self._identity_label)
+        identity_row.addWidget(self._identity_combo, 1)
+
         button_row = QHBoxLayout()
         button_row.addWidget(self._approve_selected)
         button_row.addWidget(self._reject_selected)
@@ -160,6 +188,8 @@ class ReviewDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(self._status)  # 待审核总数常驻列表顶部（Batch 5）
         layout.addWidget(self._list, 1)
+        layout.addLayout(identity_row)
+        layout.addWidget(self._identity_hint)
         layout.addLayout(button_row)
         layout.addWidget(close_buttons)
 
@@ -217,8 +247,12 @@ class ReviewDialog(QDialog):
         parentheses for audit, and the row states its status explicitly.
         """
         photo_label, person_label = self._controller.resolve_row_labels(result)
-        confidence_text = REVIEW_CONFIDENCE_FORMAT.format(
-            band=confidence_band(result.confidence), value=result.confidence,
+        confidence_text = (
+            REVIEW_CONFIDENCE_NO_EVIDENCE
+            if result.confidence is None
+            else REVIEW_CONFIDENCE_FORMAT.format(
+                band=confidence_band(result.confidence), value=result.confidence,
+            )
         )
         item = QListWidgetItem("\n".join((
             REVIEW_ROW_FORMAT.format(
@@ -267,11 +301,50 @@ class ReviewDialog(QDialog):
                 ids.append(value)
         return tuple(ids)
 
+    def _available_persons(self) -> list[tuple[UUID, str]]:
+        """Return picker options, degrading to none when unsupported.
+
+        The controller may be a light test double without the person read-side;
+        an empty picker keeps the queue usable (approving then falls back to the
+        explicit "no identity" warning) instead of failing construction.
+        """
+        lister = getattr(self._controller, "list_persons", None)
+        if lister is None:
+            return []
+        try:
+            return list(lister())
+        except Exception:  # noqa: BLE001 - UI must not fail on a read-side stub
+            return []
+
+    def _selected_identity(self) -> UUID | None:
+        """Return the identity chosen for approval (Stage 4 D-1), if any."""
+        value = self._identity_combo.currentData()
+        return value if isinstance(value, UUID) else None
+
+    def _confirm_without_identity(self) -> bool:
+        """Ask before approving without an identity; True to proceed anyway.
+
+        D-1 says the human decision is final, so we never silently block it —
+        but approving without an identity yields a row the archive planner
+        cannot select, which the user must be told about explicitly.
+        """
+        answer = QMessageBox.question(
+            self,
+            REVIEW_APPROVE_ALL_CONFIRM_TITLE,
+            REVIEW_NO_IDENTITY_WARNING,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
     def _on_approve_selected(self) -> None:
         """Approve each selected pending result; refresh the list afterwards."""
         ids = self._selected_ids()
         if ids:
-            self._controller.bulk_approve(ids)
+            person_id = self._selected_identity()
+            if person_id is None and not self._confirm_without_identity():
+                return
+            self._controller.bulk_approve(ids, person_id)
         self._refresh_list()
 
     def _on_reject_selected(self) -> None:
@@ -303,5 +376,8 @@ class ReviewDialog(QDialog):
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
-        self._controller.bulk_approve(all_ids)
+        person_id = self._selected_identity()
+        if person_id is None and not self._confirm_without_identity():
+            return
+        self._controller.bulk_approve(all_ids, person_id)
         self._refresh_list()

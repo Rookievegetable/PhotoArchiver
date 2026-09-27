@@ -13,16 +13,31 @@ class ReviewRecognitionUseCase:
     bulk, and persist the outcome through the recognition repository.
     """
 
-    def approve(self, result_id: UUID) -> RecognitionResult | None:  # type: ignore[empty-body]
-        """Mark a single pending result as approved."""
+    def approve(
+        self,
+        result_id: UUID,
+        person_id: UUID | None = None,  # type: ignore[empty-body]
+    ) -> RecognitionResult | None:
+        """Mark a single pending result as approved.
+
+        ``person_id`` (Stage 4 D-1) is the human-decided identity written with
+        the approval so the row can actually reach the archive planner.
+        """
         raise NotImplementedError
 
     def reject(self, result_id: UUID) -> RecognitionResult | None:  # type: ignore[empty-body]
         """Mark a single pending result as rejected."""
         raise NotImplementedError
 
-    def bulk_approve(self, result_ids: tuple[UUID, ...]) -> int:  # type: ignore[empty-body]
-        """Approve each pending result in the batch; return how many transitioned."""
+    def bulk_approve(
+        self,
+        result_ids: tuple[UUID, ...],
+        person_id: UUID | None = None,  # type: ignore[empty-body]
+    ) -> int:
+        """Approve each pending result in the batch; return how many transitioned.
+
+        ``person_id`` (Stage 4 D-1) only fills rows that carry no identity yet.
+        """
         raise NotImplementedError
 
     def bulk_reject(self, result_ids: tuple[UUID, ...]) -> int:  # type: ignore[empty-body]

@@ -242,6 +242,17 @@ REVIEW_STATUS_LINE = (
 REVIEW_ROW_FORMAT = "照片={photo_label}　人员={person_label}"
 REVIEW_ROW_DETAIL_FORMAT = "{confidence_text} · 状态：{status}"
 REVIEW_CONFIDENCE_FORMAT = "置信度：{band}（{value:.2f}）"
+# Stage 4 D-1：人工批准时必须能指定身份，否则批准后的行无法进入归档。
+REVIEW_IDENTITY_LABEL = "批准时指定人员"
+REVIEW_IDENTITY_UNRESOLVED = "（未指定）"
+REVIEW_IDENTITY_HINT = (
+    "新识别结果不含身份归属；在此选择人员后「通过」才会写入归属并可进入归档。"
+)
+REVIEW_NO_IDENTITY_WARNING = (
+    "未选择人员：通过后该结果不会进入归档计划（归档只消费带人员归属的已通过记录）。"
+)
+# 无相似度证据（Stage 4 BLK-5）：confidence 落库为 NULL，不是 0.0。
+REVIEW_CONFIDENCE_NO_EVIDENCE = "无相似度证据"
 REVIEW_CONFIDENCE_VERY_HIGH = "很高"
 REVIEW_CONFIDENCE_HIGH = "较高"
 REVIEW_CONFIDENCE_MEDIUM = "中等"

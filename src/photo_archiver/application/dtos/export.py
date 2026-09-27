@@ -48,12 +48,17 @@ class ExportPhotoRow:
 
 @dataclass(frozen=True, slots=True)
 class ExportMatchRow:
-    """One row of recognition/match data for the export."""
+    """One row of recognition/match data for the export.
+
+    ``confidence`` 是 ``float | None``（Stage 4 BLK-5）：``None`` 表示该归属
+    **无相似度证据**（按位置配对或人工指派确认），与「测得 0.0」不同，导出
+    须原样保留该区别，不得统一填 0。
+    """
 
     photo_id: str
     person_id: str
     person_name: str
-    confidence: float
+    confidence: float | None
     status: str  # pending / approved / rejected
 
 

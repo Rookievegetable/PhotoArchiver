@@ -198,12 +198,14 @@ class ArchivePlanner:
 
         # E-SG-6：成功态归档拦截按 (person, photo) 作用域——一个 person 的
         # 成功归档不阻止其他 person 的同照片归属。
+        # Stage 4 BLK-1：按稳定 Person identity 去重，不再按姓名字符串——
+        # 同名不同人互不抑制，改名后也不会重复归档。
         if self._archive_record_repository.has_successful_for_person(
-            photo_id, person_name,
+            photo_id, person_id, person_name,
         ):
             logger.debug(
-                "Archive plan: photo {} already archived for person {}, skipping",
-                photo_id, person_name,
+                "Archive plan: photo {} already archived for person {} ({}), skipping",
+                photo_id, person_name, person_id,
             )
             return None
 

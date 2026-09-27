@@ -337,4 +337,7 @@ class ArchiveExecutor:
             target_event_or_date=target.event_or_date,
             target_original_name=target.original_name,
             status=ArchiveStatus.PLANNED,
+            # Stage 4 BLK-1：落盘稳定 Person identity，使成功态去重不再
+            # 依赖姓名字符串（同名不同人互不抑制、改名后不重复归档）。
+            person_id=item.person_id,
         )

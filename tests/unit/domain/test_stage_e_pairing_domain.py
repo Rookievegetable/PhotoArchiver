@@ -105,6 +105,15 @@ def _scenario(vectors, clusters, persons, samples, **kwargs):
     return suggest_pairings(clusters, persons, samples, lookup, **kwargs)
 
 
+def _unit_vector(cosine_to_x_axis: float):
+    """Unit 2-D vector whose cosine with the x-axis equals the argument.
+
+    D-2 boundary tests need exact, reproducible similarity values instead of
+    angle-derived cosines (which only approximate the threshold).
+    """
+    return (cosine_to_x_axis, math.sqrt(1.0 - cosine_to_x_axis ** 2))
+
+
 def test_sample_match_generates_suggested_with_score():
     """规则①：已确认样本高置信（≥0.40）→ sample_match 建议。"""
     cluster_id, person_id = uuid4(), uuid4()
@@ -124,6 +133,56 @@ def test_sample_match_generates_suggested_with_score():
     assert outcomes[0].source == "sample_match"
     # 最大余弦 = max(cos(0°-3°), cos(5°-3°)) = cos2°。
     assert outcomes[0].score == pytest.approx(math.cos(math.radians(2.0)), abs=1e-5)
+
+
+# ── D-2：样本匹配阈值边界统一为 score >= 0.40 ────────────────────────────────
+
+
+def test_score_exactly_at_threshold_matches():
+    """D-2：score **恰等于**阈值 0.40 时命中（``>=`` 而非 ``>``）。"""
+    cluster_id, person_id = uuid4(), uuid4()
+    # 成员向量在 x 轴，样本向量与之夹角使余弦精确为 0.40。
+    vectors = [(1.0, 0.0), _unit_vector(0.40)]
+    outcomes = _scenario(
+        vectors,
+        [PairingCluster(cluster_id, "k|a|000000", (0,))],
+        [PairingPerson(person_id, 1)],
+        [person_id],
+        sample_match_threshold=0.40,
+    )
+    assert len(outcomes) == 1
+    assert outcomes[0].source == "sample_match"
+    assert outcomes[0].score == pytest.approx(0.40, abs=1e-6)
+
+
+def test_score_just_below_threshold_does_not_match():
+    """D-2：score 略低于阈值（0.39）不触发 sample_match。"""
+    cluster_id, person_id = uuid4(), uuid4()
+    vectors = [(1.0, 0.0), _unit_vector(0.39)]
+    outcomes = _scenario(
+        vectors,
+        [PairingCluster(cluster_id, "k|a|000000", (0,))],
+        [PairingPerson(person_id, 1)],
+        [person_id],
+        sample_match_threshold=0.40,
+    )
+    assert all(o.source != "sample_match" for o in outcomes)
+
+
+def test_score_just_above_threshold_matches():
+    """D-2：score 略高于阈值（0.41）命中。"""
+    cluster_id, person_id = uuid4(), uuid4()
+    vectors = [(1.0, 0.0), _unit_vector(0.41)]
+    outcomes = _scenario(
+        vectors,
+        [PairingCluster(cluster_id, "k|a|000000", (0,))],
+        [PairingPerson(person_id, 1)],
+        [person_id],
+        sample_match_threshold=0.40,
+    )
+    assert len(outcomes) == 1
+    assert outcomes[0].source == "sample_match"
+    assert outcomes[0].score == pytest.approx(0.41, abs=1e-6)
 
 
 def test_below_sample_threshold_falls_back_to_ordered():
