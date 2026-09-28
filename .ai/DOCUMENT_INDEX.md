@@ -6,7 +6,7 @@
 >
 > 任何 AI 在 30 秒内读完本文即可理解整个文档体系结构。
 >
-> Version: 1.3.1 ｜ Status: Stable ｜ Last Updated: 2026-07-26
+> Version: 1.4.0 ｜ Status: Stable ｜ Last Updated: 2026-09-28
 
 ---
 
@@ -73,6 +73,22 @@ flowchart TD
 | 文档 | 职责 | 类型 |
 |---|---|---|
 | `.ai/business/roadmap.md` | 15 步开发路线图与每步交付清单 | SSOT — 路线图 |
+| `docs/business-baseline/`（v1.4.0 新增登记） | **业务基线（现行/历史/冻结）**：Stage1_BusinessFacts / Stage2_BusinessRules / Stage3_BusinessDiagrams（三者现行有效，基线 `2823d1c`）+ Stage1/2_Handoff（历史交接）+ Stage4_FinalAudit / Stage4_1_FinalReview（冻结审查演进链）+ Stage4_2_FinalFreezeReview（当前冻结复审，8 项条件满足，**待 owner 签核**）；来源/基准/有效性表见该目录 README | SSOT — 业务基线（AUD-003 整改入库，2026-09-28） |
+| `docs/decisions/AUD-017-person-embeddings-decision.md`（新增） | person_embeddings 零写入者问题的 Owner 决策材料（现状/数据链/三方案对比；Decision Required） | 决策材料（待裁决） |
+| `docs/development/people-import-face-clustering-development-plan.md` | 人员导入与人脸分组匹配重设计——业务方案（阶段 A–F 目标/规则/裁决引用） | 计划文档（实施已完成，保留为需求出处） |
+| `docs/development/people-import-face-clustering-execution-plan.md` | 同上——工程执行计划（阶段拆分/交付物/验收标准） | 计划文档（同上） |
+| `docs/development/stage-f-calibration-report.md` | Stage F 真实数据校准报告（473 照片分布证据；**match_threshold 证据缺口 = 体检 F1-2，待 AUD-017 裁决后补**） | 证据文档 |
+| `docs/development/evidence/` | 阶段证据 JSON（stage-f-real-run / lifecycle-stress / upgrade-real 等；部分文件工作树未入库） | 证据目录 |
+
+### 2.3.1 体检与历史报告（`docs/health-check/`、`docs/roadmap/`）
+
+| 文档 | 职责 | 类型/状态 |
+|---|---|---|
+| `docs/health-check/`（AUDIT_BASELINE、九份分项报告、FINAL_HEALTH_CHECK、FINDINGS_LEDGER、evidence/） | 2026-09-28 全面工程健康体检（Stage 0–9，判 ATTENTION）与 Stage 10 治理恢复产物——**当前 Findings 唯一台账** | 审计产物（**工作树未入库**；入库后本索引更新） |
+| `docs/health-check/PROJECT_HEALTH_CHECK.md`、`PROJECT_HEALTH_CHECK_2026-09-10.md` | 历史体检报告（2026-09-02 / 2026-09-10 两轮） | 历史快照（结论已被后续轮次与 2026-09-28 体检取代） |
+| `docs/roadmap/DEVELOPMENT_ROADMAP.md` | 基于 2026-09-02 体检的后续开发计划 | **历史快照**（其"Current State"为 09-02 时点，此后状态全部演进；现行状态以 `.ai/PROJECT_STATUS.md` 为准） |
+| `docs/roadmap/NEXT_PHASE_FEATURE_DEVELOPMENT_PLAN.md` | 基于 2026-09-02 基线的下一阶段功能规划（Phase 9 P0 已实施） | **历史快照**（其缺口表部分行已被后续实现覆盖，如照片删除；现行状态以 `.ai/PROJECT_STATUS.md` 为准） |
+| `docs/development/PHASE_9_FILTER_COMPLETENESS_REPORT.md` | Phase 9 筛选完整性实施报告 | 历史报告 |
 
 ### 2.4 人类开发者文档（`docs/` + 根）
 
@@ -91,6 +107,7 @@ flowchart TD
 | `docs/development/phase4-adr-draft.md` | 阶段 4 技术债轮前置门草案（兼容路径移除轮次 / search_photos N+1 批量查询方案与实测基线 / export 写能力与审批门裁决点；已拍板定稿，ADR-029/030 登记） | 设计文档 |
 | `docs/development/phase5-adr-draft.md` | 阶段 5 打包策略前置门草案（运行形态定位 A/B / ISSUE-018 终态 / Release 页标注；已拍板定稿，ADR-031 登记） | 设计文档 |
 | `docs/user-guide/installation.md` | 最终用户：安装、首次配置（`.env` 关键项）、模型包下载与启动（GUI / CLI 对照） | 用户文档 |
+| `docs/user-guide/manual.md` | 最终用户：安装版端到端操作手册（覆盖至阶段 A/B；**阶段 C–F 功能章节待补**——体检 AUD-001 族） | 用户文档 |
 | `docs/user-guide/workflow.md` | 最终用户：导入→扫描→审核→归档六环节闭环操作、附加能力与命令行对照表 | 用户文档 |
 | `docs/user-guide/faq.md` | 最终用户：识别 / 归档 / 数据备份 / 平台支持等常见问题解答 | 用户文档 |
 | `CHANGELOG.md` | 用户可见的版本变更记录（Keep a Changelog 格式；git log 是提交级历史的 SSOT，本文件是其上层摘要） | 变更日志 |
@@ -130,6 +147,9 @@ flowchart TD
 | Review Checklist 总表 | `.ai/rules/review-rules.md` §22 |
 | 文档一致性审计方法论 | `.ai/rules/audit-methodology.md` |
 | 15 步路线图 | `.ai/business/roadmap.md` |
+| 业务基线（业务事实/规则/流程图/冻结结论） | `docs/business-baseline/`（现行 = Stage1+2+3；冻结 = Stage4_2，待 owner 签核） |
+| 当前体检发现台账 | `docs/health-check/FINDINGS_LEDGER.md`（工作树；现行 OPEN 发现另登记于 `.ai/KNOWN_ISSUES.md` 体检登记节） |
+| Owner 待决业务材料 | `docs/decisions/AUD-017-person-embeddings-decision.md` |
 | 配置项详解 | `docs/development/configuration.md` |
 | 目录结构详解 | `docs/deployment/project-structure.md` |
 | 架构详解 | `docs/architecture/overview.md` |

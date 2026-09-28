@@ -208,7 +208,7 @@ def export(
 **理由**：
 
 - **门面原则**——插件绕过编排直触仓储会破 UnitOfWork 边界
-- **业务不变量**——Application 编排守的业务规则（如 ArchivePlanner 的 1:N Top-1 策略、SearchPhotosService 的 SQL 下推契约）插件直触仓储会绕过
+- **业务不变量**——Application 编排守的业务规则（如 ArchivePlanner 的 (person, photo) 归档去重语义（E-SG-6）、SearchPhotosService 的 SQL 下推契约）插件直触仓储会绕过
 - **审计盲点**——host 无法经 Service log 观测插件对仓储的操作
 
 ### 3.2 禁止：UnitOfWork

@@ -93,9 +93,12 @@ class ArchivePlanner:
             - person_ids=(pid,..) + photo_ids=(pid2,..) → 仅此 persons 的
               APPROVED 集合过滤到此 photo_ids（最窄集）
 
-        Each photo is planned at most once even if multiple persons were
-        matched historically — we archive under the first APPROVED match's
-        person name, mirroring the 1:N Top-1 strategy fixed in裁决 #5.
+        归档去重作用域为 (person, photo)（E-SG-6，2026-09-25 owner 裁决）：
+        同一照片可同时归属多个 Person（Stage E 多 attribution），各自进入
+        自己的归档计划；同一 (person, photo) 对在一次规划内至多产生一个计划
+        项。历史上"每照片只规划一次、落在第一个 APPROVED 匹配"的 1:N Top-1
+        语义已被 E-SG-6 取代（成功态归档记录亦按 (person, photo) 判定，
+        见 has_successful_for_person，BLK-1 后按稳定 person_id）。
         """
         target_person_ids = self._resolve_target_persons(person_ids)
         # B3 批量归档：photo_ids 非空时把它转成 set 做 O(1) 过滤；空表走原路径。

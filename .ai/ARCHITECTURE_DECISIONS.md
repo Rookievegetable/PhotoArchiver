@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.2.0 ｜ Status: Stable ｜ Last Updated: 2026-09-06
+> Version: 1.3.0 ｜ Status: Stable ｜ Last Updated: 2026-09-28
 
 ---
 
@@ -435,6 +435,51 @@
 | 理由 | D-3 排除矩阵终态：崩溃与枚举 API（3 种实现）、PySide6 版本（6.8.3/6.11.1）、线程类型（QThreadPool/Python）均无关，唯一共同必要条件 = **后台线程做 macOS 文件系统调用 + 主线程事件循环并发**（故障在 Python 帧之下原生层，见 run #80/#88/#91 三份 faulthandler 栈）。把枚举搬回主线程使该并发组合在扫描路径上不复存在。枚举成本实测 0.140s/2000 文件（主线程一次性，配状态提示可接受）。 |
 | 影响范围 | `application/services/scan_and_register_photos_service.py`（`enumerate_files` 新用例方法 + execute 预枚举分支 + `_scan_and_register` resolve 开关）、`application/use_cases/scan_and_register_photos.py`（协议扩 enumerate_files）、`application/commands/scan_and_register_photos.py`（pre_enumerated_items 字段）、`presentation/controllers/scan_controller.py`（主线程前置）、`tests/`（服务/控制器/AST 守卫）、user-guide 已知问题节。不变：任务层契约（事件/取消/单飞）、CLI 行为、其他任务的线程模型。 |
 | 残余风险 | worker 仍执行文件内容读取（PIL/哈希）——macOS CI 数百次运行从未在该面崩溃（崩溃仅现于枚举/realpath 系统调用）。大库枚举的主线程冻结 ≈ 70µs/文件（10 万文件 ≈ 7s），阈值已文档化，超出时分块枚举另行立项。 |
+
+### ADR-042 — Stage C 识别入口切换为可追溯运行（多脸观测 + 重跑 + 兼容双写）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 立项阶段 C；2026-09-25 实施，提交 `73657ec`/`7ec3173`/`a9f15b3`） |
+| 决策 | 新增可追溯识别数据链：`recognition_runs`/`recognition_run_photos`/`recognition_run_scopes`/`face_observations`（migration `004`）+ `error_count`（`005`）；`RunRecognitionService` 逐脸写观测并按旧逻辑产出一条 PENDING `RecognitionResult` 兼容行（单脸 Top-1 语义不变，审核/归档/导出/就绪全绿）；UI 识别入口切换为 `RecognitionScopeDialog`（范围 all/selected + 脸数档位 + 仅重试失败照片），经 `RecognitionRunController`→`RunRecognitionTask` 提交；**重跑 = 新建 run**（历史保留，不覆盖人工决定）；AST 守卫测试禁止旧 `MatchPersonsController` UI 路径回接。 |
+| 理由 | 阶段 C 目标"多脸检测与可重跑"要求逐脸证据可追溯；兼容双写使冻结期内既有消费方零改动（后续 E-SG 系列裁决的前提）。 |
+| 影响范围 | `application/services/run_recognition_service.py`、`face_analysis_task.py`、`presentation/controllers/recognition_run_controller.py`、`views/recognition_scope_dialog.py`、`alembic/versions/004/005`、AST 守卫 `test_recognition_entry_migration.py`、生命周期回归 `test_stage_f_lifecycle.py`。 |
+
+### ADR-043 — Stage D 聚类两段式算法与 inclusive 合并门限（≥0.4 含等号）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 裁决：两段式算法 + 合并门限 ≥0.4；2026-09-25 实施 `5c3c6d2`，偏差修复 `8d4c342`） |
+| 决策 | 两段式聚类：①贪心候选——观测向量按量化簇心余弦 **≥0.5** 归入候选；②complete-linkage 合并——簇间 min-pairwise 余弦 **≥0.4（含等号）** 即合并（实现初版 `>0.4` 为偏差，owner 裁决与规格 §D-2 均为 ≥，经 runtime 证明 cos=0.4 量化后误分 2 簇；修复为"扫描取严格 `>` 最大值自 -inf 起、扫描后以 `>=` 判门限"，三点边界测试钉死：0.4 合并 / 0.5 分离 / 0.400001 合并）。低质量门限默认 0.0（禁用，待 Stage F 校准质量公式）。表 `face_cluster_runs`/`face_clusters`/`face_cluster_members`（migration `006`）；重跑 = 新一代 cluster run，历史保留；输入默认 `in_selected_scope` 观测。 |
+| 理由 | 两段式在贪心效率与 complete-linkage 簇质量间取平衡；inclusive 边界是 owner 明示裁决；量化（6 位小数）吸收 BLAS 末位抖动保证跨平台确定性。 |
+| 影响范围 | `domain/services/face_clustering.py`、`application/services/cluster_faces_service.py`、`infrastructure/cosine_kernel.py`、`alembic/versions/006`、`tests/unit/domain/test_face_clustering_algorithm.py`、D-4 UI（人员页聚类区 + `cluster_results_dialog.py`）。 |
+
+### ADR-044 — Stage E 配对确认与 (person, photo) 兼容语义（E-SG-5 / E-SG-6）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 裁决 E-SG-6/E-SG-5；2026-09-25 实施 `ee5d7d4`，整改 `f6e70b0`） |
+| 决策 | ①**E-SG-6**：兼容层与归档去重作用域 = **(person, photo)**——同一照片可同时归属多个 Person（各自持有一条 APPROVED 兼容行；`recognition_results` 无 UNIQUE(photo_id)，多行合法）；改派/解除（unassign/reassign）回撤旧人兼容投影（`remove_results_for_person_photos`）并 disable 其样本（`enabled=0`，历史保留）。②**E-SG-5**：改派后旧人样本停用，不参与后续建议。③建议顺序：sample-match（该人 enabled 样本 max cosine **≥0.40**，排除 rejected 对）优先，其次 sort_key × roster_order 一对一顺序建议；**建议永不自动写归属**，确认才生效。④样本沉淀：确认时整簇成员观测写入 `person_face_embeddings`（`UNIQUE(person_id, observation_id)` 幂等）。 |
+| 理由 | 审计实证 E-P1-1（第二确认的归属在兼容层丢失 → 该照片永不按第二人归档）与 E-P1-2（改派后兼容层残留旧身份 → 归档错人）；旧"每照片一条 APPROVED"语义无法表达多归属，owner 按归档业务现实裁决为 (person, photo)。 |
+| 影响范围 | `application/services/pairing_workbench_service.py`、`domain/services/pairing.py`、`sqlite_recognition_repository.py`（`remove_results_for_person_photos`）、`ArchivePlanner`（`seen_person_photo_pairs` + `has_successful_for_person`）、`alembic/versions/007`、`test_stage_e_remediation.py`。 |
+
+### ADR-045 — 归档按稳定身份去重 + 置信度三态 + 人工身份最终化（BLK-1 / BLK-5 / D-1）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（Stage 4 冻结阻断修复 + owner 裁决落地；2026-09-28 `2823d1c`） |
+| 决策 | ①**BLK-1**：`archive_records` 增 `person_id`（migration `008`，FK→people ON DELETE SET NULL + 索引；存量行按"姓名唯一命中"回填，重名保持 NULL 不猜身份）；成功态归档去重优先按稳定 person_id（同名不同人互不抑制、改名后不重复归档），无主存量行回退姓名匹配；`read_workspace_counts` archivable_count 与 planner 同口径。②**BLK-5**：`recognition_results.confidence` 放宽为可空（008 重建表并按 002 重建命名索引）——`None` = 该归属无相似度证据（位置配对/人工指派），数值 = 真实余弦（[0,1] 校验）；禁止把"无证据"写为 0.0；配对确认 sample_match 写真实余弦、ordered_suggestion/manual 写 NULL。③**D-1**：审核批准可同时写入 `person_id`（人工选择/修改/确认的身份即最终结果，使该行真正进入归档计划）；`ReviewDialog` 增身份选择器，未指定身份时显式告警不静默；批量批准的默认身份不覆盖行上已有身份；重跑识别不覆盖人工批准。 |
+| 理由 | 冻结审查三项业务级阻断：同名互抑/改名重复归档（DATA_RELATION_ERROR）、"无证据"被误表达为"相似度为零"、批准后 person_id 恒 NULL 致归档永不选中；migration 008 幂等守护（列存在探测）+ downgrade 先回填 NULL 再恢复 NOT NULL，升级/回滚数据安全。 |
+| 影响范围 | `alembic/versions/008`、`sqlite_archive_record_repository.py`、`sqlite_recognition_repository.py`、`archive_planner.py`/`archive_executor.py`、`domain/entities/recognition.py`、`review_recognition_service.py`、`review_dialog.py`、`test_freeze_blockers.py`（13 项回归）。 |
+
+### ADR-046 — 匹配阈值 D-2：`>= 0.40`（含等号命中）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 裁决 D-2，2026-09-28 随 `2823d1c` 统一；边界经 Stage4.2 真库实测） |
+| 决策 | 人员匹配阈值判定为 `similarity >= 0.40`（**含等号**）：`DEFAULT_MATCH_THRESHOLD = 0.40`（`application/dtos/settings.py`）+ 设置边界校验 + `CosinePersonMatcher` 注入；配对建议 sample-match 规则同口径；全部文档统一 `>=` 表述（历史 `>`/`>=` 口径分裂收口）。 |
+| 理由 | Stage4.2 实测三点边界：0.39 不命中 / 0.40 命中 / 0.41 命中。 |
+| 影响范围 | settings DTO、`ai/similarity_matcher.py`、`domain/services/pairing.py`、文档口径；**附注**：识别侧（自动匹配）阈值边界证据仍须补入 Stage F 校准报告——与 AUD-017 方案选择一并处理（体检 F1-2 证据缺口）。 |
 
 ---
 

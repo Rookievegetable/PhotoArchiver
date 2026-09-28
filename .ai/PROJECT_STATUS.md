@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.34.1 · Last Updated: 2026-09-23 · Status: Live
+> Version: 1.35.0 · Last Updated: 2026-09-28 · Status: Live
 
 ---
 
@@ -20,41 +20,25 @@
 | 12–14 | Main UI、Settings、Export | ✅ Completed |
 | 15 | Plugin System | ✅ Completed |
 
-M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 均已落地。此后进入发布工程与桌面验收驱动的迭代修复（已发布至 v2.8.0）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**（业务方案 `docs/development/people-import-face-clustering-development-plan.md` + 工程执行计划 `...-execution-plan.md`），阶段 A（导入草稿与稳定名单顺序）已实施完成，阶段 B–F 待逐阶段立项。
-
----
+M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 已落地；发布工程至 v2.8.0（2026-09-13）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**：阶段 A（两段式导入，09-21 owner 验收 ✅）→ 阶段 B（人员与分组页，09-23 owner 验收 ✅）→ **阶段 C/D/E/F（2026-09-24 ~ 09-28 全部实施完成并冻结审查）**。**2026-09-28 完成全面工程健康体检（Stage 0–9，判 ATTENTION）与治理基线恢复（Stage 10）**；业务基线冻结正式生效待 owner 签核（Stage4.2 复审 8 项条件已满足，见 `docs/business-baseline/`）。
 
 ## 2. Current Step（当前开发阶段）
 
-**人员名单导入与人脸分组匹配 · 阶段 B 重排性能优化 P0（2026-09-23 实施并探针实测验证，owner 确认任务收口、P1/P2 不做）**——探测驱动（`logs/probe_perf.py`：真实 SQLite + offscreen Qt，50/300/1000 人 × 连续下移 20 次，逐阶段计时）：基线单次点击总耗时 **88/477/2132ms**，热点与此前假设不同——① `reorder_people` 逐 id `find_by_id` 校验（每查开一条新连接，占写库段 ~80%；真正的 N 行 UPDATE+提交仅 ~8ms@300，「只写受影响行」假设被证伪）；② 页面自刷新 + 窗口级联再刷新的**双重整表重建**（`_render_rows` ×2.0/点击）；③ 渲染循环 `list.index` O(N²) 行查找与逐行信号/重绘。修复三箭：**P0-1** 校验改一次 `list_all()` + 集合比对（行为与错误文案零变化）；**P0-2** `people_changed` 信号带 `structure_changed` 分级——纯顺序变化只更新状态栏（页面发射信号前已自刷新），不再重建筛选轴/就绪快照、不再二次 `page.refresh()`；结构变化（增/删/改）级联完整保留，但同样跳过对「已自刷新页面」的第二次刷新；**P0-3** `_render_rows` 以 `setUpdatesEnabled(False)` + `QSignalBlocker` 包裹重建，行位次改 id→位次字典。**同口径复测：50 人 88.9→21.7ms（4.1×）、300 人 476.4→115.6ms（4.1×）、1000 人 1757.4→391.0ms（4.5×）**；④ ×2.0→×1.0/点击、①a ×N→×0、⑥c 消除。回归测试 +5 项。未改 Schema/依赖/CLI/插件契约；保存即时性语义不变（单事务毫秒级，防抖确认为不需要）。**边界**：1000 人档剩余 ~391ms 中 ~261ms 为整表 `setItem`+逐行按钮重建（P1 增量两行交换 / P2 delegate 按钮——**owner 裁决不做**，2026-09-23，见 §6）；探针修正记录——手动 `processEvents()` 不投递 DeferredDelete，`setCellWidget` 替换的旧按钮以可见子控件累积并线性拖慢重绘（探针伪影，真实 `exec()` 事件循环持续投递、应用无此问题），修正后基线由 2132ms 修正为 1757ms。
+**治理基线恢复与 AUD-017 决策准备（Stage 10，2026-09-28）**——全面工程健康体检（同日，Stage 0–9，只读，判 **ATTENTION**：P0×0 / P1×1 / P2×10 / P3×15）后的第一轮整改，严格限定五项：
 
-**人员名单导入与人脸分组匹配 · 阶段 B 桌面复审修复（2026-09-23 实施，待 owner 复验）**——owner 桌面验收 §1–§9 通过并提出四项问题（⑤ 为复审追问后追加），均已修复且各配回归测试：① **校验消息中文化**：`ManagePeopleService` 面向用户的校验文案改为中文（「工号已被其他人员占用：X」「姓名不能为空」「人员不存在」「重排序列表包含重复的人员 / 重排序目标不存在」），域实体保持语言中立、由 Application 层映射已知规则、未知消息原样透传；保存失败/删除失败对话框标题从「新增人员」改为「无法保存名单修改」/「无法删除人员」。② **拖拽重排不再出现空白行**（根因：`InternalMove` 下 Qt 在页面按域重渲染**之后**才执行 `QAbstractItemView::startDrag` 的 `clearOrRemove()`，把源行从视图模型删掉而行内按钮不跟随 → 目标行空白；修复：拖拽模式改 `DragOnly` 并在模式设置**之后**为视图与视口重新开启 `acceptDrops`（`setDragDropMode` 会复位该标志）、`startDrag` 记录源行、自绘 `dragEnter/dragMove` 仅接受本表行载荷（外部/文本载荷与回看态禁拖拽时一律拒绝）、落点显式降级为 `CopyAction`（表拖拽动作集为 Copy|Move）+ 清空陈旧选区兜底）。③ **删除确认对话框进入即预选**：`preselect_id` 按字符串比对选中目标行，`showEvent` 聚焦选择器（默认按钮仍为「取消」，误按回车不会删除）。④ **导入后「人员与分组」页无需重启即刷新**：`_refresh_filter_persons` 作为人员轴刷新汇聚点同步 `page.refresh()`，覆盖同步导入、后台 `import_confirm`、插件导入、删除与页面自身改动（来源批次下拉与「来源批次」列同步更新）。⑤ **上移/下移（含拖拽落点）后高亮跟随被移动的人**（复审追问：移动后选区停留在原行号 → 连续点击移动的是「取而代之」的另一人；修复：`refresh()` 把选区锚定到「人」——重渲染前记下选中人员的 id、渲染后按 id 找回并 `setCurrentCell`/`selectRow`/`scrollToItem`，覆盖按钮移动、拖拽落点与窗口人员轴刷新汇聚路径；仅在表格原本持有焦点时归还焦点，按钮键盘可用性不受影响；「上移/下移」在首/末行置灰替代静默无效；`dropEvent` 的「清空陈旧选区」兜底改为仅在落点未能降级为 `CopyAction` 时执行，正常拖拽后被拖行在新位置保持选中）。未改 Schema、未加依赖、未改删除级联与 CLI/插件契约。
+- **AUD-001（P1）SSOT 恢复**：本文件与 KNOWN_ISSUES/ARCHITECTURE_DECISIONS/DOCUMENT_INDEX/CHANGELOG 全部刷新至 HEAD `2823d1c` 口径（阶段 C–F 完成态、迁移链 001–008、体检发现登记）；根因（阶段收尾义务无书面登记载体）已在体检 DOCUMENTATION_AUDIT 立案。
+- **AUD-003（P2）业务基线入库**：Stage1_BusinessFacts / Stage1_Handoff / Stage2_BusinessRules / Stage2_Handoff / Stage3_BusinessDiagrams / Stage4_FinalAudit / Stage4_1_FinalReview / Stage4_2_FinalFreezeReview 八份自 `D:\workFile\PhotoArchiver-BusinessReview\` 原样收入 `docs/business-baseline/`（正文零改写；来源/基准/有效性表见该目录 README）。
+- **AUD-009（P2）依赖矩阵三方对齐**：`dependency-rules.md` §4 矩阵 5 行过期口径修正（app 组合根全开；infrastructure 增 application ports/dtos；presentation 增 domain/workers/plugins/app-context；workers 增 domain）+ DEP-001/030/040 同步——与 AST 实测及守卫测试 `test_layer_boundaries.py` 一致。
+- **AUD-014（P2）Top-1 归档残留清理（F1-4）**：`archive_planner.py` docstring、`face-recognition-pipeline-and-archive.md` §6.2、`plugin-context-design.md` §3.1 三处全部改为 (person, photo)（E-SG-6）口径；识别侧 Top-1（ADR-017 语义）不受影响。
+- **AUD-017（P2）决策材料**：`docs/decisions/AUD-017-person-embeddings-decision.md`——现状/数据链/三方案（A 激活旧表 / B 登记受限 / C 样本直读）对比，**Decision Required，待 owner 裁决**。
 
-**人员名单导入与人脸分组匹配 · 阶段 B：人员名单管理（2026-09-22 实施；2026-09-23 owner 桌面验收 §1–§9 通过 ✅，四项复审问题与复审追问（上移/下移选区跟随）已修复待复验）**——新增「**人员与分组**」页（D5：导航 5→6 项 —— 概览 / 照片库 / **人员与分组** / 审核中心 / 数据工具 / 设置；审核中心与设置仍为触发式行），把名单做成**可编辑列表**：表格按 `roster_order` 列出 顺序/姓名/工号/部门/备注/来源批次，**拖拽行或「上移/下移」**即调整顺序并**立即持久化**（单事务整表重排），照片库人员筛选下拉同步；**新增人员**（手工录入，经 `max_roster_order()+1` 排到末尾）、**编辑**（复用 `Person` 实体校验 + 工号唯一性，域错误原文回显）、**删除所选**（复用既有 `PersonDeletionDialog`（新增可选 `preselect_id` 预选行）+ `DeletePersonService` 级联语义：照片保留、识别归属置空）；**来源批次回看**（`ImportBatchRepository.list_batches()` + 每批在册人数，回看态只读、禁拖拽）。**分层**：Domain `PersonRepository` 增 `reorder()`（Protocol + SQLite 单事务 `UPDATE` + InMemory，后者 `list_all` 补齐与 SQL 一致的 roster 排序契约）；Application 新 `ManagePeopleService`（add/edit/reorder/roster）+ `AddPersonCommand`/`EditPersonCommand`/`ReorderPeopleCommand` + DTO `ImportBatchSummary`/`PeopleRoster`，装配进 `ApplicationServices.manage_people`；Presentation 新 `PeopleAdminPage` + `PersonEditDialog`。**未改 Schema、未加依赖**；`recognition_results`/归档/审核/导出/CLI/插件契约零改动。删除级联的 C/E 扩展点（`cluster_person_assignments`/`person_face_embeddings`）已按计划留待 C/E（见 Remaining）。
+**阶段 C–F 实施摘要（2026-09-24 ~ 09-28，全部已入库并冻结审查）**：
 
-**人员名单导入与人脸分组匹配 · 阶段 A：导入草稿与稳定名单顺序（2026-09-20 实施，2026-09-21 owner 桌面验收通过 ✅）**——把「选文件即入库」改为**两段式导入**：选文件 → 解析为可编辑**草稿**（`import_batches`/`import_draft_rows`）→「导入预览与确认」对话框核对/编辑/拆分/跳过 → 确认才在单事务写入 `people`，并记录用户确认的 `roster_order`（人员筛选下拉按该顺序展示）；取消不写正式人员、草稿保留可回溯。**Schema**：迁移 `003_import_batches_and_roster`（两张草稿表 + `people.roster_order`/`people.source_batch_id` 扩列 + 两索引，`upgrade`/`downgrade` 双向实现）。**Domain**：`ImportBatch`/`ImportDraftRow` 实体 + `ImportBatchRepository` Protocol + `Person` 扩字段（可空、向后兼容）。**Application**：`ParseImportDraftService`（编码阶梯 BOM 感知 utf-8-sig/utf-16/utf-8/gb18030/latin-1、分隔符频率探测、表头关键词字段映射、多人顿号/逗号串联**拆分建议**、组标题告警「N组/第N组/名单」默认跳过、工号强冲突与姓名+部门弱冲突分类）、`ConfirmImportService`（单 UoW 事务、TOCTOU 二次查重降级为合并、行级错误隔离带行号）。**Infrastructure**：`FileRosterTableReader`（openpyxl `.xlsx/.xlsm`、**新增 `xlrd==2.0.1` 读 `.xls`（D1 owner 批准）**、文本编码阶梯）、`SQLiteImportBatchRepository`。**Workers**：`ConfirmImportTask`（>500 行走 Worker，同步阈值 `CONFIRM_SYNC_LIMIT=500`）。**Presentation**：`ImportPreviewDialog`（原始内容/解析结果/告警/动作四区 + 表头·工作表重解析 + 计数 + 超 500 行后台提示）、MainWindow 两段式入口、`ui_text` 文案 22 项、D6 `TASK_LABELS["import_confirm"]` 注册且终态刷新人员轴。**兼容**：旧 `ImportPeopleService` 与 CLI `import-people` 直通路径保留（插件 `import_people` 写路径 ADR-028 不变）；`recognition_results`/归档/审核/导出/就绪语义零改动。本阶段同时修复上一轮全量测试**死锁式超时**（新模态对话框未被既有测试替身，pytest 永久阻塞）并完成 24 项既有测试的两段式适配。质量门与验收证据见 §5；未发布安装包。**探测驱动的验收准备已完成**：桌面工具包 `PhotoArchiver-阶段A验收\`（样本 + 一键启动）与验收脚本 `docs/development/stage-a-import-acceptance-script.md` 就绪，每个期望值均经真实服务 + SQLite 全序列实测（`logs\probe_full_sequence.txt`）。**owner 桌面验收已通过（2026-09-21，§1–§9 全部 ✅）**，并就探测发现的两项行为作出裁决且已实施：F-A1（LIMIT-007）= 确认时从 `max(既有 roster_order)+1` 全局单调续编（`PersonRepository.max_roster_order()` 新协议方法 + SQLite/InMemory 双实现）；F-A2（LIMIT-008）= 文件内重复优先跳过（`ParseImportDraftService` 判定优先级修正，两类告警均保留）；两项各配定向测试，验收脚本 §9/§10/§11 已回填实测与结论，KNOWN_ISSUES 相应条目按维护规则删除。
-
-**UI/UX Batch 7：视觉体系、键盘可用性与最终验收（2026-09-19 实施，待 owner 验收）**——新增 `presentation/visual_style.py` 作为集中视觉体系唯一替换点：主/次/危险按钮层级经动态属性 `styleRole` + 应用级 QSS 选择器表达（唯一 `setStyleSheet` 调用点在 `app/application.py` 装配处，静态守卫测试确保零散布）；焦点环覆盖按钮/输入/日期/列表控件；空态页走共享 `EmptyStateCard` objectName 卡片样式。角色赋值：概览 CTA、照片库空态扫描 CTA、批量归档 = primary；移除登记、删除登记确认、删除人员确认 = danger；归档确认按钮随试运行切换 primary↔danger（配合 Batch 6 的默认焦点规则）。可访问性：状态栏取消按钮补 accessible name；全局无仅图标控件（工具栏动作均带文本）；快捷键仅 Ctrl+,（设置）无冲突；状态语义全部文字化（文字角标 + ✓/○ 清单标记）非仅颜色；Qt6 原生高 DPI 缩放 + palette 驱动的 QSS 保证浅/深主题无需固定色（危险色除外）。新增 `docs/development/ui-acceptance-script.md` 面向验收人员的端到端手工脚本（§1–§8 覆盖蓝图九场景，§9 如实列出 LIMIT-001/002/004/006 验证边界），手册 §4 链接。未改业务逻辑、前序交互契约、Schema/CLI/CI/打包配置；未新增图标与依赖（resources/icons 仍空置，文本符号复用）。
-
-**UI/UX Batch 6：归档、导出与危险操作的安全表达（2026-09-19 实施，待 owner 验收）**——归档：根目录缺失从纯报错改为询问式「去设置」直达设置页（默认按钮「暂不」，Yes 后内联打开 SettingsDialog 并同轮刷新快照，设置入口抽出 `_open_settings_dialog` 供复用避免协调器重入）；ArchivePreviewDialog 首行声明范围（已选 N 张 / 全部已通过）、新增源→目标示例列表（前 8 项 + 截断说明，`ArchivePath.resolve()` 纯拼接）、冲突策略选择器下附后果文字提示（随切换更新）；**试运行默认勾选**（owner 决策），确认按钮语义化——试运行显示「执行试运行」（默认按钮），正式写入显示「开始归档」且默认焦点移至「取消」。导出：**CURRENT_BATCH 从最终用户对话框移除**（owner 决策，不再以禁用单选框伪装功能；ExportScope 枚举与 Task→Service 的契约 ValueError 守卫不动）；FILTERED 范围选中时显示当前筛选摘要 + 预计导出数量（经 FilterBar 新增 `summary_text`/`result_count` 属性由窗口传入，与照片墙同源）。危险操作：PhotoDeletionConfirmDialog 补「界面内没有撤销操作」明示并将默认焦点固定于「取消」；PersonDeletionDialog 同样取消默认焦点；重复处置本为只读报告无需确认。文案全入 ui_text.py；未改 Archive Planner/Executor、冲突策略契约、文件复制语义、ExportScope 服务契约、Schema/CLI/CI。
-
-**UI/UX Batch 5：审核中心——人工确认而非盲批（2026-09-19 实施，待 owner 验收）**——ReviewDialog 由纯文本列表升级为可审阅界面：每条记录两行（照片/人员可读名 + 置信度文字分级带精确数值 + 状态「待审核」），文字分级（很高≥0.90 / 较高≥0.75 / 中等≥0.60 / 较低）仅措辞不判据，精确值括号保留供审计；待审核总数移至对话框顶部常驻；「通过所选/拒绝所选」实时显示选中数量、「全部通过（N）」显示队列总数；**全部通过增加二次确认**（明确数量 + 界面内无批量撤销的如实说明，默认 No，取消不改数据）；行缩略图经注入的 PhotoListController 既有异步安全通道加载（`_attach_thumbnail` 单次连接防重复信号；photo 实体经 `ReviewController.photo_for` 只读查询，缺失即无图标降级，Widget 零磁盘 IO）；MainWindow 审核对话框关闭后同轮 `_refresh_workspace_state()` + `_refresh_photo_list()`（照片墙角标与概览计数同步刷新）。键盘多选沿用 ExtendedSelection 默认（Ctrl/Shift+方向键）。未改 RecognitionResult 审批业务规则、批量事务语义、ReviewRecognitionUseCase、Schema/CLI/CI。
-
-**UI/UX Batch 4：照片库——筛选、空态、选择态与详情（2026-09-19 实施，待 owner 验收）**——FilterBar 时间轴重构为时间模式下拉（默认"全部时间"不约束且隐藏起止编辑；"自定义时间"展开并生效）；`from > to` 阻止发 criteria（上一个有效筛选保持生效）并显示内联修正提示，绝不静默渲染空结果；新增摘要行（已生效条件 + 结果计数，计数经 `set_result_count` 由窗口查询后回填）。照片库空态三态化（ADR-036 延伸）：库中无照片（CTA 扫描照片）/ 筛选无结果（CTA 清除筛选）/ 任务中（进度说明），`_refresh_workspace_state` 后重评估（快照 has_photos 变化联动，本轮修复的真实缺口）；选择态上下文批量操作栏（归档所选 N / 移除登记 N，无选区整体隐藏，busy 置灰，接线既有 `_collect_selected_photo_ids` → 批量归档/删除登记路径）；双击照片打开只读 `PhotoDetailDialog`（大预览 + 原名/路径/拍摄时间/状态角标，仅用已加载实体与缓存缩略图，缺失降级"未知/未生成"）。页内 "PhotoLibrary" 工具栏由批量操作栏取代（`_delete_photos_action` QAction 契约与 Batch 2 选区语义不变，仅不再挂工具栏）。文案全入 ui_text.py；未改 PhotoListModel/Delegate/搜索 DTO/异步缩略图机制、审核业务规则、归档默认值、controller API、Schema/CLI/CI/扫描线程模型。
-
-**UI/UX Batch 3：主窗口信息架构与首次引导（2026-09-18 实施，待 owner 验收）**——MainWindow 重构为流程驱动工作台壳：左侧 QListWidget 导航（概览 / 照片库 / 审核中心 / 数据工具 / 设置）+ QStackedWidget 三页；窗口级 Main 工具栏精简为五个频繁主操作（流程序：导入 / 扫描 / 识别 / 审核 / 归档，插件动作 ADR-038 挂载契约不变）；维护操作（导出数据 / 检测重复 / 删除人员）移入数据工具页（Owner 决策 4 的信息架构落地），删除登记留在照片库页（选区态，Batch 2 语义不变）；设置改为触发式导航项（Ctrl+, 快捷键经 window.addAction 保留）；取消动作移入状态栏常驻 QToolButton（objectName="CancelTask"，QAction 契约不变）。新增概览页：`controllers/overview_presenter.py`（纯逻辑）+ `views/overview_page.py`——五步检查清单（导入人员 → 扫描照片 → 运行人脸识别 → 人工审核 → 安全归档）逐步由 Batch 2 WorkspaceController 快照驱动（Widget 零仓储访问），唯一主 CTA 指向最合理的下一步（优先级 match → model → import/scan → review → archive → settings，全部完成时引导继续扫描；允许先扫描再导入，识别需人员与照片双齐由 CTA 归位表达），底部本地处理隐私说明。审核中心/设置导航行为触发式（打开模态不切页，高亮自动回贴）。文案全入 ui_text.py；未改审核业务规则、归档默认值、CURRENT_BATCH 展示、controller API、Schema/CLI/CI/扫描线程模型。
-
-**UI/UX Batch 2：工作区就绪状态与防呆动作可用性（2026-09-17 实施；2026-09-18 owner 验收通过并随 Batch 1 一并提交入库，未发布）**。Application 层新增只读工作区查询：`WorkspaceStatus` DTO（`application/dtos/workspace.py`，七字段：人员存在/照片存在/待识别数/待审核数/可归档数/归档根可用/模型 available·missing·unknown）+ `WorkspaceReadinessService`（`application/services/workspace_readiness.py`）；计数由 `RecognitionRepository.read_workspace_counts()` 单条 SQL 聚合（不物化实体、不重复扫描大库、无新 Schema），可归档数与 ArchivePlanner 语义对齐（绝对路径 + 存在人员 + APPROVED + 排除成功归档历史），归档根探测只查最近存在祖先目录可写性（不创建、不用异常判断），模型状态装配时一次性判定（真实 MatchPersonsService→AVAILABLE，`_UnavailableMatchService`→MISSING，UNKNOWN 可注入测试）。Presentation 侧 `WorkspaceController` 将缓存快照翻译为各动作的 enabled/tooltip/next_action：识别缺人员/缺照片/全部已识别/模型缺失时置灰并给出可直达的下一步按钮（导入/扫描/审核/设置/模型说明）；审核 0 条时对话框保持打开显示空态（不再"一闪而过"），通过/拒绝按钮按队列+选区启用；归档无根/无可归档时置灰并直达设置/审核；删除登记仅在照片墙有选区时可用；取消动作维持 Batch 1 语义。刷新时机：启动、任务终态、审核/设置对话框返回；任务进行中保存原状态、终态后恢复为最新快照（一次查询）。服务层原有校验保留为第二道防线（TOCTOU）。文案全部入 `ui_text.py`。Batch 1 全局任务协调与取消语义同批在案（`TaskCoordinator`、五任务互斥、LIMIT-002 取消、终态恢复、异常路径修复）。本轮质量门见 §5；均未发布安装包。
-
-**v2.8.0 已发布并产出安装包（Windows 桌面交付轮，2026-09-13）**——ADR-031 方案B 落地：release.yml build-windows job 自动构建 **PhotoArchiver-v2.8.0-setup.exe（152MB 在线，windowed 无控制台）+ PhotoArchiver-v2.8.0-offline-setup.exe（439MB 含模型）** 双产物（run #31 三 job 全绿）；`PhotoArchiver-cli.exe` 独立命令行入口；`download-models` 内置命令（sha256 fail-closed）；frozen 适配（alembic 随 bundle / 模型目录锚定 / windowed 流 shim）；macOS 扫描稳定性重构（ADR-041 枚举前置，实验性支持披露）+ **离线模型路径缺陷修复（insightface root 语义，真机验收发现）**；CI 自愈（139 重试）。已真机验收两轮：第一轮暴露离线模型路径缺陷 + 控制台窗口问题（均已修复）；第二轮待 owner 用 **14:20Z 之后构建的新安装包**重验（关键区别：启动日志首行应显示 `Starting PhotoArchiver v2.8.0` 构建版本戳 + 识别不再报错不再下载）。**Release 资产已随重打更新（14:20Z）**。
-
-**v2.7.0（Phase G 运营轮，2026-09-12）**——recognize CLI（FEAT-15 全闭环）、归档根目录设置（FEAT-14 闭环）、照片墙状态角标；LIMIT-006 判据 6/5 达成后 skip 解除即复现段错误（run #80）→ 判据重置、skip 恢复；崩溃边界确认为全量套件上下文；公开取证通道（崩溃栈→注解）已建成；owner 供日志后 faulthandler 栈定位 scandir C 层为崩溃点 → 实验三阴性（listdir 变体仍崩）→ 结论：与枚举 API 无关，疑似 PySide6 上游缺陷（worker 枚举 + 主线程事件循环并发）；darwin skip 恢复；D-3 排查结论（实验五回滚后修正）：**不可仓内修复**——64MB 大栈实验（run #97）证伪栈假设，崩溃点第 4 次漂移（PIL Image.open）；确证崩溃 = macOS arm64 后台线程任意原生调用 + 主线程事件循环并发的概率性 SIGSEGV，与枚举 API/PySide6 版本/线程类型/栈大小全部无关。CI 自愈（run #99 最终定性后）：macOS/Linux runner 环境漂移致 pytest 概率性 SIGSEGV（139）与代码无关——pytest 步骤对 139 自动重试 ≤3 次（真实失败不重试）。darwin skip 恢复为长期项——**owner 处置（2026-09-13）：方案 3 维持现状**，macOS 定性实验性支持并已在 user-guide/FAQ 披露；上游 issue 草稿备提交；ADR-041 的枚举前置保留（架构上仍正确：主线程枚举 0.14s/2000 文件可接受，且消除了已知的枚举面并发）；实验四阴性结论（与 PySide6 版本无关）在案；上游 issue 草稿备提交。待 owner 签核。
-
-**v2.6.0（审计清零后的首个发版，2026-09-12）**——收录 v2.5.0 后全部变更：插件目录生产接线（ADR-038）、并行匹配分片 flush（ADR-037）、cleanup-thumbnails、antelopev2 摘要钉定、'未匹配' UI 筛选、migrate CLI（ADR-039）、分层 AST 断言（T-1）。待 owner 签核。
-
-**v2.5.0（Phase F 正确性收口，2026-09-12）**——Phase F 全部六期完成：前三候选（captured_at 回填 CLI + 路径锚定 + CI macOS 崩溃诊断，ADR-035）与正确性收口五项（Windows 文件名净化 + 扫描环防护 / 查询去重 + 未匹配哨兵 / 取消接线与 UX / 质量基建 / CLI 对等，ADR-036，owner 2026-09-12 按建议批准 D4–D9）。待 owner 收尾 v2.5.0：核对 GitHub Release 资产 + 粘贴 `CHANGELOG.md` 第 9–44 行 `[2.5.0]` 段进 body 后签核。
-
-全量回归 **783 passed / 4 skipped / 0 failed**；覆盖率基线 **92%**（pytest-cov 首次引入，dev-only，不设门槛）。
+- **阶段 C 可追溯识别运行**（`73657ec`/`7ec3173`/`a9f15b3`）：`RecognitionRun`/`FaceObservation` 数据链（migration `004`/`005`）；`RunRecognitionService` 逐脸观测 + recognition_results PENDING 兼容双写（审核/归档/导出/就绪全绿）；UI 入口切 `RecognitionScopeDialog`（范围 + 脸数档位 + 仅重试失败照片），重跑=新建 run；AST 守卫禁止旧 MatchPersons UI 路径回接。
+- **阶段 D 人脸聚类**（`5c3c6d2`/`8d4c342`/`c543828`）：两段式算法（贪心簇心候选 ≥0.5 → complete-linkage 合并 **≥0.4 含等号**，owner 裁决修正实现偏差并以三点边界测试钉死）；低质量门限默认 0.0 禁用待 F 校准；表 `006_face_clusters`；时间排序 sort_key；D-4 UI 入口（人员页聚类区 + 结果对话框）。
+- **阶段 E 配对工作台**（`ee5d7d4`/`f6e70b0`）：簇→人建议（sample-match max-cosine ≥0.40 优先，排除 rejected 对；顺序建议次之；**永不自动写归属**）；确认→sort_snapshot + D3 兼容 APPROVED + 整簇样本沉淀（007 `person_face_embeddings`，UNIQUE 幂等）；**E-SG-6**：兼容/归档去重作用域 = (person, photo)，不同人各自持有同照片归属；改派/解除回撤旧投影并 disable 旧样本（E-SG-5）；unassign 覆盖三入口撤销。
+- **阶段 F 历史/性能/上线**（`e7d2735`/`d47d984`/`b3b8685`/`2823d1c`）：真实数据校准（473 照片/1441 脸/44 簇全链实测）；人员历史回填（幂等）；失败重试入口 + 失败清单导出；1000 张生命周期压测（取消→部分持久→重试覆盖剩余）+ 升级完整性演练（生产库副本 003→007 零丢失）；**冻结阻断修复**：BLK-1 归档按稳定 person_id 去重（migration `008`：archive_records.person_id 回填 + confidence 可空三态）+ D-1 审核批准可携身份 + D-2 阈值 `>=0.40`。
+- **冻结审查链**：Stage4 独立审计（NOT-FREEZE-READY）→ `2823d1c` 修复 5 阻断 + 2 裁决 → Stage4.1 复审（代码级闭合）→ 基线收口（Stage1–3 文档对齐 2823d1c）→ **Stage4.2 终审：8 项冻结条件全部满足**（真库探针 + D-1 七层一致 + D-2 边界 0.39 不命中/0.40 命中），**待 owner 签核**。
 
 ### 历史发版锚点
 
@@ -78,16 +62,18 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | 范围 | 状态 | 当前事实 |
 |---|---|---|
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
-| 版本链 | ✅ | v2.8.0 三处一致（pyproject / .env.example / CHANGELOG `[2.8.0] - 2026-09-13`）。 |
-| CI | ✅ | 三平台绿（run #124 @ main `92bb1e9`）；runner 环境漂移 exit 139 自动重试 ≤3 次自愈常驻；no-skip 守卫运行期统计（F-5/体检 T-5）；覆盖率门槛 90%（Linux job 强制）；macOS 崩溃报告收集在位（LIMIT-006 D-1）。 |
-| 桌面复验 | ✅ | 机制项（N1–N4 自动化：1200 行导入闭环/取消一致性/备份恢复演练/换目录子进程）+ 感知项（J1–J7 owner 逐项判定）全部通过。 |
-| 未决问题 | ✅ 清零 | 体检 N-1~N-9 全部处置；离线模型路径缺陷（v2.8.0 真机验收发现）已修复并有守卫测试。仅余 LIMIT-* 设计/环境限制。 |
-| Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消为任务边界粒度，设计特征）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS/Linux runner 环境漂移 SIGSEGV，CI 自愈 + darwin skip 维持），均 Low、不阻塞。 |
-| Release body | ⏳ 待 owner | GitHub Release v2.8.0 已发布（资产：在线 145MB + 离线 419MB 安装包 + wheel/sdist，随 tag 重打更新）；当前 body 为 `generate_release_notes` 自动生成的比较链接（且重复多条），需 owner 粘贴 `CHANGELOG.md` `[2.8.0]` 段进 body 后签核（v2.5.0/v2.7.0 同流程）。 |
+| 人员导入重设计（阶段 A–F） | ✅ 实施完成 | 全部入库至 `2823d1c`；业务基线见 `docs/business-baseline/`；冻结待 owner 签核。 |
+| 版本链 | ⚠️ | v2.8.0 三处一致（pyproject / .env.example / CHANGELOG `[2.8.0]`）；**此后 47 个提交未发版**——CHANGELOG 已补 `[Unreleased]` 段（阶段 A–F 主要变更），无伪造发行版本。 |
+| 测试基线 | ✅ | 全量 **1310 passed / 6 skipped / 0 failed**（2026-09-28 两跑实测 250.55s/263.36s）；行覆盖 **93.2%**（实测）；已知盲区：workers 错误分支 74.1%、配对守卫分支（AUD-019）。 |
+| CI | ⚠️ | 本地三质量门全绿（ruff / mypy 258 文件 / pytest）；**main 领先 origin 44 提交未推送——HEAD 区间未经远端三平台矩阵验证（AUD-002，OPEN）**；LIMIT-006 CI 自愈 + darwin skip 维持。 |
+| 业务基线 | ✅ 已入库 | `docs/business-baseline/`（Stage1–3 现行有效 + Stage4/4.1 历史 + Stage4.2 冻结复审），基线 `2823d1c`，来源与有效性表见其 README。 |
+| 未决问题 | 📋 已登记 | 体检台账：**P1×1（AUD-001 文档滞后——本 Stage 10 已整改闭合）**；P2×10 中 AUD-003/009/014 本轮闭合，**AUD-002/004/015/017/019/023 保持 OPEN**（详见 `.ai/KNOWN_ISSUES.md` 体检登记节与台账 `docs/health-check/FINDINGS_LEDGER.md`）；AUD-017 决策材料就绪待 owner。 |
+| Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消粒度——说明已按体检修正：识别取消延迟=剩余队列排空，AUD-023）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS/Linux runner 环境漂移 SIGSEGV，CI 自愈 + darwin skip 维持），均 Low、不阻塞。 |
+| Release body | ⏳ 待 owner | GitHub Release v2.8.0 资产已发布；body 签核流程同前。 |
 
 ### 数据库 Schema
 
-Alembic 管理（`001_initial_v4` + `002_split_create_ddl` + `003_import_batches_and_roster`，ADR-027）；`PRAGMA user_version = 4`。003 新增 `import_batches`/`import_draft_rows` 两表与 `people.roster_order`/`people.source_batch_id` 两列（阶段 A，见 §2）。
+Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `003_import_batches_and_roster` → `004_recognition_runs_and_observations` → `005_recognition_run_error_count` → `006_face_clusters` → `007_assignments_and_person_samples` → `008_archive_identity_and_confidence`**（head = 008）。003 导入批次/草稿 + roster_order；004/005 识别运行/观测；006 聚类；007 配对/样本；008 archive_records.person_id 回填 + recognition_results.confidence 可空（BLK-1/BLK-5，幂等守护 + downgrade 先回填 NULL）。每次启动 `alembic_runner` 自动 upgrade head（frozen 适配）。
 
 ---
 
@@ -95,17 +81,22 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl` + `003_import_batches
 
 | 模块 | 状态 | 关键位置 |
 |---|---|---|
-| Logging / Configuration | ✅ | `infrastructure/logging/`、`infrastructure/config/` |
-| Database | ✅ | Alembic 管理（ADR-027） |
-| Domain / Import / Scan / Thumbnail | ✅ | `domain/`、`application/services/`、`infrastructure/`；`PillowPhotoMetadataReader` 支持 Exif 子 IFD 拍摄时刻（ISSUE-019 修复）；扫描枚举前置主线程（ADR-041 预枚举模式） |
-| 模型部署（下载/解包/校验/frozen） | ✅ | `infrastructure/ai/model_deployment.py`（SSOT，zip 顶层拍平 + onnx 存在性校验）+ `insightface_loader.py`（root 语义：传 `model_root.parent`）+ `download-models` CLI（sha256 fail-closed） |
-| Recognition / Review | ✅ | InsightFace detect/recognize/match 与审核闭环 |
-| Archive | ✅ | Planner → Plan → Executor，captured_at 现对真实相机照片正确分桶 |
-| UI / Settings / Export | ✅ | 主窗口、设置闭环（含归档根目录，G-2）、Excel/CSV/HTML 导出、照片墙网格布局 |
-| 人员筛选 | ✅ | 三轴组合筛选 + 人员轴键入即时搜索（`presentation/person_matcher.py` 四级智能排名） |
-| Plugins | ✅ | 发现/加载/生命周期 + PluginContext 读方法 + import_people 写方法；`PLUGINS_DIRECTORY` 配置后启动自动加载并挂载工具栏动作（ADR-038）；示例插件仍不自动加载 |
-| 人员名单导入（阶段 A 两段式） | ✅ 已验收（2026-09-21） | `application/services/parse_import_draft_service.py`、`confirm_import_service.py`、`infrastructure/importers/roster_table_reader.py`、`presentation/views/import_preview_dialog.py`、`alembic/versions/003_import_batches_and_roster.py`；旧直通路径（GUI 之外：插件 / CLI）保留 |
-| 人员与分组页（阶段 B） | ✅ 实施完成、待验收 | `application/services/manage_people_service.py`、`presentation/views/people_admin_page.py`、`person_edit_dialog.py`；导航 5→6 项（D5）；`PersonRepository.reorder`（SQLite 单事务）；删除复用 `PersonDeletionService` 与既有确认对话框 |
+| Logging / Configuration | ✅ | `infrastructure/logging/`、`infrastructure/config/`（ADR-035 用户数据目录锚定） |
+| Database | ✅ | Alembic 001–008（ADR-024/027）；17 张表全有读写方（体检对账） |
+| Domain / Import / Scan / Thumbnail | ✅ | `domain/`、`application/services/`、`infrastructure/`；扫描枚举前置主线程（ADR-041） |
+| 模型部署（下载/解包/校验/frozen） | ✅ | `model_deployment.py`（sha256 fail-closed）+ `insightface_loader.py` + `download-models` CLI |
+| Recognition / Review（兼容链） | ✅ | InsightFace 检测/识别 + 审核闭环（D-1 身份选择器，`2823d1c`） |
+| 可追溯识别运行（阶段 C） | ✅ | `run_recognition_service.py` + `recognition_runs`/`face_observations`（004/005）+ `recognition_scope_dialog.py`（范围/重试/失败清单导出） |
+| 人脸聚类（阶段 D） | ✅ | `domain/services/face_clustering.py`（两段式 ≥0.5/≥0.4 含等号）+ `cluster_faces_service.py` + `006` + 结果查看 |
+| 配对工作台（阶段 E） | ✅ | `pairing_workbench_service.py` + `domain/services/pairing.py` + `007`；E-SG-6 (person, photo) 兼容语义；样本沉淀/回撤 |
+| 归档（身份去重） | ✅ | `archive_planner.py`/`archive_executor.py`——(person, photo) 去重（E-SG-6 + BLK-1 稳定身份，migration 008）；**docstring 已同步 E-SG-6 口径（AUD-014 整改）** |
+| 历史回填 / 失败重试（阶段 F） | ✅ | `backfill_historical_people_service.py`（幂等）+ `recognition_failure_service.py` |
+| UI / Settings / Export | ✅ | 主窗口、设置闭环、Excel/CSV/HTML 导出；CURRENT_BATCH fail-closed 延迟项 |
+| 人员筛选 | ✅ | 三轴组合筛选 + 人员轴智能搜索（`presentation/person_matcher.py`） |
+| 人员名单导入（阶段 A） | ✅ 已验收（09-21） | 两段式：`parse_import_draft_service.py`/`confirm_import_service.py`/`import_preview_dialog.py`（003） |
+| 人员与分组页（阶段 B） | ✅ 已验收（09-23） | `manage_people_service.py`/`people_admin_page.py`；导航 5→6 |
+| Plugins | ✅ | 发现/装载/生命周期 + PluginContext 读方法 + import_people（ADR-026/028/038） |
+| 业务基线（文档） | ✅ 已入库 | `docs/business-baseline/`（Stage1–3 有效 / Stage4 系演进链）；决策材料 `docs/decisions/AUD-017-person-embeddings-decision.md` |
 
 ---
 
@@ -113,104 +104,29 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl` + `003_import_batches
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-23（本地 Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；阶段 B owner 桌面验收（2026-09-23，§1–§9 通过）之后，本次会话实施**阶段 B 四项复审修复**，同日继续修复复审追问（上移/下移后高亮跟随被移动的人）；当日晚些会话实施**重排性能优化 P0**（探测定位 → P0-1/P0-2/P0-3 → 探针复测闭环） |
-| 会话范围 | ① 人员页校验消息中文化（Application 映射已知域规则 + 两个对话框标题）；② 拖拽重排「空白行」根因修复（`DragOnly` + 视口 `acceptDrops` + 自绘 `dragEnter/dragMove/drop` + 落点降级 `CopyAction` + 陈旧选区清空 + `startDrag` 源行）；③ 删除确认对话框预选与聚焦；④ 导入后「人员与分组」页即时刷新（人员轴刷新汇聚点）；⑤ 回归测试与探测：空白行回归 4 项 + 服务 1 项 + 导入闭环 1 项，既有 2 项断言改中文，探测脚本 3 份（Qt 拖放语义 / `findData` 对象比对 / 上移下移选区行为）；⑥ 复审追问修复：上移/下移与拖拽落点后选区锚定到「人」并跟随到新位置、首/末行按钮置灰、`dropEvent` 清空选区改条件化；新增回归 4 项 + 拖拽 2 项断言更新；用户手册同步新行为 |
-| 关键产出 | ① Application：`manage_people_service.py` 增 `_ENTITY_MESSAGES`（已知域规则中文映射）与 `_localized_validation()`，`add_person`/`edit_person` 两条写入路径经映射后抛中文，模块 docstring 记录「域保持语言中立、Application 拥有 UI 文案」；② Presentation：`people_admin_page.py` 的 `_ReorderableTable` 拖拽实现重写（`_ROW_MIME_TYPE` + `startDrag` 记录源行 + `dragEnterEvent`/`dragMoveEvent`/`dropEvent`/`_is_row_drag`，落点显式降级 `CopyAction` 后清空陈旧选区；`DragOnly` 之后重新开启视图与视口 `acceptDrops`）与 `_warn(message, title)`；`person_deletion_dialog.py` 的 `_select_person` 改字符串比对 + 新增 `showEvent` 聚焦选择器；③ `ui_text.py` 新增 `PEOPLE_PAGE_SAVE_FAILED_TITLE`/`PEOPLE_PAGE_DELETE_FAILED_TITLE`；④ 测试：页面 8 项 + 服务 1 项 + 导入闭环 1 项（既有空姓名/占用断言改中文匹配）；⑤ 探测脚本 `logs/probe_drag.py`/`logs/probe_combo.py`（不入库）；⑥ 复审追问修复：`refresh()` 选区锚定到人员 id（`_selected_person_id`/`_restore_selection`/`_focus_row`，仅表格原本持焦时归还焦点）、`_render_action_state` 首/末行置灰、`dropEvent` 清空选区改为仅落点未降级 `CopyAction` 时执行；页面回归 +4 项（19 项）、拖拽 2 项断言改为「被拖行在新位置保持选中 / 仅兜底清空」；`docs/user-guide/manual.md` 同步「保持选中 + 边界置灰 + 删除预选」；探测 `logs/probe_move.py`（不入库）；⑦ 性能 P0：`manage_people_service.py` 重排校验单读化、`people_admin_page.py` 信号分级 + `_render_rows` 冻结/阻塞/O(N) 位次、`main_window.py` 级联分层（`_on_people_changed(structure_changed)` + `_refresh_filter_persons(refresh_page=)`）；回归 +5 项；探针 `logs/probe_perf.py` 建基线并复测（修正 DeferredDelete 投递伪影后同口径对比），诊断探针 `probe_perf_debug.py`/`probe_widget_leak.py`（均不入库） |
-| 当前质量门 | 提交前实测：`ruff check src tests` **All checks passed**；`mypy src` **216 source files** 无问题；pytest **全量 1104 passed / 6 skipped**（4:21，0 failed、全程无挂起）；P0 目标测试 55 项（服务 + 页面 + 窗口 + 集成）单跑全绿 |
-| 工作区 | main；阶段 B 复审修复以三段提交入库：`fix(people)`（四项源码修复 + 两个标题常量）、`test(people)`（10 项回归测试）、`docs(status)`（PROJECT_STATUS 同步）；复审追问修复另三段：`fix(people)`（上移/下移选区跟随 + 边界置灰 + `dropEvent` 条件清空）、`test(people)`（新增 4 项 + 拖拽 2 项断言更新）、`docs(people)`（手册 + PROJECT_STATUS 同步 v1.33.0）；性能 P0 另两段：`8bf2af8 perf(people)`（P0-1/P0-2/P0-3 三处源码）、`0067993 test(people)`（回归 +5 项）；**未推送**（push 属 owner，GIT-020）。 |
-| Remaining | **阶段 A 已验收通过（2026-09-21）**；**阶段 B §1–§9 已通过（2026-09-23）**，四项复审问题已修复并追加复审追问修复，**待 owner 复验**（① 工号占用提示中文；② 拖拽排序无空白行；③ 删除确认进入即预选并聚焦；④ 导入后人员页无需重启刷新；⑤ 上移/下移（含拖拽）后高亮跟随被移动的人、首/末行按钮置灰）；**重排性能 P0 已实施并探针实测（50/300/1000 人单次点击 21.7/115.6/391.0ms），owner 确认任务收口、不再深度修复（P1/P2 不做，2026-09-23）**。**下一步需 owner 立项**：阶段 C（多脸检测与可重跑）· 阶段 D（聚类 + 时间排序）· 阶段 E/F 待 C/D 就绪 · UI/UX Batch 7 整体收口验收 · v2.8.0 二轮真机验收 · GitHub Release v2.8.0 body 签核 · 第 4 轮全面体检候审。 |
+| 时间 | 2026-09-28（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；当日两段工作：**①全面工程健康体检（Stage 0–9，只读）**——十阶段完成审计基线/架构/业务逻辑/数据/测试/文档/可靠性安全性能/UI/交叉/综合报告；**②治理基线恢复（Stage 10）**——按体检台账执行 AUD-001/003/009/014 整改与 AUD-017 决策准备 |
+| 会话范围 | ①实测复跑全量测试（1310 passed / 6 skipped，两跑）+ 覆盖率 93.2% + ruff/mypy；②AST 依赖图全量实测（19 组层间边缘 + SCC 零环）；③业务链行为审计（归档/审核/配对/识别运行/扫描/导入深查 + 冻结阻断修复逐链核验）；④Schema×17 仓储读写对账；⑤文档体系逐份核验；⑥任务生命周期与安全扫描；⑦十维交叉矩阵；⑧Stage 10 文档整改（详见 §2） |
+| 关键产出 | 体检报告 10 份 + 台账（`docs/health-check/`，工作树未入库）：AUDIT_BASELINE / ARCHITECTURE_AUDIT / CODE_LOGIC_AUDIT / DATA_PERSISTENCE_AUDIT / TEST_QUALITY_AUDIT / DOCUMENTATION_AUDIT / RELIABILITY_SECURITY_PERFORMANCE_AUDIT / UI_AUDIT / CROSS_DIMENSION_RECONCILIATION / FINAL_HEALTH_CHECK（判 ATTENTION）+ FINDINGS_LEDGER（P0×0/P1×1/P2×10/P3×15 + AR×5）；Stage 10：`docs/business-baseline/`（8 文件 + README 来源表）、`docs/decisions/AUD-017-person-embeddings-decision.md`（Decision Required）、dependency-rules §4/DEP-001/030/040 对齐、archive_planner docstring + 两文档 E-SG-6 口径、本文件与 KNOWN_ISSUES/ADR（ADR-042~046）/DOCUMENT_INDEX/CHANGELOG 刷新 |
+| 当前质量门 | 体检实测：pytest **1310 passed / 6 skipped** ×2、ruff 全绿、mypy 258 文件零错、覆盖率 93.2%；Stage 10 验证：分层守卫测试 + archive planner 定向测试 + ruff/mypy（改动文件）全绿（详见提交信息） |
+| 工作区 | main @ `2823d1c`；体检产物与业务基线等新文件随本轮治理提交入库；**未推送**（push 属 owner，GIT-020） |
+| Remaining | 见 §6 Next Step。 |
 
 ---
-
-### 阶段 B 验收证据与边界
-
-- Application 单测：`tests/unit/application/test_manage_people_service.py`（8 项）——新增追加全局序位（F-A1 续编）、空姓名/重复工号拒绝、编辑字段覆盖与自身工号放行、重排绝对位次落库、未知/重复 id 拒绝、批次汇总计数。
-- SQLite 集成：`tests/integration/test_people_admin_flow.py`（2 项）——重开同一库后顺序持久（加→改→重排→重开验证），删除语义回归（照片保留、识别归属置空、人员消失）。
-- 页面 UI：`tests/unit/presentation/test_people_admin_page.py`（7 项）——渲染列与顺序、上移/下移持久化、拖拽重排、批次回看筛选且只读禁拖拽（含来源批次列）、新增成功、域校验错误原文回显且不写入、空库空态文案。
-- 导航：`tests/unit/presentation/test_main_window_navigation.py`（8 项适配）——六项导航顺序、四个页面行切换（含新页 index 2）、审核中心/设置触发行 3/5 回弹、任务面板各页常驻、数据工具页维护动作不变。
-- 质量门：Ruff / MyPy 绿；全量 pytest 1085 passed / 6 skipped / 0 failed（单次完整运行）。
-- 边界：拖拽排序仅在「全部批次」视图生效（回看态只读、拖拽禁用，防歧义）；整表重排为单事务批量 UPDATE（无行级进度）；编辑复用 `add` upsert（无单独 update 路径，协议已含）；删除在「人员与分组」页与「数据工具」页共用同一用例与确认对话框（一处实现两处入口）；批次回看人数为**当前在册**计数（被删除/合并的人不再计入）；阶段 B 不改 Schema、不加依赖、不动 CLI/插件契约。
-
----
-
-### 阶段 B 复审修复证据与边界
-
-- 中文文案：`tests/unit/application/test_manage_people_service.py`（新增「空姓名在 add/edit 两条路径均为中文」；既有空姓名/占用断言改为中文匹配）；`tests/unit/presentation/test_people_admin_page.py::test_identity_conflict_is_reported_in_chinese`（标题为「无法保存名单修改」、正文含「工号已被其他人员占用：E100」且不含英文原文）。
-- 拖拽重排：`test_row_drop_reorders_the_roster_without_a_blank_row`（走真实视口接收路径 enter→move→drop：落点被接受、动作降级为 `CopyAction`、顺序落库为 1/2/3、三行文本与「操作」列控件齐全、无陈旧选区）、`test_move_only_drop_leaves_no_stale_selection`（动作集只含 Move 时仍不留旧选区）、`test_table_keeps_row_drops_enabled_for_reordering`（`setDragDropMode` 复位 `acceptDrops` 的回归锚点）、`test_foreign_drag_payload_never_reorders_the_roster`、`test_batch_review_disables_row_drops`。
-- 删除预选：`test_delete_selected_row_preselects_it_in_the_confirm_dialog`（页面把选中行 `preselect_id` 传入对话框）、`test_deletion_dialog_selects_and_focuses_the_requested_person`（构造即选中第三人 + 预览同步 + `showEvent` 后 `focusWidget()` 为选择器）。
-- 移动后选区跟随（复审追问）：`test_move_buttons_keep_the_person_selected_at_the_new_position`（下移→末尾置灰→上移两次回到开头置灰，选区与 currentRow 始终跟随「李四」）、`test_repeated_move_clicks_move_the_same_person`（连续两次下移移动同一人——旧行为第二次移动的是「取而代之」者）、`test_move_buttons_grey_out_at_the_roster_edges`（首/末行与无选区的置灰矩阵）、`test_selection_follows_the_person_across_refreshes`（增员刷新与整表重排后选区仍锁定同一人）；拖拽两项断言相应更新（降级成功时保持选中 / 未降级时兜底清空）。
-- 导入后即时刷新：`tests/integration/test_excel_import_ui_closed_loop.py::test_second_import_refreshes_the_people_page_without_restart`（真实 .xlsx 连续两批导入 → 页面无需重启显示 3 人，「来源批次」列显示第二批文件名）。
-- 边界：拖拽仍仅在「全部批次」视图生效；落点降级依赖表拖拽动作集含 `CopyAction`（当前 PySide6 实测为 Copy|Move），若未来模型不再提供 Copy 则由「清空陈旧选区」兜底（不保证光标语义）；选区跟随仅在人员仍在可见名单时恢复（批次回看过滤后自然清空；回看态本身禁移动）；中文化仅覆盖**已知**域规则映射（`_ENTITY_MESSAGES`），新增域规则需同步登记，未知消息原样透传不静默改写；未做人工桌面复验（待 owner 按复审五点复验）。
-- 探测脚本（`logs/`，不入库）：`probe_drag.py`（Qt 拖放语义：`setDragDropMode` 复位 `acceptDrops`、表拖拽动作集、事件投递路径）、`probe_combo.py`（`findData` 与 Python 对象比对）、`probe_move.py`（上移/下移选区跟随的修复前后行为对照）。
-
----
-
-### 阶段 B 重排性能优化 P0 证据与边界
-
-- 性能回归：`tests/unit/application/test_manage_people_service.py::test_reorder_people_validates_with_a_single_roster_read`（校验期间 `find_by_id` 调用归零，顺序与返回值不变）；`tests/unit/presentation/test_people_admin_page.py::test_move_renders_the_table_exactly_once`（一次移动 `_render_rows` 恰一次且 `people_changed` 发 `structure_changed=False`）、`test_structural_mutation_marks_people_changed_as_structural`（新增发 `True`）；`tests/unit/presentation/test_main_window_workspace_state.py` 新增两项——纯顺序变化时筛选轴/就绪快照/页面重渲染全部不触发，结构变化时筛选轴与快照各一次且不再二次 `page.refresh()`。
-- 探针数字（`logs/probe_perf.py` 同口径 before/after，均修正 DeferredDelete 投递后）：50 人 88.9→21.7ms、300 人 476.4→115.6ms、1000 人 1757.4→391.0ms；阶段调用次数 ④ ×2.0→×1.0、①a ×N→×0、⑥c ×1.0→×0.0；原始日志 `logs/perf_probe.log`（旧基线）/ `perf_probe_before_fixed.log`（同口径基线）/ `perf_probe_after.log`（P0 后）。
-- 边界：`people_changed` 信号签名由 `Signal()` 变 `Signal(bool)`（唯一连接点 `_on_people_changed`，默认参数兼容直接调用）；纯顺序变化后照片库人员筛选下拉的排列顺序在下一次结构变化/重启前保持旧序（内容与选中不受影响，裁决接受的取舍）；结构变化级联仍会经 `set_persons` 重发 criteria 触发照片列表重查（删除人员后筛选回落「全部人员」的语义依赖此路径，保留）；P0-3 的冻结/阻塞只作用于渲染窗口内，选区恢复与按钮态刷新在其后正常执行；探针伪影（`processEvents()` 不投递 DeferredDelete 导致旧行内按钮累积）仅影响无真实事件循环的探测环境，应用 `exec()` 下不存在；P1/P2 未实施（owner 裁决不做，2026-09-23）。
-- 诊断探针（`logs/`，不入库）：`probe_perf_debug.py`（逐点击分解定位累积伪影）、`probe_widget_leak.py`（四变体对照证明旧按钮不回收与 P0-3 无关 + DeferredDelete 显式冲刷验证）。
-
----
-
-### 阶段 A 验收证据与边界
-
-- 迁移：`tests/integration/database/test_alembic_migrations.py`（9 项）——head 记录 `003_import_batches_and_roster`、8 表（002 的 6 + 003 的 2）与 7 个显式索引全在、幂等重跑、`initialize_schema()` 走 Alembic、downgrade 到 `001_initial_v4` 干净回退；`tests/integration/test_import_draft_flow.py::test_migration_003_roundtrip` 直验 003 扩列与回退。
-- Reader 与解析：`test_import_draft_flow.py`——GB18030 CSV 经阶梯解码且分隔符探测为逗号、UTF-16（BOM）+ Tab、`.xls` 经 xlrd 读真实二进制 fixture、组标题行默认跳过、多名单元格生成 `multi_name` 告警与拆分按钮而非静默拆分、库内工号重复 → 默认合并。
-- 确认语义：确认后 `roster_order` 与草稿顺序一致且 `source_batch_id` 可回溯、批次转 `confirmed`；未确认（取消）时正式人员零写入且草稿可回读；行级校验错误隔离（其余行仍写入、错误带 `row N`）。
-- UI：`tests/unit/presentation/test_import_preview_dialog.py`（7 项）——四区渲染与计数/告警、拆分后计数与姓名、动作切换落库、确认写入与顺序、取消不写、未知告警 code 兜底、超 500 行提示仅大名单显示。
-- 闭环：`test_excel_import_ui_closed_loop.py`（真实工具栏动作 → 真实解析 → 真实对话框构造 + `exec()` 替身 → 同步确认 → SQLite → 人员轴刷新）；`test_bulk_people_import_closed_loop.py`（1200 行 → `ConfirmImportTask` Worker → 1200 新建 + 名单顺序；二次导入 1200 合并 / 0 新建 / 库计数不变）。
-- 取消与准入：`test_cancellation_and_ux.py::test_import_cancel_resets_ui`（>500 行走真实 Worker + 阻塞桩，取消后终态复位）；`test_plugin_directory_loading.py::test_loaded_plugin_action_obeys_window_admission`（busy 期间插件动作与全部冲突入口拒绝，tooltip 说明「人员导入」，终态恢复）。
-- 契约适配：`test_main_window_task_coordination.py`（36 项）与 `test_main_window_workspace_state.py`（20 项）以解析/对话框/提交点替身适配两段式；`test_five_tasks_*` 仍覆盖五个宿主入口（`import_confirm` 无独立窗口入口，其标签经进度/状态文案生效）。
-- 边界：≤500 行确认在**窗口线程同步执行**（写入期间 UI 不重绘，>500 行走 Worker 并在预览内提示）；预览中的编辑/拆分/动作切换逐步落库草稿（每步一次草稿写，未确认前不触碰正式人员）；组标题与多名识别为**启发式**（正则），界面只提示不强制；草稿批次暂无自动清理策略（由 B/F 阶段回看入口落地后统一决策）；`downgrade` 的 `DROP COLUMN` 依赖 SQLite ≥3.35（项目基线 Python 3.11 自带满足）；CLI `import-people` 与插件写路径仍为直通导入（无预览）；未做人工桌面视觉验收。
-
----
-
-### Batch 1 验收证据与边界
-
-- 准入/取消/早到终态：`tests/unit/presentation/test_task_coordinator.py`（9 项）与 `test_main_window_task_coordination.py`（36 项）。覆盖模态重入、五任务互斥、取消对象、三类 early replay、旧任务事件拒绝、失败重试、原 QAction 状态恢复、取消/刷新异常恢复。主要为真实 Qt 信号 + 受控提交替身，不冒充五条完整 Worker 闭环。
-- 实库刷新：`tests/integration/test_task_terminal_refresh.py`（15 项，五任务 × 三终态），真实 SQLite + 当前人员/状态组合筛选 + 照片墙 ID 集合；终态使用受控信号，数据库行模拟任务已持久化部分。
-- 配置插件：`tests/integration/test_plugin_directory_loading.py::test_loaded_plugin_action_obeys_window_admission`，真实目录加载/挂载 QAction，执行方法替身断言 busy 时零调用、终态后可执行且 tooltip 恢复。
-- 深层保护：现有 `test_scan_single_flight.py`、`test_match_persons_controller.py` 和真实执行的 `test_scan_cancellation.py` 均由 Qt 回归及完整套件覆盖；Controller、Worker 源码未改。
-- 开发中曾出现新协调器测试组合的原生崩溃，单项独跑通过；将 route 对 owner 的强引用改为弱引用后，同文件、Presentation 全套和最终全量均通过。此局部修复不构成 LIMIT-004/006 已根治的结论，也未以新增 skip 掩盖。
-- 仅单 MainWindow 的宿主入口互斥，不提供跨窗口/跨进程锁或插件沙箱；同步对话框期间取消按钮不可用。ADR-041 枚举前置、Schema/Alembic、CLI、CI、打包、依赖均未改变。未做人工桌面视觉验收。
-
-### Batch 2 验收证据与边界
-
-- 状态矩阵：`tests/unit/application/test_workspace_readiness.py`（22 项）以替身仓储覆盖人员/照片/待识别/待审核/可归档/根可用/模型三态的全部组合与根探测边界；SQL 聚合语义由真实 SQLite 仓储测试与 `test_application_service_workflows.py`（合计与定向 20 passed）覆盖。
-- 控制器矩阵：`tests/unit/presentation/test_workspace_controller.py`，快照→guidance 的 enabled/tooltip/next_action 全分支。
-- UI 行为：`tests/unit/presentation/test_main_window_workspace_state.py`——初始禁用+下一步按钮、终态/对话框返回后刷新 enabled/tooltip 变化、任务进行中缓存渲染与终态恢复、busy 时下一步按钮禁用、模型缺失下一步弹说明不启动识别、删除登记随照片墙选区变化、取消 tooltip 三态（空闲/可取消/取消中）。`test_review_dialog_empty_queue.py`——0 条时对话框保持打开、按钮置灰、选区启用。
-- 适配回归：`test_match_ui_wiring.py` 与 `test_main_window_task_coordination.py` 的快照式原状态断言更新为就绪/未就绪显式期望；原有互斥、取消、恢复语义断言不变。
-- 边界：Widget 不触仓储（只经 `WorkspaceController` 缓存快照），可用性判断零异常捕获；`MatchPersonsController.start_match`、删除预览、归档服务校验原样保留为第二道防线；模型状态为装配期快照（装包后不自动探测文件变化，需重启）；归档根探测为咨询性检查，不保证后续文件系统变化；未做人工桌面视觉验收。
-
-### Batch 3 验收证据与边界
-
-- 五态矩阵：`tests/unit/presentation/test_overview_presenter.py`（12 项）——空库 → 导入 / 只有人员 → 扫描 / 只有照片 → 导入（识别需人员与照片双齐）/ 全识别待审核 → 审核 / 可归档 → 归档 / 模型缺失·未知 → 模型说明 / 归档根不可用 → 设置 / 全部完成 → 继续扫描；各步 done 语义与 detail 来源（guidance tooltip）断言；快照未加载 → 无清单无 CTA。
-- 导航与常驻可见性：`tests/unit/presentation/test_main_window_navigation.py`（14 项）——Main 工具栏五主操作流程序、数据工具页三维护动作与 Main 无交集、五态 CTA 渲染与真实导入 picker 路由、页面栈切换、审核中心/设置触发式导航开对话框不切页且高亮回贴、状态栏（进度 + CancelTask 按钮）在每页可见、busy 时数据工具动作与概览 CTA 置灰带原因并恢复、导航五项标签。
-- 兼容契约保持：ADR-038 插件挂载（findChild(QToolBar,"Main") + isVisible + actions() 文本契约）由 test_plugin_ui_loading / test_plugin_directory_loading 覆盖全绿；bulk/excel 导入闭环经 Main 工具栏触发"导入人员"全绿；Batch 1/2（协调 45、workspace_state 19、审核空态、workspace_controller）经适配后全绿；缩略图渲染/网格布局经切页适配后全绿。
-- 边界：概览归档步 done 为中性判定（archivable_count==0 即完成，根不可用阻塞由 detail 说明）；空库审核步 done=True 由 detail 解释（权威引导是主 CTA）；未新增图标（文本符号 ✓/○）、未改主题/QSS、未新增依赖；导航仅本窗口范围，不提供跨窗口状态；未做人工桌面视觉验收。
-
-### Batch 4 验收证据与边界
-
-- 筛选轴：`tests/unit/presentation/test_filter_bar.py`（时间模式默认无约束/自定义展开双值/from>to 拦截且恢复后继续、摘要与结果计数、非法区间不改写已生效摘要）与 `test_filter_bar_person_axis_layout.py`（P0-3 布局回归在自定义时间模式对起止两编辑复检）。
-- 空态三态与批量栏：`tests/unit/presentation/test_photo_library_page.py`（8 项）——空库 CTA 扫描、has_photos 快照 + 0 结果 → 筛选空态（不误导重扫）、清除 CTA 复位摘要、busy 态进出、批量栏仅选区出现且计数准确、busy 时批量按钮置灰恢复、双击打开详情、查询后计数回填、详情缺数据降级三断言。
-- 兼容契约保持：`_delete_photos_action` QAction 选区语义（Batch 2 workspace_state 断言不变）；批量归档/删除复用既有 `_on_archive_clicked`/`_on_delete_photos_clicked` 路径（B3 photo_ids 透传不变）；导航/概览/任务协调/导入闭环/缩略图渲染测试全绿；PhotoListModel 与异步缩略图机制零改动。
-- 边界：筛选空态判定使用 WorkspaceController 缓存快照的 has_photos（任务终态/对话框返回即刷新，本轮补 `_refresh_workspace_state` 后重评估）；详情预览解码缓存缩略图小文件（非原图同步 IO，已在 docstring 声明边界）；批量栏按钮与 `_delete_photos_action` 双入口并存（QAction 不再挂工具栏，工具栏入口被批量栏取代）；状态角标沿用 v2.7.0 文本角标（非仅颜色）；未新增图标/主题/QSS/依赖；未做人工桌面视觉验收。
-
-### Batch 5 验收证据与边界
-
-- 可审阅行与置信度表达：`tests/unit/presentation/test_review_dialog_review_board.py`（11 项）——`confidence_band` 分级矩阵（0.90/0.75/0.60 边界归属）、行文本含人读名 + "置信度：较高（0.87）"（文字分级与精确值并存）+ "状态：待审核"、队列总数置顶（布局序断言）。
-- 计数与二次确认：通过/拒绝所选按钮随选区实时显示 N、全选区清空回退无计数文案、全部通过按钮显示队列总数；确认框 No → `bulk_approve` 零调用且队列原样、确认文案含精确数量；Yes → 全量 id 一次性批量且队列刷新。
-- 缩略图安全通道：注入替身源断言 `load_thumbnail(photo.id, raw_path)` 逐行请求、到达信号聚合到同照片全部行（QIcon 非 null）、None 到达与 photo 实体缺失均静默降级（无图标、无请求）；`test_review_controller.py` 新增 `photo_for` 有/无仓储两态。
-- 兼容契约保持：Batch 2 空队列保持打开/按钮置灰语义全绿（确认 stub 放行路径适配）；`_on_review_clicked` 装饰器准入语义由 workspace_state 真实 handler 测试覆盖（替身放宽 `**kwargs` 接收 thumbnail_source）；ReviewRecognitionUseCase 与批量事务零改动；审核对话框关闭后照片墙刷新由 `_refresh_photo_list` 既有查询路径承担。
-- 边界：置信度分级仅措辞不参与任何业务判定（阈值常量注解声明）；键盘多选依赖 Qt ExtendedSelection 默认行为（Ctrl/Shift+方向键），未新增自定义快捷键；缩略图行图标不做过期失效（对话框生命周期短，刷新列表即重建行）；未做人工桌面视觉验收。
 
 ## 6. Next Step（下一步开发计划）
 
-**人员名单导入重设计阶段 A 已实施并验收通过**（2026-09-20 实施 / 2026-09-21 owner 桌面验收 §1–§9 全部通过，见 §2/§5 与 `docs/development/stage-a-import-acceptance-script.md` §11；F-A1/F-A2 裁决已实施并回归）。**阶段 B 已实施并完成 owner 桌面验收（2026-09-23，§1–§9 通过），四项复审问题与复审追问已修复（中文校验文案 / 拖拽无空白行 / 删除确认预选聚焦 / 导入后人员页即时刷新 / 移动后高亮跟随被移动的人），待 owner 复验**（见 §2/§5「阶段 B 复审修复证据与边界」）。UI/UX 收口批次 0–7 全部实施完毕（2026-09-19），待 owner 按 `docs/development/ui-acceptance-script.md` 执行端到端验收。v2.8.0 发布与安装包验收事项仍独立保留；本轮没有重新核验远端 CI、Release body 或安装包。后续均需 owner 立项：
+**待 owner**：
 
-| Next Step | **待 owner**：① **阶段 B 复审五点复验**（工号占用提示中文 / 拖拽排序无空白行 / 删除确认进入即预选并聚焦 / 导入后人员页无需重启刷新 / 上移下移（含拖拽）后高亮跟随被移动的人）与阶段 C（多脸检测与可重跑）是否立项；② 新离线安装包二轮真机验收 + Release body 粘贴 `[2.8.0]` 段后签核；③ A-1 CURRENT_BATCH 导出是否解除挂起（解除则先出批次持久化设计文档）；④ A-3 代码签名证书采购决策；⑤ 是否提交上游 PySide6 issue（草稿就绪）。**可立项**：A-2 大库分块枚举——硬前置：上游并发缺陷需先有结论（枚举回后台线程 = 回到崩溃形态）。**明确不做**：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2（P0 已收口，owner 裁决 2026-09-23）。 |
+| # | 事项 | 依据 |
+|---|---|---|
+| 1 | **业务基线冻结签核**（Stage4.2 八项条件已满足，签核即冻结生效） | `docs/business-baseline/Stage4_2_FinalFreezeReview.md` §9 |
+| 2 | **AUD-017 裁决**：person_embeddings 候选源三选一（A 激活旧表 / B 登记受限 / C 样本直读多样本）——选择后补 ADR；选 A/C 须同补识别侧阈值边界证据进校准报告（顺带闭合 F1-2） | `docs/decisions/AUD-017-person-embeddings-decision.md` |
+| 3 | **推送 44 提交过远端 CI**（AUD-002）+ 发版评估（`[Unreleased]` 段如何切版本、手册阶段 C–F 功能章节补齐） | 体检 §11 发布风险 |
+| 4 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
+| 5 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
+| 6 | 体检 P2 整改排期：AUD-015（归档 FS/DB 失败语义：补对账 or 声明取舍）、AUD-023（取消延迟：`shutdown(cancel_futures=True)` 方向）、AUD-019（workers/配对守卫补测试）、AUD-004 残余（全链贯通回归一条）、AUD-010（DEP §17 文件 I/O：补端口 or 修订规则） | `docs/health-check/FINDINGS_LEDGER.md` |
+
+**可立项**：全链贯通回归测试（导入→配对确认→归档执行单条）；AUD-023 取消延迟修复。**明确不做**（历史裁决维持）：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2。
 
 ---
 
@@ -218,24 +134,22 @@ Alembic 管理（`001_initial_v4` + `002_split_create_ddl` + `003_import_batches
 
 | 职责 | 文件 |
 |---|---|
-| 运行状态唯一快照 | `.ai/PROJECT_STATUS.md` |
-| 架构决策（ADR-031~041，040 Rejected） | `.ai/ARCHITECTURE_DECISIONS.md` |
-| 用户使用手册（安装版端到端） | `docs/user-guide/manual.md` |
-| 打包定义（PyInstaller + Inno Setup） | `packaging/windows/photo_archiver.spec`、`installer.iss`、`ChineseSimplified.isl`（vendored） |
-| 模型部署 SSOT（下载/解包/校验） | `src/photo_archiver/infrastructure/ai/model_deployment.py`（脚本为薄壳） |
-| insightface 装载（root 语义） | `src/photo_archiver/infrastructure/ai/insightface_loader.py` |
-| 扫描预枚举（ADR-041） | `src/photo_archiver/presentation/controllers/scan_controller.py`（主线程枚举）+ `src/photo_archiver/application/services/scan_and_register_photos_service.py`（`enumerate_files`/`pre_enumerated_items`） |
+| 运行状态唯一快照 | `.ai/PROJECT_STATUS.md`（本文件） |
+| 架构决策（ADR-001~046） | `.ai/ARCHITECTURE_DECISIONS.md`（042~046 = 阶段 C–F 裁决补登记） |
+| 当前问题与限制 | `.ai/KNOWN_ISSUES.md`（含体检登记节） |
+| 文档体系导航 | `.ai/DOCUMENT_INDEX.md` |
+| 业务基线（现行/历史/冻结） | `docs/business-baseline/`（README 含来源与有效性表） |
+| Owner 决策材料 | `docs/decisions/AUD-017-person-embeddings-decision.md` |
+| 体检报告与台账 | `docs/health-check/`（工作树产物，含 FINDINGS_LEDGER） |
+| 用户使用手册 | `docs/user-guide/manual.md`（阶段 C–F 功能章节待补，Next Step #3） |
+| 依赖矩阵（SSOT） | `.ai/rules/dependency-rules.md` §4（v1.2.0 已对齐守卫测试） |
+| 数据库初始化/迁移 | `sqlite_connection.py`、`alembic_runner.py`（链 `001`→`008`，`alembic/versions/`） |
+| 可追溯识别运行 | `run_recognition_service.py` + `recognition_scope_dialog.py` + `recognition_failure_service.py` |
+| 聚类 / 配对 | `domain/services/face_clustering.py` / `pairing.py`；`cluster_faces_service.py` / `pairing_workbench_service.py` |
+| 归档（身份去重） | `archive_planner.py` / `archive_executor.py`（E-SG-6 + BLK-1） |
 | 分层边界守卫 | `tests/unit/architecture/test_layer_boundaries.py` |
-| LIMIT-006 压力实验 | `tests/integration/test_scan_stress_no_qtbot.py`（PA_STRESS 门控） |
-| 上游 issue 草稿 | `docs/development/limit006-upstream-issue-draft.md` |
-| UI 文案表（中文化单一置换点） | `src/photo_archiver/presentation/ui_text.py` |
-| 集中视觉体系（Batch 7 唯一样式点） | `src/photo_archiver/presentation/visual_style.py` |
-| 桌面 GUI 人工验收脚本（UI/UX 收口） | `docs/development/ui-acceptance-script.md` |
-| 数据库初始化/迁移 | `src/photo_archiver/infrastructure/database/sqlite_connection.py`、`alembic_runner.py`（迁移链 `001`→`002`→`003`，见 `alembic/versions/`） |
-| 人员导入（阶段 A 两段式） | 解析：`src/photo_archiver/application/services/parse_import_draft_service.py`；确认：`.../confirm_import_service.py`；读表：`src/photo_archiver/infrastructure/importers/roster_table_reader.py`；预览：`src/photo_archiver/presentation/views/import_preview_dialog.py`；草稿仓储：`src/photo_archiver/infrastructure/database/sqlite_import_batch_repository.py` |
-| 人员导入重设计计划（业务 + 工程） | `docs/development/people-import-face-clustering-development-plan.md`、`...-execution-plan.md` |
-| 质量验证 / 发布工作流 | `tests/`、`.github/workflows/ci.yml` / `.github/workflows/release.yml` |
+| 质量验证 / 发布工作流 | `tests/`、`.github/workflows/ci.yml` / `release.yml` |
 
 ---
 
-> 本文件只描述当前状态；历史决策见 `.ai/ARCHITECTURE_DECISIONS.md`，当前问题见 `.ai/KNOWN_ISSUES.md`，路线图见 `.ai/business/roadmap.md`。
+> 本文件只描述当前状态；历史决策见 `.ai/ARCHITECTURE_DECISIONS.md`，当前问题见 `.ai/KNOWN_ISSUES.md`，业务基线见 `docs/business-baseline/`，路线图见 `.ai/business/roadmap.md`。

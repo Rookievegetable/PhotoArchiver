@@ -246,8 +246,11 @@ for person_id in 目标人员集合:                      # 空 = 所有有 APPR
 ```
 
 - **只消费 `MatchStatus.APPROVED`**；待审核/已拒绝永远不会出现在归档计划里。
-- 同一照片被多人通过过时只归档一次，落在第一个 APPROVED 匹配的人员目录下
-  （镜像识别侧 1:N Top-1 策略，裁决 #5）。
+- 归档去重作用域为 **(person, photo)**（E-SG-6，2026-09-25 owner 裁决）：同一照片
+  可同时归属多个 Person（Stage E 多 attribution），各自进入各自的归档记录；
+  同一 (person, photo) 对不会重复归档——成功态记录（ARCHIVED/SKIPPED/RENAMED/
+  OVERWRITTEN）按稳定 person_id 拦截（BLK-1，migration 008；存量无主行回退按
+  姓名命中）。历史上"每照片只归档一次（1:N Top-1）"的旧语义已被本裁决取代。
 - 重跑安全（review M-2）：只有成功态记录阻止再次规划；`PLANNED`（上次崩溃
   孤儿）/`DRY_RUN`（预览）/`FAILED`（失败）**允许重试**。
 - planner 零 IO 副作用：不碰文件系统、不写归档记录，可反复调用于预览。

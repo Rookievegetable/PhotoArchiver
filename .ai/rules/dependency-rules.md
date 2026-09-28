@@ -1,10 +1,10 @@
 # PhotoArchiver Dependency Rules
 
-Version: 1.1.2
+Version: 1.2.0
 
 Status: Stable
 
-Last Updated: 2026-07-24
+Last Updated: 2026-09-28
 
 ---
 
@@ -74,17 +74,19 @@ Dependencies outside these modules require explicit approval.
 
 # 4. Dependency Matrix
 
-| Module         | May Depend On                                     |
-| -------------- | ------------------------------------------------- |
-| app            | presentation, application, common                |
-| presentation   | application, common                               |
-| application    | domain, common                                    |
-| domain         | common                                            |
-| infrastructure | domain, common                                    |
-| workers        | application, common, PySide6.QtCore (threading)   |
-| ai             | infrastructure, domain, common                    |
-| plugins        | application, common                               |
-| common         | Standard Library only                             |
+> **修订（2026-09-28，全面工程健康体检 AUD-009 整改）**：本矩阵与实际 import（AST 实测）及分层守卫测试 `tests/unit/architecture/test_layer_boundaries.py` 对齐——此前 5 行为端口迁移到 Application 层与 TaskCoordinator 接线之前的历史快照。守卫测试是"机器可判定禁令"的常驻自动化；本矩阵是其声明口径。
+
+| Module         | May Depend On                                     | 备注（对齐守卫测试与现状） |
+| -------------- | ------------------------------------------------- | --- |
+| app            | presentation, application, domain, infrastructure, workers, ai, plugins, common | 组合根/装配层，import 全开（守卫测试明确豁免 app） |
+| presentation   | application, domain, common, workers, plugins（ADR-038 插件宿主）, app（仅 `app.context` 类型引用） | 禁止 infrastructure / ai / sqlite3 / cv2 / insightface（DEP-002，守卫测试强制） |
+| application    | domain, common                                    | 无 GUI、无 SQL/图像栈；依赖倒置只经 ports |
+| domain         | common                                            | 零框架依赖（DEP-020/021） |
+| infrastructure | domain, common, **application（ports + dtos）**   | application/ports 为系统侧端口（exporter/unit_of_work/user_settings_store/photo_file_scanner/thumbnail_generator/person_import_reader 等），适配器实现端口并消费其 DTO——Clean Architecture 合法方向 |
+| workers        | application, common, domain, PySide6.QtCore (threading) | domain 仅实体/枚举引用（application_tasks/export_task）；Qt 限 QtCore（WRK-002） |
+| ai             | infrastructure, domain, common                    | 现状仅依赖 domain（比声明更严格） |
+| plugins        | application, common                               | DEP-060 |
+| common         | Standard Library only                             | DEP-071 |
 
 ---
 
@@ -95,7 +97,11 @@ Dependencies outside these modules require explicit approval.
 Presentation MAY import:
 
 * application
+* domain（实体/值对象/域异常——视图与控制器消费业务对象）
 * common
+* workers（任务提交与事件，经 `TaskCoordinator`/`QtWorkerExecutor` 边界）
+* plugins（仅 MainWindow 插件宿主持有 `PluginRegistry`，ADR-038）
+* app（仅 `app.context.ApplicationContext` 类型引用）
 
 ---
 
@@ -223,6 +229,7 @@ Infrastructure MAY depend on:
 
 * domain
 * common
+* application（**ports + dtos**——适配器实现 `application/ports/*` 系统侧端口并消费其 DTO；这是依赖倒置的正确方向，守卫测试放行。禁止依赖 application/services 内部实现细节）
 
 ---
 
@@ -258,6 +265,7 @@ Workers MAY depend on:
 
 * application
 * common
+* domain（实体/枚举引用，如 `RecognitionRun`/`ExportScope` 消费）
 * PySide6.QtCore (threading primitives only, e.g. QObject, QRunnable, QThreadPool, Signal, Slot)
 
 The PySide6.QtCore allowance is a threading boundary dependency required to satisfy WRK-002. Workers MUST NOT import widgets or any other PySide6 submodules outside QtCore.
