@@ -24,6 +24,8 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 ## 2. Current Step（当前开发阶段）
 
+**AUD-017 实现闭环（Stage 11A 决策 + 11B 实现，2026-09-28）**——owner 正式裁决 **Option C**（`person_face_embeddings` 作为后续批次样本相似度候选来源）+ **K-3=suggested 建议层**（样本相似度仅生成 `similarity_suggestion`，不得直接形成身份确认），并附加约束：冷启动 FaceCluster → sort_key → roster_order → ordered_suggestion → 人工确认 → 样本沉淀 链不变、`person_embeddings` 不恢复生产写入路径。**实现核验结论：Option C 的生产链在阶段 E 已存在**（`SuggestPairingsService` 经 `list_enabled()`（enabled=1，person_id 确定序）读候选样本 + `NumpyCosineSimilarityFactory` 多样本 max 余弦 + 规则① `sample_match` 建议 ≥0.40 + 规则③冷启动补位，全部落 suggested 层），本阶段完成证明与登记：**真实 SQLite 闭环集成测试 4 项**（`tests/integration/test_aud017_sample_suggestion_sqlite.py`——主闭环含 disabled 样本排除与解除→重建议→重复确认样本幂等 / 零样本冷启动仅 ordered / 平分 tie-break 确定性 / 维度不一致 fail-closed）、domain 规则钉定 3 项（cluster<persons 不强配 / 平分首位 / 高分胜出）、kernel 钉定 2 项（量化 0.4/0.6 边界 + 混维 fail-closed）；**生产代码零改动**。登记：ADR-047、决策文档 §7 已填裁决、KNOWN_ISSUES 移除 AUD-017（闭环）。遗留边界（ADR-047 登记）：识别兼容链对 `person_embeddings` 的遗留读不动（候选可证恒空）；多样本大库性能路径为实现期关注点；识别侧阈值边界证据随实现轮补校准报告（F1-2）。
+
 **治理基线恢复与 AUD-017 决策准备（Stage 10，2026-09-28）**——全面工程健康体检（同日，Stage 0–9，只读，判 **ATTENTION**：P0×0 / P1×1 / P2×10 / P3×15）后的第一轮整改，严格限定五项：
 
 - **AUD-001（P1）SSOT 恢复**：本文件与 KNOWN_ISSUES/ARCHITECTURE_DECISIONS/DOCUMENT_INDEX/CHANGELOG 全部刷新至 HEAD `2823d1c` 口径（阶段 C–F 完成态、迁移链 001–008、体检发现登记）；根因（阶段收尾义务无书面登记载体）已在体检 DOCUMENTATION_AUDIT 立案。
@@ -104,11 +106,11 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-28（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；当日两段工作：**①全面工程健康体检（Stage 0–9，只读）**——十阶段完成审计基线/架构/业务逻辑/数据/测试/文档/可靠性安全性能/UI/交叉/综合报告；**②治理基线恢复（Stage 10）**——按体检台账执行 AUD-001/003/009/014 整改与 AUD-017 决策准备 |
-| 会话范围 | ①实测复跑全量测试（1310 passed / 6 skipped，两跑）+ 覆盖率 93.2% + ruff/mypy；②AST 依赖图全量实测（19 组层间边缘 + SCC 零环）；③业务链行为审计（归档/审核/配对/识别运行/扫描/导入深查 + 冻结阻断修复逐链核验）；④Schema×17 仓储读写对账；⑤文档体系逐份核验；⑥任务生命周期与安全扫描；⑦十维交叉矩阵；⑧Stage 10 文档整改（详见 §2） |
-| 关键产出 | 体检报告 10 份 + 台账（`docs/health-check/`，工作树未入库）：AUDIT_BASELINE / ARCHITECTURE_AUDIT / CODE_LOGIC_AUDIT / DATA_PERSISTENCE_AUDIT / TEST_QUALITY_AUDIT / DOCUMENTATION_AUDIT / RELIABILITY_SECURITY_PERFORMANCE_AUDIT / UI_AUDIT / CROSS_DIMENSION_RECONCILIATION / FINAL_HEALTH_CHECK（判 ATTENTION）+ FINDINGS_LEDGER（P0×0/P1×1/P2×10/P3×15 + AR×5）；Stage 10：`docs/business-baseline/`（8 文件 + README 来源表）、`docs/decisions/AUD-017-person-embeddings-decision.md`（Decision Required）、dependency-rules §4/DEP-001/030/040 对齐、archive_planner docstring + 两文档 E-SG-6 口径、本文件与 KNOWN_ISSUES/ADR（ADR-042~046）/DOCUMENT_INDEX/CHANGELOG 刷新 |
-| 当前质量门 | 体检实测：pytest **1310 passed / 6 skipped** ×2、ruff 全绿、mypy 258 文件零错、覆盖率 93.2%；Stage 10 验证：分层守卫测试 + archive planner 定向测试 + ruff/mypy（改动文件）全绿（详见提交信息） |
-| 工作区 | main @ `2823d1c`；体检产物与业务基线等新文件随本轮治理提交入库；**未推送**（push 属 owner，GIT-020） |
+| 时间 | 2026-09-28（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；当日四段工作：**①全面工程健康体检（Stage 0–9，只读）**；**②治理基线恢复（Stage 10，commit `a01f11b`）**；**③AUD-017 决策准备（Stage 11A）**——决策材料 v2（真实库探针闭合基线 UNKNOWN-2：生产库 person_embeddings 0 行 / alembic 003 / 472 条识别结果 person_id 全 NULL）→ **owner 正式裁决 Option C + K-3=suggested 层**；**④AUD-017 实现闭环（Stage 11B）** |
+| 会话范围 | Stage 11A：决策文档 v2（现状/数据链/三方案七维对比/冲突 K-1~K-3）；Stage 11B：按裁决核验生产链（Option C 能力阶段 E 已存在）→ 新增真实 SQLite 闭环集成测试 4 项 + domain 钉定 3 项 + kernel 钉定 2 项（生产代码零改动）→ 登记 ADR-047 / 决策文档 §7 / KNOWN_ISSUES 移除 AUD-017 / CHANGELOG / 本文件 |
+| 关键产出 | 体检报告 10 份 + 台账（`docs/health-check/`，工作树未入库）；Stage 10：`docs/business-baseline/`（8 文件 + README）、`docs/decisions/AUD-017-person-embeddings-decision.md`、dependency-rules 对齐、Top-1 三载体清理、SSOT 刷新；Stage 11A/11B：裁决登记 + ADR-047 + `tests/integration/test_aud017_sample_suggestion_sqlite.py`（§14 硬要求：真实数据库→真实候选仓储→真实 kernel→真实建议→人工确认→样本沉淀，零 stub） |
+| 当前质量门 | 全量 pytest 见提交信息（Stage 11B 新增 9 项测试全绿：集成 4 + domain 3 + kernel 2）；ruff / mypy 全绿；体检实测基线 1310 passed / 93.2% 覆盖 |
+| 工作区 | main；Stage 11A/11B 产物随本轮提交入库；**未推送**（push 属 owner，GIT-020） |
 | Remaining | 见 §6 Next Step。 |
 
 ---
@@ -120,11 +122,11 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | # | 事项 | 依据 |
 |---|---|---|
 | 1 | **业务基线冻结签核**（Stage4.2 八项条件已满足，签核即冻结生效） | `docs/business-baseline/Stage4_2_FinalFreezeReview.md` §9 |
-| 2 | **AUD-017 裁决**：person_embeddings 候选源三选一（A 激活旧表 / B 登记受限 / C 样本直读多样本）——选择后补 ADR；选 A/C 须同补识别侧阈值边界证据进校准报告（顺带闭合 F1-2） | `docs/decisions/AUD-017-person-embeddings-decision.md` |
-| 3 | **推送 44 提交过远端 CI**（AUD-002）+ 发版评估（`[Unreleased]` 段如何切版本、手册阶段 C–F 功能章节补齐） | 体检 §11 发布风险 |
-| 4 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
-| 5 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
-| 6 | 体检 P2 整改排期：AUD-015（归档 FS/DB 失败语义：补对账 or 声明取舍）、AUD-023（取消延迟：`shutdown(cancel_futures=True)` 方向）、AUD-019（workers/配对守卫补测试）、AUD-004 残余（全链贯通回归一条）、AUD-010（DEP §17 文件 I/O：补端口 or 修订规则） | `docs/health-check/FINDINGS_LEDGER.md` |
+| 2 | **推送 44+ 提交过远端 CI**（AUD-002）+ 发版评估（`[Unreleased]` 段如何切版本、手册阶段 C–F 功能章节补齐） | 体检 §11 发布风险 |
+| 3 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
+| 4 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
+| 5 | 体检 P2 整改排期：AUD-015（归档 FS/DB 失败语义：补对账 or 声明取舍）、AUD-023（取消延迟：`shutdown(cancel_futures=True)` 方向）、AUD-019（workers/配对守卫补测试）、AUD-004 残余（全链贯通回归一条）、AUD-010（DEP §17 文件 I/O：补端口 or 修订规则） | `docs/health-check/FINDINGS_LEDGER.md` |
+| 6 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
 
 **可立项**：全链贯通回归测试（导入→配对确认→归档执行单条）；AUD-023 取消延迟修复。**明确不做**（历史裁决维持）：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2。
 
@@ -135,7 +137,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 职责 | 文件 |
 |---|---|
 | 运行状态唯一快照 | `.ai/PROJECT_STATUS.md`（本文件） |
-| 架构决策（ADR-001~046） | `.ai/ARCHITECTURE_DECISIONS.md`（042~046 = 阶段 C–F 裁决补登记） |
+| 架构决策（ADR-001~047） | `.ai/ARCHITECTURE_DECISIONS.md`（042~046 = 阶段 C–F 裁决补登记；047 = AUD-017 Option C 落地） |
 | 当前问题与限制 | `.ai/KNOWN_ISSUES.md`（含体检登记节） |
 | 文档体系导航 | `.ai/DOCUMENT_INDEX.md` |
 | 业务基线（现行/历史/冻结） | `docs/business-baseline/`（README 含来源与有效性表） |

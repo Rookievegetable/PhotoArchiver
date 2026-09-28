@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.3.0 ｜ Status: Stable ｜ Last Updated: 2026-09-28
+> Version: 1.4.0 ｜ Status: Stable ｜ Last Updated: 2026-09-28
 
 ---
 
@@ -480,6 +480,15 @@
 | 决策 | 人员匹配阈值判定为 `similarity >= 0.40`（**含等号**）：`DEFAULT_MATCH_THRESHOLD = 0.40`（`application/dtos/settings.py`）+ 设置边界校验 + `CosinePersonMatcher` 注入；配对建议 sample-match 规则同口径；全部文档统一 `>=` 表述（历史 `>`/`>=` 口径分裂收口）。 |
 | 理由 | Stage4.2 实测三点边界：0.39 不命中 / 0.40 命中 / 0.41 命中。 |
 | 影响范围 | settings DTO、`ai/similarity_matcher.py`、`domain/services/pairing.py`、文档口径；**附注**：识别侧（自动匹配）阈值边界证据仍须补入 Stage F 校准报告——与 AUD-017 方案选择一并处理（体检 F1-2 证据缺口）。 |
+
+### ADR-047 — AUD-017 裁决：样本相似度建议走 suggested 层（Option C），`person_embeddings` 不恢复写入（Stage 11B）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（owner 裁决 2026-09-28：Option C + K-3=suggested 层；决策材料 `docs/decisions/AUD-017-person-embeddings-decision.md`） |
+| 决策 | 身份建议的候选来源 = **`person_face_embeddings`（enabled=1 样本）**：建议生成经 `SuggestPairingsService.list_enabled()`（`ORDER BY person_id, created_at, id` 确定序）+ `NumpyCosineSimilarityFactory`（量化 6 位）计算成员观测 × 样本的**多样本 max 余弦**（D4），规则① `>= 0.40`（恰等命中，D-2）产出 `sample_match` 建议；样本相似度结果**仅落 suggested 层**（K-3：绝不写 confirmed、不写兼容行 person_id、不自动学习）；冷启动 ordered_suggestion 链（FaceCluster → sort_key → roster_order → 位次一对一）原样保留，两路径并存互不替代；**`person_embeddings` 不恢复任何生产写入路径**，其读路径保留为兼容链遗留（全 git 历史无写入者、候选可证恒空——真实库探针 0 行，见决策材料 §2）。维度不一致 fail-closed（kernel 拒绝混维向量——单模型 buffalo_l 下维度校验即模型身份守卫；模型版本列如未来需要另行 migration 裁决）。 |
+| 理由 | Option C 正是执行计划 E-3/E-4 与开发计划 :155 的既定形态（多样本匹配、非覆盖式），消除基线 Stage3 B2 的"候选源二义"；K-3 保证人工确认是身份确认的唯一入口（与 D-1/E-SG"永不自动确认"一致）；生产链在阶段 E 已存在（规则①+`list_enabled`），本裁决将其确立为 AUD-017 的正式答案并以真实 SQLite 集成测试闭环证明（任务书 §14：禁止 stub 掩蔽空表）。 |
+| 影响范围 | 零生产代码改动（能力已存在，Stage 11B 完成证明与登记）；新增 `tests/integration/test_aud017_sample_suggestion_sqlite.py`（4 项：主闭环含 disabled 排除与重复确认幂等 / 零样本冷启动 / 平分 tie-break / 维度 fail-closed）、`tests/unit/domain/test_stage_e_pairing_domain.py` 钉定 3 项、`tests/unit/infrastructure/test_cosine_kernel.py` 钉定 2 项；KNOWN_ISSUES 移除 AUD-017 条目。**边界**：识别兼容链（`run_recognition_service` 对 `person_embeddings` 的遗留读）不动——候选可证恒空故行为等价于零匹配，清除属后续清理裁决；多样本匹配的性能路径（样本量大时复用 numpy kernel）为实现期关注点。 |
 
 ---
 

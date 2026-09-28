@@ -298,3 +298,51 @@ def test_face_embedding_sample_entity_rejects_bad_quality():
             person_id=uuid4(), observation_id=uuid4(),
             embedding=FaceEmbedding((1.0, 0.0)), quality_score=1.5,
         )
+
+
+# ── Stage 11B（AUD-017 Option C）规则钉定：top-1 / tie-break / 计数边界 ─────
+
+
+def test_cluster_fewer_than_persons_leaves_extra_roster_unpaired():
+    """规则③边界：组 < 人 → 每组各得一条建议，多出的人员不强配（人工处置）。"""
+    c1 = uuid4()
+    p1, p2 = uuid4(), uuid4()
+    outcomes = _scenario(
+        [_unit(0.0)],
+        [PairingCluster(c1, "k|a|000000", (0,))],
+        [PairingPerson(p1, 1), PairingPerson(p2, 2)],
+        [],
+    )
+    assert len(outcomes) == 1
+    assert outcomes[0].person_id == p1
+    assert outcomes[0].source == "ordered_suggestion"
+
+
+def test_equal_score_tie_breaks_to_first_sample_owner():
+    """规则①平分：两样本同分 → 按样本序（服务侧为 person_id 确定序）取首位。"""
+    c1, p1, p2 = uuid4(), uuid4(), uuid4()
+    vector = _unit(0.0)
+    outcomes = _scenario(
+        [vector, vector, vector],
+        [PairingCluster(c1, "k|a|000000", (0,))],
+        [PairingPerson(p1, 1), PairingPerson(p2, 2)],
+        [p1, p2],
+    )
+    assert len(outcomes) == 1
+    assert outcomes[0].source == "sample_match"
+    assert outcomes[0].person_id == p1       # 严格 > 保守首选 → 确定性
+    assert outcomes[0].score == 1.0
+
+
+def test_higher_score_wins_regardless_of_sample_order():
+    """规则①：取最高分属主，不因样本序在先而偏袒低分。"""
+    c1, p1, p2 = uuid4(), uuid4(), uuid4()
+    outcomes = _scenario(
+        [_unit(0.0), _unit_vector(0.8), _unit_vector(0.9)],
+        [PairingCluster(c1, "k|a|000000", (0,))],
+        [PairingPerson(p1, 1), PairingPerson(p2, 2)],
+        [p1, p2],
+    )
+    assert len(outcomes) == 1
+    assert outcomes[0].person_id == p2
+    assert outcomes[0].score == 0.9
