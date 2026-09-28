@@ -29,13 +29,17 @@ class RunRecognitionService(RunRecognitionUseCase):
                  recognition_repository: RecognitionRepository,
                  recognition_run_repository: RecognitionRunRepository,
                  face_observation_repository: FaceObservationRepository, *,
-                 max_workers: int = 1, progress_reporter=None) -> None:
+                 photo_repository=None, max_workers: int = 1,
+                 progress_reporter=None) -> None:
         self._detector = detector
         self._matcher = matcher
         self._face_embedding_repository = face_embedding_repository
         self._recognition_repository = recognition_repository
         self._run_repository = recognition_run_repository
         self._observation_repository = face_observation_repository
+        # AUD-004 接缝修复：快照必须携带照片 captured_at，聚类 sort_key 的
+        # 时间排序才能经真实链路生效（此前快照恒 None → 全簇退化为创建序）。
+        self._photo_repository = photo_repository
         self._max_workers = max(1, max_workers)
         self._progress_reporter = progress_reporter
         self._cancel_event = Event()
@@ -52,8 +56,15 @@ class RunRecognitionService(RunRecognitionUseCase):
             raise RuntimeError("RecognitionRun did not generate an id")
         self._run_repository.add_run(run)
         self._run_repository.add_run_scopes(run_id, command.selected_ranges)
+        captured_by_photo = {}
+        if self._photo_repository is not None:
+            for photo_id in command.photo_ids:
+                photo = self._photo_repository.find_by_id(photo_id)
+                if photo is not None:
+                    captured_by_photo[photo_id] = photo.captured_at
         self._run_repository.add_run_photos(run_id, [
-            RunPhotoSnapshot(run_id, photo_id, str(image))
+            RunPhotoSnapshot(run_id, photo_id, str(image),
+                             captured_at=captured_by_photo.get(photo_id))
             for photo_id, image in zip(command.photo_ids, command.images)
         ])
         run.start()

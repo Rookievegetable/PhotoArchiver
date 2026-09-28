@@ -388,6 +388,7 @@ def _build_recognition_services(
         recognition_repository=repositories.recognition,
         recognition_run_repository=repositories.recognition_runs,
         face_observation_repository=repositories.face_observations,
+        photo_repository=repositories.photos,
         max_workers=settings.max_workers,
     )
     return match_service, run_service

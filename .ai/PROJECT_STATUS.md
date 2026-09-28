@@ -24,6 +24,8 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 ## 2. Current Step（当前开发阶段）
 
+**AUD-004 全链贯通回归（Stage 12A，2026-09-29）**——补齐体检遗留的"两段式导入→扫描→识别→聚类→配对建议→人工确认→归档规划→归档执行"单条真实链回归：`tests/integration/test_aud004_full_chain_regression.py` 4 场景（真实 SQLite/仓储/服务，仅 AI 检测器按任务书允许用可控假件）：A 标准冷启动（重复 execute 去重 + 全批重跑不覆盖人工决定/兼容 (person,photo) 幂等/归档零重复，且第二代建议自动切换 sample_match 路径——双路径语义得证）、B 簇<人不强配、C 簇>人未确认簇不归属、§9 单项失败隔离+FAILED 重试（现状语义钉定，不涉 AUD-015）。**期间暴露并修复真实接缝缺陷（AUD-004 范围内最小修复）**：`RunRecognitionService` 构造 run_photos 快照时丢弃照片 captured_at → 聚类 sort_key 经真实链路恒为 `~|~|创建序`，Stage D 时间排序从未真实生效；最小修复=服务注入 `PhotoRepository`（可选参数，兼容既有构造）+ 快照填充 captured_at + 装配接线 + 测试快照接缝断言；生产链时间排序自此真实生效。验证：全量 **1323 passed / 6 skipped**、ruff/mypy 绿。
+
 **AUD-017 实现闭环（Stage 11A 决策 + 11B 实现，2026-09-28）**——owner 正式裁决 **Option C**（`person_face_embeddings` 作为后续批次样本相似度候选来源）+ **K-3=suggested 建议层**（样本相似度仅生成 `similarity_suggestion`，不得直接形成身份确认），并附加约束：冷启动 FaceCluster → sort_key → roster_order → ordered_suggestion → 人工确认 → 样本沉淀 链不变、`person_embeddings` 不恢复生产写入路径。**实现核验结论：Option C 的生产链在阶段 E 已存在**（`SuggestPairingsService` 经 `list_enabled()`（enabled=1，person_id 确定序）读候选样本 + `NumpyCosineSimilarityFactory` 多样本 max 余弦 + 规则① `sample_match` 建议 ≥0.40 + 规则③冷启动补位，全部落 suggested 层），本阶段完成证明与登记：**真实 SQLite 闭环集成测试 4 项**（`tests/integration/test_aud017_sample_suggestion_sqlite.py`——主闭环含 disabled 样本排除与解除→重建议→重复确认样本幂等 / 零样本冷启动仅 ordered / 平分 tie-break 确定性 / 维度不一致 fail-closed）、domain 规则钉定 3 项（cluster<persons 不强配 / 平分首位 / 高分胜出）、kernel 钉定 2 项（量化 0.4/0.6 边界 + 混维 fail-closed）；**生产代码零改动**。登记：ADR-047、决策文档 §7 已填裁决、KNOWN_ISSUES 移除 AUD-017（闭环）。遗留边界（ADR-047 登记）：识别兼容链对 `person_embeddings` 的遗留读不动（候选可证恒空）；多样本大库性能路径为实现期关注点；识别侧阈值边界证据随实现轮补校准报告（F1-2）。
 
 **治理基线恢复与 AUD-017 决策准备（Stage 10，2026-09-28）**——全面工程健康体检（同日，Stage 0–9，只读，判 **ATTENTION**：P0×0 / P1×1 / P2×10 / P3×15）后的第一轮整改，严格限定五项：
@@ -106,10 +108,10 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-28（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；当日四段工作：**①全面工程健康体检（Stage 0–9，只读）**；**②治理基线恢复（Stage 10，commit `a01f11b`）**；**③AUD-017 决策准备（Stage 11A）**——决策材料 v2（真实库探针闭合基线 UNKNOWN-2：生产库 person_embeddings 0 行 / alembic 003 / 472 条识别结果 person_id 全 NULL）→ **owner 正式裁决 Option C + K-3=suggested 层**；**④AUD-017 实现闭环（Stage 11B）** |
+| 时间 | 2026-09-28 ~ 09-29（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；五段工作：**①全面工程健康体检（Stage 0–9，只读）**；**②治理基线恢复（Stage 10，commit `a01f11b`）**；**③AUD-017 决策准备（Stage 11A）**——决策材料 v2（真实库探针闭合基线 UNKNOWN-2：生产库 person_embeddings 0 行 / alembic 003 / 472 条识别结果 person_id 全 NULL）→ **owner 正式裁决 Option C + K-3=suggested 层**；**④AUD-017 实现闭环（Stage 11B）**；**⑤AUD-004 全链贯通回归（Stage 12A，09-29）**——4 场景真实链回归 + 聚类时间排序接缝缺陷最小修复（快照 captured_at） |
 | 会话范围 | Stage 11A：决策文档 v2（现状/数据链/三方案七维对比/冲突 K-1~K-3）；Stage 11B：按裁决核验生产链（Option C 能力阶段 E 已存在）→ 新增真实 SQLite 闭环集成测试 4 项 + domain 钉定 3 项 + kernel 钉定 2 项（生产代码零改动）→ 登记 ADR-047 / 决策文档 §7 / KNOWN_ISSUES 移除 AUD-017 / CHANGELOG / 本文件 |
 | 关键产出 | 体检报告 10 份 + 台账（`docs/health-check/`，工作树未入库）；Stage 10：`docs/business-baseline/`（8 文件 + README）、`docs/decisions/AUD-017-person-embeddings-decision.md`、dependency-rules 对齐、Top-1 三载体清理、SSOT 刷新；Stage 11A/11B：裁决登记 + ADR-047 + `tests/integration/test_aud017_sample_suggestion_sqlite.py`（§14 硬要求：真实数据库→真实候选仓储→真实 kernel→真实建议→人工确认→样本沉淀，零 stub） |
-| 当前质量门 | 全量 pytest 见提交信息（Stage 11B 新增 9 项测试全绿：集成 4 + domain 3 + kernel 2）；ruff / mypy 全绿；体检实测基线 1310 passed / 93.2% 覆盖 |
+| 当前质量门 | 全量 pytest **1323 passed / 6 skipped**（体检基线 1310 → 11B +9 → 12A +4）；ruff / mypy 全绿；体检实测覆盖率基线 93.2% |
 | 工作区 | main；Stage 11A/11B 产物随本轮提交入库；**未推送**（push 属 owner，GIT-020） |
 | Remaining | 见 §6 Next Step。 |
 
@@ -125,7 +127,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 2 | **推送 44+ 提交过远端 CI**（AUD-002）+ 发版评估（`[Unreleased]` 段如何切版本、手册阶段 C–F 功能章节补齐） | 体检 §11 发布风险 |
 | 3 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
 | 4 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
-| 5 | 体检 P2 整改排期：AUD-015（归档 FS/DB 失败语义：补对账 or 声明取舍）、AUD-023（取消延迟：`shutdown(cancel_futures=True)` 方向）、AUD-019（workers/配对守卫补测试）、AUD-004 残余（全链贯通回归一条）、AUD-010（DEP §17 文件 I/O：补端口 or 修订规则） | `docs/health-check/FINDINGS_LEDGER.md` |
+| 5 | 体检 P2 整改排期：AUD-015（归档 FS/DB 失败语义：补对账 or 声明取舍）、AUD-023（取消延迟：`shutdown(cancel_futures=True)` 方向）、AUD-019（workers/配对守卫补测试）、AUD-010（DEP §17 文件 I/O：补端口 or 修订规则） | `docs/health-check/FINDINGS_LEDGER.md` |
 | 6 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
 
 **可立项**：全链贯通回归测试（导入→配对确认→归档执行单条）；AUD-023 取消延迟修复。**明确不做**（历史裁决维持）：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2。

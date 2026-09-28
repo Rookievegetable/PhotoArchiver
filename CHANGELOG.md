@@ -40,6 +40,11 @@ Commit-level history lives in git — this file is the user-facing digest.
   批准会明确提示"该结果暂不可归档"，不再静默产出无法归档的记录。
 - **匹配阈值统一为 ≥ 0.40**（D-2，含等号命中）。
 
+### Fixed
+
+- **聚类时间排序接缝修复**：识别运行快照此前未携带照片拍摄时间，聚类排序在真实
+  链路中退化为创建顺序；现快照携带 captured_at，按最早拍摄时间排序真实生效。
+
 ### Docs
 
 - 业务基线入库 `docs/business-baseline/`（Stage1–3 现行有效 + Stage4 冻结审查链）；
