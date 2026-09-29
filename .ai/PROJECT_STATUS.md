@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.35.0 · Last Updated: 2026-09-28 · Status: Live
+> Version: 1.36.0 · Last Updated: 2026-09-29 · Status: Live
 
 ---
 
@@ -23,6 +23,8 @@
 M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 已落地；发布工程至 v2.8.0（2026-09-13）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**：阶段 A（两段式导入，09-21 owner 验收 ✅）→ 阶段 B（人员与分组页，09-23 owner 验收 ✅）→ **阶段 C/D/E/F（2026-09-24 ~ 09-28 全部实施完成并冻结审查）**。**2026-09-28 完成全面工程健康体检（Stage 0–9，判 ATTENTION）与治理基线恢复（Stage 10）**；业务基线冻结正式生效待 owner 签核（Stage4.2 复审 8 项条件已满足，见 `docs/business-baseline/`）。
 
 ## 2. Current Step（当前开发阶段）
+
+**P3 文档与治理卫生清偿 · 第一轮（Stage 13A，2026-09-29）**——体检 P3 共 14 项，按类别分批处置；本轮仅处理文档/治理/仓库卫生类 5 项：**AUD-006**（仓库杂物：`jobs34.json`/`jobs_tmp.json`/`runs_all.json`（93KB CI 查询 dump）/`release_check_tmp.yml`（工作流草稿副本）——经核验无任何代码/测试/文档引用（仅体检台账提及），`git rm` 出库 + `.gitignore` 增加 `jobs*.json`/`runs_all.json`/`*_tmp.yml`/`*.part` 规则并探针验证生效）；**AUD-007**（pre-commit 声明与配置脱节——处置 Option B：删除 dev.txt 钉定与 README 开发栈提及。理由：项目自始无 `.pre-commit-config.yaml`、`.ai/rules/git-rules.md` 无 hook 规范，真实质量门禁是 CI（`ruff check .` + `mypy src` + pytest）+ 手动工具调用；引入 hooks 属开发工作流变更，须 owner 立项而非卫生整改）；**AUD-022**（历史规划文档无标记——`DEVELOPMENT_ROADMAP.md` 与 `NEXT_PHASE_FEATURE_DEVELOPMENT_PLAN.md` 加 `Status: Historical` 横幅：Superseded by / Effective baseline `928981a`+ / 逐条列明已知失真点；历史正文原样保留）；**AUD-005 / AUD-008** 标记 RESOLVED BY PRIOR STAGE（Stage 10 合并 LIMIT 双表、LIMIT-006 去重、Stage 12C 更新 LIMIT-002 说明；LIMIT-001/004 经复核仍准确）。本轮零生产代码行为变更。剩余 9 项 P3（设计/测试/数据/UI 类：AUD-011/012/013/016/018/020/021/024/025）留 Stage 13B/13C。
 
 **AUD-010 Application 文件 I/O 架构边界定性与处置（Stage 12E，2026-09-29）**——**DEP §17 定性 = Type B（规则过度严格）**：全量盘点确认 application 层真实文件 I/O 恰 3 处且全部业务性（归档复制+containment、名单批次哈希、失败清单导出），非业务性 I/O 为零；原禁令"应用层永不触碰文件"与本项目的工作流编排定位冲突。**处置 = 端口化（不取消禁令、不建通用 framework）**：新增 `ArchiveFileStore` / `FailureListWriter` 业务语义端口 + `RosterTableReader.read_bytes` 协议扩展 + 两个基建实现（FS 逻辑逐字迁移，行为零变化）+ **DEP-072** 取代 §17 绝对表述 + 守卫测试 `test_application_has_no_direct_file_io`（AST 逐文件断言，负向验证已捕获注入违规）。行为不变：三冲突策略、dry-run、containment/symlink 防护、M-4 mtime 语义、AUD-015 原子复制与 FS/DB 一致性模型全部由既有套件证明。ADR-049。验证：全量 **1355 passed / 8 skipped**（2 项为 Windows symlink 平台门控）、ruff/mypy 绿。
 
@@ -116,7 +118,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-28 ~ 09-29（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；五段工作：**①全面工程健康体检（Stage 0–9，只读）**；**②治理基线恢复（Stage 10，commit `a01f11b`）**；**③AUD-017 决策准备（Stage 11A）**——决策材料 v2（真实库探针闭合基线 UNKNOWN-2：生产库 person_embeddings 0 行 / alembic 003 / 472 条识别结果 person_id 全 NULL）→ **owner 正式裁决 Option C + K-3=suggested 层**；**④AUD-017 实现闭环（Stage 11B）**；**⑤AUD-004 全链贯通回归（Stage 12A，09-29）**——4 场景真实链回归 + 聚类时间排序接缝缺陷最小修复（快照 captured_at）；**⑥AUD-019 workers/配对守卫测试补强（Stage 12B，09-29）**——15 项真实 SQLite 守卫/生命周期测试；**⑦AUD-023 取消延迟整改（Stage 12C，09-29）**——3 处最小生产修复 + 4 场景确定性取消证据测试；**⑧AUD-015 归档 FS/DB 定性（Stage 12D，09-29）**——6 项故障注入 + ADR-048 一致性模型 + 原子复制修复；**⑨AUD-010 文件 I/O 端口化（Stage 12E，09-29）**——2 端口+2 实现+DEP-072+守卫+8 项契约测试 |
+| 时间 | 2026-09-28 ~ 09-29（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；五段工作：**①全面工程健康体检（Stage 0–9，只读）**；**②治理基线恢复（Stage 10，commit `a01f11b`）**；**③AUD-017 决策准备（Stage 11A）**——决策材料 v2（真实库探针闭合基线 UNKNOWN-2：生产库 person_embeddings 0 行 / alembic 003 / 472 条识别结果 person_id 全 NULL）→ **owner 正式裁决 Option C + K-3=suggested 层**；**④AUD-017 实现闭环（Stage 11B）**；**⑤AUD-004 全链贯通回归（Stage 12A，09-29）**——4 场景真实链回归 + 聚类时间排序接缝缺陷最小修复（快照 captured_at）；**⑥AUD-019 workers/配对守卫测试补强（Stage 12B，09-29）**——15 项真实 SQLite 守卫/生命周期测试；**⑦AUD-023 取消延迟整改（Stage 12C，09-29）**——3 处最小生产修复 + 4 场景确定性取消证据测试；**⑧AUD-015 归档 FS/DB 定性（Stage 12D，09-29）**——6 项故障注入 + ADR-048 一致性模型 + 原子复制修复；**⑨AUD-010 文件 I/O 端口化（Stage 12E，09-29）**——2 端口+2 实现+DEP-072+守卫+8 项契约测试；**⑩P3 治理卫生第一轮（Stage 13A，09-29）**——仓库杂物出库+gitignore、pre-commit 声明收敛、历史文档标记 |
 | 会话范围 | Stage 11A：决策文档 v2（现状/数据链/三方案七维对比/冲突 K-1~K-3）；Stage 11B：按裁决核验生产链（Option C 能力阶段 E 已存在）→ 新增真实 SQLite 闭环集成测试 4 项 + domain 钉定 3 项 + kernel 钉定 2 项（生产代码零改动）→ 登记 ADR-047 / 决策文档 §7 / KNOWN_ISSUES 移除 AUD-017 / CHANGELOG / 本文件 |
 | 关键产出 | 体检报告 10 份 + 台账（`docs/health-check/`，工作树未入库）；Stage 10：`docs/business-baseline/`（8 文件 + README）、`docs/decisions/AUD-017-person-embeddings-decision.md`、dependency-rules 对齐、Top-1 三载体清理、SSOT 刷新；Stage 11A/11B：裁决登记 + ADR-047 + `tests/integration/test_aud017_sample_suggestion_sqlite.py`（§14 硬要求：真实数据库→真实候选仓储→真实 kernel→真实建议→人工确认→样本沉淀，零 stub） |
 | 当前质量门 | 全量 pytest **1355 passed / 8 skipped**（体检基线 1310 → 11B +9 → 12A +4 → 12B +15 → 12C +4 → 12D +6 → 12E +7）；ruff / mypy 全绿；体检实测覆盖率基线 93.2% |
@@ -135,7 +137,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 2 | **推送 44+ 提交过远端 CI**（AUD-002）+ 发版评估（`[Unreleased]` 段如何切版本、手册阶段 C–F 功能章节补齐） | 体检 §11 发布风险 |
 | 3 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
 | 4 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
-| 5 | 体检 P2 已全部闭合（Stage 10–12E）；剩余：推送 + 远端 CI + 发版（#2，owner 操作）、阶段 B 复验（#3）、Release body 签核（#4）、P3 批次与第 5 轮体检候审 | `docs/health-check/FINDINGS_LEDGER.md` |
+| 5 | 体检 P2 已全部闭合（Stage 10–12E）；P3 治理/文档类第一批已清（Stage 13A）；剩余：Stage 13B（P3 测试/契约/工具链：AUD-020 契约测试名实不符、AUD-021 覆盖率范围声明、AUD-016 DTO 校验等）与 Stage 13C（设计/数据/UI/可靠性类：AUD-011/012/013/018/024/025）、推送 + 远端 CI + 发版（#2，owner 操作）、阶段 B 复验（#3）、Release body 签核（#4）、第 5 轮体检候审、审计产物入库决策 | `docs/health-check/FINDINGS_LEDGER.md` |
 | 6 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
 
 **可立项**：全链贯通回归测试（导入→配对确认→归档执行单条）；AUD-023 取消延迟修复。**明确不做**（历史裁决维持）：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2。

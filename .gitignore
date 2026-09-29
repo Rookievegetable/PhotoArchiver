@@ -313,3 +313,11 @@ Desktop.ini
 /build/
 /build_dist/
 *.spec.bak
+
+# 一次性调查/调试产物（Stage 13A：AUD-006）——CI 查询 dump 与工作流草稿
+# 副本，均可随时重新生成，不得入库。
+jobs*.json
+runs_all.json
+*_tmp.yml
+# 原子写残留（ADR-048：崩溃窗口的 .part 兄弟，正常重试会复用/清理）
+*.part

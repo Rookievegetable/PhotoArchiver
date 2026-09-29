@@ -53,7 +53,7 @@ Export Results
 
 > **技术栈权威清单**：`.ai/rules/dependency-rules.md` §13（含层归属、延后批注）。本节为人类入口概览，若与彼冲突以彼为准。
 
-核心运行栈：Python 3.11、PySide6、SQLite（Alembic 迁移管理，ADR-024）、InsightFace + ONNX Runtime、OpenCV、Pillow、openpyxl、Pydantic + pydantic-settings、Loguru。开发栈：pytest、pytest-qt、Ruff、Black、isort、MyPy、pre-commit。已批准但当前未使用：pandas（当前零 import，openpyxl 用于 Step 14 Excel 导出）、watchdog（filesystem watcher 用途预留，当前零 import）。SQLAlchemy 仅被 Alembic 使用（ORM 未引入）。完整清单与层归属见 `.ai/rules/dependency-rules.md` §13。
+核心运行栈：Python 3.11、PySide6、SQLite（Alembic 迁移管理，ADR-024）、InsightFace + ONNX Runtime、OpenCV、Pillow、openpyxl、Pydantic + pydantic-settings、Loguru。开发栈：pytest、pytest-qt、Ruff、Black、isort、MyPy。已批准但当前未使用：pandas（当前零 import，openpyxl 用于 Step 14 Excel 导出）、watchdog（filesystem watcher 用途预留，当前零 import）。SQLAlchemy 仅被 Alembic 使用（ORM 未引入）。完整清单与层归属见 `.ai/rules/dependency-rules.md` §13。
 
 ## 快速开始
 

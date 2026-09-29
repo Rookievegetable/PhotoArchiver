@@ -1,5 +1,13 @@
 # PhotoArchiver — 后续开发路线图（Development Roadmap）
 
+> ## ⚠️ Status: Historical（历史快照，2026-09-29 标记）
+>
+> **本文档是 2026-09-02 体检当时的后续开发计划；历史内容原样保留，不构成现行规范。**
+> - **Superseded by**：`.ai/PROJECT_STATUS.md`（当前状态唯一权威）+ `.ai/business/roadmap.md`（15 步路线图）
+> - **Effective baseline**：`928981a` 及其后继（阶段 A–F 已全部实施完成，见 PROJECT_STATUS §2）
+> - **已知失真**（勿据本文判断现状）：§"Current State" 以现在时描述 2026-09-02 时点状态（当时记载的"3 项用户可见功能失效""无 WAL/备份""文档漂移"等问题此后均已修复）；Phase 授权状态与排期均已过期。
+> - 现行文档导航见 `.ai/DOCUMENT_INDEX.md`。
+
 > **文档性质**：基于 2026-09-02 全项目体检（`docs/health-check/PROJECT_HEALTH_CHECK.md`）的后续开发计划
 > **制定基线**：HEAD `3a2ef0a`（== origin/main，clean）
 > **排序原则**：按 User Value / Blocking Relationship / Architecture Impact / Risk / Effort / Release Impact 排序，**禁止按 Feature ID 顺序机械开发**

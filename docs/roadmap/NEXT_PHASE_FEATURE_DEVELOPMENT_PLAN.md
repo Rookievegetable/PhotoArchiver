@@ -1,5 +1,13 @@
 # PhotoArchiver — Next Phase Feature Development Plan
 
+> ## ⚠️ Status: Historical（历史快照，2026-09-29 标记）
+>
+> **本文档是 2026-09-02 基线的下一阶段规划；历史内容原样保留，不构成现行规范。**
+> - **Superseded by**：`.ai/PROJECT_STATUS.md`（当前状态唯一权威）
+> - **Effective baseline**：`928981a` 及其后继
+> - **已知失真**（勿据本文的缺口表判断现状）：§3 缺口表所列项目此后均已落地或改写——"筛选人员轴/日期轴 PARTIAL"已实装（三轴可用）；"照片删除/库管理 MISSING（照片只进不出）"已实现（`delete_photos_service` + 照片库删除入口 + prune-missing）；Phase 9 P0 已实施完成。
+> - 现行文档导航见 `.ai/DOCUMENT_INDEX.md`。
+
 > **文档性质**：下一阶段功能开发规划（2026-09-02 制定，Owner 已据此授权 Phase 9 P0 实施）
 > **制定基线**：HEAD `4c0cc8c`（== origin/main，工作树干净；Phase 4.1→8 全部 COMPLETE，Git History Cleanup + Remote Alignment 完成）
 > **方法论**：Evidence > Assumption——Feature Inventory 全部结论基于当前 HEAD 代码/测试实测，不将"文档说 COMPLETE"等同于"实现 COMPLETE"
