@@ -321,3 +321,6 @@ runs_all.json
 *_tmp.yml
 # 原子写残留（ADR-048：崩溃窗口的 .part 兄弟，正常重试会复用/清理）
 *.part
+
+# 覆盖率二进制数据（可由任何 coverage 运行再生成；仓库只保留 JSON 证据）
+docs/health-check/evidence/.coverage_*

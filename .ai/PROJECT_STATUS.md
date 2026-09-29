@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.39.0 · Last Updated: 2026-09-30 · Status: Live
+> Version: 1.40.0 · Last Updated: 2026-09-30 · Status: Live
 
 ---
 
@@ -23,6 +23,8 @@
 M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 已落地；发布工程至 v2.8.0（2026-09-13）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**：阶段 A（两段式导入，09-21 owner 验收 ✅）→ 阶段 B（人员与分组页，09-23 owner 验收 ✅）→ **阶段 C/D/E/F（2026-09-24 ~ 09-28 全部实施完成并冻结审查）**。**2026-09-28 完成全面工程健康体检（Stage 0–9，判 ATTENTION）与治理基线恢复（Stage 10）**；业务基线冻结正式生效待 owner 签核（Stage4.2 复审 8 项条件已满足，见 `docs/business-baseline/`）。
 
 ## 2. Current Step（当前开发阶段）
+
+**整改收口与发布基线核验（Stage 13D，2026-09-30）**——体检整改全链收口：①**Finding 台账归一**（25 条：P1×1 / P2×10 / P3×14）——四行（AUD-001/003/009/014）此前收尾证据只在提交记录与 SSOT、行内状态未更新，本阶段经**当前 HEAD 复核后**归位；另对三处曾被体检结论证伪的项（AUD-016 无校验 / AUD-025 队列吞错 / AUD-010 直接 I/O）做 HEAD 证据抽查，全部与台账一致——**台账反映当前 HEAD，非历史报告**。②**审计产物入库**：`docs/health-check/`（README 索引 + 10 份报告 + 台账 + evidence）与 `docs/development/evidence/stage-f-*.md` 正式纳入 Git，使 SSOT 引用有效（此前指向未入库路径）。③**历史幽灵任务清理**：Stage B 五点复验确认为 Owner 人工验收项（非代码遗留）——其五项修复均有回归测试，仅桌面复验待 Owner。④**发布基线核对**：pyproject/`.env.example`/最新 tag 一致为 2.8.0（`git describe` = v2.8.0-59-ga5fb7aa），56 提交未推送（Owner 操作）。⑤质量门 HEAD 实测复现：**1378 passed / 8 skipped / 0 failed**、ruff 全绿、mypy 261 文件零错。⑥**未决 Owner 决策**：ADR-050 附属项（3 个零边界消费者 Protocol 的删除变体 = 公开 API 变更）——本阶段不自行裁决。
 
 **P3 连接生命周期与审核错误语义清偿（Stage 13C-C，2026-09-30）——体检 P3 全部 15 项处置完毕**（14 FIXED + AUD-024 ACCEPTED-RISK）。**AUD-024 ACCEPTED-RISK**：复核确认 per-call 连接不跨方法持有/不缓存/不跨线程共享（thread-local provider），UoW/backup/integrity 三路径均**显式 close**；剩余风险仅"依赖 CPython 引用计数"（项目钉定 3.11）+ 异常 traceback 下延后至 GC——有界非泄漏，**不机械插入 close()**；契约以 7 项行为测试钉死（连接唯一性、UoW commit/rollback/异常 close、嵌套拒绝、**真实 UNIQUE 冲突后不滞留写锁**）。**AUD-025 FIXED（前提证伪 + 契约固化）**：体检所指吞错点实为 D-1 **身份选择器**读取（`_available_persons`），**审核队列读取链无 blanket catch**——真实读失败向上冒泡，空态仅表示成功的空查询；4 项真实 SQLite 测试钉死（空态业务状态 / 读失败冒泡且 `REVIEW_EMPTY` 从未出现 / 故障恢复后重读正常 / 真实读路径对照）。选择器降级保留为文档化设计（失败后果由既有"未指定身份"显式告警覆盖），为其加独立错误提示属产品取舍不阻塞。ADR-053。验证：全量 **1378 passed / 8 skipped**、ruff/mypy（261 文件）绿。
 
@@ -144,7 +146,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 2 | **推送 44+ 提交过远端 CI**（AUD-002）+ 发版评估（`[Unreleased]` 段如何切版本、手册阶段 C–F 功能章节补齐） | 体检 §11 发布风险 |
 | 3 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
 | 4 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
-| 5 | 体检 P1+P2 已全部闭合（Stage 10–12E）；**P3 全部 15 项处置完毕**（Stage 13A/13B/13C-A/13C-B/13C-C）；遗留待决：①ADR-050 的 3 个 Protocol 删除变体（Owner API 决策）；②推送 + 远端 CI + 发版（#2，owner 操作）；③阶段 B 复验（#3）；④Release body 签核（#4）；⑤体检产物（`docs/health-check/`）入库决策；⑥第 5 轮全面体检候审 | `docs/health-check/FINDINGS_LEDGER.md` |
+| 5 | 体检整改全链闭合（P1 0 OPEN / P2 仅 AUD-002 owner 操作 / P3 0 OPEN）；**第 5 轮全面体检候审**（前置条件：P1=0 ✅、P2=0 ❌（AUD-002 待 Owner 推送+CI）、P3=0 OPEN ✅、Owner 决策待结 ❌（ADR-050 附属 Protocol 删除变体）、SSOT 同步 ✅——待 #2 与 Owner 决策落地后进入 Final Re-Audit）；③阶段 B 五点桌面复验（Owner 人工验收，修复均有回归测试）；④Release body 签核（#4，v2.8.0 body 待粘贴 CHANGELOG `[2.8.0]` 段） | `docs/health-check/FINDINGS_LEDGER.md`（已入库） |
 | 6 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
 
 **可立项**：全链贯通回归测试（导入→配对确认→归档执行单条）；AUD-023 取消延迟修复。**明确不做**（历史裁决维持）：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2。
@@ -161,7 +163,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 文档体系导航 | `.ai/DOCUMENT_INDEX.md` |
 | 业务基线（现行/历史/冻结） | `docs/business-baseline/`（README 含来源与有效性表） |
 | Owner 决策材料 | `docs/decisions/AUD-017-person-embeddings-decision.md` |
-| 体检报告与台账 | `docs/health-check/`（工作树产物，含 FINDINGS_LEDGER） |
+| 体检报告与台账 | `docs/health-check/`（**已入库**，含 README 索引 + FINDINGS_LEDGER 状态字段为 Finding 权威） |
 | 用户使用手册 | `docs/user-guide/manual.md`（阶段 C–F 功能章节待补，Next Step #3） |
 | 依赖矩阵（SSOT） | `.ai/rules/dependency-rules.md` §4（v1.2.0 已对齐守卫测试） |
 | 数据库初始化/迁移 | `sqlite_connection.py`、`alembic_runner.py`（链 `001`→`008`，`alembic/versions/`） |

@@ -6,7 +6,7 @@
 >
 > 任何 AI 在 30 秒内读完本文即可理解整个文档体系结构。
 >
-> Version: 1.5.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
+> Version: 1.6.0 ｜ Status: Stable ｜ Last Updated: 2026-09-30
 
 ---
 
@@ -84,7 +84,7 @@ flowchart TD
 
 | 文档 | 职责 | 类型/状态 |
 |---|---|---|
-| `docs/health-check/`（AUDIT_BASELINE、九份分项报告、FINAL_HEALTH_CHECK、FINDINGS_LEDGER、evidence/） | 2026-09-28 全面工程健康体检（Stage 0–9，判 ATTENTION）与 Stage 10 治理恢复产物——**当前 Findings 唯一台账** | 审计产物（**工作树未入库**；入库后本索引更新） |
+| `docs/health-check/`（README 索引 + AUDIT_BASELINE、九份分项报告、FINAL_HEALTH_CHECK、FINDINGS_LEDGER、evidence/） | 2026-09-28 全面工程健康体检（Stage 0–9，判 ATTENTION）与 Stage 10–13D 整改闭环产物——**当前 Findings 唯一台账**（状态字段权威：25 条中 P1 0 OPEN / P2 1 OPEN[AUD-002] / P3 0 OPEN） | 审计产物（**已入库** 2026-09-30；报告正文为审计时点快照，当前状态以 PROJECT_STATUS 为准——见该目录 README「使用规则」） |
 | `docs/health-check/PROJECT_HEALTH_CHECK.md`、`PROJECT_HEALTH_CHECK_2026-09-10.md` | 历史体检报告（2026-09-02 / 2026-09-10 两轮） | 历史快照（结论已被后续轮次与 2026-09-28 体检取代） |
 | `docs/roadmap/DEVELOPMENT_ROADMAP.md` | 基于 2026-09-02 体检的后续开发计划 | **历史快照**（其"Current State"为 09-02 时点，此后状态全部演进；现行状态以 `.ai/PROJECT_STATUS.md` 为准） |
 | `docs/roadmap/NEXT_PHASE_FEATURE_DEVELOPMENT_PLAN.md` | 基于 2026-09-02 基线的下一阶段功能规划（Phase 9 P0 已实施） | **历史快照**（其缺口表部分行已被后续实现覆盖，如照片删除；现行状态以 `.ai/PROJECT_STATUS.md` 为准） |

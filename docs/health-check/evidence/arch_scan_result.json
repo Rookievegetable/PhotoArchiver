@@ -1,0 +1,3424 @@
+{
+ "layer_edges": {
+  "ai->domain": [
+   "photo_archiver.ai.insightface_detector -> photo_archiver.domain.exceptions",
+   "photo_archiver.ai.insightface_detector -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.ai.insightface_recognizer -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.ai.similarity_matcher -> photo_archiver.domain.value_objects.__init__"
+  ],
+  "app->presentation": [
+   "photo_archiver.app.application -> photo_archiver.presentation.translations",
+   "photo_archiver.app.application -> photo_archiver.presentation.views.main_window",
+   "photo_archiver.app.application -> photo_archiver.presentation.visual_style",
+   "photo_archiver.app.context -> photo_archiver.presentation.controllers.__init__",
+   "photo_archiver.app.ui_assembly -> photo_archiver.presentation.controllers.__init__"
+  ],
+  "app->application": [
+   "photo_archiver.app.bootstrap -> photo_archiver.application.ports.__init__",
+   "photo_archiver.app.bootstrap -> photo_archiver.application.services.__init__",
+   "photo_archiver.app.context -> photo_archiver.application.ports.__init__",
+   "photo_archiver.app.services -> photo_archiver.application.__init__",
+   "photo_archiver.app.services -> photo_archiver.application.dtos.workspace",
+   "photo_archiver.app.services -> photo_archiver.application.services.workspace_readiness",
+   "photo_archiver.app.services -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.app.ui_assembly -> photo_archiver.application.__init__",
+   "photo_archiver.app.ui_assembly -> photo_archiver.application.ports.system_settings"
+  ],
+  "app->infrastructure": [
+   "photo_archiver.app.bootstrap -> photo_archiver.infrastructure.config.__init__",
+   "photo_archiver.app.bootstrap -> photo_archiver.infrastructure.database.alembic_runner",
+   "photo_archiver.app.bootstrap -> photo_archiver.infrastructure.database.integrity",
+   "photo_archiver.app.bootstrap -> photo_archiver.infrastructure.logging.__init__",
+   "photo_archiver.app.context -> photo_archiver.infrastructure.config.__init__",
+   "photo_archiver.app.repositories -> photo_archiver.infrastructure.__init__",
+   "photo_archiver.app.services -> photo_archiver.infrastructure.__init__",
+   "photo_archiver.app.services -> photo_archiver.infrastructure.config.__init__",
+   "photo_archiver.app.services -> photo_archiver.infrastructure.image.__init__",
+   "photo_archiver.app.services -> photo_archiver.infrastructure.ai.__init__",
+   "photo_archiver.app.ui_assembly -> photo_archiver.infrastructure.config.__init__",
+   "photo_archiver.app.ui_assembly -> photo_archiver.infrastructure.config.settings",
+   "photo_archiver.app.ui_assembly -> photo_archiver.infrastructure.exporters.__init__",
+   "photo_archiver.app.ui_assembly -> photo_archiver.infrastructure.image.__init__",
+   "photo_archiver.app.ui_assembly -> photo_archiver.infrastructure.persistence.qsettings_user_settings_store"
+  ],
+  "app->workers": [
+   "photo_archiver.app.bootstrap -> photo_archiver.workers.__init__",
+   "photo_archiver.app.context -> photo_archiver.workers.__init__",
+   "photo_archiver.app.ui_assembly -> photo_archiver.workers.__init__"
+  ],
+  "app->domain": [
+   "photo_archiver.app.repositories -> photo_archiver.domain.__init__"
+  ],
+  "app->ai": [
+   "photo_archiver.app.services -> photo_archiver.ai.__init__",
+   "photo_archiver.app.services -> photo_archiver.ai.similarity_matcher",
+   "photo_archiver.app.services -> photo_archiver.ai.similarity_matcher"
+  ],
+  "application->domain": [
+   "photo_archiver.application.commands.cluster_faces -> photo_archiver.domain.services.face_clustering",
+   "photo_archiver.application.commands.start_recognition_run -> photo_archiver.domain.__init__",
+   "photo_archiver.application.dtos.archive -> photo_archiver.domain.entities.archive",
+   "photo_archiver.application.dtos.archive -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.dtos.cluster_results -> photo_archiver.domain.__init__",
+   "photo_archiver.application.dtos.duplicates -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.application.dtos.import_draft -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.application.dtos.people_admin -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.application.dtos.recognition -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.ports.archive_path_builder -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.ports.face_detector -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.ports.face_recognizer -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.ports.person_matcher -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.ports.photo_metadata_reader -> photo_archiver.domain.__init__",
+   "photo_archiver.application.ports.similarity_kernel -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.archive_executor -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.archive_executor -> photo_archiver.domain.entities.archive",
+   "photo_archiver.application.services.archive_executor -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.services.archive_path_builder_service -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.services.archive_path_builder_service -> photo_archiver.domain.value_objects.archive_path",
+   "photo_archiver.application.services.archive_planner -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.backfill_capture_time_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.backfill_content_hash_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.backfill_historical_people_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.backfill_historical_people_service -> photo_archiver.domain.repositories.import_batch_repository",
+   "photo_archiver.application.services.backfill_historical_people_service -> photo_archiver.domain.repositories.person_repository",
+   "photo_archiver.application.services.cleanup_thumbnail_cache_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.cluster_faces_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.cluster_faces_service -> photo_archiver.domain.entities.face_observation",
+   "photo_archiver.application.services.cluster_results_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.confirm_import_service -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.application.services.confirm_import_service -> photo_archiver.domain.entities.person",
+   "photo_archiver.application.services.confirm_import_service -> photo_archiver.domain.exceptions",
+   "photo_archiver.application.services.confirm_import_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.confirm_import_service -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.services.delete_person_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.delete_photos_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.detect_duplicates_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.dispose_duplicates_service -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.application.services.dispose_duplicates_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.export_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.export_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.face_analysis_task -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.face_analysis_task -> photo_archiver.domain.exceptions",
+   "photo_archiver.application.services.import_people_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.import_people_service -> photo_archiver.domain.exceptions",
+   "photo_archiver.application.services.list_persons_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.list_persons_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.list_recognition_runs_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.manage_people_service -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.application.services.manage_people_service -> photo_archiver.domain.exceptions",
+   "photo_archiver.application.services.manage_people_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.manage_people_service -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.services.match_persons_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.pairing_workbench_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.pairing_workbench_service -> photo_archiver.domain.entities.cluster_assignment",
+   "photo_archiver.application.services.pairing_workbench_service -> photo_archiver.domain.entities.face_cluster",
+   "photo_archiver.application.services.pairing_workbench_service -> photo_archiver.domain.repositories.cluster_assignment_repository",
+   "photo_archiver.application.services.pairing_workbench_service -> photo_archiver.domain.repositories.recognition_repository",
+   "photo_archiver.application.services.parse_import_draft_service -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.application.services.parse_import_draft_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.parse_import_draft_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.plugin_context_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.plugin_context_service -> photo_archiver.domain.entities.recognition",
+   "photo_archiver.application.services.plugin_context_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.prune_missing_photos_service -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.application.services.prune_missing_photos_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.prune_missing_photos_service -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.application.services.recognition_failure_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.register_photo_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.review_recognition_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.run_recognition_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.scan_and_register_photos_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.search_photos_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.search_photos_service -> photo_archiver.domain.repositories.__init__",
+   "photo_archiver.application.services.suggest_pairings_service -> photo_archiver.domain.__init__",
+   "photo_archiver.application.services.suggest_pairings_service -> photo_archiver.domain.entities.cluster_assignment",
+   "photo_archiver.application.services.suggest_pairings_service -> photo_archiver.domain.repositories.cluster_assignment_repository",
+   "photo_archiver.application.services.workspace_readiness -> photo_archiver.domain.__init__",
+   "photo_archiver.application.use_cases.cluster_faces -> photo_archiver.domain.__init__",
+   "photo_archiver.application.use_cases.review_recognition -> photo_archiver.domain.__init__",
+   "photo_archiver.application.use_cases.run_recognition -> photo_archiver.domain.__init__"
+  ],
+  "infrastructure->domain": [
+   "photo_archiver.infrastructure.cosine_kernel -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.database.sqlite_archive_record_repository -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.database.sqlite_archive_record_repository -> photo_archiver.domain.entities.archive",
+   "photo_archiver.infrastructure.database.sqlite_cluster_assignment_repository -> photo_archiver.domain.entities.cluster_assignment",
+   "photo_archiver.infrastructure.database.sqlite_cluster_assignment_repository -> photo_archiver.domain.repositories.cluster_assignment_repository",
+   "photo_archiver.infrastructure.database.sqlite_cluster_assignment_repository -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.infrastructure.database.sqlite_face_cluster_repository -> photo_archiver.domain.entities.face_cluster",
+   "photo_archiver.infrastructure.database.sqlite_face_cluster_repository -> photo_archiver.domain.repositories.face_cluster_repository",
+   "photo_archiver.infrastructure.database.sqlite_face_embedding_repository -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.database.sqlite_face_observation_repository -> photo_archiver.domain.entities.face_observation",
+   "photo_archiver.infrastructure.database.sqlite_face_observation_repository -> photo_archiver.domain.repositories.face_observation_repository",
+   "photo_archiver.infrastructure.database.sqlite_folder_repository -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.database.sqlite_import_batch_repository -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.infrastructure.database.sqlite_mappers -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.database.sqlite_mappers -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.infrastructure.database.sqlite_mappers -> photo_archiver.domain.entities.archive",
+   "photo_archiver.infrastructure.database.sqlite_mappers -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.infrastructure.database.sqlite_person_repository -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.database.sqlite_photo_repository -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.database.sqlite_recognition_repository -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.database.sqlite_recognition_repository -> photo_archiver.domain.repositories.recognition_repository",
+   "photo_archiver.infrastructure.database.sqlite_recognition_run_repository -> photo_archiver.domain.entities.recognition_run",
+   "photo_archiver.infrastructure.database.sqlite_recognition_run_repository -> photo_archiver.domain.repositories.recognition_run_repository",
+   "photo_archiver.infrastructure.database.sqlite_recognition_run_repository -> photo_archiver.domain.value_objects.__init__",
+   "photo_archiver.infrastructure.filesystem.pillow_photo_metadata_reader -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.repositories.in_memory_cluster_assignment_repository -> photo_archiver.domain.entities.cluster_assignment",
+   "photo_archiver.infrastructure.repositories.in_memory_cluster_assignment_repository -> photo_archiver.domain.entities.face_cluster",
+   "photo_archiver.infrastructure.repositories.in_memory_cluster_assignment_repository -> photo_archiver.domain.repositories.cluster_assignment_repository",
+   "photo_archiver.infrastructure.repositories.in_memory_face_cluster_repository -> photo_archiver.domain.entities.face_cluster",
+   "photo_archiver.infrastructure.repositories.in_memory_face_cluster_repository -> photo_archiver.domain.repositories.face_cluster_repository",
+   "photo_archiver.infrastructure.repositories.in_memory_face_observation_repository -> photo_archiver.domain.entities.face_observation",
+   "photo_archiver.infrastructure.repositories.in_memory_face_observation_repository -> photo_archiver.domain.repositories.face_observation_repository",
+   "photo_archiver.infrastructure.repositories.in_memory_folder_repository -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.repositories.in_memory_person_repository -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.repositories.in_memory_photo_repository -> photo_archiver.domain.__init__",
+   "photo_archiver.infrastructure.repositories.in_memory_recognition_run_repository -> photo_archiver.domain.entities.recognition_run",
+   "photo_archiver.infrastructure.repositories.in_memory_recognition_run_repository -> photo_archiver.domain.repositories.recognition_run_repository",
+   "photo_archiver.infrastructure.repositories.in_memory_recognition_run_repository -> photo_archiver.domain.value_objects.__init__"
+  ],
+  "infrastructure->application": [
+   "photo_archiver.infrastructure.database.sqlite_unit_of_work -> photo_archiver.application.ports.__init__",
+   "photo_archiver.infrastructure.exporters.csv_exporter -> photo_archiver.application.ports.exporter",
+   "photo_archiver.infrastructure.exporters.excel_exporter -> photo_archiver.application.ports.exporter",
+   "photo_archiver.infrastructure.exporters.html_exporter -> photo_archiver.application.ports.exporter",
+   "photo_archiver.infrastructure.filesystem.local_photo_file_scanner -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.infrastructure.filesystem.local_photo_file_scanner -> photo_archiver.application.ports.__init__",
+   "photo_archiver.infrastructure.filesystem.pillow_photo_metadata_reader -> photo_archiver.application.ports.__init__",
+   "photo_archiver.infrastructure.image.pillow_thumbnail_generator -> photo_archiver.application.ports.__init__",
+   "photo_archiver.infrastructure.importers.dispatching_person_import_reader -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.infrastructure.importers.dispatching_person_import_reader -> photo_archiver.application.ports.__init__",
+   "photo_archiver.infrastructure.importers.excel_person_import_reader -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.infrastructure.importers.excel_person_import_reader -> photo_archiver.application.ports.__init__",
+   "photo_archiver.infrastructure.importers.roster_table_reader -> photo_archiver.application.dtos.import_draft",
+   "photo_archiver.infrastructure.importers.txt_person_import_reader -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.infrastructure.importers.txt_person_import_reader -> photo_archiver.application.ports.__init__",
+   "photo_archiver.infrastructure.persistence.in_memory_user_settings_store -> photo_archiver.application.dtos.settings",
+   "photo_archiver.infrastructure.persistence.in_memory_user_settings_store -> photo_archiver.application.ports.user_settings_store",
+   "photo_archiver.infrastructure.persistence.qsettings_user_settings_store -> photo_archiver.application.dtos.settings",
+   "photo_archiver.infrastructure.persistence.qsettings_user_settings_store -> photo_archiver.application.ports.user_settings_store"
+  ],
+  "plugins->application": [
+   "photo_archiver.plugins.loader -> photo_archiver.application.ports.plugin",
+   "photo_archiver.plugins.loader -> photo_archiver.application.ports.plugin_context"
+  ],
+  "presentation->application": [
+   "photo_archiver.presentation.controllers.archive_controller -> photo_archiver.application.__init__",
+   "photo_archiver.presentation.controllers.archive_controller -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.presentation.controllers.cluster_faces_controller -> photo_archiver.application.__init__",
+   "photo_archiver.presentation.controllers.cluster_faces_controller -> photo_archiver.application.commands.__init__",
+   "photo_archiver.presentation.controllers.detect_duplicates_controller -> photo_archiver.application.commands.__init__",
+   "photo_archiver.presentation.controllers.detect_duplicates_controller -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.presentation.controllers.detect_duplicates_controller -> photo_archiver.application.services.__init__",
+   "photo_archiver.presentation.controllers.detect_duplicates_controller -> photo_archiver.application.use_cases.__init__",
+   "photo_archiver.presentation.controllers.export_controller -> photo_archiver.application.dtos.export",
+   "photo_archiver.presentation.controllers.export_controller -> photo_archiver.application.services.export_service",
+   "photo_archiver.presentation.controllers.export_controller -> photo_archiver.application.ports.exporter",
+   "photo_archiver.presentation.controllers.import_people_controller -> photo_archiver.application.__init__",
+   "photo_archiver.presentation.controllers.match_persons_controller -> photo_archiver.application.__init__",
+   "photo_archiver.presentation.controllers.match_persons_controller -> photo_archiver.application.commands.__init__",
+   "photo_archiver.presentation.controllers.photo_list_controller -> photo_archiver.application.ports.__init__",
+   "photo_archiver.presentation.controllers.photo_list_controller -> photo_archiver.application.ports.thumbnail_cache",
+   "photo_archiver.presentation.controllers.photo_list_controller -> photo_archiver.application.services.__init__",
+   "photo_archiver.presentation.controllers.recognition_run_controller -> photo_archiver.application.__init__",
+   "photo_archiver.presentation.controllers.recognition_run_controller -> photo_archiver.application.commands.__init__",
+   "photo_archiver.presentation.controllers.review_controller -> photo_archiver.application.__init__",
+   "photo_archiver.presentation.controllers.scan_controller -> photo_archiver.application.__init__",
+   "photo_archiver.presentation.controllers.settings_controller -> photo_archiver.application.__init__",
+   "photo_archiver.presentation.controllers.workspace_controller -> photo_archiver.application.dtos.workspace",
+   "photo_archiver.presentation.views.archive_preview_dialog -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.presentation.views.cluster_results_dialog -> photo_archiver.application.dtos.cluster_results",
+   "photo_archiver.presentation.views.cluster_results_dialog -> photo_archiver.application.services.__init__",
+   "photo_archiver.presentation.views.duplicate_report_dialog -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.presentation.views.duplicate_report_dialog -> photo_archiver.application.use_cases.__init__",
+   "photo_archiver.presentation.views.export_dialog -> photo_archiver.application.dtos.export",
+   "photo_archiver.presentation.views.import_preview_dialog -> photo_archiver.application.commands.import_draft",
+   "photo_archiver.presentation.views.import_preview_dialog -> photo_archiver.application.dtos.import_draft",
+   "photo_archiver.presentation.views.main_window -> photo_archiver.application.dtos.export",
+   "photo_archiver.presentation.views.main_window -> photo_archiver.application.dtos.plugin_action_result",
+   "photo_archiver.presentation.views.main_window -> photo_archiver.application.commands.__init__",
+   "photo_archiver.presentation.views.pairing_workbench_dialog -> photo_archiver.application.commands.pairing",
+   "photo_archiver.presentation.views.pairing_workbench_dialog -> photo_archiver.application.services.__init__",
+   "photo_archiver.presentation.views.people_admin_page -> photo_archiver.application.commands.__init__",
+   "photo_archiver.presentation.views.people_admin_page -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.presentation.views.people_admin_page -> photo_archiver.application.services.__init__",
+   "photo_archiver.presentation.views.person_deletion_dialog -> photo_archiver.application.services.__init__",
+   "photo_archiver.presentation.views.person_deletion_dialog -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.presentation.views.person_deletion_dialog -> photo_archiver.application.use_cases.__init__",
+   "photo_archiver.presentation.views.photo_deletion_confirm_dialog -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.presentation.views.plugin_report_dialog -> photo_archiver.application.dtos.plugin_action_result",
+   "photo_archiver.presentation.views.settings_dialog -> photo_archiver.application.dtos.settings"
+  ],
+  "presentation->workers": [
+   "photo_archiver.presentation.controllers.archive_controller -> photo_archiver.workers.__init__",
+   "photo_archiver.presentation.controllers.cluster_faces_controller -> photo_archiver.workers.__init__",
+   "photo_archiver.presentation.controllers.export_controller -> photo_archiver.workers.__init__",
+   "photo_archiver.presentation.controllers.import_people_controller -> photo_archiver.workers.__init__",
+   "photo_archiver.presentation.controllers.match_persons_controller -> photo_archiver.workers.__init__",
+   "photo_archiver.presentation.controllers.recognition_run_controller -> photo_archiver.workers.__init__",
+   "photo_archiver.presentation.controllers.scan_controller -> photo_archiver.workers.__init__",
+   "photo_archiver.presentation.task_coordinator -> photo_archiver.workers.__init__",
+   "photo_archiver.presentation.task_coordinator -> photo_archiver.workers.events",
+   "photo_archiver.presentation.views.main_window -> photo_archiver.workers.__init__",
+   "photo_archiver.presentation.views.main_window -> photo_archiver.workers.events"
+  ],
+  "presentation->domain": [
+   "photo_archiver.presentation.controllers.export_controller -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.controllers.match_persons_controller -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.controllers.photo_list_controller -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.controllers.recognition_run_controller -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.controllers.review_controller -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.export_dialog -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.filter_bar -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.import_preview_dialog -> photo_archiver.domain.entities.__init__",
+   "photo_archiver.presentation.views.main_window -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.pairing_workbench_dialog -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.people_admin_page -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.people_admin_page -> photo_archiver.domain.exceptions",
+   "photo_archiver.presentation.views.person_deletion_dialog -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.person_edit_dialog -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.photo_detail_dialog -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.photo_list_model -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.recognition_scope_dialog -> photo_archiver.domain.__init__",
+   "photo_archiver.presentation.views.review_dialog -> photo_archiver.domain.__init__"
+  ],
+  "presentation->plugins": [
+   "photo_archiver.presentation.views.main_window -> photo_archiver.plugins.__init__"
+  ],
+  "presentation->app": [
+   "photo_archiver.presentation.views.main_window -> photo_archiver.app.context"
+  ],
+  "workers->application": [
+   "photo_archiver.workers.application_tasks -> photo_archiver.application.commands.__init__",
+   "photo_archiver.workers.application_tasks -> photo_archiver.application.dtos.__init__",
+   "photo_archiver.workers.application_tasks -> photo_archiver.application.use_cases.__init__",
+   "photo_archiver.workers.export_task -> photo_archiver.application.dtos.export",
+   "photo_archiver.workers.export_task -> photo_archiver.application.services.export_service",
+   "photo_archiver.workers.export_task -> photo_archiver.application.ports.exporter"
+  ],
+  "workers->domain": [
+   "photo_archiver.workers.application_tasks -> photo_archiver.domain.__init__",
+   "photo_archiver.workers.export_task -> photo_archiver.domain.__init__"
+  ]
+ },
+ "sccs": [],
+ "deferred_imports": [
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 358,
+   "imports": [
+    "photo_archiver.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 359,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "_build_recognition_services",
+   "line": 360,
+   "imports": [
+    "photo_archiver.infrastructure.ai"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 415,
+   "imports": [
+    "photo_archiver.ai.similarity_matcher"
+   ]
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "in_fn": "__init__",
+   "line": 416,
+   "imports": [
+    "photo_archiver.application.dtos"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 144,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 196,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 144,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 196,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 144,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 196,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 144,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 196,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 144,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 196,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 144,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "in_fn": "execute_action",
+   "line": 196,
+   "imports": [
+    "photo_archiver.application.dtos.plugin_action_result"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.services.parse_import_draft_service",
+   "in_fn": "_identity_value",
+   "line": 284,
+   "imports": [
+    "photo_archiver.domain"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.services.parse_import_draft_service",
+   "in_fn": "_identity_value",
+   "line": 284,
+   "imports": [
+    "photo_archiver.domain"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.services.parse_import_draft_service",
+   "in_fn": "_identity_value",
+   "line": 284,
+   "imports": [
+    "photo_archiver.domain"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.services.parse_import_draft_service",
+   "in_fn": "_identity_value",
+   "line": 284,
+   "imports": [
+    "photo_archiver.domain"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.services.parse_import_draft_service",
+   "in_fn": "_identity_value",
+   "line": 284,
+   "imports": [
+    "photo_archiver.domain"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.services.parse_import_draft_service",
+   "in_fn": "_identity_value",
+   "line": 284,
+   "imports": [
+    "photo_archiver.domain"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.services.parse_import_draft_service",
+   "in_fn": "_identity_value",
+   "line": 284,
+   "imports": [
+    "photo_archiver.domain"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.services.parse_import_draft_service",
+   "in_fn": "_identity_value",
+   "line": 284,
+   "imports": [
+    "photo_archiver.domain"
+   ]
+  },
+  {
+   "module": "photo_archiver.application.services.parse_import_draft_service",
+   "in_fn": "_identity_value",
+   "line": 284,
+   "imports": [
+    "photo_archiver.domain"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.config.settings",
+   "in_fn": "_default_app_version",
+   "line": 30,
+   "imports": [
+    "photo_archiver._build_info"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.config.settings",
+   "in_fn": "_default_app_version",
+   "line": 30,
+   "imports": [
+    "photo_archiver._build_info"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.config.settings",
+   "in_fn": "_default_app_version",
+   "line": 30,
+   "imports": [
+    "photo_archiver._build_info"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.config.settings",
+   "in_fn": "_default_app_version",
+   "line": 30,
+   "imports": [
+    "photo_archiver._build_info"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.config.settings",
+   "in_fn": "_default_app_version",
+   "line": 30,
+   "imports": [
+    "photo_archiver._build_info"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.config.settings",
+   "in_fn": "_default_app_version",
+   "line": 30,
+   "imports": [
+    "photo_archiver._build_info"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.config.settings",
+   "in_fn": "_default_app_version",
+   "line": 30,
+   "imports": [
+    "photo_archiver._build_info"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.config.settings",
+   "in_fn": "_default_app_version",
+   "line": 30,
+   "imports": [
+    "photo_archiver._build_info"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_connection",
+   "in_fn": "initialize_schema",
+   "line": 164,
+   "imports": [
+    "photo_archiver.infrastructure.database.alembic_runner"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_connection",
+   "in_fn": "initialize_schema",
+   "line": 164,
+   "imports": [
+    "photo_archiver.infrastructure.database.alembic_runner"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_connection",
+   "in_fn": "initialize_schema",
+   "line": 164,
+   "imports": [
+    "photo_archiver.infrastructure.database.alembic_runner"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_connection",
+   "in_fn": "initialize_schema",
+   "line": 164,
+   "imports": [
+    "photo_archiver.infrastructure.database.alembic_runner"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_connection",
+   "in_fn": "initialize_schema",
+   "line": 164,
+   "imports": [
+    "photo_archiver.infrastructure.database.alembic_runner"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_connection",
+   "in_fn": "initialize_schema",
+   "line": 164,
+   "imports": [
+    "photo_archiver.infrastructure.database.alembic_runner"
+   ]
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_connection",
+   "in_fn": "initialize_schema",
+   "line": 164,
+   "imports": [
+    "photo_archiver.infrastructure.database.alembic_runner"
+   ]
+  }
+ ],
+ "third_party": {
+  "ai": [
+   "collections",
+   "cv2",
+   "insightface",
+   "loguru",
+   "math",
+   "numpy",
+   "pathlib",
+   "typing",
+   "uuid"
+  ],
+  "app": [
+   "PySide6",
+   "collections",
+   "dataclasses",
+   "importlib",
+   "loguru",
+   "os",
+   "pathlib",
+   "sqlite3",
+   "uuid"
+  ],
+  "application": [
+   "__future__",
+   "collections",
+   "concurrent",
+   "contextlib",
+   "copy",
+   "csv",
+   "dataclasses",
+   "datetime",
+   "enum",
+   "hashlib",
+   "loguru",
+   "pathlib",
+   "re",
+   "shutil",
+   "threading",
+   "types",
+   "typing",
+   "uuid"
+  ],
+  "domain": [
+   "collections",
+   "copy",
+   "dataclasses",
+   "datetime",
+   "enum",
+   "pathlib",
+   "types",
+   "typing",
+   "uuid"
+  ],
+  "infrastructure": [
+   "PIL",
+   "PySide6",
+   "__future__",
+   "alembic",
+   "certifi",
+   "collections",
+   "contextlib",
+   "csv",
+   "dataclasses",
+   "datetime",
+   "hashlib",
+   "html",
+   "insightface",
+   "json",
+   "loguru",
+   "numpy",
+   "openpyxl",
+   "os",
+   "pathlib",
+   "platformdirs",
+   "pydantic",
+   "pydantic_settings",
+   "re",
+   "shutil",
+   "sqlite3",
+   "ssl",
+   "string",
+   "sys",
+   "tempfile",
+   "threading",
+   "typing",
+   "urllib",
+   "uuid",
+   "xlrd",
+   "zipfile"
+  ],
+  "plugins": [
+   "__future__",
+   "importlib",
+   "loguru",
+   "pathlib",
+   "typing"
+  ],
+  "presentation": [
+   "PySide6",
+   "__future__",
+   "collections",
+   "dataclasses",
+   "datetime",
+   "functools",
+   "loguru",
+   "pathlib",
+   "sys",
+   "typing",
+   "uuid",
+   "weakref"
+  ],
+  "workers": [
+   "PySide6",
+   "abc",
+   "collections",
+   "dataclasses",
+   "loguru",
+   "typing",
+   "uuid"
+  ]
+ },
+ "stats": [
+  {
+   "module": "photo_archiver.presentation.views.main_window",
+   "lines": 1577,
+   "classes": 1,
+   "functions": 63,
+   "biggest_fn": "_build_photo_library_page",
+   "biggest_fn_lines": 123
+  },
+  {
+   "module": "photo_archiver.presentation.views.people_admin_page",
+   "lines": 618,
+   "classes": 2,
+   "functions": 33,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 54
+  },
+  {
+   "module": "photo_archiver.presentation.ui_text",
+   "lines": 590,
+   "classes": 0,
+   "functions": 2,
+   "biggest_fn": "cluster_run_status_label",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.app.services",
+   "lines": 458,
+   "classes": 5,
+   "functions": 11,
+   "biggest_fn": "build_application_services",
+   "biggest_fn_lines": 227
+  },
+  {
+   "module": "photo_archiver.presentation.views.filter_bar",
+   "lines": 393,
+   "classes": 1,
+   "functions": 13,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 100
+  },
+  {
+   "module": "photo_archiver.presentation.views.pairing_workbench_dialog",
+   "lines": 393,
+   "classes": 1,
+   "functions": 21,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 58
+  },
+  {
+   "module": "photo_archiver.presentation.views.review_dialog",
+   "lines": 383,
+   "classes": 1,
+   "functions": 15,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 54
+  },
+  {
+   "module": "photo_archiver.application.services.pairing_workbench_service",
+   "lines": 380,
+   "classes": 2,
+   "functions": 15,
+   "biggest_fn": "_sink_confirmation",
+   "biggest_fn_lines": 70
+  },
+  {
+   "module": "photo_archiver.application.services.archive_executor",
+   "lines": 343,
+   "classes": 1,
+   "functions": 10,
+   "biggest_fn": "_execute_real",
+   "biggest_fn_lines": 77
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_recognition_repository",
+   "lines": 343,
+   "classes": 1,
+   "functions": 13,
+   "biggest_fn": "read_workspace_counts",
+   "biggest_fn_lines": 75
+  },
+  {
+   "module": "photo_archiver.application.services.match_persons_service",
+   "lines": 325,
+   "classes": 1,
+   "functions": 9,
+   "biggest_fn": "_analyze_one",
+   "biggest_fn_lines": 62
+  },
+  {
+   "module": "photo_archiver.domain.services.face_clustering",
+   "lines": 301,
+   "classes": 5,
+   "functions": 16,
+   "biggest_fn": "_merge_pair",
+   "biggest_fn_lines": 36
+  },
+  {
+   "module": "photo_archiver.application.services.export_service",
+   "lines": 297,
+   "classes": 1,
+   "functions": 10,
+   "biggest_fn": "_flatten",
+   "biggest_fn_lines": 44
+  },
+  {
+   "module": "photo_archiver.application.services.parse_import_draft_service",
+   "lines": 295,
+   "classes": 1,
+   "functions": 14,
+   "biggest_fn": "_build_rows",
+   "biggest_fn_lines": 68
+  },
+  {
+   "module": "photo_archiver.presentation.views.import_preview_dialog",
+   "lines": 292,
+   "classes": 1,
+   "functions": 15,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 81
+  },
+  {
+   "module": "photo_archiver.presentation.views.settings_dialog",
+   "lines": 287,
+   "classes": 1,
+   "functions": 12,
+   "biggest_fn": "_build_form",
+   "biggest_fn_lines": 62
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_photo_repository",
+   "lines": 276,
+   "classes": 1,
+   "functions": 11,
+   "biggest_fn": "add",
+   "biggest_fn_lines": 52
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_mappers",
+   "lines": 274,
+   "classes": 0,
+   "functions": 14,
+   "biggest_fn": "photo_from_row",
+   "biggest_fn_lines": 40
+  },
+  {
+   "module": "photo_archiver.application.services.scan_and_register_photos_service",
+   "lines": 272,
+   "classes": 1,
+   "functions": 11,
+   "biggest_fn": "_scan_and_register",
+   "biggest_fn_lines": 77
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_cluster_assignment_repository",
+   "lines": 271,
+   "classes": 2,
+   "functions": 17,
+   "biggest_fn": "add_assignments",
+   "biggest_fn_lines": 33
+  },
+  {
+   "module": "photo_archiver.application.services.plugin_context_service",
+   "lines": 262,
+   "classes": 1,
+   "functions": 9,
+   "biggest_fn": "import_people",
+   "biggest_fn_lines": 40
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_face_cluster_repository",
+   "lines": 254,
+   "classes": 1,
+   "functions": 14,
+   "biggest_fn": "add_clusters",
+   "biggest_fn_lines": 32
+  },
+  {
+   "module": "photo_archiver.presentation.views.export_dialog",
+   "lines": 249,
+   "classes": 1,
+   "functions": 8,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 59
+  },
+  {
+   "module": "photo_archiver.application.services.cluster_faces_service",
+   "lines": 246,
+   "classes": 1,
+   "functions": 9,
+   "biggest_fn": "_persist",
+   "biggest_fn_lines": 52
+  },
+  {
+   "module": "photo_archiver.plugins.loader",
+   "lines": 244,
+   "classes": 1,
+   "functions": 13,
+   "biggest_fn": "_load_single",
+   "biggest_fn_lines": 50
+  },
+  {
+   "module": "photo_archiver.workers.application_tasks",
+   "lines": 243,
+   "classes": 7,
+   "functions": 16,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 22
+  },
+  {
+   "module": "photo_archiver.application.dtos.deletion",
+   "lines": 241,
+   "classes": 10,
+   "functions": 18,
+   "biggest_fn": "photo_count",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.infrastructure.config.settings",
+   "lines": 239,
+   "classes": 1,
+   "functions": 16,
+   "biggest_fn": "_default_app_version",
+   "biggest_fn_lines": 15
+  },
+  {
+   "module": "photo_archiver.application.services.archive_planner",
+   "lines": 225,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "plan",
+   "biggest_fn_lines": 84
+  },
+  {
+   "module": "photo_archiver.application.services.review_recognition_service",
+   "lines": 220,
+   "classes": 1,
+   "functions": 8,
+   "biggest_fn": "_transition",
+   "biggest_fn_lines": 61
+  },
+  {
+   "module": "photo_archiver.application.__init__",
+   "lines": 219,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.presentation.views.cluster_results_dialog",
+   "lines": 218,
+   "classes": 1,
+   "functions": 9,
+   "biggest_fn": "refresh",
+   "biggest_fn_lines": 35
+  },
+  {
+   "module": "photo_archiver.infrastructure.filesystem.pillow_photo_metadata_reader",
+   "lines": 217,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "read",
+   "biggest_fn_lines": 54
+  },
+  {
+   "module": "photo_archiver.infrastructure.persistence.qsettings_user_settings_store",
+   "lines": 212,
+   "classes": 1,
+   "functions": 7,
+   "biggest_fn": "load",
+   "biggest_fn_lines": 59
+  },
+  {
+   "module": "photo_archiver.presentation.views.archive_preview_dialog",
+   "lines": 205,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 77
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.photo_list_controller",
+   "lines": 202,
+   "classes": 2,
+   "functions": 8,
+   "biggest_fn": "status_badges",
+   "biggest_fn_lines": 35
+  },
+  {
+   "module": "photo_archiver.domain.entities.face_cluster",
+   "lines": 201,
+   "classes": 3,
+   "functions": 8,
+   "biggest_fn": "cancel",
+   "biggest_fn_lines": 19
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_recognition_run_repository",
+   "lines": 199,
+   "classes": 1,
+   "functions": 10,
+   "biggest_fn": "update_run",
+   "biggest_fn_lines": 39
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin",
+   "lines": 198,
+   "classes": 3,
+   "functions": 14,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 19
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_archive_record_repository",
+   "lines": 198,
+   "classes": 1,
+   "functions": 8,
+   "biggest_fn": "add",
+   "biggest_fn_lines": 45
+  },
+  {
+   "module": "photo_archiver.infrastructure.importers.roster_table_reader",
+   "lines": 195,
+   "classes": 1,
+   "functions": 10,
+   "biggest_fn": "list_sheets",
+   "biggest_fn_lines": 24
+  },
+  {
+   "module": "photo_archiver.application.services.suggest_pairings_service",
+   "lines": 194,
+   "classes": 3,
+   "functions": 7,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 94
+  },
+  {
+   "module": "photo_archiver.infrastructure.ai.model_deployment",
+   "lines": 187,
+   "classes": 0,
+   "functions": 5,
+   "biggest_fn": "verify_integrity",
+   "biggest_fn_lines": 49
+  },
+  {
+   "module": "photo_archiver.application.services.manage_people_service",
+   "lines": 180,
+   "classes": 1,
+   "functions": 8,
+   "biggest_fn": "reorder_people",
+   "biggest_fn_lines": 27
+  },
+  {
+   "module": "photo_archiver.presentation.task_coordinator",
+   "lines": 180,
+   "classes": 3,
+   "functions": 13,
+   "biggest_fn": "bind",
+   "biggest_fn_lines": 32
+  },
+  {
+   "module": "photo_archiver.app.bootstrap",
+   "lines": 179,
+   "classes": 0,
+   "functions": 4,
+   "biggest_fn": "bootstrap_application",
+   "biggest_fn_lines": 73
+  },
+  {
+   "module": "photo_archiver.application.services.import_people_service",
+   "lines": 179,
+   "classes": 1,
+   "functions": 9,
+   "biggest_fn": "import_rows",
+   "biggest_fn_lines": 47
+  },
+  {
+   "module": "photo_archiver.app.ui_assembly",
+   "lines": 175,
+   "classes": 2,
+   "functions": 5,
+   "biggest_fn": "build_ui_controllers",
+   "biggest_fn_lines": 62
+  },
+  {
+   "module": "photo_archiver.presentation.views.recognition_scope_dialog",
+   "lines": 175,
+   "classes": 1,
+   "functions": 7,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 60
+  },
+  {
+   "module": "photo_archiver.domain.entities.recognition_run",
+   "lines": 172,
+   "classes": 3,
+   "functions": 8,
+   "biggest_fn": "fail",
+   "biggest_fn_lines": 13
+  },
+  {
+   "module": "photo_archiver.presentation.views.person_deletion_dialog",
+   "lines": 170,
+   "classes": 1,
+   "functions": 10,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 28
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_connection",
+   "lines": 166,
+   "classes": 2,
+   "functions": 10,
+   "biggest_fn": "initialize_schema",
+   "biggest_fn_lines": 39
+  },
+  {
+   "module": "photo_archiver.application.services.run_recognition_service",
+   "lines": 157,
+   "classes": 1,
+   "functions": 7,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 57
+  },
+  {
+   "module": "photo_archiver.domain.services.pairing",
+   "lines": 155,
+   "classes": 3,
+   "functions": 2,
+   "biggest_fn": "suggest_pairings",
+   "biggest_fn_lines": 87
+  },
+  {
+   "module": "photo_archiver.application.services.dispose_duplicates_service",
+   "lines": 152,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "preview",
+   "biggest_fn_lines": 51
+  },
+  {
+   "module": "photo_archiver.application.services.confirm_import_service",
+   "lines": 151,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 60
+  },
+  {
+   "module": "photo_archiver.domain.__init__",
+   "lines": 151,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.domain.entities.cluster_assignment",
+   "lines": 151,
+   "classes": 2,
+   "functions": 6,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 19
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.overview_presenter",
+   "lines": 151,
+   "classes": 4,
+   "functions": 6,
+   "biggest_fn": "build",
+   "biggest_fn_lines": 72
+  },
+  {
+   "module": "photo_archiver.infrastructure.repositories.in_memory_cluster_assignment_repository",
+   "lines": 149,
+   "classes": 2,
+   "functions": 15,
+   "biggest_fn": "disable_samples",
+   "biggest_fn_lines": 20
+  },
+  {
+   "module": "photo_archiver.application.services.backfill_historical_people_service",
+   "lines": 148,
+   "classes": 3,
+   "functions": 3,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 77
+  },
+  {
+   "module": "photo_archiver.application.dtos.plugin_context",
+   "lines": 147,
+   "classes": 7,
+   "functions": 1,
+   "biggest_fn": "succeeded",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.domain.repositories.recognition_repository",
+   "lines": 147,
+   "classes": 2,
+   "functions": 11,
+   "biggest_fn": "list_by_photo_ids",
+   "biggest_fn_lines": 35
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_import_batch_repository",
+   "lines": 147,
+   "classes": 1,
+   "functions": 9,
+   "biggest_fn": "replace_draft_rows",
+   "biggest_fn_lines": 32
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.recognition_run_controller",
+   "lines": 147,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "start_run",
+   "biggest_fn_lines": 50
+  },
+  {
+   "module": "photo_archiver.ai.insightface_detector",
+   "lines": 146,
+   "classes": 1,
+   "functions": 7,
+   "biggest_fn": "detect_with_embeddings",
+   "biggest_fn_lines": 30
+  },
+  {
+   "module": "photo_archiver.domain.value_objects.archive_path",
+   "lines": 144,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 42
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.detect_duplicates_controller",
+   "lines": 144,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "_dispose_confirmed",
+   "biggest_fn_lines": 35
+  },
+  {
+   "module": "photo_archiver.application.services.archive_photos_service",
+   "lines": 142,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 30
+  },
+  {
+   "module": "photo_archiver.presentation.views.photo_list_delegate",
+   "lines": 141,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "paint",
+   "biggest_fn_lines": 75
+  },
+  {
+   "module": "photo_archiver.domain.entities.archive",
+   "lines": 140,
+   "classes": 2,
+   "functions": 8,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 17
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.review_controller",
+   "lines": 138,
+   "classes": 1,
+   "functions": 9,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 22
+  },
+  {
+   "module": "photo_archiver.application.services.backfill_capture_time_service",
+   "lines": 137,
+   "classes": 2,
+   "functions": 3,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 64
+  },
+  {
+   "module": "photo_archiver.infrastructure.exporters.html_exporter",
+   "lines": 136,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "export",
+   "biggest_fn_lines": 21
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_person_repository",
+   "lines": 135,
+   "classes": 1,
+   "functions": 10,
+   "biggest_fn": "add",
+   "biggest_fn_lines": 28
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.match_persons_controller",
+   "lines": 134,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "start_match",
+   "biggest_fn_lines": 35
+  },
+  {
+   "module": "photo_archiver.workers.qt_executor",
+   "lines": 134,
+   "classes": 3,
+   "functions": 7,
+   "biggest_fn": "run",
+   "biggest_fn_lines": 23
+  },
+  {
+   "module": "photo_archiver.application.services.backfill_content_hash_service",
+   "lines": 133,
+   "classes": 2,
+   "functions": 3,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 57
+  },
+  {
+   "module": "photo_archiver.application.dtos.__init__",
+   "lines": 129,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.infrastructure.logging.configuration",
+   "lines": 129,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "configure_logging",
+   "biggest_fn_lines": 24
+  },
+  {
+   "module": "photo_archiver.infrastructure.repositories.in_memory_photo_repository",
+   "lines": 129,
+   "classes": 1,
+   "functions": 11,
+   "biggest_fn": "search",
+   "biggest_fn_lines": 29
+  },
+  {
+   "module": "photo_archiver.presentation.views.duplicate_report_dialog",
+   "lines": 129,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 28
+  },
+  {
+   "module": "photo_archiver.workers.task",
+   "lines": 129,
+   "classes": 2,
+   "functions": 10,
+   "biggest_fn": "run",
+   "biggest_fn_lines": 24
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.export_controller",
+   "lines": 128,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "export",
+   "biggest_fn_lines": 29
+  },
+  {
+   "module": "photo_archiver.presentation.visual_style",
+   "lines": 126,
+   "classes": 0,
+   "functions": 6,
+   "biggest_fn": "style_empty_state_card",
+   "biggest_fn_lines": 10
+  },
+  {
+   "module": "photo_archiver.ai.insightface_recognizer",
+   "lines": 125,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "extract",
+   "biggest_fn_lines": 28
+  },
+  {
+   "module": "photo_archiver.application.services.recognition_failure_service",
+   "lines": 125,
+   "classes": 2,
+   "functions": 5,
+   "biggest_fn": "report",
+   "biggest_fn_lines": 35
+  },
+  {
+   "module": "photo_archiver.infrastructure.repositories.in_memory_face_cluster_repository",
+   "lines": 123,
+   "classes": 1,
+   "functions": 11,
+   "biggest_fn": "update_cluster_status",
+   "biggest_fn_lines": 18
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.scan_controller",
+   "lines": 123,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "scan_folder",
+   "biggest_fn_lines": 37
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_face_embedding_repository",
+   "lines": 121,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "list_all",
+   "biggest_fn_lines": 47
+  },
+  {
+   "module": "photo_archiver.application.services.cluster_results_service",
+   "lines": 120,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "_detail",
+   "biggest_fn_lines": 37
+  },
+  {
+   "module": "photo_archiver.application.services.prune_missing_photos_service",
+   "lines": 119,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 30
+  },
+  {
+   "module": "photo_archiver.domain.entities.__init__",
+   "lines": 119,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.services.delete_person_service",
+   "lines": 116,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 31
+  },
+  {
+   "module": "photo_archiver.application.services.settings_service",
+   "lines": 114,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "load",
+   "biggest_fn_lines": 32
+  },
+  {
+   "module": "photo_archiver.infrastructure.ai.insightface_loader",
+   "lines": 114,
+   "classes": 2,
+   "functions": 4,
+   "biggest_fn": "load",
+   "biggest_fn_lines": 48
+  },
+  {
+   "module": "photo_archiver.application.dtos.archive",
+   "lines": 108,
+   "classes": 4,
+   "functions": 7,
+   "biggest_fn": "archived_count",
+   "biggest_fn_lines": 7
+  },
+  {
+   "module": "photo_archiver.domain.repositories.photo_repository",
+   "lines": 106,
+   "classes": 1,
+   "functions": 10,
+   "biggest_fn": "search",
+   "biggest_fn_lines": 27
+  },
+  {
+   "module": "photo_archiver.infrastructure.filesystem.local_photo_file_scanner",
+   "lines": 105,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "scan",
+   "biggest_fn_lines": 55
+  },
+  {
+   "module": "photo_archiver.application.ports.plugin_context",
+   "lines": 104,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "import_people",
+   "biggest_fn_lines": 25
+  },
+  {
+   "module": "photo_archiver.presentation.person_matcher",
+   "lines": 101,
+   "classes": 0,
+   "functions": 3,
+   "biggest_fn": "_minimal_subsequence_window",
+   "biggest_fn_lines": 34
+  },
+  {
+   "module": "photo_archiver.presentation.views.photo_list_model",
+   "lines": 100,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "data",
+   "biggest_fn_lines": 21
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.backup",
+   "lines": 99,
+   "classes": 0,
+   "functions": 3,
+   "biggest_fn": "backup_database",
+   "biggest_fn_lines": 42
+  },
+  {
+   "module": "photo_archiver.application.dtos.settings",
+   "lines": 97,
+   "classes": 2,
+   "functions": 2,
+   "biggest_fn": "validate_preferences",
+   "biggest_fn_lines": 31
+  },
+  {
+   "module": "photo_archiver.infrastructure.__init__",
+   "lines": 97,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.infrastructure.repositories.in_memory_person_repository",
+   "lines": 97,
+   "classes": 1,
+   "functions": 11,
+   "biggest_fn": "list_all",
+   "biggest_fn_lines": 16
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.archive_controller",
+   "lines": 97,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 23
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_face_observation_repository",
+   "lines": 96,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "add_many",
+   "biggest_fn_lines": 41
+  },
+  {
+   "module": "photo_archiver.presentation.views.photo_deletion_confirm_dialog",
+   "lines": 95,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 23
+  },
+  {
+   "module": "photo_archiver.ai.similarity_matcher",
+   "lines": 94,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "match",
+   "biggest_fn_lines": 40
+  },
+  {
+   "module": "photo_archiver.application.dtos.export",
+   "lines": 92,
+   "classes": 6,
+   "functions": 1,
+   "biggest_fn": "total_row_count",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.presentation.views.overview_page",
+   "lines": 92,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 28
+  },
+  {
+   "module": "photo_archiver.application.services.delete_photos_service",
+   "lines": 91,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 24
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.cluster_faces_controller",
+   "lines": 91,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "connect_signals",
+   "biggest_fn_lines": 23
+  },
+  {
+   "module": "photo_archiver.application.dtos.plugin_action_result",
+   "lines": 89,
+   "classes": 2,
+   "functions": 3,
+   "biggest_fn": "success",
+   "biggest_fn_lines": 9
+  },
+  {
+   "module": "photo_archiver.infrastructure.image.thumbnail_cache",
+   "lines": 86,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "cleanup",
+   "biggest_fn_lines": 20
+  },
+  {
+   "module": "photo_archiver.application.dtos.recognition",
+   "lines": 84,
+   "classes": 6,
+   "functions": 2,
+   "biggest_fn": "succeeded",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.domain.entities.face_observation",
+   "lines": 83,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "classify_scope",
+   "biggest_fn_lines": 17
+  },
+  {
+   "module": "photo_archiver.infrastructure.exporters.excel_exporter",
+   "lines": 83,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "_to_row",
+   "biggest_fn_lines": 24
+  },
+  {
+   "module": "photo_archiver.presentation.views.person_edit_dialog",
+   "lines": 83,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "_build_ui",
+   "biggest_fn_lines": 33
+  },
+  {
+   "module": "photo_archiver.application.services.__init__",
+   "lines": 82,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.services.archive_path_builder_service",
+   "lines": 81,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "build",
+   "biggest_fn_lines": 49
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.workspace_controller",
+   "lines": 81,
+   "classes": 3,
+   "functions": 6,
+   "biggest_fn": "match_guidance",
+   "biggest_fn_lines": 23
+  },
+  {
+   "module": "photo_archiver.presentation.views.plugin_report_dialog",
+   "lines": 81,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 50
+  },
+  {
+   "module": "photo_archiver.application.use_cases.deletion",
+   "lines": 80,
+   "classes": 4,
+   "functions": 8,
+   "biggest_fn": "preview",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.integrity",
+   "lines": 80,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "verify_database_integrity",
+   "biggest_fn_lines": 37
+  },
+  {
+   "module": "photo_archiver.app.repositories",
+   "lines": 79,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "build_sqlite_repositories",
+   "biggest_fn_lines": 24
+  },
+  {
+   "module": "photo_archiver.application.services.cleanup_thumbnail_cache_service",
+   "lines": 79,
+   "classes": 2,
+   "functions": 3,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 21
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.import_people_controller",
+   "lines": 77,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "connect_signals",
+   "biggest_fn_lines": 27
+  },
+  {
+   "module": "photo_archiver.application.services.detect_duplicates_service",
+   "lines": 75,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 40
+  },
+  {
+   "module": "photo_archiver.domain.entities.recognition",
+   "lines": 75,
+   "classes": 2,
+   "functions": 4,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 6
+  },
+  {
+   "module": "photo_archiver.domain.repositories.archive_record_repository",
+   "lines": 75,
+   "classes": 1,
+   "functions": 7,
+   "biggest_fn": "list_by_photo_ids",
+   "biggest_fn_lines": 23
+  },
+  {
+   "module": "photo_archiver.infrastructure.cosine_kernel",
+   "lines": 75,
+   "classes": 2,
+   "functions": 6,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 15
+  },
+  {
+   "module": "photo_archiver.infrastructure.exporters.csv_exporter",
+   "lines": 75,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "_to_row",
+   "biggest_fn_lines": 24
+  },
+  {
+   "module": "photo_archiver.infrastructure.repositories.in_memory_face_observation_repository",
+   "lines": 74,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "add_many",
+   "biggest_fn_lines": 17
+  },
+  {
+   "module": "photo_archiver.presentation.views.photo_detail_dialog",
+   "lines": 74,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 42
+  },
+  {
+   "module": "photo_archiver.domain.entities.import_batch",
+   "lines": 72,
+   "classes": 2,
+   "functions": 2,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 6
+  },
+  {
+   "module": "photo_archiver.domain.value_objects.face_count_range",
+   "lines": 72,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "parse",
+   "biggest_fn_lines": 18
+  },
+  {
+   "module": "photo_archiver.domain.repositories.person_repository",
+   "lines": 71,
+   "classes": 1,
+   "functions": 9,
+   "biggest_fn": "reorder",
+   "biggest_fn_lines": 11
+  },
+  {
+   "module": "photo_archiver.workers.events",
+   "lines": 71,
+   "classes": 5,
+   "functions": 1,
+   "biggest_fn": "message",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_folder_repository",
+   "lines": 70,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "add",
+   "biggest_fn_lines": 28
+  },
+  {
+   "module": "photo_archiver.infrastructure.image.pillow_thumbnail_generator",
+   "lines": 69,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "generate",
+   "biggest_fn_lines": 37
+  },
+  {
+   "module": "photo_archiver.infrastructure.importers.excel_person_import_reader",
+   "lines": 69,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "read",
+   "biggest_fn_lines": 30
+  },
+  {
+   "module": "photo_archiver.application.services.register_photo_service",
+   "lines": 68,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 26
+  },
+  {
+   "module": "photo_archiver.application.ports.exporter",
+   "lines": 67,
+   "classes": 2,
+   "functions": 1,
+   "biggest_fn": "export",
+   "biggest_fn_lines": 14
+  },
+  {
+   "module": "photo_archiver.domain.repositories.cluster_assignment_repository",
+   "lines": 67,
+   "classes": 2,
+   "functions": 12,
+   "biggest_fn": "disable_samples",
+   "biggest_fn_lines": 7
+  },
+  {
+   "module": "photo_archiver.infrastructure.repositories.in_memory_recognition_run_repository",
+   "lines": 67,
+   "classes": 1,
+   "functions": 9,
+   "biggest_fn": "list_runs",
+   "biggest_fn_lines": 10
+  },
+  {
+   "module": "photo_archiver.domain.value_objects.photo_search_criteria",
+   "lines": 66,
+   "classes": 2,
+   "functions": 1,
+   "biggest_fn": "__repr__",
+   "biggest_fn_lines": 2
+  },
+  {
+   "module": "photo_archiver.presentation.translations",
+   "lines": 66,
+   "classes": 0,
+   "functions": 2,
+   "biggest_fn": "install_chinese_ui_translations",
+   "biggest_fn_lines": 23
+  },
+  {
+   "module": "photo_archiver.infrastructure.importers.txt_person_import_reader",
+   "lines": 64,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "read",
+   "biggest_fn_lines": 28
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.settings_controller",
+   "lines": 64,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 13
+  },
+  {
+   "module": "photo_archiver.application.commands.__init__",
+   "lines": 63,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.app.application",
+   "lines": 62,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 16
+  },
+  {
+   "module": "photo_archiver.application.ports.face_recognizer",
+   "lines": 60,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "extract_from",
+   "biggest_fn_lines": 22
+  },
+  {
+   "module": "photo_archiver.application.dtos.import_draft",
+   "lines": 59,
+   "classes": 3,
+   "functions": 3,
+   "biggest_fn": "create_count",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.application.ports.face_detector",
+   "lines": 59,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "detect_with_embeddings",
+   "biggest_fn_lines": 19
+  },
+  {
+   "module": "photo_archiver.application.services.search_photos_service",
+   "lines": 59,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 23
+  },
+  {
+   "module": "photo_archiver.domain.repositories.face_cluster_repository",
+   "lines": 58,
+   "classes": 1,
+   "functions": 10,
+   "biggest_fn": "update_cluster_run",
+   "biggest_fn_lines": 6
+  },
+  {
+   "module": "photo_archiver.workers.export_task",
+   "lines": 58,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 25
+  },
+  {
+   "module": "photo_archiver.domain.repositories.face_embedding_repository",
+   "lines": 57,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "list_all",
+   "biggest_fn_lines": 22
+  },
+  {
+   "module": "photo_archiver.application.dtos.duplicates",
+   "lines": 56,
+   "classes": 2,
+   "functions": 3,
+   "biggest_fn": "group_count",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.domain.value_objects.face_box",
+   "lines": 56,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 13
+  },
+  {
+   "module": "photo_archiver.infrastructure.importers.dispatching_person_import_reader",
+   "lines": 56,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "read",
+   "biggest_fn_lines": 20
+  },
+  {
+   "module": "photo_archiver.ai.insightface_types",
+   "lines": 55,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.ports.thumbnail_cache",
+   "lines": 52,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "compute_key",
+   "biggest_fn_lines": 8
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.sqlite_unit_of_work",
+   "lines": 51,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "_scope",
+   "biggest_fn_lines": 7
+  },
+  {
+   "module": "photo_archiver.domain.repositories.recognition_run_repository",
+   "lines": 50,
+   "classes": 1,
+   "functions": 8,
+   "biggest_fn": "update_run",
+   "biggest_fn_lines": 11
+  },
+  {
+   "module": "photo_archiver.presentation.startup_failure",
+   "lines": 49,
+   "classes": 0,
+   "functions": 2,
+   "biggest_fn": "corrupted_database_guidance",
+   "biggest_fn_lines": 23
+  },
+  {
+   "module": "photo_archiver.application.commands.deletion",
+   "lines": 48,
+   "classes": 4,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.commands.pairing",
+   "lines": 48,
+   "classes": 6,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.domain.entities.person",
+   "lines": 48,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 12
+  },
+  {
+   "module": "photo_archiver.application.dtos.cluster_results",
+   "lines": 47,
+   "classes": 3,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.services.list_persons_service",
+   "lines": 47,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 11
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.__init__",
+   "lines": 47,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.domain.value_objects.photo_path",
+   "lines": 46,
+   "classes": 2,
+   "functions": 3,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 12
+  },
+  {
+   "module": "photo_archiver.infrastructure.exporters._spreadsheet_safety",
+   "lines": 46,
+   "classes": 0,
+   "functions": 2,
+   "biggest_fn": "sanitize_spreadsheet_cell",
+   "biggest_fn_lines": 18
+  },
+  {
+   "module": "photo_archiver.workers.__init__",
+   "lines": 46,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.use_cases.review_recognition",
+   "lines": 45,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "approve",
+   "biggest_fn_lines": 11
+  },
+  {
+   "module": "photo_archiver.application.commands.cluster_faces",
+   "lines": 44,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "parameters",
+   "biggest_fn_lines": 9
+  },
+  {
+   "module": "photo_archiver.application.services.face_analysis_task",
+   "lines": 44,
+   "classes": 3,
+   "functions": 3,
+   "biggest_fn": "__call__",
+   "biggest_fn_lines": 8
+  },
+  {
+   "module": "photo_archiver.application.ports.__init__",
+   "lines": 43,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.domain.entities.photo",
+   "lines": 43,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 11
+  },
+  {
+   "module": "photo_archiver.infrastructure.database.alembic_runner",
+   "lines": 43,
+   "classes": 0,
+   "functions": 1,
+   "biggest_fn": "run_alembic_migrations",
+   "biggest_fn_lines": 21
+  },
+  {
+   "module": "photo_archiver.application.services.workspace_readiness",
+   "lines": 42,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 18
+  },
+  {
+   "module": "photo_archiver.domain.services.__init__",
+   "lines": 41,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.commands.start_recognition_run",
+   "lines": 39,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 12
+  },
+  {
+   "module": "photo_archiver.application.use_cases.archive",
+   "lines": 38,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "preview",
+   "biggest_fn_lines": 13
+  },
+  {
+   "module": "photo_archiver.domain.entities.folder",
+   "lines": 38,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 17
+  },
+  {
+   "module": "photo_archiver.domain.repositories.face_observation_repository",
+   "lines": 38,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "add_many",
+   "biggest_fn_lines": 7
+  },
+  {
+   "module": "photo_archiver.domain.value_objects.photo_metadata",
+   "lines": 38,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 8
+  },
+  {
+   "module": "photo_archiver.application.commands.people_admin",
+   "lines": 37,
+   "classes": 3,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.ports.archive_path_builder",
+   "lines": 37,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "build",
+   "biggest_fn_lines": 16
+  },
+  {
+   "module": "photo_archiver.application.ports.person_matcher",
+   "lines": 36,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "match",
+   "biggest_fn_lines": 17
+  },
+  {
+   "module": "photo_archiver.domain.value_objects.face_embedding",
+   "lines": 36,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 6
+  },
+  {
+   "module": "photo_archiver.application.use_cases.__init__",
+   "lines": 35,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.infrastructure.persistence.in_memory_user_settings_store",
+   "lines": 34,
+   "classes": 1,
+   "functions": 3,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 9
+  },
+  {
+   "module": "photo_archiver.application.services.scan_photo_folder_service",
+   "lines": 33,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 18
+  },
+  {
+   "module": "photo_archiver.infrastructure.repositories.__init__",
+   "lines": 33,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.app.context",
+   "lines": 32,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.commands.archive",
+   "lines": 32,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.commands.import_draft",
+   "lines": 32,
+   "classes": 3,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.ports.roster_table_reader",
+   "lines": 31,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "read_raw",
+   "biggest_fn_lines": 8
+  },
+  {
+   "module": "photo_archiver.application.use_cases.settings",
+   "lines": 31,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "save",
+   "biggest_fn_lines": 10
+  },
+  {
+   "module": "photo_archiver.domain.repositories.__init__",
+   "lines": 31,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.infrastructure.image.content_hash_calculator",
+   "lines": 31,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "calculate",
+   "biggest_fn_lines": 15
+  },
+  {
+   "module": "photo_archiver.infrastructure.logging.__init__",
+   "lines": 31,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.presentation.controllers.__init__",
+   "lines": 31,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.dtos.import_people",
+   "lines": 30,
+   "classes": 2,
+   "functions": 1,
+   "biggest_fn": "succeeded",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.application.ports.photo_file_scanner",
+   "lines": 30,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "scan",
+   "biggest_fn_lines": 14
+  },
+  {
+   "module": "photo_archiver.domain.value_objects.__init__",
+   "lines": 30,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.domain.repositories.folder_repository",
+   "lines": 29,
+   "classes": 1,
+   "functions": 4,
+   "biggest_fn": "add",
+   "biggest_fn_lines": 8
+  },
+  {
+   "module": "photo_archiver.domain.value_objects.face_box_embedding",
+   "lines": 29,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.infrastructure.repositories.in_memory_folder_repository",
+   "lines": 29,
+   "classes": 1,
+   "functions": 5,
+   "biggest_fn": "__init__",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.domain.repositories.import_batch_repository",
+   "lines": 28,
+   "classes": 1,
+   "functions": 6,
+   "biggest_fn": "add_batch",
+   "biggest_fn_lines": 2
+  },
+  {
+   "module": "photo_archiver.application.dtos.photo_scan",
+   "lines": 27,
+   "classes": 2,
+   "functions": 1,
+   "biggest_fn": "succeeded",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.application.ports.thumbnail_generator",
+   "lines": 27,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "generate",
+   "biggest_fn_lines": 11
+  },
+  {
+   "module": "photo_archiver.domain.exceptions",
+   "lines": 26,
+   "classes": 4,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.dtos.people_admin",
+   "lines": 25,
+   "classes": 2,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.dtos.workspace",
+   "lines": 25,
+   "classes": 2,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.services.list_recognition_runs_service",
+   "lines": 24,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 5
+  },
+  {
+   "module": "photo_archiver.application.commands.scan_photo_folder",
+   "lines": 23,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.ports.unit_of_work",
+   "lines": 23,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "__enter__",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.domain.value_objects.person_identity",
+   "lines": 23,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "__post_init__",
+   "biggest_fn_lines": 6
+  },
+  {
+   "module": "photo_archiver.infrastructure.exporters._atomic_write",
+   "lines": 23,
+   "classes": 0,
+   "functions": 1,
+   "biggest_fn": "write_atomic",
+   "biggest_fn_lines": 16
+  },
+  {
+   "module": "photo_archiver.application.dtos.scan_and_register_photos",
+   "lines": 22,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "succeeded",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.application.ports.system_settings",
+   "lines": 22,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "match_threshold",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.application.commands.scan_and_register_photos",
+   "lines": 21,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.use_cases.scan_and_register_photos",
+   "lines": 21,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "enumerate_files",
+   "biggest_fn_lines": 7
+  },
+  {
+   "module": "photo_archiver.presentation.views.__init__",
+   "lines": 20,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.ports.person_import_reader",
+   "lines": 19,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "read",
+   "biggest_fn_lines": 8
+  },
+  {
+   "module": "photo_archiver.application.ports.similarity_kernel",
+   "lines": 19,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "build",
+   "biggest_fn_lines": 2
+  },
+  {
+   "module": "photo_archiver.application.ports.progress_reporter",
+   "lines": 18,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "report",
+   "biggest_fn_lines": 9
+  },
+  {
+   "module": "photo_archiver.app.__init__",
+   "lines": 17,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.ports.user_settings_store",
+   "lines": 17,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "load",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.application.use_cases.match_persons",
+   "lines": 17,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.infrastructure.exporters.__init__",
+   "lines": 17,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.ai.__init__",
+   "lines": 16,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.commands.backfill_capture_time",
+   "lines": 15,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.use_cases.cluster_faces",
+   "lines": 15,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "cancel",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.application.use_cases.run_recognition",
+   "lines": 15,
+   "classes": 1,
+   "functions": 2,
+   "biggest_fn": "cancel",
+   "biggest_fn_lines": 3
+  },
+  {
+   "module": "photo_archiver.infrastructure.importers.__init__",
+   "lines": 15,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.infrastructure.persistence.__init__",
+   "lines": 15,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.commands.register_photo",
+   "lines": 14,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.infrastructure.ai.__init__",
+   "lines": 14,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.commands.import_people",
+   "lines": 13,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.commands.match_persons",
+   "lines": 13,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.ports.photo_metadata_reader",
+   "lines": 13,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "read",
+   "biggest_fn_lines": 2
+  },
+  {
+   "module": "photo_archiver.application.use_cases.import_people",
+   "lines": 13,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 2
+  },
+  {
+   "module": "photo_archiver.application.use_cases.register_photo",
+   "lines": 13,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 2
+  },
+  {
+   "module": "photo_archiver.application.use_cases.scan_photo_folder",
+   "lines": 13,
+   "classes": 1,
+   "functions": 1,
+   "biggest_fn": "execute",
+   "biggest_fn_lines": 2
+  },
+  {
+   "module": "photo_archiver.infrastructure.config.__init__",
+   "lines": 13,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.application.dtos.register_photo",
+   "lines": 12,
+   "classes": 1,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.infrastructure.image.__init__",
+   "lines": 11,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.infrastructure.filesystem.__init__",
+   "lines": 8,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.plugins.__init__",
+   "lines": 7,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.__init__",
+   "lines": 1,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.common.__init__",
+   "lines": 1,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  },
+  {
+   "module": "photo_archiver.presentation.__init__",
+   "lines": 1,
+   "classes": 0,
+   "functions": 0,
+   "biggest_fn": "-",
+   "biggest_fn_lines": 0
+  }
+ ]
+}
