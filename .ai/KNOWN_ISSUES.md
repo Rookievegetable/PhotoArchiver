@@ -43,13 +43,12 @@ _无 ISSUE-XXX 系未决条目。设计 / 平台 / 测试覆盖限制见下方�
 
 ## 全面体检登记（2026-09-28，Stage 10 治理恢复时同步）
 
-> 来源：全面工程健康体检（Stage 0–9，READ-ONLY，判 ATTENTION；完整台账与证据见 `docs/health-check/FINDINGS_LEDGER.md`）。以下为**保持 OPEN** 的 P2 级发现（P1 AUD-001 与 P2 AUD-003/009/014 已于 Stage 10 整改闭合；P2 AUD-017 已于 Stage 11B 按 owner 裁决 Option C 实现闭环（ADR-047）、P2 AUD-004 已于 Stage 12A 全链贯通回归闭合（含聚类时间排序接缝修复）、P2 AUD-019 已于 Stage 12B worker/配对守卫测试补强闭合；P3 级 15 项见台账，不在此重复登记）。
+> 来源：全面工程健康体检（Stage 0–9，READ-ONLY，判 ATTENTION；完整台账与证据见 `docs/health-check/FINDINGS_LEDGER.md`）。以下为**保持 OPEN** 的 P2 级发现（P1 AUD-001 与 P2 AUD-003/009/014 已于 Stage 10 整改闭合；P2 AUD-017 已于 Stage 11B 按 owner 裁决 Option C 实现闭环（ADR-047）、P2 AUD-004 已于 Stage 12A 全链贯通回归闭合（含聚类时间排序接缝修复）、P2 AUD-019 已于 Stage 12B worker/配对守卫测试补强闭合、P2 AUD-023 已于 Stage 12C 取消延迟整改闭合（shutdown 排空 → pending 批量取消 + 任务入口取消检查）；P3 级 15 项见台账，不在此重复登记）。
 
 | ID | Severity | Description | Status | Impact | Planned Resolution |
 |---|---|---|---|---|---|
 | AUD-002 | P2 | main 领先 origin/main 44 提交未推送——HEAD 区间（阶段 C–F）未经远端三平台 CI 验证；CHANGELOG 无对应发行记录（本轮已补 `[Unreleased]` 段，版本切分待 owner） | Open | Medium | owner 推送 + 发版评估（PROJECT_STATUS §6 #3） |
 | AUD-015 | P2 | 归档批 FS/DB 部分失败不一致：整批单 UoW 事务包裹 DB 写而文件复制不可事务化；批中途异常逃逸/断电 → 已复制文件无 DB 记录，重跑产生 `.archived-N` 副本或误标 SKIPPED；无崩溃对账路径（逐项 OSError 有隔离） | Open | Medium | owner 定性：补对账工具 or 文档声明为已知取舍 |
-| AUD-023 | P2 | 识别取消延迟 = 剩余队列全排空：`run_recognition_service` 一次性 submit 全部 futures，取消只 break 消费循环，`with ThreadPoolExecutor` 退出 `shutdown(wait=True)` 无 cancel_futures → 已入队任务照常执行（千张 ≈60s，即 Stage F 审查 F-04"取消延迟 60.0s"真根因）；状态一致性无损 | Open | Medium | 修复方向：批量 future.cancel + `shutdown(cancel_futures=True)` 或任务体感知取消（owner 立项） |
 
 ---
 

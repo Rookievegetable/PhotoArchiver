@@ -75,13 +75,25 @@ class RunRecognitionService(RunRecognitionUseCase):
         total = len(command.photo_ids)
         try:
             candidates = self._face_embedding_repository.list_all()
-            task = FaceAnalysisTask(self._detector)
+            task = FaceAnalysisTask(self._detector, cancel_event=self._cancel_event)
             with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
                 futures = [pool.submit(task, photo_id, image)
                            for photo_id, image in zip(command.photo_ids, command.images)]
-                for photo_id, future in zip(command.photo_ids, futures):
+                for index, (photo_id, future) in enumerate(zip(command.photo_ids, futures)):
                     if self._cancel_event.is_set():
-                        future.cancel()
+                        # AUD-023：取消后不再启动 pending work——在阻塞等待前
+                        # 批量取消所有尚未开始的 future（幂等；已运行的返回
+                        # False），仅等待当前 in-flight 项到安全点（单张完成）
+                        # 自然退出；已完成子集照常持久化（run.cancel 在下方）。
+                        # executor 为本服务每次 execute 私有创建，shutdown 不
+                        # 影响共享资源——因此无需 shutdown(cancel_futures=True)。
+                        for later_future in futures[index:]:
+                            later_future.cancel()
+                        try:
+                            future.result()
+                        except CancelledError:
+                            pass
+                        break
                     try:
                         result = future.result()
                     except CancelledError:
@@ -99,6 +111,11 @@ class RunRecognitionService(RunRecognitionUseCase):
                     if compatibility is not None:
                         self._recognition_repository.add(compatibility)
                     self._report(processed, total, f"Analyzed photo {photo_id}")
+                # AUD-023：覆盖"条目完成后才看到取消"的竞争路径——在 shutdown
+                # 之前统一兜底取消全部 future（已完成项 cancel 为无害 no-op），
+                # pending 不再阻塞终态。
+                for future in futures:
+                    future.cancel()
             if pending:
                 self._observation_repository.add_many(pending)
             run.cancel(stats) if self._cancel_event.is_set() else run.complete(stats)
