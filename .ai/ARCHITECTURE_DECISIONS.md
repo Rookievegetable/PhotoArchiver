@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.4.0 ｜ Status: Stable ｜ Last Updated: 2026-09-28
+> Version: 1.5.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
 
 ---
 
@@ -490,6 +490,18 @@
 | 理由 | Option C 正是执行计划 E-3/E-4 与开发计划 :155 的既定形态（多样本匹配、非覆盖式），消除基线 Stage3 B2 的"候选源二义"；K-3 保证人工确认是身份确认的唯一入口（与 D-1/E-SG"永不自动确认"一致）；生产链在阶段 E 已存在（规则①+`list_enabled`），本裁决将其确立为 AUD-017 的正式答案并以真实 SQLite 集成测试闭环证明（任务书 §14：禁止 stub 掩蔽空表）。 |
 | 影响范围 | 零生产代码改动（能力已存在，Stage 11B 完成证明与登记）；新增 `tests/integration/test_aud017_sample_suggestion_sqlite.py`（4 项：主闭环含 disabled 排除与重复确认幂等 / 零样本冷启动 / 平分 tie-break / 维度 fail-closed）、`tests/unit/domain/test_stage_e_pairing_domain.py` 钉定 3 项、`tests/unit/infrastructure/test_cosine_kernel.py` 钉定 2 项；KNOWN_ISSUES 移除 AUD-017 条目。**边界**：识别兼容链（`run_recognition_service` 对 `person_embeddings` 的遗留读）不动——候选可证恒空故行为等价于零匹配，清除属后续清理裁决；多样本匹配的性能路径（样本量大时复用 numpy kernel）为实现期关注点。 |
 
+
+### ADR-048 — 归档 FS/DB 一致性模型：Accepted Partial State + retry 幂等收敛；executor 原子复制（Stage 12D / AUD-015）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（2026-09-29，全面体检 AUD-015 整改：故障注入定性 + 最小机制修复） |
+| 决策 | 归档链（Planner → Executor）的一致性模型定为 **Accepted Partial State + retry 幂等收敛**——非强一致、无自动后台对账：(1) **批量 DB 原子**（单 UoW：全部归档记录同一事务提交/回滚，review M-1 语义维持）× **非事务性 FS 复制**，二者间无分布式事务（SQLite 无法回滚已完成的 FS 副作用，禁止伪事务）；(2) **崩溃窗口 1（批级回滚）**：已复制文件成孤儿（记录全失）——重试收敛：skip 策略把"目标已存在"收敛为 SKIPPED 成功态（零重复复制）、overwrite 收敛为 ARCHIVED（重新复制）、rename 收敛为 RENAMED + dup 兄弟并存；成功态（ARCHIVED/SKIPPED/RENAMED/OVERWRITTEN）拦截再规划，FAILED/PLANNED/DRY_RUN 可重试（M-2）；(3) **崩溃窗口 2（mid-copy 半写）**：`_copy_file` 改经同目录 `.part` 临时副本 + `os.replace` 原子落位——mid-copy 崩溃只遗留 `.part` 兄弟（无害残留，同名重试复用临时路径），目标位置"存在即完整"；replace 前失败 → 单项 FAILED + `.part` 清理 → 重试收敛。修复前直接 `copy2` 到目标，半写文件 + skip 策略 = **永久锁定损坏归档**（SKIPPED 成功态拦截重新规划，无法经 overwrite 恢复——故障注入实证的非收敛窗口，本修复消除其源头）。(4) **窗口 3（DB 成功后文件外部消失）**：executor 无法产生、无主动检测——登记为已知边界，人工处置。 |
+| 理由 | 故障注入实证（`test_aud015_archive_consistency.py`，真实 SQLite + 真实 FS + commit 边界崩溃注入）：窗口 1 经重试自然收敛（孤儿→SKIPPED/ARCHIVED，幂等）；窗口 2 修复前为**唯一非收敛状态**（损坏归档被标记为成功且无法重试恢复）——原子复制以 ~10 行消除该窗口源头，是覆盖实际故障窗口的最小机制；伪事务（BEGIN-copy-COMMIT）被明确否决（SQLite 不能回滚 FS 副作用）。 |
+| 影响范围 | `archive_executor.py::_copy_file`（原子化，containment 检查与 rename/skip/overwrite 语义不变；符号链接目标仍被先行拒绝，`os.replace` 不穿越链接）；新增 `tests/integration/test_aud015_archive_consistency.py`（6 项：FS 失败隔离与重试收敛 / 崩溃孤儿 skip 自愈 / overwrite 重新归档 / 遗留半写锁定证据 + 原子复制新语义 / rename dup 兄弟 / 幂等）；**钉定既有行为**：RENAMED 记录保留规划名（兄弟名仅在 outcome）。 |
+| 残余风险 | `.part` 兄弟残留（无害，重试复用同名路径）；窗口 3 无主动检测（外部删除需人工）；**遗留半写目标**（修复前版本产生）+ skip 锁定需人工恢复（删除记录与目标后重归档）——修复后 executor 不再产生该形态。 |
+
+---
 ---
 
 ## 已裁决的规则/文档冲突（已在代码/规则中执行）

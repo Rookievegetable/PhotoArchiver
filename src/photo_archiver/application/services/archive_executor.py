@@ -279,15 +279,30 @@ class ArchiveExecutor:
     def _copy_file(source: Path, target: Path) -> None:
         """Copy source to target preserving metadata (mtime, mode bits).
 
-        review M-4 fix: use shutil.copy2 (not copyfile) so target mtime tracks
-        the source — re-scanning archive_root later can fall back to mtime for
-        captured_at without seeing every archived file stamped "now". EXIF lives
-        in the byte stream so it survives either helper; copy2 also preserves
-        access mode bits which copyfile drops. Caller still owns parent mkdir.
+        review M-4 fix: copy2 (not copyfile) so target mtime tracks the
+        source — re-scanning archive_root later can fall back to mtime for
+        captured_at without seeing every archived file stamped "now". EXIF
+        lives in the byte stream so it survives either helper; copy2 also
+        preserves access mode bits which copyfile drops. Caller still owns
+        parent mkdir.
+
+        AUD-015（Stage 12D）：经同目录 ``.part`` 临时副本 + ``os.replace``
+        原子落位——复制中途崩溃只遗留 ``.part`` 兄弟（无害残留，同名重试
+        会复用同名临时路径），不会在目标位置留下半写文件（skip 策略会把
+        "目标存在"收敛为 SKIPPED 成功态，半写文件将永久锁定损坏归档）。
+        ``os.replace`` 不穿越符号链接；符号链接目标已被 containment 检查
+        先行拒绝，本方法不会见到。失败时清理临时副本。
         """
+        import os
         import shutil
 
-        shutil.copy2(source, target)
+        temp = target.with_name(target.name + ".part")
+        try:
+            shutil.copy2(source, temp)
+            os.replace(temp, target)
+        except BaseException:
+            temp.unlink(missing_ok=True)
+            raise
 
     @staticmethod
     def _compute_renamed_target(target: Path) -> Path:
