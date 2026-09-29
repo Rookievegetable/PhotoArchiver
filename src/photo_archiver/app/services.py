@@ -53,6 +53,8 @@ from photo_archiver.infrastructure import (
     SQLiteUnitOfWork,
     TxtPersonImportReader,
 )
+from photo_archiver.infrastructure.exporters.failure_list_writer import CsvFailureListWriter
+from photo_archiver.infrastructure.filesystem.archive_file_store import FilesystemArchiveFileStore
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.infrastructure.image import ContentHashCalculator, ThumbnailCache
 
@@ -171,6 +173,7 @@ def build_application_services(
     )
     archive_executor = ArchiveExecutor(
         repositories.archive_records,
+        file_store=FilesystemArchiveFileStore(),
         unit_of_work=unit_of_work,
     )
     archive_photos_service = ArchivePhotosService(
@@ -309,6 +312,7 @@ def build_application_services(
         recognition_failures=RecognitionFailureService(
             repositories.recognition_runs,
             repositories.face_observations,
+            CsvFailureListWriter(),
         ),
         backfill_historical_people=BackfillHistoricalPeopleService(
             repositories.people,

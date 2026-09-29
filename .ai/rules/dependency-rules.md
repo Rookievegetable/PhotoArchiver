@@ -1,10 +1,10 @@
 # PhotoArchiver Dependency Rules
 
-Version: 1.2.0
+Version: 1.3.0
 
 Status: Stable
 
-Last Updated: 2026-09-28
+Last Updated: 2026-09-29
 
 ---
 
@@ -353,6 +353,33 @@ Common MUST NOT depend on any project module.
 
 ---
 
+## DEP-072 — Application 层的文件访问（修订 2026-09-29，AUD-010）
+
+> **修订说明**：原 §17（"Only Infrastructure may access File System … Business
+> logic must remain independent of external resources"）是**原则正确但不可机械执行**的
+> 绝对禁令——本项目的 Application 层承担工作流编排，其归档/导入/失败清单能力在业务
+> 语义上需要读写文件。处置不是取消禁令，而是把禁令落到**能力端口**上：Application
+> 表达"做什么"，Infrastructure 表达"怎么做"。
+
+**规则**：Application 层 MUST NOT 直接执行文件系统操作（builtin `open()`、
+`Path.open/read_text/write_text/write_bytes/unlink/mkdir/rmdir/rename`、
+`shutil`、`tempfile`）；所有文件访问 MUST 经 application/ports 下的**能力端口**。
+端口 MUST 表达业务语义（`ArchiveFileStore` / `RosterTableReader.read_bytes` /
+`FailureListWriter` …），MUST NOT 是 os API 的通用封套（禁止 `IFileSystem`
+`OSWrapper` `PathService` 之类无业务语义的抽象——见 §7 判定原则）。
+
+**允许**：纯计算（SHA-256/JSON 变换）、`pathlib.PurePath` 值对象操作、内存缓冲、
+经端口的读取。
+
+**守卫**：`tests/unit/architecture/test_layer_boundaries.py::test_application_has_no_direct_file_io`
+逐文件 AST 断言（builtin `open`、`shutil`/`tempfile` 导入、文件系统专用方法调用）。
+已知盲区在测试内如实声明（`read_bytes`/`replace` 因类型信息缺失无法在 AST 层
+区分为端口方法与文件系统方法；可伪装形态依赖评审兜底）。
+
+**ADR**：ADR-049（端口化处置与判定原则）。
+
+---
+
 # 13. Third-Party Libraries
 
 Approved libraries:
@@ -431,14 +458,18 @@ Application depends only on interfaces.
 
 # 17. External Resources
 
-Only Infrastructure may access:
+Infrastructure adapters may access the external resources directly; every
+other layer reaches them through capability ports.
 
-* File System
-* SQLite
-* Image Files
-* Configuration Files
+* File System — Infrastructure only (implementations); Application via the
+  capability ports governed by **DEP-072** (v1.3.0, 2026-09-29).
+* SQLite — Infrastructure only (`architecture-rules.md` §14 / DEP-012).
+* Image Files / Configuration Files / Network — Infrastructure only.
 
-Business logic must remain independent of external resources.
+Business logic declares *what* capability it needs; infrastructure decides
+*how* it is performed. The binding rule for the application layer is DEP-072
+(AST-guarded), replacing the former blanket "no application file I/O
+whatsoever" wording.
 
 ---
 

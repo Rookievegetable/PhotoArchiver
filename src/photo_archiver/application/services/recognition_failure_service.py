@@ -20,8 +20,8 @@ owner 批准执行计划 Stage F："提供历史照片「重新分析」入口 +
 
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
+from pathlib import Path
 from uuid import UUID
 
 from loguru import logger
@@ -57,9 +57,10 @@ class RecognitionFailureService:
     """Derive retryable photos and failure reports for recognition runs."""
 
     def __init__(self, recognition_run_repository: RecognitionRunRepository,
-                 face_observation_repository) -> None:
+                 face_observation_repository, failure_list_writer) -> None:
         self._run_repository = recognition_run_repository
         self._observation_repository = face_observation_repository
+        self._failure_list_writer = failure_list_writer
 
     def latest_resumable_run_id(self) -> UUID | None:
         """Return the newest terminal recognition run, or ``None``.
@@ -113,11 +114,10 @@ class RecognitionFailureService:
         重复导出内容一致（确定性列序与行序）。Returns 数据行数。
         """
         report = self.report(run_id)
-        with open(path, "w", encoding="utf-8-sig", newline="") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(_CSV_HEADER)
-            for row in report.rows:
-                writer.writerow([row[column] for column in _CSV_HEADER])
+        self._failure_list_writer.write_failure_list(
+            Path(path), _CSV_HEADER,
+            [[row[column] for column in _CSV_HEADER] for row in report.rows],
+        )
         logger.info(
             "RecognitionFailureService: exported {} failure row(s) for run {} to {}",
             len(report.rows), run_id, path,

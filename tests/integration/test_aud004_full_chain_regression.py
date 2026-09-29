@@ -35,6 +35,7 @@ from photo_archiver.application.commands.import_draft import (
     ConfirmImportCommand,
     ParseImportDraftCommand,
 )
+from photo_archiver.infrastructure.filesystem.archive_file_store import FilesystemArchiveFileStore
 from photo_archiver.application.commands.pairing import (
     ConfirmAssignmentCommand,
     StartSuggestPairingsCommand,
@@ -213,6 +214,7 @@ def _archive(repos, archive_root: Path):
         ),
         executor=ArchiveExecutor(
             repos.archive_records,
+            file_store=FilesystemArchiveFileStore(),
             unit_of_work=SQLiteUnitOfWork(repos._connection_provider),
         ),
         default_conflict_strategy="skip",

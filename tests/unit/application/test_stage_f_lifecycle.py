@@ -23,6 +23,7 @@ from photo_archiver.domain import (
     FaceEmbedding,
     ImageUnreadableError,
 )
+from photo_archiver.infrastructure.exporters.failure_list_writer import CsvFailureListWriter
 from photo_archiver.infrastructure.repositories import (
     InMemoryFaceClusterRepository,
     InMemoryFaceObservationRepository,
@@ -147,7 +148,7 @@ def test_retry_after_cancel_creates_new_run_covering_remaining():
     first = service.execute(StartRecognitionRunCommand(
         photo_ids=photo_ids, images=photo_ids,
     ))
-    failure_service = RecognitionFailureService(bundle.runs, bundle.observations)
+    failure_service = RecognitionFailureService(bundle.runs, bundle.observations, CsvFailureListWriter())
 
     retryable = failure_service.report(first.id).retryable_photo_ids
     second = service.execute(StartRecognitionRunCommand(
@@ -172,7 +173,7 @@ def test_repeated_cancel_retry_cycles_stay_consistent():
     outcomes = {photo_id: _one_face() for photo_id in photo_ids}
     cancel_points = [300, 500]
     service = _make_service(bundle, outcomes, cancel_after=cancel_points[0])
-    failure_service = RecognitionFailureService(bundle.runs, bundle.observations)
+    failure_service = RecognitionFailureService(bundle.runs, bundle.observations, CsvFailureListWriter())
 
     run_ids: list = []
     statuses: list[str] = []
@@ -221,6 +222,6 @@ def test_unreadable_and_error_photos_are_retryable_but_do_not_crash():
 
     assert run.status == "completed"
     assert run.unreadable_count == 1 and run.error_count == 1
-    failure_service = RecognitionFailureService(bundle.runs, bundle.observations)
+    failure_service = RecognitionFailureService(bundle.runs, bundle.observations, CsvFailureListWriter())
     retryable = failure_service.report(run.id).retryable_photo_ids
     assert set(retryable) == {bad, err}  # 无产出观测的照片即重试候选（Spec Gap 语义）

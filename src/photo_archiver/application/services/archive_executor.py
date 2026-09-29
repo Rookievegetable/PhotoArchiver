@@ -17,7 +17,7 @@ from pathlib import Path
 from loguru import logger
 
 from photo_archiver.application.dtos import ArchiveOutcome, ArchivePlan, ArchivePlanItem, ArchiveResult
-from photo_archiver.application.ports import UnitOfWork
+from photo_archiver.application.ports import ArchiveFileStore, UnitOfWork
 from photo_archiver.domain import ArchiveRecord, ArchiveRecordRepository
 from photo_archiver.domain.entities.archive import ArchiveStatus
 from photo_archiver.domain.value_objects import ArchivePath
@@ -30,10 +30,12 @@ _RENAME_CONFLICT_SUFFIX = "dup"
 class ArchiveExecutor:
     """Execute an ArchivePlan against the filesystem, persisting ArchiveRecord per item.
 
-    The executor is the only component in the archive workflow that touches the
-    filesystem and the only one that writes ArchiveRecord aggregates. Keeping
-    these two responsibilities together means the persisted record always
-    reflects what actually happened on disk, even under partial failures.
+    The executor is the only component in the archive workflow that writes
+    ArchiveRecord aggregates and the only one that decides filesystem
+    operations — which flow through the ``ArchiveFileStore`` port (AUD-010:
+    application states WHAT, infrastructure implements HOW). Keeping decision
+    + persistence together means the persisted record always reflects what
+    actually happened on disk, even under partial failures.
 
     Transaction boundary (review M-1 fix): the executor accepts an optional
     UnitOfWork and wraps the entire batch so the per-item "PLANNED → finalized"
@@ -45,19 +47,23 @@ class ArchiveExecutor:
     def __init__(
         self,
         archive_record_repository: ArchiveRecordRepository,
+        file_store: ArchiveFileStore,
         unit_of_work: UnitOfWork | None = None,
     ) -> None:
-        """Initialize the executor with its persistence target.
+        """Initialize the executor with its persistence target and file store.
 
         Args:
             archive_record_repository: Where per-item ArchiveRecord aggregates land.
+            file_store: Filesystem capability port (AUD-010) — containment
+                verification, atomic copy, sibling negotiation.
             unit_of_work: Optional transactional scope. When provided the executor
                 wraps the whole batch so PLANNED + finalized records commit atomically.
                 When None the executor runs without a transaction boundary — callers
-                reuse it WITHOUT a UoW MUST wrap the execute() call in their own UoW
+                reusing it WITHOUT a UoW MUST wrap the execute() call in their own UoW
                 to avoid orphan PLANNED rows on mid-batch crash.
         """
         self._archive_record_repository = archive_record_repository
+        self._file_store = file_store
         self._unit_of_work = unit_of_work
 
     def execute(
@@ -130,7 +136,9 @@ class ArchiveExecutor:
         target = Path(item.target_path.resolve())
         # P2-005 fix: dry-run previews must flag link-based escapes too so the
         # user sees the same failure the real run would produce.
-        containment_error = self._verify_target_containment(item, target)
+        containment_error = self._file_store.verify_target_containment(
+            Path(item.target_path.archive_root), target,
+        )
         if containment_error is not None:
             logger.warning("Archive dry-run FAIL {}: {}", item.photo_id, containment_error)
             record.mark_failed(containment_error)
@@ -140,7 +148,7 @@ class ArchiveExecutor:
                 target_path=item.target_path,
                 error=containment_error,
             )
-        if not source.exists():
+        if not self._file_store.path_exists(source):
             error = f"source missing: {source}"
             logger.warning("Archive dry-run FAIL {}: {}", item.photo_id, error)
             record.mark_failed(error)
@@ -175,8 +183,10 @@ class ArchiveExecutor:
 
         # P2-005 fix: containment is now verified at both the lexical level
         # (review M-3, kept) and the filesystem level (symlink/junction
-        # resolution) before any mutation — see _verify_target_containment.
-        containment_error = self._verify_target_containment(item, target)
+        # resolution) before any mutation — see ArchiveFileStore.verify_target_containment.
+        containment_error = self._file_store.verify_target_containment(
+            Path(item.target_path.archive_root), target,
+        )
         if containment_error is not None:
             logger.warning("Archive FAIL {}: {}", item.photo_id, containment_error)
             record.mark_failed(containment_error)
@@ -188,23 +198,27 @@ class ArchiveExecutor:
             )
 
         try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if target.exists():
+            self._file_store.ensure_parent_directory(target)
+            if self._file_store.path_exists(target):
                 if conflict_strategy == "skip":
                     logger.info("Archive SKIP {} (target exists): {}", item.photo_id, target)
                     record.mark_skipped()
                     return ArchiveOutcome(item.photo_id, ArchiveStatus.SKIPPED, item.target_path)
                 if conflict_strategy == "overwrite":
-                    self._copy_file(source, target)
+                    self._file_store.copy_atomically(source, target)
                     logger.info("Archive OVERWRITE {}: {} -> {}", item.photo_id, source, target)
                     record.mark_overwritten()
                     return ArchiveOutcome(item.photo_id, ArchiveStatus.OVERWRITTEN, item.target_path)
                 if conflict_strategy == "rename":
-                    renamed_target = self._compute_renamed_target(target)
+                    renamed_target = self._file_store.find_available_sibling(
+                        target, _RENAME_CONFLICT_SUFFIX,
+                    )
                     # P2-005 fix: the chosen sibling could sit behind a symlinked
                     # ancestor or land on a broken symlink — re-verify containment
                     # before writing through it.
-                    sibling_error = self._verify_target_containment(item, renamed_target)
+                    sibling_error = self._file_store.verify_target_containment(
+                        Path(item.target_path.archive_root), renamed_target,
+                    )
                     if sibling_error is not None:
                         logger.warning("Archive FAIL {}: {}", item.photo_id, sibling_error)
                         record.mark_failed(sibling_error)
@@ -214,7 +228,7 @@ class ArchiveExecutor:
                             target_path=item.target_path,
                             error=sibling_error,
                         )
-                    self._copy_file(source, renamed_target)
+                    self._file_store.copy_atomically(source, renamed_target)
                     logger.info(
                         "Archive RENAME {}: {} -> {} (target existed)",
                         item.photo_id,
@@ -225,7 +239,7 @@ class ArchiveExecutor:
                     renamed_path = self._path_segments_from(renamed_target, item.target_path)
                     return ArchiveOutcome(item.photo_id, ArchiveStatus.RENAMED, renamed_path)
 
-            self._copy_file(source, target)
+            self._file_store.copy_atomically(source, target)
             logger.info("Archive COPY {}: {} -> {}", item.photo_id, source, target)
             record.mark_archived()
             return ArchiveOutcome(item.photo_id, ArchiveStatus.ARCHIVED, item.target_path)
@@ -240,87 +254,6 @@ class ArchiveExecutor:
                 target_path=item.target_path,
                 error=error,
             )
-
-    @staticmethod
-    def _verify_target_containment(item: ArchivePlanItem, target: Path) -> str | None:
-        """Return an error string when ``target`` would escape archive_root, else None.
-
-        P2-005 fix — defence in depth at the filesystem boundary:
-
-        1. Lexical containment (review M-3, kept): segment validation already
-           blocks ``..``/separator names; this re-checks the composed target
-           against the configured root.
-        2. Filesystem-level containment: ``Path.resolve(strict=False)`` follows
-           symlinks and junctions, so a pre-existing symlinked directory
-           *inside* archive_root (local-attacker model) can no longer let
-           mkdir/copy2 write through it to a location outside the root.
-           ``ArchivePath.resolve`` is intentionally PurePath-lexical (Domain
-           stays filesystem-free), so this re-check belongs to the executor.
-        3. Explicit leaf-symlink rejection: never overwrite or write through a
-           symlinked target — including broken symlinks — even when the link
-           happens to point back inside the root.
-        """
-        archive_root_path = Path(item.target_path.archive_root).resolve(strict=False)
-        try:
-            target.relative_to(archive_root_path)
-        except ValueError:
-            return f"target escapes archive_root: {target} not under {archive_root_path}"
-        resolved_target = target.resolve(strict=False)
-        if not resolved_target.is_relative_to(archive_root_path):
-            return (
-                f"target escapes archive_root via filesystem links: {target} resolves "
-                f"to {resolved_target} outside {archive_root_path}"
-            )
-        if target.is_symlink():
-            return f"target is a symlink: {target} — refusing to write through it"
-        return None
-
-    @staticmethod
-    def _copy_file(source: Path, target: Path) -> None:
-        """Copy source to target preserving metadata (mtime, mode bits).
-
-        review M-4 fix: copy2 (not copyfile) so target mtime tracks the
-        source — re-scanning archive_root later can fall back to mtime for
-        captured_at without seeing every archived file stamped "now". EXIF
-        lives in the byte stream so it survives either helper; copy2 also
-        preserves access mode bits which copyfile drops. Caller still owns
-        parent mkdir.
-
-        AUD-015（Stage 12D）：经同目录 ``.part`` 临时副本 + ``os.replace``
-        原子落位——复制中途崩溃只遗留 ``.part`` 兄弟（无害残留，同名重试
-        会复用同名临时路径），不会在目标位置留下半写文件（skip 策略会把
-        "目标存在"收敛为 SKIPPED 成功态，半写文件将永久锁定损坏归档）。
-        ``os.replace`` 不穿越符号链接；符号链接目标已被 containment 检查
-        先行拒绝，本方法不会见到。失败时清理临时副本。
-        """
-        import os
-        import shutil
-
-        temp = target.with_name(target.name + ".part")
-        try:
-            shutil.copy2(source, temp)
-            os.replace(temp, target)
-        except BaseException:
-            temp.unlink(missing_ok=True)
-            raise
-
-    @staticmethod
-    def _compute_renamed_target(target: Path) -> Path:
-        """Find the next non-existing sibling of target under the rename strategy.
-
-        Pattern: insert ``.archived-1`` ``.archived-2`` ... before the first
-        extension. Stops at the first non-existing sibling so the rename
-        counter is deterministic under concurrent runs of the same plan.
-        """
-        stem = target.stem
-        suffix = target.suffix
-        parent = target.parent
-        counter = 1
-        while True:
-            candidate = parent / f"{stem}.{_RENAME_CONFLICT_SUFFIX}-{counter}{suffix}"
-            if not candidate.exists():
-                return candidate
-            counter += 1
 
     @staticmethod
     def _path_segments_from(resolved: Path, original: ArchivePath) -> ArchivePath:

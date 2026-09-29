@@ -51,6 +51,12 @@ Commit-level history lives in git — this file is the user-facing digest.
 - **聚类时间排序接缝修复**：识别运行快照此前未携带照片拍摄时间，聚类排序在真实
   链路中退化为创建顺序；现快照携带 captured_at，按最早拍摄时间排序真实生效。
 
+### Changed
+
+- **应用层文件访问改为能力端口**：归档复制/目标校验、名单批次哈希、失败清单
+  导出现在经业务语义端口完成（应用层只表达"做什么"，实现位于基础设施层）；
+  对用户行为、归档一致性与冲突策略无变化。
+
 ### Docs
 
 - 业务基线入库 `docs/business-baseline/`（Stage1–3 现行有效 + Stage4 冻结审查链）；

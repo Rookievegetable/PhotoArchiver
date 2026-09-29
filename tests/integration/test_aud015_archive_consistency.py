@@ -39,6 +39,7 @@ from photo_archiver.domain import (
     RecognitionResult,
 )
 from photo_archiver.infrastructure.database.sqlite_unit_of_work import SQLiteUnitOfWork
+from photo_archiver.infrastructure.filesystem.archive_file_store import FilesystemArchiveFileStore
 
 
 class _CrashOnCommitUoW:
@@ -100,6 +101,7 @@ def _archive_service(repos, conflict_strategy: str) -> ArchivePhotosService:
         ),
         executor=ArchiveExecutor(
             repos.archive_records,
+            file_store=FilesystemArchiveFileStore(),
             unit_of_work=SQLiteUnitOfWork(repos._connection_provider),
         ),
         default_conflict_strategy=conflict_strategy,
@@ -163,7 +165,9 @@ def test_crash_after_copy_leaves_orphans_and_skip_retry_converges(tmp_path):
     archive_root = tmp_path / "archive"
     crash_uow = _CrashOnCommitUoW(repos._connection_provider)
 
-    executor = ArchiveExecutor(repos.archive_records, unit_of_work=crash_uow)
+    executor = ArchiveExecutor(
+        repos.archive_records, FilesystemArchiveFileStore(), unit_of_work=crash_uow,
+    )
     plan = ArchivePlanner(
         path_builder=ArchivePathBuilderService(),
         person_repository=repos.people,
@@ -210,7 +214,9 @@ def test_crash_after_copy_overwrite_retry_rearchives_fresh_copy(tmp_path):
         recognition_repository=repos.recognition,
         archive_record_repository=repos.archive_records,
     ).plan(str(archive_root), ())
-    ArchiveExecutor(repos.archive_records, unit_of_work=crash_uow).execute(plan, "overwrite")
+    ArchiveExecutor(
+        repos.archive_records, FilesystemArchiveFileStore(), unit_of_work=crash_uow,
+    ).execute(plan, "overwrite")
     assert len(repos.archive_records.list_all()) == 0    # 记录回滚
     orphan = next(archive_root.rglob("alpha.jpg"))
     orphan.write_bytes(b"stale-orphan-bytes")            # 篡改孤儿内容以区分
@@ -300,7 +306,9 @@ def test_rename_strategy_after_orphan_creates_sibling_copy(tmp_path):
         recognition_repository=repos.recognition,
         archive_record_repository=repos.archive_records,
     ).plan(str(archive_root), ())
-    ArchiveExecutor(repos.archive_records, unit_of_work=crash_uow).execute(plan, "rename")
+    ArchiveExecutor(
+        repos.archive_records, FilesystemArchiveFileStore(), unit_of_work=crash_uow,
+    ).execute(plan, "rename")
     assert len(repos.archive_records.list_all()) == 0    # 崩溃：孤儿 + 无记录
 
     result = _archive_service(repos, "rename").execute(

@@ -25,6 +25,7 @@ from photo_archiver.application.services import (
     ArchivePhotosService,
     ArchivePlanner,
 )
+from photo_archiver.infrastructure.filesystem.archive_file_store import FilesystemArchiveFileStore
 from photo_archiver.domain import (
     ArchiveStatus,
     Folder,
@@ -135,7 +136,7 @@ def test_step11_e2e_archives_approved_photo_under_naming_rule(
         recognition_repository=recognition_repo,
         archive_record_repository=archive_repo,
     )
-    executor = ArchiveExecutor(archive_repo, unit_of_work=SQLiteUnitOfWork(sqlite_provider))
+    executor = ArchiveExecutor(archive_repo, FilesystemArchiveFileStore(), unit_of_work=SQLiteUnitOfWork(sqlite_provider))
     service = ArchivePhotosService(
         planner=planner,
         executor=executor,
@@ -182,7 +183,7 @@ def test_step11_e2e_dry_run_does_not_write_filesystem(
         recognition_repository=recognition_repo,
         archive_record_repository=archive_repo,
     )
-    executor = ArchiveExecutor(archive_repo, unit_of_work=SQLiteUnitOfWork(sqlite_provider))
+    executor = ArchiveExecutor(archive_repo, FilesystemArchiveFileStore(), unit_of_work=SQLiteUnitOfWork(sqlite_provider))
     service = ArchivePhotosService(
         planner=planner, executor=executor,
     )
@@ -214,7 +215,7 @@ def test_step11_e2e_skip_strategy_skips_second_run(
         recognition_repository=recognition_repo,
         archive_record_repository=archive_repo,
     )
-    executor = ArchiveExecutor(archive_repo, unit_of_work=SQLiteUnitOfWork(sqlite_provider))
+    executor = ArchiveExecutor(archive_repo, FilesystemArchiveFileStore(), unit_of_work=SQLiteUnitOfWork(sqlite_provider))
     service = ArchivePhotosService(
         planner=planner, executor=executor,
     )
@@ -247,7 +248,7 @@ def test_step11_e2e_unknown_date_segment_when_captured_at_missing(
         recognition_repository=recognition_repo,
         archive_record_repository=archive_repo,
     )
-    executor = ArchiveExecutor(archive_repo, unit_of_work=SQLiteUnitOfWork(sqlite_provider))
+    executor = ArchiveExecutor(archive_repo, FilesystemArchiveFileStore(), unit_of_work=SQLiteUnitOfWork(sqlite_provider))
     service = ArchivePhotosService(
         planner=planner, executor=executor,
     )

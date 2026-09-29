@@ -68,6 +68,10 @@ def _split_lines(text: str) -> list[str]:
 class FileRosterTableReader:
     """Read roster files into raw tables by extension (stage A)."""
 
+    def read_bytes(self, source_path: Path) -> bytes:
+        """Return the raw file bytes（批次 file_hash 溯源用）."""
+        return Path(source_path).read_bytes()
+
     def list_sheets(self, source_path: Path) -> tuple[str, ...]:
         """List worksheet names of a workbook; empty for text files."""
         path = Path(source_path)

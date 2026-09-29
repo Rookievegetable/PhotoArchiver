@@ -285,11 +285,8 @@ class ParseImportDraftService:
 
         return PersonIdentity(identity)
 
-    @staticmethod
-    def _hash_file(source_path: Path) -> str:
-        """SHA-256 of the source file for batch traceability."""
+    def _hash_file(self, source_path: Path) -> str:
+        """SHA-256 of the source file for batch traceability（AUD-010：字节经 reader 端口）."""
         digest = hashlib.sha256()
-        with source_path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(65536), b""):
-                digest.update(chunk)
+        digest.update(self._reader.read_bytes(source_path))
         return digest.hexdigest()

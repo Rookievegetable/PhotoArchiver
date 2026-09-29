@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.5.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
+> Version: 1.6.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
 
 ---
 
@@ -500,6 +500,18 @@
 | 理由 | 故障注入实证（`test_aud015_archive_consistency.py`，真实 SQLite + 真实 FS + commit 边界崩溃注入）：窗口 1 经重试自然收敛（孤儿→SKIPPED/ARCHIVED，幂等）；窗口 2 修复前为**唯一非收敛状态**（损坏归档被标记为成功且无法重试恢复）——原子复制以 ~10 行消除该窗口源头，是覆盖实际故障窗口的最小机制；伪事务（BEGIN-copy-COMMIT）被明确否决（SQLite 不能回滚 FS 副作用）。 |
 | 影响范围 | `archive_executor.py::_copy_file`（原子化，containment 检查与 rename/skip/overwrite 语义不变；符号链接目标仍被先行拒绝，`os.replace` 不穿越链接）；新增 `tests/integration/test_aud015_archive_consistency.py`（6 项：FS 失败隔离与重试收敛 / 崩溃孤儿 skip 自愈 / overwrite 重新归档 / 遗留半写锁定证据 + 原子复制新语义 / rename dup 兄弟 / 幂等）；**钉定既有行为**：RENAMED 记录保留规划名（兄弟名仅在 outcome）。 |
 | 残余风险 | `.part` 兄弟残留（无害，重试复用同名路径）；窗口 3 无主动检测（外部删除需人工）；**遗留半写目标**（修复前版本产生）+ skip 锁定需人工恢复（删除记录与目标后重归档）——修复后 executor 不再产生该形态。 |
+
+---
+
+### ADR-049 — Application 文件访问端口化：能力端口 + DEP-072 守卫（Stage 12E / AUD-010）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（2026-09-29，全面体检 AUD-010 定性 + 端口化处置） |
+| 决策 | Application 层**不得**直接文件 I/O，全部经**业务语义能力端口**：(1) 新增 `ArchiveFileStore` 端口（`path_exists` / `ensure_parent_directory` / `verify_target_containment` / `copy_atomically` / `find_available_sibling`）——`ArchiveExecutor` 决定"做什么"（冲突策略、目标路径、状态机），`FilesystemArchiveFileStore`（infrastructure/filesystem）决定"怎么做"（P2-005/M-3/M-4 containment、AUD-015 原子复制、确定性 dup 协商逐字迁移，行为零变化）；(2) 新增 `FailureListWriter` 端口 + `CsvFailureListWriter`——失败清单 CSV 渲染（UTF-8-BOM、列序）归基础设施，服务层保留行结构语义；(3) `RosterTableReader` 协议扩展 `read_bytes`——批次 file_hash 溯源经既有 reader 端口，`ParseImportDraftService` 只做 SHA-256 纯计算。**DEP-072**（新增）取代原 §17 的绝对表述：禁令落在"能力端口"而非"应用层永不触碰文件"；守卫 `test_layer_boundaries.py::test_application_has_no_direct_file_io` 逐文件 AST 断言（builtin `open`、`shutil`/`tempfile` 导入、FS 专用方法调用），盲区在测试内如实声明。 |
+| 理由 | 盘点确认 application 层真实文件 I/O 恰为 3 处且全部是**业务性**（归档复制与 containment、名单批次哈希、失败清单导出），非业务性（临时文件/日志/cache）在本层为零。原 §17 属"原则正确但不可机械执行"的过度严格规则（Type B）——本项目的应用层是工作流编排层，关闭其文件访问会迫使业务能力下沉或制造无意义抽象。判定原则：端口 MUST 表达业务语义（`ArchiveFileStore` 是归档能力，非 `IFileSystem` 封套），因此未建立通用 filesystem framework；每个端口恰有一个生产实现，无 stub。 |
+| 影响范围 | 新增 `application/ports/{archive_file_store,failure_list_writer}.py`、`infrastructure/filesystem/archive_file_store.py`、`infrastructure/exporters/failure_list_writer.py`；改 `archive_executor.py`（构造注入 file_store，FS 逻辑迁出）、`recognition_failure_service.py`（writer 注入）、`parse_import_draft_service.py`（hash 经 reader）、`app/services.py`（装配）、`ports/roster_table_reader.py` + `FileRosterTableReader`（read_bytes）；测试：executor/step11/aud004/aud015/stage_f 构造点更新 + 新增 `test_archive_file_store.py`（8 项契约）+ 守卫测试（负向验证已捕获注入违规）。**行为不变**：三冲突策略、dry-run、containment/symlink 防护、M-4 mtime 语义、AUD-015 原子复制与 FS/DB 一致性模型全部由既有套件证明。 |
+| 残余边界 | 守卫 AST 盲区（`read_bytes`/`replace` 等同名方法在无类型信息下无法区分端口调用与文件系统调用；可伪装形态依赖评审）；刻意不拆分 `ArchiveFileStore` 为多个细粒度端口（调用方与语义一一对应，过度细分无收益）。 |
 
 ---
 ---

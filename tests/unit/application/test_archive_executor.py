@@ -10,6 +10,7 @@ from uuid import uuid4
 from photo_archiver.application.dtos import ArchivePlan, ArchivePlanItem
 from photo_archiver.application.services import ArchiveExecutor
 from photo_archiver.domain import ArchiveRecord, ArchiveStatus, ArchivePath
+from photo_archiver.infrastructure.filesystem.archive_file_store import FilesystemArchiveFileStore
 
 
 class _RecordingArchiveRecordRepository:
@@ -62,7 +63,7 @@ def test_executor_copies_source_to_target(tmp_path: Path) -> None:
     archive_root = tmp_path / "archive"
     item = _make_plan_item(source, str(archive_root))
     repo = _RecordingArchiveRecordRepository()
-    executor = ArchiveExecutor(repo)
+    executor = ArchiveExecutor(repo, FilesystemArchiveFileStore())
     result = executor.execute(_make_plan(item), conflict_strategy="skip")
     assert len(result.outcomes) == 1
     assert result.outcomes[0].status is ArchiveStatus.ARCHIVED
@@ -80,7 +81,7 @@ def test_executor_skip_strategy_skips_existing_target(tmp_path: Path) -> None:
     target.write_bytes(b"old")
     item = _make_plan_item(source, str(archive_root))
     repo = _RecordingArchiveRecordRepository()
-    executor = ArchiveExecutor(repo)
+    executor = ArchiveExecutor(repo, FilesystemArchiveFileStore())
     result = executor.execute(_make_plan(item), conflict_strategy="skip")
     assert result.outcomes[0].status is ArchiveStatus.SKIPPED
     assert target.read_bytes() == b"old"  # not overwritten
@@ -96,7 +97,7 @@ def test_executor_overwrite_strategy_replaces_target(tmp_path: Path) -> None:
     target.write_bytes(b"old")
     item = _make_plan_item(source, str(archive_root))
     repo = _RecordingArchiveRecordRepository()
-    executor = ArchiveExecutor(repo)
+    executor = ArchiveExecutor(repo, FilesystemArchiveFileStore())
     result = executor.execute(_make_plan(item), conflict_strategy="overwrite")
     assert result.outcomes[0].status is ArchiveStatus.OVERWRITTEN
     assert target.read_bytes() == b"new"
@@ -111,7 +112,7 @@ def test_executor_rename_strategy_picks_sibling(tmp_path: Path) -> None:
     target.write_bytes(b"old")
     item = _make_plan_item(source, str(archive_root))
     repo = _RecordingArchiveRecordRepository()
-    executor = ArchiveExecutor(repo)
+    executor = ArchiveExecutor(repo, FilesystemArchiveFileStore())
     result = executor.execute(_make_plan(item), conflict_strategy="rename")
     outcome = result.outcomes[0]
     assert outcome.status is ArchiveStatus.RENAMED
@@ -128,7 +129,7 @@ def test_executor_dry_run_does_not_touch_filesystem(tmp_path: Path) -> None:
     archive_root = tmp_path / "archive"
     item = _make_plan_item(source, str(archive_root))
     repo = _RecordingArchiveRecordRepository()
-    executor = ArchiveExecutor(repo)
+    executor = ArchiveExecutor(repo, FilesystemArchiveFileStore())
     result = executor.execute(_make_plan(item), conflict_strategy="skip", dry_run=True)
     assert result.outcomes[0].status is ArchiveStatus.DRY_RUN
     assert result.dry_run_count == 1
@@ -143,7 +144,7 @@ def test_executor_dry_run_fails_on_missing_source(tmp_path: Path) -> None:
     archive_root = tmp_path / "archive"
     item = _make_plan_item(source, str(archive_root))
     repo = _RecordingArchiveRecordRepository()
-    executor = ArchiveExecutor(repo)
+    executor = ArchiveExecutor(repo, FilesystemArchiveFileStore())
     result = executor.execute(_make_plan(item), conflict_strategy="skip", dry_run=True)
     assert result.outcomes[0].status is ArchiveStatus.FAILED
     assert result.failed_count == 1
@@ -156,7 +157,7 @@ def test_executor_records_planned_before_finalize(tmp_path: Path) -> None:
     archive_root = tmp_path / "archive"
     item = _make_plan_item(source, str(archive_root))
     repo = _RecordingArchiveRecordRepository()
-    executor = ArchiveExecutor(repo)
+    executor = ArchiveExecutor(repo, FilesystemArchiveFileStore())
     executor.execute(_make_plan(item), conflict_strategy="skip")
     # Final state should reflect ARCHIVED, not PLANNED.
     assert len(repo.added) == 1
@@ -176,7 +177,7 @@ def test_executor_failed_on_oserror(tmp_path: Path) -> None:
     archive_root = tmp_path / "archive"
     item = _make_plan_item(source, str(archive_root))
     repo = _RecordingArchiveRecordRepository()
-    executor = ArchiveExecutor(repo)
+    executor = ArchiveExecutor(repo, FilesystemArchiveFileStore())
     result = executor.execute(_make_plan(item), conflict_strategy="skip")
     assert result.outcomes[0].status is ArchiveStatus.FAILED
     assert result.outcomes[0].error is not None

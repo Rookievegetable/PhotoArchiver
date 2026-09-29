@@ -131,3 +131,39 @@ def test_layer_boundaries_hold(layer: str) -> None:
         f"Layer boundary violations in '{layer}' "
         f"(see .ai/rules/dependency-rules.md §2/§4):\n  " + "\n  ".join(all_violations)
     )
+
+
+# ── AUD-010（Stage 12E）：application 层直接文件 I/O 禁令 ───────────────────
+
+_BANNED_FS_IMPORTS = frozenset({"shutil", "tempfile"})
+# AST 类型盲区说明：read_bytes 允许（RosterTableReader 端口方法）；replace/
+# remove 允许（str/list 方法与仓储方法）。可伪装形态（如 Path.read_bytes）
+# 依赖评审兜底——本守卫捕获的是已知的违规形态（builtin open / FS 专用库）。
+_BANNED_FS_ATTR_CALLS = frozenset(
+    {"open", "read_text", "write_text", "write_bytes", "unlink", "mkdir", "rmdir", "rename"}
+)
+
+
+def test_application_has_no_direct_file_io() -> None:
+    """application 层禁止直接文件 I/O（DEP §17）——全部经能力端口。"""
+    violations: list[str] = []
+    for path in sorted((_SRC / "application").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split(".")[0] in _BANNED_FS_IMPORTS:
+                        violations.append(f"{path.name}: imports {alias.name}")
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and node.level == 0 and node.module.split(".")[0] in _BANNED_FS_IMPORTS:
+                    violations.append(f"{path.name}: imports {node.module}")
+            elif isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Name) and func.id == "open":
+                    violations.append(f"{path.name}:{node.lineno} builtin open()")
+                elif isinstance(func, ast.Attribute) and func.attr in _BANNED_FS_ATTR_CALLS:
+                    violations.append(f"{path.name}:{node.lineno} .{func.attr}() call")
+    assert not violations, (
+        "Direct file I/O in application layer (see .ai/rules/dependency-rules.md §17):"
+        + "".join("\n  " + violation for violation in violations)
+    )

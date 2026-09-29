@@ -21,6 +21,7 @@ import pytest
 from photo_archiver.application.dtos import ArchivePlan, ArchivePlanItem
 from photo_archiver.application.services import ArchiveExecutor
 from photo_archiver.domain import ArchiveRecord, ArchiveStatus, ArchivePath
+from photo_archiver.infrastructure.filesystem.archive_file_store import FilesystemArchiveFileStore
 
 
 class _RecordingArchiveRecordRepository:
@@ -95,7 +96,7 @@ def test_symlinked_person_dir_inside_root_cannot_escape(tmp_path: Path) -> None:
     if not _create_symlink(archive_root / "Alice", outside, is_directory=True):
         pytest.skip("symlink creation not permitted on this platform/account")
 
-    result = ArchiveExecutor(_RecordingArchiveRecordRepository()).execute(
+    result = ArchiveExecutor(_RecordingArchiveRecordRepository(), FilesystemArchiveFileStore()).execute(
         _plan(_make_plan_item(source, str(archive_root))), conflict_strategy="skip"
     )
 
@@ -119,7 +120,7 @@ def test_symlinked_leaf_target_is_refused_even_if_inside_root(tmp_path: Path) ->
     if not _create_symlink(day_dir / "x.jpg", bystander, is_directory=False):
         pytest.skip("symlink creation not permitted on this platform/account")
 
-    result = ArchiveExecutor(_RecordingArchiveRecordRepository()).execute(
+    result = ArchiveExecutor(_RecordingArchiveRecordRepository(), FilesystemArchiveFileStore()).execute(
         _plan(_make_plan_item(source, str(archive_root))), conflict_strategy="overwrite"
     )
 
@@ -140,7 +141,7 @@ def test_dry_run_reports_symlink_escape_as_failed(tmp_path: Path) -> None:
     if not _create_symlink(archive_root / "Alice", outside, is_directory=True):
         pytest.skip("symlink creation not permitted on this platform/account")
 
-    result = ArchiveExecutor(_RecordingArchiveRecordRepository()).execute(
+    result = ArchiveExecutor(_RecordingArchiveRecordRepository(), FilesystemArchiveFileStore()).execute(
         _plan(_make_plan_item(source, str(archive_root))), conflict_strategy="skip", dry_run=True
     )
 
@@ -167,7 +168,7 @@ def test_junction_escape_is_refused_without_privileges(tmp_path: Path) -> None:
 
     _winapi.CreateJunction(str(outside), str(archive_root / "Alice"))
 
-    result = ArchiveExecutor(_RecordingArchiveRecordRepository()).execute(
+    result = ArchiveExecutor(_RecordingArchiveRecordRepository(), FilesystemArchiveFileStore()).execute(
         _plan(_make_plan_item(source, str(archive_root))), conflict_strategy="skip"
     )
 

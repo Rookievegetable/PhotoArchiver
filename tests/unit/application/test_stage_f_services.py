@@ -20,6 +20,7 @@ from photo_archiver.application.services import (
 from photo_archiver.application.services.backfill_historical_people_service import (
     BackfillHistoricalPeopleCommand,
 )
+from photo_archiver.infrastructure.exporters.failure_list_writer import CsvFailureListWriter
 from photo_archiver.domain import (
     FaceBox,
     FaceEmbedding,
@@ -180,7 +181,7 @@ class _FailureHarness:
     def __init__(self):
         self.runs = _RunRepo()
         self.observations = InMemoryFaceObservationRepository()
-        self.service = RecognitionFailureService(self.runs, self.observations)
+        self.service = RecognitionFailureService(self.runs, self.observations, CsvFailureListWriter())
         run = RecognitionRun(parameters={})
         from photo_archiver.domain import RecognitionRunStats
 

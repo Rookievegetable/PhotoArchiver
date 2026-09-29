@@ -29,3 +29,11 @@ class RosterTableReader(Protocol):
         sheet_name: str | None = None,
     ) -> RawRosterTable:
         """Decode the file; the first row is returned via ``header`` when ``has_header``."""
+        ...
+
+    def read_bytes(self, source_path: Path) -> bytes:
+        """Return the raw file bytes（批次 file_hash 溯源用，AUD-010）。
+
+        实现负责打开文件；调用方（parse 服务）对字节做纯计算（SHA-256）。
+        """
+        ...
