@@ -52,6 +52,13 @@ class RecognitionResult:
 
     def __post_init__(self) -> None:
         """Validate fields and initialize generated values."""
+        if not isinstance(self.status, MatchStatus):
+            # AUD-018-B：与 ``ArchiveRecord.status`` 同口径的构造期类型校验
+            # （dataclass 不强制类型——缺此校验时非法状态可直达 DB；本表无
+            # DB 层 CHECK，域枚举是唯一状态机，见 ADR-052 记录）。
+            raise ValidationError(
+                "RecognitionResult status must be a MatchStatus enum"
+            )
         if self.confidence is not None and not 0.0 <= self.confidence <= 1.0:
             raise ValidationError("RecognitionResult confidence must be in [0.0, 1.0]")
         if self.created_at is None:

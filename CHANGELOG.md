@@ -61,6 +61,7 @@ Commit-level history lives in git — this file is the user-facing digest.
 
 - 覆盖率基线改为可复现声明（命令 / 测量范围 / 包含与排除 / 分子分母 / CI 门禁命令）。
 - 移除空置的 `common/` 包并同步架构规则（零代码行为变化）。
+- 识别结果的状态值现在在构造时校验（只接受域枚举），避免非法状态写入数据库。
 - 业务基线入库 `docs/business-baseline/`（Stage1–3 现行有效 + Stage4 冻结审查链）；
   `.ai/` 状态文档恢复与代码一致；架构决策补登记 ADR-042~046；依赖矩阵对齐实际架构
   与守卫测试（v1.2.0）。

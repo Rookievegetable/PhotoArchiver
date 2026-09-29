@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.7.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
+> Version: 1.8.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
 
 ---
 
@@ -532,6 +532,17 @@
 | 决策 | ①**移除 `src/photo_archiver/common/`**：该包为 1 行 docstring 空骨架，`src/`/`tests/`/`main.py` 零导入（仅分层守卫的命名空间黑名单提及）；其声明职责（constants/helpers/shared exceptions/base classes/validators）要么未用、要么已有更合适的归属（`domain/exceptions.py`、`infrastructure/logging/`、`application/dtos/`）。同步移除 DEP §3 模块树与 §4 矩阵条目、ARC-008 改写为"Removed"、project-structure 标注移除。②**`main_window.py` 不做代码拆分**（1578 行 / 63 方法：事件路由 29、UI 构建 8、状态同步 5、其余为编排辅助）：职责已外移——窗口只做装配/路由/状态同步，service 调用均为编排，业务规则、文件与 SQL 触点为零。确立 ARC-011 职责边界规则，防止后续以"文件大"为由机械重构或把业务逻辑塞回窗口。 |
 | 理由 | 空批准包会招致死代码或错置工具（任务书 §11 原则：宁可删除空目录也不添加无意义 utility）；行数不是拆分理由（§14），Qt 惯例中事件路由本就是 MainWindow 职责。 |
 | 影响范围 | 删除 1 个包目录；4 份规则/结构文档更新（architecture-rules、dependency-rules、project-structure、本 ADR）；守卫测试 `test_layer_boundaries.py` 的 domain 黑名单**保留** `photo_archiver.common`（命名空间级预防禁令，模块若重建则域层仍禁引）。代码行为零变更。 |
+
+---
+
+### ADR-052 — 数据生命周期与状态机职责定案：人员删除语义、status 枚举归属、`file_hash` 用途（Stage 13C-B / AUD-018）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（2026-09-29，体检 AUD-018 三子项逐项定性；登记**既有**设计而非新决策） |
+| 决策 | **A 人员删除的数据生命周期**（FK 矩阵，登记既有设计）：`recognition_results.person_id` 与 `archive_records.person_id` = **SET NULL**——这两类记录描述的是**照片**（照片独立于人员存在），删人后照片与归档事实保留、身份匿名化；`cluster_person_assignments.person_id` 与 `person_face_embeddings.person_id`（及历史 `person_embeddings`）= **CASCADE**——映射与样本**从属于**该人员（无独立生命期；样本是"这个人的人脸模板"，人没了模板无意义；配对决策指向已删除的人会悬空）。二者不对称是**有意设计**（与 `docs/business-baseline/Stage1_BusinessFacts.md` §删除人员 记载一致），不改 migration。**B status 合法性归属**：新增表（003/004/006/007）在 DB 层有 CHECK，早期表（`recognition_results`/`archive_records`，002/008）没有——裁定 **域枚举是唯一状态机**（实体构造期/状态迁移处校验，仓储签名类型化，如 `update_status(status: MatchStatus)` 写 `status.value`），**不**为冻结表补 DB CHECK（迁移重建 + 生产数据集合核验成本，换不到真实缺陷防护）。补齐唯一缺口：`RecognitionResult.__post_init__` 增加 status 类型校验（此前 dataclass 不强制类型，可构造非法状态直达 DB），与 `ArchiveRecord.status` 同口径。**C `import_batches.file_hash`**：类型 D（审计/溯源 metadata）——记录"本批人员来自哪个文件内容"（`ParseImportDraftService` 计算 SHA-256；回填批次写 `backfill:<ts>` 合成值），读取方仅实体水合（`sqlite_import_batch_repository:18`），**不做去重键**（同一文件经编辑后重导是合法业务行为，按内容去重会静默跳过合法重导）——保留字段、明确用途，**不删除**。 |
+| 理由 | 消除三处"看起来不一致其实有意"的模型歧义：A 的级联差异对应"记录 vs 从属物"的本质差异；B 的 CHECK 差异对应"新增表更严"的历史演进，防护责任在域枚举（唯一可写路径）；C 的不读取是**设计**而非缺失——去重键需要额外的查询/比较路径与"内容相同但用户想重导"的业务裁决，属功能而非卫生。 |
+| 影响范围 | `domain/entities/recognition.py`（status 构造期类型校验）；新增 `tests/unit/application/test_aud016_018_contracts.py`（018-B 2 项）；迁移零变更、Schema 零变更。 |
 
 ---
 ---

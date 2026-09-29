@@ -238,6 +238,19 @@ class ArchiveExecutor:
                     record.mark_renamed()
                     renamed_path = self._path_segments_from(renamed_target, item.target_path)
                     return ArchiveOutcome(item.photo_id, ArchiveStatus.RENAMED, renamed_path)
+                # AUD-016 防御纵深：未知策略此前静默落入下方"直接复制"分支——
+                # 对已存在的目标等同未授权覆盖。此处 fail-closed：单项 FAILED
+                # （批次继续，与其他逐项失败语义一致）。正常入口的权威校验在
+                # ArchivePhotosService._resolve_conflict_strategy。
+                error = f"unsupported conflict strategy: {conflict_strategy!r}"
+                logger.warning("Archive FAIL {}: {}", item.photo_id, error)
+                record.mark_failed(error)
+                return ArchiveOutcome(
+                    photo_id=item.photo_id,
+                    status=ArchiveStatus.FAILED,
+                    target_path=item.target_path,
+                    error=error,
+                )
 
             self._file_store.copy_atomically(source, target)
             logger.info("Archive COPY {}: {} -> {}", item.photo_id, source, target)
