@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.6.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
+> Version: 1.7.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
 
 ---
 
@@ -512,6 +512,26 @@
 | 理由 | 盘点确认 application 层真实文件 I/O 恰为 3 处且全部是**业务性**（归档复制与 containment、名单批次哈希、失败清单导出），非业务性（临时文件/日志/cache）在本层为零。原 §17 属"原则正确但不可机械执行"的过度严格规则（Type B）——本项目的应用层是工作流编排层，关闭其文件访问会迫使业务能力下沉或制造无意义抽象。判定原则：端口 MUST 表达业务语义（`ArchiveFileStore` 是归档能力，非 `IFileSystem` 封套），因此未建立通用 filesystem framework；每个端口恰有一个生产实现，无 stub。 |
 | 影响范围 | 新增 `application/ports/{archive_file_store,failure_list_writer}.py`、`infrastructure/filesystem/archive_file_store.py`、`infrastructure/exporters/failure_list_writer.py`；改 `archive_executor.py`（构造注入 file_store，FS 逻辑迁出）、`recognition_failure_service.py`（writer 注入）、`parse_import_draft_service.py`（hash 经 reader）、`app/services.py`（装配）、`ports/roster_table_reader.py` + `FileRosterTableReader`（read_bytes）；测试：executor/step11/aud004/aud015/stage_f 构造点更新 + 新增 `test_archive_file_store.py`（8 项契约）+ 守卫测试（负向验证已捕获注入违规）。**行为不变**：三冲突策略、dry-run、containment/symlink 防护、M-4 mtime 语义、AUD-015 原子复制与 FS/DB 一致性模型全部由既有套件证明。 |
 | 残余边界 | 守卫 AST 盲区（`read_bytes`/`replace` 等同名方法在无类型信息下无法区分端口调用与文件系统调用；可伪装形态依赖评审）；刻意不拆分 `ArchiveFileStore` 为多个细粒度端口（调用方与语义一一对应，过度细分无收益）。 |
+
+---
+
+### ADR-050 — UseCase Protocol 使用准则：按边界需要而非按 Service 一一映射（Stage 13C-A / AUD-011）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（2026-09-29，全面体检 AUD-011 定性；ARC-010 规则化） |
+| 决策 | Application 层的 UseCase Protocol **不是**每个 service 的强制壳，而是**跨边界能力的标注机制**。事实盘点（Stage 13C-A）：11 个 use_cases 文件声明 14 个 Protocol，每个恰有一个 service 实现；其中 **11 个** 被 presentation 控制器/worker 以类型标注消费（archive 2、run_recognition 3、cluster_faces 2、import_people 2、match_persons 2、scan_and_register 2、delete_person 1、delete_photos 1、dispose_duplicates 2、review_recognition 1、settings 1），**3 个**（RegisterPhoto / ScanPhotoFolder / PruneMissingPhotos）无外部标注方——其服务为**活的**组合根能力（`ApplicationServices` 以**具体类**字段标注暴露，CLI `prune` 经该字段驱动）。测试对 Protocol 的引用近乎为零（14 个中共 2 处），说明现存 Protocol 的价值是**边界标注**而非测试替身点。因此确立准则（ARC-010）：跨 application 边界的能力需要 Protocol；仅经组合根暴露的应用内能力不需要；不得为凑齐而批量新建；已声明但仅被自身 service 继承的 Protocol 视为契约冗余候选。 |
+| 理由 | 回答体检核心问题"需要所有 service 都有 Protocol 吗"——以代码事实作答：本项目是**单进程桌面应用 + 单一组合根**（`ApplicationServices` 具体类字段），没有多实现替换需求；Protocol 的真实消费者是 presentation/worker 的构造函数标注（11/14 有），其余场景由组合根的具体类型承担。不建立 36 个 Protocol（无消费者的空壳），也不删除 11 个在用 Protocol（会破坏注入边界）。 |
+| 影响范围 | `architecture-rules.md` 新增 ARC-010（使用准则）；本 ADR 记录盘点事实与 3 个冗余候选的**待决变体**（删除触及 `application/__init__.py` 公开导出 = 公开 API 变更，按 Stage 13C-A §9 属 Owner 决策，本阶段不执行）。代码零变更。 |
+
+### ADR-051 — 移除空置的 `common/` 包；MainWindow 职责边界成文（Stage 13C-A / AUD-013）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（2026-09-29） |
+| 决策 | ①**移除 `src/photo_archiver/common/`**：该包为 1 行 docstring 空骨架，`src/`/`tests/`/`main.py` 零导入（仅分层守卫的命名空间黑名单提及）；其声明职责（constants/helpers/shared exceptions/base classes/validators）要么未用、要么已有更合适的归属（`domain/exceptions.py`、`infrastructure/logging/`、`application/dtos/`）。同步移除 DEP §3 模块树与 §4 矩阵条目、ARC-008 改写为"Removed"、project-structure 标注移除。②**`main_window.py` 不做代码拆分**（1578 行 / 63 方法：事件路由 29、UI 构建 8、状态同步 5、其余为编排辅助）：职责已外移——窗口只做装配/路由/状态同步，service 调用均为编排，业务规则、文件与 SQL 触点为零。确立 ARC-011 职责边界规则，防止后续以"文件大"为由机械重构或把业务逻辑塞回窗口。 |
+| 理由 | 空批准包会招致死代码或错置工具（任务书 §11 原则：宁可删除空目录也不添加无意义 utility）；行数不是拆分理由（§14），Qt 惯例中事件路由本就是 MainWindow 职责。 |
+| 影响范围 | 删除 1 个包目录；4 份规则/结构文档更新（architecture-rules、dependency-rules、project-structure、本 ADR）；守卫测试 `test_layer_boundaries.py` 的 domain 黑名单**保留** `photo_archiver.common`（命名空间级预防禁令，模块若重建则域层仍禁引）。代码行为零变更。 |
 
 ---
 ---

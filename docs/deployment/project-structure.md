@@ -306,7 +306,6 @@ photo_archiver/
 │   ├── ports/
 │   ├── services/
 │   └── └
-├── common/
 ├── domain/
 │   ├── entities/
 │   ├── repositories/

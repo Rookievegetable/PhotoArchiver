@@ -26,7 +26,7 @@ PhotoArchiver adopts:
 - Clean Architecture
 - Layered Architecture
 
-> **分层依赖图+矩阵权威**：`.ai/rules/dependency-rules.md` §2（依赖原则与方向图）+ §4（模块依赖矩阵，含 `ai` / `workers` / `plugins` / `common` 全方向）。本节不复制图与矩阵正文，详见该处。当本文件 §5 与 DEP §4 矩阵表述不同时，以 DEP §4 为准（ADR R-8 已裁决，见 `ARCHITECTURE_DECISIONS.md`）。
+> **分层依赖图+矩阵权威**：`.ai/rules/dependency-rules.md` §2（依赖原则与方向图）+ §4（模块依赖矩阵，含 `ai` / `workers` / `plugins` 全方向）。本节不复制图与矩阵正文，详见该处。当本文件 §5 与 DEP §4 矩阵表述不同时，以 DEP §4 为准（ADR R-8 已裁决，见 `ARCHITECTURE_DECISIONS.md`）。
 
 Dependencies MUST always point toward the Domain layer.
 
@@ -191,21 +191,43 @@ Plugins MUST NOT modify internal architecture.
 
 ---
 
-## ARC-008 Common
+## ARC-008 Common（**Removed 2026-09-29，Stage 13C-A / AUD-013**）
 
-Responsible for reusable utilities.
-
-Examples:
-
-- Constants
-- Helpers
-- Shared Exceptions
-- Base Classes
-- Validators
-
-Common MUST remain lightweight.
+The `common/` package was an empty one-line skeleton with **zero** importers
+across `src/`, `tests/` and `main.py`; every "responsibility" listed for it
+(constants, helpers, shared exceptions, base classes, validators) was either
+unused or already lives in a more appropriate module (`domain/exceptions.py`,
+`infrastructure/logging/`, `application/dtos/`). An approved-but-empty package
+invites either dead code or misplaced utilities, so it was **removed** together
+with its entries in the DEP §3 module list / §4 matrix (Stage 13C-A). Utilities
+MUST be placed in the module that owns the concern (domain value objects,
+application ports, infrastructure adapters) rather than a shared bag.
 
 ---
+
+## ARC-010 UseCase Protocol 使用准则（新增 2026-09-29，Stage 13C-A / AUD-011）
+
+**Protocol 与 Service 不要求一一映射**（ADR-050）。准则：
+
+1. **需要 Protocol**：能力跨越 application 边界（presentation 控制器、worker 任务
+   注入、组合根替换、插件可替换点）——调用方按接口类型标注，组合根注入实现。
+2. **不需要 Protocol**：仅由组合根经 `ApplicationServices`（具体类字段标注）暴露的
+   应用内能力；当前全部消费者与具体实现同进程同根，无替换需求。
+3. **不得为凑齐而批量新建**：新增 service 不自动要求 Protocol；仅在出现第二个消费者
+   或替换需求时再提取。
+4. **已声明的 Protocol 不得无消费者悬挂**：若某 Protocol 除"被其 service 继承"外无任何
+   标注方，视为契约冗余候选（当前 3 项：RegisterPhoto / ScanPhotoFolder / PruneMissingPhotos
+   ——CLI 经组合根具体类驱动，其删除触及 `application/__init__.py` 公开导出，属 Owner
+   API 决策，ADR-050 记录为待决变体）。
+
+## ARC-011 MainWindow 职责边界（新增 2026-09-29，Stage 13C-A / AUD-013）
+
+`presentation/views/main_window.py`（1578 行 / 63 方法）体积大但**职责已外移**：
+事件路由（29 个 `_on_*`）、UI 构建（8 个 `_build_*`）、状态同步（5 个 `_refresh_*`）
+与编排调用（service `.execute`），**无业务规则、无文件/SQL 触点**。规则：
+MainWindow MUST 只做装配/路由/状态同步；任何业务判定 MUST 落入 controller/presenter/
+application service。新增能力时按此分流，不以行数为拆分理由（禁止
+`MainWindowPart1/2/3` 式机械切分）。
 
 ## ARC-009 子包与特殊目录职责补录
 
@@ -232,7 +254,7 @@ Common MUST remain lightweight.
 
 > **依赖矩阵权威**：`.ai/rules/dependency-rules.md` §4（完整模块×可依赖矩阵）。本节不复制矩阵正文，详见该处。本文件 §6 列禁令以矩阵为准。
 
-The matrix in DEP §4 is the SSOT for all module-to-module dependency allowances, including `ai`, `workers`, `plugins`, and `common` directions. §6 below enumerates the prohibitions that complement the matrix.
+The matrix in DEP §4 is the SSOT for all module-to-module dependency allowances, including `ai`, `workers`, and `plugins` directions. §6 below enumerates the prohibitions that complement the matrix.
 
 ---
 
@@ -616,7 +638,7 @@ infrastructure/logging/
 
 Business code MUST NOT configure loggers.
 
-The `common/logging/` option was removed: loguru is a third-party library, and the `common` module is restricted to the Standard Library only per DEP-071.
+The `common/logging/` option was removed: loguru is a third-party library. The `common` module itself was removed entirely in 2026-09 (Stage 13C-A / AUD-013, see ARC-008).
 
 ---
 

@@ -64,7 +64,6 @@ photo_archiver
 ├── infrastructure
 ├── workers
 ├── ai
-├── common
 └── plugins
 ```
 
@@ -78,15 +77,15 @@ Dependencies outside these modules require explicit approval.
 
 | Module         | May Depend On                                     | 备注（对齐守卫测试与现状） |
 | -------------- | ------------------------------------------------- | --- |
-| app            | presentation, application, domain, infrastructure, workers, ai, plugins, common | 组合根/装配层，import 全开（守卫测试明确豁免 app） |
-| presentation   | application, domain, common, workers, plugins（ADR-038 插件宿主）, app（仅 `app.context` 类型引用） | 禁止 infrastructure / ai / sqlite3 / cv2 / insightface（DEP-002，守卫测试强制） |
-| application    | domain, common                                    | 无 GUI、无 SQL/图像栈；依赖倒置只经 ports |
-| domain         | common                                            | 零框架依赖（DEP-020/021） |
-| infrastructure | domain, common, **application（ports + dtos）**   | application/ports 为系统侧端口（exporter/unit_of_work/user_settings_store/photo_file_scanner/thumbnail_generator/person_import_reader 等），适配器实现端口并消费其 DTO——Clean Architecture 合法方向 |
-| workers        | application, common, domain, PySide6.QtCore (threading) | domain 仅实体/枚举引用（application_tasks/export_task）；Qt 限 QtCore（WRK-002） |
-| ai             | infrastructure, domain, common                    | 现状仅依赖 domain（比声明更严格） |
+| app            | presentation, application, domain, infrastructure, workers, ai, plugins | 组合根/装配层，import 全开（守卫测试明确豁免 app） |
+| presentation   | application, domain, workers, plugins（ADR-038 插件宿主）, app（仅 `app.context` 类型引用） | 禁止 infrastructure / ai / sqlite3 / cv2 / insightface（DEP-002，守卫测试强制） |
+| application    | domain                                            | 无 GUI、无 SQL/图像栈；依赖倒置只经 ports |
+| domain         | —（无内部依赖）                                   | 零框架依赖（DEP-020/021） |
+| infrastructure | domain, **application（ports + dtos）**           | application/ports 为系统侧端口（exporter/unit_of_work/user_settings_store/photo_file_scanner/thumbnail_generator/person_import_reader 等），适配器实现端口并消费其 DTO——Clean Architecture 合法方向 |
+| workers        | application, domain, PySide6.QtCore (threading)   | domain 仅实体/枚举引用（application_tasks/export_task）；Qt 限 QtCore（WRK-002） |
+| ai             | infrastructure, domain                            | 现状仅依赖 domain（比声明更严格） |
 | plugins        | application, common                               | DEP-060 |
-| common         | Standard Library only                             | DEP-071 |
+| （common）      | **已移除**（2026-09-29 Stage 13C-A / ARC-008，DEP-071 随之作废） | DEP-071 |
 
 ---
 

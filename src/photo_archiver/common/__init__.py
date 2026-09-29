@@ -1,1 +1,0 @@
-"""PhotoArchiver Package"""

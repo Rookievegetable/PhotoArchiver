@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.36.0 · Last Updated: 2026-09-29 · Status: Live
+> Version: 1.37.0 · Last Updated: 2026-09-29 · Status: Live
 
 ---
 
@@ -23,6 +23,8 @@
 M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 已落地；发布工程至 v2.8.0（2026-09-13）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**：阶段 A（两段式导入，09-21 owner 验收 ✅）→ 阶段 B（人员与分组页，09-23 owner 验收 ✅）→ **阶段 C/D/E/F（2026-09-24 ~ 09-28 全部实施完成并冻结审查）**。**2026-09-28 完成全面工程健康体检（Stage 0–9，判 ATTENTION）与治理基线恢复（Stage 10）**；业务基线冻结正式生效待 owner 签核（Stage4.2 复审 8 项条件已满足，见 `docs/business-baseline/`）。
 
 ## 2. Current Step（当前开发阶段）
+
+**P3 架构与结构债务清偿（Stage 13C-A，2026-09-29）**——AUD-011（UseCase Protocol 双轨制）**FIXED**：盘点 11 文件/14 Protocol（每个恰一实现；11 个有 presentation/worker 边界标注消费者，3 个无但服务为活的组合根能力，测试引用 2/14）→ 核心问题以代码事实定案：**本项目单进程 + 单一组合根（`ApplicationServices` 具体类字段），Protocol 是跨边界标注机制而非 service 强制壳**；确立 **ARC-010** 使用准则 + **ADR-050**（含 3 个契约冗余候选的删除变体——触及 `application/__init__.py` 公开导出，属 Owner API 决策，记录为待决项，代码零变更）。AUD-013（`common/` 空置 + main_window 规模）**FIXED**：①`common/` 为 1 行空骨架、全仓零导入 → **删除**并同步 DEP §3/§4 矩阵、ARC-008（改写为 Removed）、project-structure（ADR-051）；②main_window 职责盘点（63 方法 = 事件路由 29 / UI 构建 8 / 状态同步 5 / 编排辅助 11，业务规则与文件/SQL 触点为零）→ 判定"大但职责已外移"，**不做代码拆分**（行数非拆分理由），确立 **ARC-011** 职责边界规则防业务逻辑回潮。验证：全量 **1355 passed / 8 skipped**、ruff/mypy（261 文件）绿。
 
 **P3 文档与治理卫生清偿 · 第一轮（Stage 13A，2026-09-29）**——体检 P3 共 14 项，按类别分批处置；本轮仅处理文档/治理/仓库卫生类 5 项：**AUD-006**（仓库杂物：`jobs34.json`/`jobs_tmp.json`/`runs_all.json`（93KB CI 查询 dump）/`release_check_tmp.yml`（工作流草稿副本）——经核验无任何代码/测试/文档引用（仅体检台账提及），`git rm` 出库 + `.gitignore` 增加 `jobs*.json`/`runs_all.json`/`*_tmp.yml`/`*.part` 规则并探针验证生效）；**AUD-007**（pre-commit 声明与配置脱节——处置 Option B：删除 dev.txt 钉定与 README 开发栈提及。理由：项目自始无 `.pre-commit-config.yaml`、`.ai/rules/git-rules.md` 无 hook 规范，真实质量门禁是 CI（`ruff check .` + `mypy src` + pytest）+ 手动工具调用；引入 hooks 属开发工作流变更，须 owner 立项而非卫生整改）；**AUD-022**（历史规划文档无标记——`DEVELOPMENT_ROADMAP.md` 与 `NEXT_PHASE_FEATURE_DEVELOPMENT_PLAN.md` 加 `Status: Historical` 横幅：Superseded by / Effective baseline `928981a`+ / 逐条列明已知失真点；历史正文原样保留）；**AUD-005 / AUD-008** 标记 RESOLVED BY PRIOR STAGE（Stage 10 合并 LIMIT 双表、LIMIT-006 去重、Stage 12C 更新 LIMIT-002 说明；LIMIT-001/004 经复核仍准确）。本轮零生产代码行为变更。剩余 9 项 P3（设计/测试/数据/UI 类：AUD-011/012/013/016/018/020/021/024/025）留 Stage 13B/13C。
 
@@ -138,7 +140,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 2 | **推送 44+ 提交过远端 CI**（AUD-002）+ 发版评估（`[Unreleased]` 段如何切版本、手册阶段 C–F 功能章节补齐） | 体检 §11 发布风险 |
 | 3 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
 | 4 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
-| 5 | 体检 P2 已全部闭合（Stage 10–12E）；P3 治理/文档类第一批已清（Stage 13A）；剩余：Stage 13B（P3 测试/契约/工具链：AUD-020 契约测试名实不符、AUD-021 覆盖率范围声明、AUD-016 DTO 校验等）与 Stage 13C（设计/数据/UI/可靠性类：AUD-011/012/013/018/024/025）、推送 + 远端 CI + 发版（#2，owner 操作）、阶段 B 复验（#3）、Release body 签核（#4）、第 5 轮体检候审、审计产物入库决策 | `docs/health-check/FINDINGS_LEDGER.md` |
+| 5 | 体检 P2 已全部闭合（Stage 10–12E）；P3 剩余 4 项（AUD-016 DTO 校验、AUD-018 Schema nit、AUD-024 连接显式关闭、AUD-025 审核空队列语义）→ Stage 13C-B；另有 ADR-050 记录的 3 个 Protocol 删除变体待 Owner API 决策；推送 + 远端 CI + 发版（#2，owner 操作）、阶段 B 复验（#3）、Release body 签核（#4）、第 5 轮体检候审、审计产物入库决策 | `docs/health-check/FINDINGS_LEDGER.md` |
 | 6 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
 
 **可立项**：全链贯通回归测试（导入→配对确认→归档执行单条）；AUD-023 取消延迟修复。**明确不做**（历史裁决维持）：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2。
@@ -150,7 +152,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 职责 | 文件 |
 |---|---|
 | 运行状态唯一快照 | `.ai/PROJECT_STATUS.md`（本文件） |
-| 架构决策（ADR-001~049） | `.ai/ARCHITECTURE_DECISIONS.md`（042~046 = 阶段 C–F 裁决补登记；047 = AUD-017 Option C；048 = 归档 FS/DB 一致性模型；049 = Application 文件访问端口化） |
+| 架构决策（ADR-001~051） | `.ai/ARCHITECTURE_DECISIONS.md`（042~046 = 阶段 C–F 裁决补登记；047 = AUD-017 Option C；048 = 归档 FS/DB 一致性模型；049 = Application 文件访问端口化；050 = UseCase Protocol 使用准则；051 = common 移除 + MainWindow 职责边界） |
 | 当前问题与限制 | `.ai/KNOWN_ISSUES.md`（含体检登记节） |
 | 文档体系导航 | `.ai/DOCUMENT_INDEX.md` |
 | 业务基线（现行/历史/冻结） | `docs/business-baseline/`（README 含来源与有效性表） |
