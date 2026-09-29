@@ -519,10 +519,11 @@
 
 | 字段 | 值 |
 |---|---|
-| 状态 | Accepted（2026-09-29，全面体检 AUD-011 定性；ARC-010 规则化） |
+| 状态 | **Accepted（2026-09-29 定性；2026-09-30 Owner 决策落地 = Option C，见下「Owner 决策」段）** |
 | 决策 | Application 层的 UseCase Protocol **不是**每个 service 的强制壳，而是**跨边界能力的标注机制**。事实盘点（Stage 13C-A）：11 个 use_cases 文件声明 14 个 Protocol，每个恰有一个 service 实现；其中 **11 个** 被 presentation 控制器/worker 以类型标注消费（archive 2、run_recognition 3、cluster_faces 2、import_people 2、match_persons 2、scan_and_register 2、delete_person 1、delete_photos 1、dispose_duplicates 2、review_recognition 1、settings 1），**3 个**（RegisterPhoto / ScanPhotoFolder / PruneMissingPhotos）无外部标注方——其服务为**活的**组合根能力（`ApplicationServices` 以**具体类**字段标注暴露，CLI `prune` 经该字段驱动）。测试对 Protocol 的引用近乎为零（14 个中共 2 处），说明现存 Protocol 的价值是**边界标注**而非测试替身点。因此确立准则（ARC-010）：跨 application 边界的能力需要 Protocol；仅经组合根暴露的应用内能力不需要；不得为凑齐而批量新建；已声明但仅被自身 service 继承的 Protocol 视为契约冗余候选。 |
 | 理由 | 回答体检核心问题"需要所有 service 都有 Protocol 吗"——以代码事实作答：本项目是**单进程桌面应用 + 单一组合根**（`ApplicationServices` 具体类字段），没有多实现替换需求；Protocol 的真实消费者是 presentation/worker 的构造函数标注（11/14 有），其余场景由组合根的具体类型承担。不建立 36 个 Protocol（无消费者的空壳），也不删除 11 个在用 Protocol（会破坏注入边界）。 |
 | 影响范围 | `architecture-rules.md` 新增 ARC-010（使用准则）；本 ADR 记录盘点事实与 3 个冗余候选的**待决变体**（删除触及 `application/__init__.py` 公开导出 = 公开 API 变更，按 Stage 13C-A §9 属 Owner 决策，本阶段不执行）。代码零变更。 |
+| **Owner 决策（2026-09-30，Stage 13D-A）** | **Option C：保留三个 Protocol，降级其架构定位。** `RegisterPhotoUseCase` / `ScanPhotoFolderUseCase` / `PruneMissingPhotosUseCase` **全部保留**，不删除、不改公开导出、不改生产行为。它们的定位明确为**兼容性 / 公开 API 层面的 Protocol**——**不要求**作为 Service 的强制抽象（ARC-010 准则同样适用于它们：无跨边界消费者 → 无需 Protocol 语义背书，但**已公开导出**，删除即构成不必要的公开 API breaking change）。**理由**：三者所描述的服务是**活的组合根能力**（`ApplicationServices` 以具体类字段暴露 `register_photo` / `scan_photo_folder` / `prune_missing_photos`；CLI `prune` 经该字段驱动真实调用），Protocol 作为其**已发布的类型契约**保留有对外价值；而"零边界消费者"是**结构性事实**（presentation / workers / plugins / tests 均无标注方），**不再作为待处理删除项**。决策门**关闭**。复核事实（HEAD `36a1d0f`）：三 Protocol 存在、公开导出 3/3 在位、消费者 0、组合根能力与 CLI 路径正常、服务实现类仍继承各自 Protocol。 |
 
 ### ADR-051 — 移除空置的 `common/` 包；MainWindow 职责边界成文（Stage 13C-A / AUD-013）
 
