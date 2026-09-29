@@ -1,4 +1,4 @@
-"""person_matcher 排名守护测试（人员下拉智能搜索，2026-09-05 UI 轮）.
+"""person_name_ranker 排名守护测试（人员下拉智能搜索，2026-09-05 UI 轮）。
 
 owner 规格以查询 ``ab`` 锁定四级优先级（自左向右）：
 全等 ``ab`` → 前缀 ``abxxx`` → 连续包含按首现位置（``xabx`` → ``xxab``）→
@@ -6,7 +6,7 @@ owner 规格以查询 ``ab`` 锁定四级优先级（自左向右）：
 单字包含、大小写、空查询、无匹配排除与确定性。
 """
 
-from photo_archiver.presentation.person_matcher import rank_person_names
+from photo_archiver.presentation.person_name_ranker import rank_person_names
 
 
 def test_owner_spec_ab_ranks_six_tiers_in_order() -> None:
@@ -43,7 +43,7 @@ def test_two_characters_require_containment_or_subsequence() -> None:
 def test_subsequence_prefers_compact_window_over_early_start() -> None:
     """aXaXaXb 型：贪心最早匹配给起点 0（跨度 6），最小窗口 DP 给 (2,6)——
     "aab" 需要两个 a，窗口必须同时盖住 a@2 与 a@4。"""
-    from photo_archiver.presentation.person_matcher import _minimal_subsequence_window
+    from photo_archiver.presentation.person_name_ranker import _minimal_subsequence_window
 
     assert _minimal_subsequence_window("aXaXaXb", "aab") == (2, 6)
     assert rank_person_names("aab", ["aXaXaXb"]) == ["aXaXaXb"]

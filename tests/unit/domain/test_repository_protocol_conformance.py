@@ -1,4 +1,19 @@
-"""Tests for repository protocol contracts."""
+"""Repository **Protocol conformance** — the domain contracts admit DB-free implementations.
+
+本文件验证的**确切**保证（Stage 13B，AUD-020 名称精确化）：
+
+    domain/repositories/* 的 Protocol 可被**不依赖任何数据库/基础设施**的
+    实现满足——仓储契约不泄漏实现细节（DEP-023 依赖倒置的可执行证据）。
+
+**本文件不验证**：InMemory 与 SQLite 实现的**行为对等性**。行为对等由各仓储
+专项测试覆盖（``tests/unit/infrastructure/repositories/test_stage_c_recognition_
+repositories.py``、``test_stage_d_cluster_repositories.py``、
+``test_stage_e_assignment_repositories.py`` 与 ``test_sqlite_repositories.py``
+中的 in-memory vs SQLite 对照用例），本文件不重复、不替代它们。
+
+三个 double 均定义于本文件内（测试替身），因此对其字典行为的断言只保证
+"替身可作为该 Protocol 的实现被使用"——即类型层符合性，而非生产仓储的行为。
+"""
 
 from uuid import UUID
 

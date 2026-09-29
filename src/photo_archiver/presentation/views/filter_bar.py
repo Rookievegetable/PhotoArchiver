@@ -39,7 +39,7 @@ from photo_archiver.domain import (
     PhotoSearchCriteria,
     UNMATCHED,
 )
-from photo_archiver.presentation.person_matcher import rank_person_names
+from photo_archiver.presentation.person_name_ranker import rank_person_names
 from photo_archiver.presentation.ui_text import (
     FILTER_ALL_PERSONS,
     FILTER_CLEAR_BUTTON,
@@ -104,7 +104,7 @@ class FilterBar(QWidget):
         # Person axis — populated via set_persons(). 占位语义：下拉列表只含
         # 真实人员；未选中（currentIndex == -1）时闭合框内显示灰色占位
         # "全部人员"= 该轴不设约束。可编辑 + 智能搜索补全（2026-09-05）：
-        # 输入即按 person_matcher 排名过滤（全等 → 前缀 → 连续包含 → 子序列），
+        # 输入即按 person_name_ranker 排名过滤（全等 → 前缀 → 连续包含 → 子序列），
         # 从补全中选中才落到筛选值——纯输入不改变 criteria。
         layout.addWidget(QLabel(FILTER_PERSON_LABEL))
         self._person_combo = QComboBox(self)

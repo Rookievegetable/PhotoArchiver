@@ -106,7 +106,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 归档（身份去重） | ✅ | `archive_planner.py`/`archive_executor.py`——(person, photo) 去重（E-SG-6 + BLK-1 稳定身份，migration 008）；**docstring 已同步 E-SG-6 口径（AUD-014 整改）** |
 | 历史回填 / 失败重试（阶段 F） | ✅ | `backfill_historical_people_service.py`（幂等）+ `recognition_failure_service.py` |
 | UI / Settings / Export | ✅ | 主窗口、设置闭环、Excel/CSV/HTML 导出；CURRENT_BATCH fail-closed 延迟项 |
-| 人员筛选 | ✅ | 三轴组合筛选 + 人员轴智能搜索（`presentation/person_matcher.py`） |
+| 人员筛选 | ✅ | 三轴组合筛选 + 人员轴智能搜索（`presentation/person_name_ranker.py`） |
 | 人员名单导入（阶段 A） | ✅ 已验收（09-21） | 两段式：`parse_import_draft_service.py`/`confirm_import_service.py`/`import_preview_dialog.py`（003） |
 | 人员与分组页（阶段 B） | ✅ 已验收（09-23） | `manage_people_service.py`/`people_admin_page.py`；导航 5→6 |
 | Plugins | ✅ | 发现/装载/生命周期 + PluginContext 读方法 + import_people（ADR-026/028/038） |
@@ -121,7 +121,8 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 时间 | 2026-09-28 ~ 09-29（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；五段工作：**①全面工程健康体检（Stage 0–9，只读）**；**②治理基线恢复（Stage 10，commit `a01f11b`）**；**③AUD-017 决策准备（Stage 11A）**——决策材料 v2（真实库探针闭合基线 UNKNOWN-2：生产库 person_embeddings 0 行 / alembic 003 / 472 条识别结果 person_id 全 NULL）→ **owner 正式裁决 Option C + K-3=suggested 层**；**④AUD-017 实现闭环（Stage 11B）**；**⑤AUD-004 全链贯通回归（Stage 12A，09-29）**——4 场景真实链回归 + 聚类时间排序接缝缺陷最小修复（快照 captured_at）；**⑥AUD-019 workers/配对守卫测试补强（Stage 12B，09-29）**——15 项真实 SQLite 守卫/生命周期测试；**⑦AUD-023 取消延迟整改（Stage 12C，09-29）**——3 处最小生产修复 + 4 场景确定性取消证据测试；**⑧AUD-015 归档 FS/DB 定性（Stage 12D，09-29）**——6 项故障注入 + ADR-048 一致性模型 + 原子复制修复；**⑨AUD-010 文件 I/O 端口化（Stage 12E，09-29）**——2 端口+2 实现+DEP-072+守卫+8 项契约测试；**⑩P3 治理卫生第一轮（Stage 13A，09-29）**——仓库杂物出库+gitignore、pre-commit 声明收敛、历史文档标记 |
 | 会话范围 | Stage 11A：决策文档 v2（现状/数据链/三方案七维对比/冲突 K-1~K-3）；Stage 11B：按裁决核验生产链（Option C 能力阶段 E 已存在）→ 新增真实 SQLite 闭环集成测试 4 项 + domain 钉定 3 项 + kernel 钉定 2 项（生产代码零改动）→ 登记 ADR-047 / 决策文档 §7 / KNOWN_ISSUES 移除 AUD-017 / CHANGELOG / 本文件 |
 | 关键产出 | 体检报告 10 份 + 台账（`docs/health-check/`，工作树未入库）；Stage 10：`docs/business-baseline/`（8 文件 + README）、`docs/decisions/AUD-017-person-embeddings-decision.md`、dependency-rules 对齐、Top-1 三载体清理、SSOT 刷新；Stage 11A/11B：裁决登记 + ADR-047 + `tests/integration/test_aud017_sample_suggestion_sqlite.py`（§14 硬要求：真实数据库→真实候选仓储→真实 kernel→真实建议→人工确认→样本沉淀，零 stub） |
-| 当前质量门 | 全量 pytest **1355 passed / 8 skipped**（体检基线 1310 → 11B +9 → 12A +4 → 12B +15 → 12C +4 → 12D +6 → 12E +7）；ruff / mypy 全绿；体检实测覆盖率基线 93.2% |
+| 当前质量门 | 全量 pytest **1355 passed / 8 skipped**（体检基线 1310 → 11B +9 → 12A +4 → 12B +15 → 12C +4 → 12D +6 → 12E +7）；ruff / mypy 全绿 |
+| 覆盖率（可复现） | **93.8%（10480 / 11172 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（262 个 .py，经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`（非 `photo_archiver` 包）；无 `[tool.coverage]` 配置、无 `.coveragerc`、无 omit 规则（仅 coverage 默认的 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
 | 工作区 | main；Stage 11A/11B 产物随本轮提交入库；**未推送**（push 属 owner，GIT-020） |
 | Remaining | 见 §6 Next Step。 |
 
