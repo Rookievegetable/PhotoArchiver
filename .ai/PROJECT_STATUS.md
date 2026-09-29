@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.38.0 · Last Updated: 2026-09-29 · Status: Live
+> Version: 1.39.0 · Last Updated: 2026-09-30 · Status: Live
 
 ---
 
@@ -23,6 +23,8 @@
 M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 已落地；发布工程至 v2.8.0（2026-09-13）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**：阶段 A（两段式导入，09-21 owner 验收 ✅）→ 阶段 B（人员与分组页，09-23 owner 验收 ✅）→ **阶段 C/D/E/F（2026-09-24 ~ 09-28 全部实施完成并冻结审查）**。**2026-09-28 完成全面工程健康体检（Stage 0–9，判 ATTENTION）与治理基线恢复（Stage 10）**；业务基线冻结正式生效待 owner 签核（Stage4.2 复审 8 项条件已满足，见 `docs/business-baseline/`）。
 
 ## 2. Current Step（当前开发阶段）
+
+**P3 连接生命周期与审核错误语义清偿（Stage 13C-C，2026-09-30）——体检 P3 全部 15 项处置完毕**（14 FIXED + AUD-024 ACCEPTED-RISK）。**AUD-024 ACCEPTED-RISK**：复核确认 per-call 连接不跨方法持有/不缓存/不跨线程共享（thread-local provider），UoW/backup/integrity 三路径均**显式 close**；剩余风险仅"依赖 CPython 引用计数"（项目钉定 3.11）+ 异常 traceback 下延后至 GC——有界非泄漏，**不机械插入 close()**；契约以 7 项行为测试钉死（连接唯一性、UoW commit/rollback/异常 close、嵌套拒绝、**真实 UNIQUE 冲突后不滞留写锁**）。**AUD-025 FIXED（前提证伪 + 契约固化）**：体检所指吞错点实为 D-1 **身份选择器**读取（`_available_persons`），**审核队列读取链无 blanket catch**——真实读失败向上冒泡，空态仅表示成功的空查询；4 项真实 SQLite 测试钉死（空态业务状态 / 读失败冒泡且 `REVIEW_EMPTY` 从未出现 / 故障恢复后重读正常 / 真实读路径对照）。选择器降级保留为文档化设计（失败后果由既有"未指定身份"显式告警覆盖），为其加独立错误提示属产品取舍不阻塞。ADR-053。验证：全量 **1378 passed / 8 skipped**、ruff/mypy（261 文件）绿。
 
 **P3 命令契约与数据模型清偿（Stage 13C-B，2026-09-29）**——**AUD-016 FIXED（体检前提经复核证伪）**：应用边界早已存在权威校验（`ArchivePhotosService._resolve_conflict_strategy`：自有常量 + strip/lower 归一 + 非法值 ValueError，`test_archive_photos_service.py:135` 专项测试在案），体检"命令层无校验"结论不完整；本轮补两项防御纵深：executor 未知策略 `else` fail-closed（此前目标已存在时静默落入复制 = 等同未授权覆盖）、application/settings 两侧合法集合同值测试防漂移。**AUD-018 三子项全部 FIXED（ADR-052，登记既有设计）**：**018-A 级联**——recognition_results/archive_records person_id = SET NULL（记录描述照片，删人后照片与归档事实保留、身份匿名化）vs cluster_person_assignments/person_face_embeddings = CASCADE（映射与样本从属于人，无独立生命期），与业务基线记载一致，**不改 migration**；**018-B status**——裁定**域枚举为唯一状态机**，不为 002/008 冻结表补 DB CHECK，仅补齐唯一缺口：`RecognitionResult.__post_init__` 增加 status 类型校验（dataclass 不强制类型，此前可构造非法状态直达 DB，与 ArchiveRecord 同口径）；**018-C file_hash**——定性为溯源 metadata（Type D），**不做去重键**（同文件编辑后重导是合法业务行为，按内容去重会静默跳过合法重导），保留字段、明确用途。新增契约测试 12 项。验证：全量 **1367 passed / 8 skipped**、ruff/mypy（261 文件）绿。
 
@@ -125,7 +127,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 时间 | 2026-09-28 ~ 09-29（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；五段工作：**①全面工程健康体检（Stage 0–9，只读）**；**②治理基线恢复（Stage 10，commit `a01f11b`）**；**③AUD-017 决策准备（Stage 11A）**——决策材料 v2（真实库探针闭合基线 UNKNOWN-2：生产库 person_embeddings 0 行 / alembic 003 / 472 条识别结果 person_id 全 NULL）→ **owner 正式裁决 Option C + K-3=suggested 层**；**④AUD-017 实现闭环（Stage 11B）**；**⑤AUD-004 全链贯通回归（Stage 12A，09-29）**——4 场景真实链回归 + 聚类时间排序接缝缺陷最小修复（快照 captured_at）；**⑥AUD-019 workers/配对守卫测试补强（Stage 12B，09-29）**——15 项真实 SQLite 守卫/生命周期测试；**⑦AUD-023 取消延迟整改（Stage 12C，09-29）**——3 处最小生产修复 + 4 场景确定性取消证据测试；**⑧AUD-015 归档 FS/DB 定性（Stage 12D，09-29）**——6 项故障注入 + ADR-048 一致性模型 + 原子复制修复；**⑨AUD-010 文件 I/O 端口化（Stage 12E，09-29）**——2 端口+2 实现+DEP-072+守卫+8 项契约测试；**⑩P3 治理卫生第一轮（Stage 13A，09-29）**——仓库杂物出库+gitignore、pre-commit 声明收敛、历史文档标记 |
 | 会话范围 | Stage 11A：决策文档 v2（现状/数据链/三方案七维对比/冲突 K-1~K-3）；Stage 11B：按裁决核验生产链（Option C 能力阶段 E 已存在）→ 新增真实 SQLite 闭环集成测试 4 项 + domain 钉定 3 项 + kernel 钉定 2 项（生产代码零改动）→ 登记 ADR-047 / 决策文档 §7 / KNOWN_ISSUES 移除 AUD-017 / CHANGELOG / 本文件 |
 | 关键产出 | 体检报告 10 份 + 台账（`docs/health-check/`，工作树未入库）；Stage 10：`docs/business-baseline/`（8 文件 + README）、`docs/decisions/AUD-017-person-embeddings-decision.md`、dependency-rules 对齐、Top-1 三载体清理、SSOT 刷新；Stage 11A/11B：裁决登记 + ADR-047 + `tests/integration/test_aud017_sample_suggestion_sqlite.py`（§14 硬要求：真实数据库→真实候选仓储→真实 kernel→真实建议→人工确认→样本沉淀，零 stub） |
-| 当前质量门 | 全量 pytest **1367 passed / 8 skipped**（体检基线 1310 → 11B +9 → 12A +4 → 12B +15 → 12C +4 → 12D +6 → 12E +7 → 13C-B +12）；ruff / mypy 全绿 |
+| 当前质量门 | 全量 pytest **1378 passed / 8 skipped**（体检基线 1310 → 11B +9 → 12A +4 → 12B +15 → 12C +4 → 12D +6 → 12E +7 → 13C-B +12 → 13C-C +11）；ruff / mypy 全绿 |
 | 覆盖率（可复现） | **93.8%（10480 / 11172 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（262 个 .py，经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`（非 `photo_archiver` 包）；无 `[tool.coverage]` 配置、无 `.coveragerc`、无 omit 规则（仅 coverage 默认的 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
 | 工作区 | main；Stage 11A/11B 产物随本轮提交入库；**未推送**（push 属 owner，GIT-020） |
 | Remaining | 见 §6 Next Step。 |
@@ -142,7 +144,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 2 | **推送 44+ 提交过远端 CI**（AUD-002）+ 发版评估（`[Unreleased]` 段如何切版本、手册阶段 C–F 功能章节补齐） | 体检 §11 发布风险 |
 | 3 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
 | 4 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
-| 5 | 体检 P2 已全部闭合（Stage 10–12E）；P3 剩余 2 项（AUD-024 连接显式关闭、AUD-025 审核空队列语义）→ Stage 13C-C；另有 ADR-050 记录的 3 个 Protocol 删除变体待 Owner API 决策；推送 + 远端 CI + 发版（#2，owner 操作）、阶段 B 复验（#3）、Release body 签核（#4）、第 5 轮体检候审、审计产物入库决策 | `docs/health-check/FINDINGS_LEDGER.md` |
+| 5 | 体检 P1+P2 已全部闭合（Stage 10–12E）；**P3 全部 15 项处置完毕**（Stage 13A/13B/13C-A/13C-B/13C-C）；遗留待决：①ADR-050 的 3 个 Protocol 删除变体（Owner API 决策）；②推送 + 远端 CI + 发版（#2，owner 操作）；③阶段 B 复验（#3）；④Release body 签核（#4）；⑤体检产物（`docs/health-check/`）入库决策；⑥第 5 轮全面体检候审 | `docs/health-check/FINDINGS_LEDGER.md` |
 | 6 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
 
 **可立项**：全链贯通回归测试（导入→配对确认→归档执行单条）；AUD-023 取消延迟修复。**明确不做**（历史裁决维持）：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2。
@@ -154,7 +156,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 职责 | 文件 |
 |---|---|
 | 运行状态唯一快照 | `.ai/PROJECT_STATUS.md`（本文件） |
-| 架构决策（ADR-001~052） | `.ai/ARCHITECTURE_DECISIONS.md`（042~046 = 阶段 C–F 裁决补登记；047 = AUD-017 Option C；048 = 归档 FS/DB 一致性模型；049 = Application 文件访问端口化；050 = UseCase Protocol 使用准则；051 = common 移除 + MainWindow 职责边界；052 = 数据生命周期与状态机职责定案） |
+| 架构决策（ADR-001~053） | `.ai/ARCHITECTURE_DECISIONS.md`（042~046 = 阶段 C–F 裁决补登记；047 = AUD-017 Option C；048 = 归档 FS/DB 一致性模型；049 = Application 文件访问端口化；050 = UseCase Protocol 使用准则；051 = common 移除 + MainWindow 职责边界；052 = 数据生命周期与状态机职责定案；053 = 连接生命周期假设 + 审核错误语义） |
 | 当前问题与限制 | `.ai/KNOWN_ISSUES.md`（含体检登记节） |
 | 文档体系导航 | `.ai/DOCUMENT_INDEX.md` |
 | 业务基线（现行/历史/冻结） | `docs/business-baseline/`（README 含来源与有效性表） |

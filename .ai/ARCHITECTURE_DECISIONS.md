@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.8.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
+> Version: 1.9.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
 
 ---
 
@@ -543,6 +543,17 @@
 | 决策 | **A 人员删除的数据生命周期**（FK 矩阵，登记既有设计）：`recognition_results.person_id` 与 `archive_records.person_id` = **SET NULL**——这两类记录描述的是**照片**（照片独立于人员存在），删人后照片与归档事实保留、身份匿名化；`cluster_person_assignments.person_id` 与 `person_face_embeddings.person_id`（及历史 `person_embeddings`）= **CASCADE**——映射与样本**从属于**该人员（无独立生命期；样本是"这个人的人脸模板"，人没了模板无意义；配对决策指向已删除的人会悬空）。二者不对称是**有意设计**（与 `docs/business-baseline/Stage1_BusinessFacts.md` §删除人员 记载一致），不改 migration。**B status 合法性归属**：新增表（003/004/006/007）在 DB 层有 CHECK，早期表（`recognition_results`/`archive_records`，002/008）没有——裁定 **域枚举是唯一状态机**（实体构造期/状态迁移处校验，仓储签名类型化，如 `update_status(status: MatchStatus)` 写 `status.value`），**不**为冻结表补 DB CHECK（迁移重建 + 生产数据集合核验成本，换不到真实缺陷防护）。补齐唯一缺口：`RecognitionResult.__post_init__` 增加 status 类型校验（此前 dataclass 不强制类型，可构造非法状态直达 DB），与 `ArchiveRecord.status` 同口径。**C `import_batches.file_hash`**：类型 D（审计/溯源 metadata）——记录"本批人员来自哪个文件内容"（`ParseImportDraftService` 计算 SHA-256；回填批次写 `backfill:<ts>` 合成值），读取方仅实体水合（`sqlite_import_batch_repository:18`），**不做去重键**（同一文件经编辑后重导是合法业务行为，按内容去重会静默跳过合法重导）——保留字段、明确用途，**不删除**。 |
 | 理由 | 消除三处"看起来不一致其实有意"的模型歧义：A 的级联差异对应"记录 vs 从属物"的本质差异；B 的 CHECK 差异对应"新增表更严"的历史演进，防护责任在域枚举（唯一可写路径）；C 的不读取是**设计**而非缺失——去重键需要额外的查询/比较路径与"内容相同但用户想重导"的业务裁决，属功能而非卫生。 |
 | 影响范围 | `domain/entities/recognition.py`（status 构造期类型校验）；新增 `tests/unit/application/test_aud016_018_contracts.py`（018-B 2 项）；迁移零变更、Schema 零变更。 |
+
+---
+
+### ADR-053 — SQLite 连接生命周期假设与审核队列错误语义（Stage 13C-C / AUD-024 + AUD-025）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（2026-09-29；AUD-024 复核定性 + AUD-025 前提证伪与契约固化） |
+| 决策 | **连接生命周期**：`UnitOfWork.transaction()` 与 backup/integrity 路径**显式 close**（``finally``，提交/回滚/异常三路径均覆盖）；per-call 路径（``SQLiteConnectionProvider.connect()``）的连接**关闭依赖 CPython 引用计数**（项目钉定 3.11）——每个仓储方法以 ``with … as connection`` 使用、不跨方法持有、不缓存、不跨线程共享（provider 为 thread-local），方法返回即释放。**判定：ACCEPTED-RISK**（有界、非泄漏）——不机械插入 ``close()``；契约以行为方式钉死：连接唯一性、UoW 三路径 close、嵌套事务拒绝、**异常后不滞留写锁**（真实 UNIQUE 冲突 → 后续写入成功）。异常路径下 traceback 可短暂持有帧引用使关闭延后至 GC——有界。跨解释器（无引用计数）保证不在本项目范围内（§21 决策门未触发：项目钉定 CPython 3.11）。**审核队列错误语义**：队列读取链（``ReviewDialog._refresh_list`` → ``ReviewController.list_pending`` → 仓储）**无 blanket catch**——读失败向上冒泡（构造期或刷新期），绝不退化为"暂无待审核"；空态仅表示**成功的空查询**。D-1 身份选择器读取（``_available_persons``）保留**文档化降级**（失败 → 选择器为空），其失败后果由既有"未指定身份"显式告警路径覆盖（批准仍可继续，告警不静默）——是否为其增加独立错误提示属**产品取舍**（不阻塞本项）。 |
+| 理由 | AUD-024 复核：体检"依赖隐式关闭"描述准确但未评估真实风险——实测无共享、无缓存、无跨调用持有，且三种非仓储路径已显式 close；剩余风险仅是 CPython 实现依赖（有界）。AUD-025 复核：体检所指吞错点（``review_dialog.py:304-317``）实为**身份选择器**读取，不是审核队列；队列读取本身从不吞错——故以契约测试固化该事实（ERROR≠EMPTY + 故障恢复），并把选择器降级明确记为设计而非缺陷。 |
+| 影响范围 | 生产代码零变更；新增 `tests/unit/infrastructure/test_aud024_connection_lifecycle.py`（7 项：spy 观测 UoW commit/rollback close、嵌套拒绝、per-call 唯一性、UNIQUE 冲突后无写锁、空事务 close）与 `tests/unit/presentation/test_aud025_review_error_semantics.py`（4 项：真实库空态 / 真实读失败冒泡 / 故障恢复 / 真实读路径对照）。 |
 
 ---
 ---
