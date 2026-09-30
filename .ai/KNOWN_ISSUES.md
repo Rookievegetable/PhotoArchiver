@@ -6,7 +6,7 @@
 >
 > 动态维护，实时更新。问题解决后**立即删除**，不保留历史记录。
 >
-> Version: 1.19.0 ｜ Last Updated: 2026-09-30 ｜ Status: Live
+> Version: 1.20.0 ｜ Last Updated: 2026-09-30 ｜ Status: Live
 
 ---
 
@@ -18,7 +18,7 @@
 | 已裁决的架构决策 / ADR | `ARCHITECTURE_DECISIONS.md` |
 | 当前任务 / Step / Roadmap | `PROJECT_STATUS.md` |
 | AI 阅读顺序 / 工作流程 | `AI_ONBOARDING.md` |
-| 体检发现的完整台账 | `docs/health-check/FINDINGS_LEDGER.md`（工作树产物，AUD-XXX 编号体系） |
+| 体检发现的完整台账 | `docs/health-check/FINDINGS_LEDGER.md`（已入库，AUD-XXX 编号体系） |
 
 ---
 
@@ -39,15 +39,13 @@
 
 ## 未决问题
 
-_无 ISSUE-XXX 系未决条目。设计 / 平台 / 测试覆盖限制见下方限制表；全面体检产出的 OPEN 发现见下节登记。_
+_无 ISSUE-XXX 系未决条目。设计 / 平台 / 测试覆盖限制见下方限制表；全面体检登记节自 2026-09-30 Stage 14 起为空（无 OPEN 发现），历史登记见台账。_
 
 ## 全面体检登记（2026-09-28，Stage 10 治理恢复时同步）
 
-> 来源：全面工程健康体检（Stage 0–9，READ-ONLY，判 ATTENTION；完整台账与证据见 `docs/health-check/FINDINGS_LEDGER.md`）。以下为**保持 OPEN** 的 P2 级发现（P1 AUD-001 与 P2 AUD-003/009/014 已于 Stage 10 整改闭合；P2 AUD-017 已于 Stage 11B 按 owner 裁决 Option C 实现闭环（ADR-047）、P2 AUD-004 已于 Stage 12A 全链贯通回归闭合（含聚类时间排序接缝修复）、P2 AUD-019 已于 Stage 12B worker/配对守卫测试补强闭合、P2 AUD-023 已于 Stage 12C 取消延迟整改闭合、P2 AUD-015 已于 Stage 12D 定性为恢复缺口并以原子复制修复（ADR-048 一致性模型）、P2 AUD-010 已于 Stage 12E 端口化并由 DEP-072 + 守卫测试强制（ADR-049）；P3 级 15 项见台账，不在此重复登记）。
-
-| ID | Severity | Description | Status | Impact | Planned Resolution |
-|---|---|---|---|---|---|
-| AUD-002 | P2 | 推送已完成（origin/main = `fb573cf`）。首次远端三平台验证 run #126：windows ✅ / macos-stress ✅ / ubuntu ❌ 1 failed / macos ❌ 2 failed——失败全部为 `test_visual_system.py` 渲染探针真实断言失败（exit 1，非 LIMIT-006）：原生样式按平台调制亮度而保留色相家族，绝对像素相等属 Windows 巧合。平台无关化修复已本地提交（Stage 14-CI，commit `02e8cef`，5 项突变负向验证防御不降级）；**待 owner 推送并重跑远端 CI，绿之前保持 OPEN**。CHANGELOG `[Unreleased]` 版本切分仍待 owner | Open | Medium | owner push 修复 + 远端 CI 复验绿 + 发版评估（PROJECT_STATUS §6 #2） |
+> 来源：全面工程健康体检（Stage 0–9，READ-ONLY，判 ATTENTION；完整台账与证据见 `docs/health-check/FINDINGS_LEDGER.md`）。
+>
+> **当前状态（2026-09-30 Stage 14 Final Re-Audit）：无 OPEN 的体检登记条目。** 25 条 Finding 全部终态：23 FIXED + AUD-024 ACCEPTED-RISK（ADR-053）+ AUD-002 CLOSED——最后一条 AUD-002（推送/远端 CI）已随 run #127 对最终 HEAD `5525d95` 三平台全绿（SHA 对齐、无 skip 掩盖失败）于 2026-09-30 闭环，按本文件维护规则整条删除，历史登记见台账与 Git。
 
 ---
 

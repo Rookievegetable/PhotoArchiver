@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.42.0 · Last Updated: 2026-09-30 · Status: Live
+> Version: 1.43.0 · Last Updated: 2026-09-30 · Status: Live
 
 ---
 
@@ -24,7 +24,9 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 ## 2. Current Step（当前开发阶段）
 
-**Stage 14 前置确认与跨平台视觉探针收敛（Stage 14-CI，2026-09-30）**——Owner 推送落地（origin/main = `fb573cf`）后首次远端三平台验证 **run #126**：windows ✅ / macos-stress ✅ / **ubuntu ❌（1 failed, 1380 passed）/ macos ❌（2 failed, 1379 passed）**——失败全部为 `test_visual_system.py` 渲染探针的真实断言失败（exit 1，非 LIMIT-006）。定性：探针要求单采样像素与期望 RGB 绝对相等，而原生按钮样式按平台**调制亮度、保留色相家族**（ubuntu primary `#247bc1` vs `#308cc6` value ×0.97；macOS `#16415c` ×0.46；macOS danger `#d66666` 白向调和；hue Δ≤3.6°）——绝对像素相等是 Windows 渲染路径巧合而非视觉契约；该文件位于 `35f9007..fb573cf` 首验区间，此前从未在 Linux/macOS 执行。修复（Stage 14-CI，`02e8cef`）：探针收敛为平台无关契约——无文字按钮内区 5 点采样取中位 + primary 相对**活调色板 Highlight** 的色相族窗口（±15°）/饱和度 ≥0.35/明度 ≥0.25 + danger 品牌红 QSS 字面量与渲染双验证（红相窗口环绕 0° ±15°）+ 与 normal 按钮饱和度差 ≥0.30（全部窗口取实测跨度 ≥1.4× 裕度并在测试内注明依据）。防御不降级：5 项突变负向验证（删 primary 规则 / 删 danger 规则 / 改涂 palette(Button) ×2 / 改涂 #2e8b57）逐一被捕获，生产文件逐字节还原；无新增 skip、无 fusion 强制、无平台豁免、生产行为零变更。本地验证：test_visual_system 18/18（本机深色主题 + 紫色强调色调色板亦绿，佐证活调色板相对断言）、全量 **1378 passed / 8 skipped / 0 failed**、ruff 全绿、mypy 261 文件零错。**AUD-002 保持 OPEN——修复已在本地提交（2 提交领先 origin），待 owner 推送重跑远端 CI；Stage 14（发布就绪复核 / 第 5 轮体检候审前置）继续阻塞于远端 CI 绿态。**
+**Stage 14 前置确认与跨平台视觉探针收敛（Stage 14-CI，2026-09-30）**——Owner 推送落地（origin/main = `fb573cf`）后首次远端三平台验证 **run #126**：windows ✅ / macos-stress ✅ / **ubuntu ❌（1 failed, 1380 passed）/ macos ❌（2 failed, 1379 passed）**——失败全部为 `test_visual_system.py` 渲染探针的真实断言失败（exit 1，非 LIMIT-006）。定性：探针要求单采样像素与期望 RGB 绝对相等，而原生按钮样式按平台**调制亮度、保留色相家族**（ubuntu primary `#247bc1` vs `#308cc6` value ×0.97；macOS `#16415c` ×0.46；macOS danger `#d66666` 白向调和；hue Δ≤3.6°）——绝对像素相等是 Windows 渲染路径巧合而非视觉契约；该文件位于 `35f9007..fb573cf` 首验区间，此前从未在 Linux/macOS 执行。修复（Stage 14-CI，`02e8cef`）：探针收敛为平台无关契约——无文字按钮内区 5 点采样取中位 + primary 相对**活调色板 Highlight** 的色相族窗口（±15°）/饱和度 ≥0.35/明度 ≥0.25 + danger 品牌红 QSS 字面量与渲染双验证（红相窗口环绕 0° ±15°）+ 与 normal 按钮饱和度差 ≥0.30（全部窗口取实测跨度 ≥1.4× 裕度并在测试内注明依据）。防御不降级：5 项突变负向验证（删 primary 规则 / 删 danger 规则 / 改涂 palette(Button) ×2 / 改涂 #2e8b57）逐一被捕获，生产文件逐字节还原；无新增 skip、无 fusion 强制、无平台豁免、生产行为零变更。本地验证：test_visual_system 18/18（本机深色主题 + 紫色强调色调色板亦绿，佐证活调色板相对断言）、全量 **1378 passed / 8 skipped / 0 failed**、ruff 全绿、mypy 261 文件零错。**[同日 Stage 14 Final 更新：owner 已推送 `02e8cef`+`5525d95`，run #127 三平台全绿，AUD-002 已闭环——见下段。]**
+
+**Stage 14 Final Re-Audit / Release Readiness（2026-09-30）**——Owner 推送 `02e8cef`+`5525d95`（origin/main = `5525d95`）后完成最终审计（只读优先，生产代码零修改）：**远端 CI run #127（id 36673035844，2026-09-30T05:21Z，attempt=1）对最终 HEAD `5525d95` 三平台全绿**——windows ✅ / ubuntu ✅ / macos ✅ / macos-stress ✅，SHA 完全对齐（run head_sha = HEAD = origin/main，GitHub API 实查）；pytest 摘要 ubuntu/macos 各 **1381 passed / 5 skipped**（Stage 14-CI 前的 1F/2F 视觉探针全部转绿）、windows **1384 passed / 2 skipped**；skip 全部为已登记豁免（2×PA_STRESS 专用 job + 3×Windows 专属 junction），no-skip 守卫步骤全过，无 skip 掩盖失败。**AUD-002 = CLOSED**（KNOWN_ISSUES v1.20.0 整条删除、台账改判 FIXED、三方同步）。台账终态（25 条 HEAD 抽查复核——Stage 13D 后生产代码零变更：fb573cf=docs、02e8cef=test-only、5525d95=docs，代码级结论沿用 + AUD-010/011/014/015/016/018/022/023 与 8 个审计测试文件在位确认）：**P0 0 / P1 0 / P2 0 / P3 0 OPEN，无 BLOCKED**——23 FIXED + AUD-024 ACCEPTED-RISK（ADR-053 维持）+ AUD-002 CLOSED；AUD-011 维持 Option C 收口（ADR-050，三 Protocol 在位、公开导出 3/3）。SSOT 一致性收口：无 OPEN/Decision Required 残留；health-check README 当前状态注与 DOCUMENT_INDEX v1.6.1 两处陈旧指针修正。Unknown 分类：远端 CI=已验证；生产库实际状态/安装包二轮验收（现 v2.8.0 资产对应 `fe7f46f` 旧基线，须随下次发版重新出包）/阶段 B 五点复验/业务基线签核/Release body/CHANGELOG 切版 = Owner 外部动作；依赖 CVE 审计（pip-audit）无既有门禁 = Known 可选加固（非 Finding、不阻塞）。**Final Re-Audit = PASS，Release Readiness = READY FOR OWNER RELEASE**（≠ RELEASED：切版/tag/Release/安装包决策均属 Owner）。
 
 **AUD-011 决策闭合（Stage 13D-A，2026-09-30）**——Owner 裁决 **Option C**：`RegisterPhotoUseCase` / `ScanPhotoFolderUseCase` / `PruneMissingPhotosUseCase` **保留**，定位为**兼容性 / 公开 API 层面的 Protocol，不要求作为 Service 的强制抽象**；不删除、不改公开导出（`application/__init__.py` 3/3 在位）、不改生产行为。HEAD `36a1d0f` 复核：三者无 presentation/workers/plugins/tests 消费者，所描述的服务为活的组合根能力（`ApplicationServices` 具体类字段；CLI `prune` 真实驱动），Protocol 作为已发布类型契约保留；"零边界消费者"为结构性事实，**不再作为待处理项**。AUD-011 决策门**关闭**（ADR-050「Owner 决策」段 + 台账）。整改链 Finding 全部落地：**P1 0 OPEN · P2 1 OPEN（AUD-002，Owner 推送/远端 CI）· P3 0 OPEN**。
 
@@ -91,9 +93,9 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | 人员导入重设计（阶段 A–F） | ✅ 实施完成 | 全部入库至 `2823d1c`；业务基线见 `docs/business-baseline/`；冻结待 owner 签核。 |
 | 版本链 | ⚠️ | v2.8.0 三处一致（pyproject / .env.example / CHANGELOG `[2.8.0]`）；**此后 47 个提交未发版**——CHANGELOG 已补 `[Unreleased]` 段（阶段 A–F 主要变更），无伪造发行版本。 |
 | 测试基线 | ✅ | 全量 **1378 passed / 8 skipped / 0 failed**（2026-09-30 实测 228.91s）；行覆盖 **93.8%**（AUD-021 可复现口径，见 §5 覆盖率行）；此前已知盲区（workers 错误分支、配对守卫）已由 Stage 12B 补齐（AUD-019）。 |
-| CI | ⚠️ | 本地三质量门全绿（ruff / mypy 261 文件 / pytest）；**远端 run #126（fb573cf 首次三平台验证）：windows ✅ / macos-stress ✅ / ubuntu ❌ 1 failed / macos ❌ 2 failed——失败面 = 视觉渲染探针（真实断言失败，非 LIMIT-006），平台无关化修复已本地提交（Stage 14-CI `02e8cef`），待 owner 推送重跑（AUD-002，OPEN）**；LIMIT-006 CI 自愈 + darwin skip 维持。 |
+| CI | ✅ | **run #127（2026-09-30T05:21Z，attempt=1）对最终 HEAD `5525d95` 三平台全绿**（windows/ubuntu/macos/macos-stress 全 success），SHA 对齐 = HEAD = origin/main；ubuntu/macos 各 1381 passed / 5 skipped、windows 1384 passed / 2 skipped，skip 均为已登记豁免；本地三质量门绿（ruff / mypy 261 文件 / pytest）；LIMIT-006 CI 自愈 + darwin skip 维持（本 run 未触发）。 |
 | 业务基线 | ✅ 已入库 | `docs/business-baseline/`（Stage1–3 现行有效 + Stage4/4.1 历史 + Stage4.2 冻结复审），基线 `2823d1c`，来源与有效性表见其 README。 |
-| 未决问题 | 📋 已登记 | 体检台账：**P1×1（AUD-001 文档滞后——本 Stage 10 已整改闭合）**；P2×10 中 AUD-003/009/014 本轮闭合，**AUD-002/004/015/017/019/023 保持 OPEN**（详见 `.ai/KNOWN_ISSUES.md` 体检登记节与台账 `docs/health-check/FINDINGS_LEDGER.md`）；AUD-017 决策材料就绪待 owner。 |
+| 未决问题 | ✅ 清零 | 体检 25 条 Finding 终态（2026-09-30 Stage 14 Final）：**P0 0 / P1 0 / P2 0 / P3 0 OPEN，无 BLOCKED**——23 FIXED + AUD-024 ACCEPTED-RISK + AUD-002 CLOSED（run #127 三平台绿）；详见 `docs/health-check/FINDINGS_LEDGER.md`。 |
 | Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消粒度——说明已按体检修正：识别取消延迟=剩余队列排空，AUD-023）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS/Linux runner 环境漂移 SIGSEGV，CI 自愈 + darwin skip 维持），均 Low、不阻塞。 |
 | Release body | ⏳ 待 owner | GitHub Release v2.8.0 资产已发布；body 签核流程同前。 |
 
@@ -130,12 +132,12 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-30（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；三段工作：**①Stage 14 前置确认**——会话交接（六项 SSOT 读取与 HEAD 复核）+ 远端 CI 结果确认（gh CLI 缺席，经 git-credential 令牌 + GitHub REST API 查询）；**②run #126 失败定性**——ubuntu 1 failed / macos 2 failed（windows 与 macos-stress 绿），失败全部为 test_visual_system.py 渲染探针真实断言失败（exit 1，非 LIMIT-006），根因 = 原生样式按平台调制亮度（ubuntu ×0.97 / macOS ×0.46）保留色相（Δ≤3.6°）而探针要求绝对像素相等；**③Stage 14-CI 修复**——探针平台无关化（无文字内区 5 点中位采样 + 活调色板色相族 ±15°/饱和度/明度窗口 + normal 饱和度差 ≥0.30 + danger 品牌红字面量双验证）+ 5 项突变负向验证 + 全量本地质量门 + SSOT 三方同步 |
-| 会话范围 | 严格限定 Stage 14-CI 任务书：只改 tests/unit/presentation/test_visual_system.py 两个探针 + CHANGELOG 条目；visual_style.py 生产行为零变更（突变仅临时注入并逐字节还原）；无新增 skip、无 -style fusion 强制、无平台豁免；AUD-011 未动；不执行 push |
-| 关键产出 | commit `02e8cef` test: make visual probes cross-platform（探针重写 + 容差模型注释 + CHANGELOG [Unreleased] Fixed 条目）；run #126 CI 日志证据留存（TEMP 下 pa_raw_ubuntu.log / pa_raw_macos.log）；本文件 v1.42.0 + KNOWN_ISSUES v1.19.0 + FINDINGS_LEDGER AUD-002 三方事实同步（docs commit） |
-| 当前质量门 | 全量 pytest **1378 passed / 8 skipped / 0 failed**（2026-09-30 实测 228.91s）；ruff 全绿；mypy 261 文件零错；突变负向验证 5/5 CAUGHT；test_visual_system 本机深色主题 + 紫色强调色调色板下 18/18 亦绿（活调色板相对断言佐证，本地 Highlight #a94dc1 hue 287.6° vs CI #308cc6 hue 203.2°） |
+| 时间 | 2026-09-30（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；两段工作：**①Stage 14-CI**——跨平台视觉探针收敛（`02e8cef` test + `5525d95` docs 同步），owner 已推送；**②Stage 14 Final Re-Audit**（本段）——run #127 三平台绿核验（SHA 对齐）+ AUD-002 闭环 + 台账 25 条 HEAD 抽查终审 + SSOT 收口（唯一提交=治理文档） |
+| 会话范围 | 只读优先审计：Git/远端 CI 证据（GitHub API 实查，gh 缺席走 git-credential 令牌）→ 台账复核（Stage 13D 后生产代码零变更：fb573cf=docs、02e8cef=test-only、5525d95=docs，代码级结论沿用 + HEAD 抽查：AUD-010/011/014/015/016/018/022/023 与 8 个审计测试文件在位）→ AUD-002/AUD-011/AUD-024 专项确认 → SSOT 一致性检查 → 治理文档收口 |
+| 关键产出 | run #127 三平台全绿证据（三平台 pytest 摘要 + skip 豁免清单 + 视觉探针 PASSED，日志 TEMP 留存 pa127_*.log）；AUD-002 CLOSED（KNOWN_ISSUES v1.20.0 登记节归零 / 台账 FIXED / 本文件 v1.43.0）；DOCUMENT_INDEX v1.6.1 两处陈旧指针修正；health-check README 当前状态注更新 |
+| 当前质量门 | 本地：1378 passed / 8 skipped / 0 failed、ruff 全绿、mypy 261 文件零错（2026-09-30 实测）；远端：run #127 三平台全绿（ubuntu/macos 各 1381+5、windows 1384+2，attempt=1） |
 | 覆盖率（可复现） | **93.8%（10480 / 11172 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（262 个 .py，经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`（非 `photo_archiver` 包）；无 `[tool.coverage]` 配置、无 `.coveragerc`、无 omit 规则（仅 coverage 默认的 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
-| 工作区 | main；**2 提交领先 origin（02e8cef test 修复 + docs 同步），push 属 owner（GIT-020），未执行 push** |
+| 工作区 | main；本阶段收口提交后 **1 提交领先 origin（push 属 owner，GIT-020），未执行 push** |
 | Remaining | 见 §6 Next Step。 |
 
 ---
@@ -147,11 +149,10 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | # | 事项 | 依据 |
 |---|---|---|
 | 1 | **业务基线冻结签核**（Stage4.2 八项条件已满足，签核即冻结生效） | `docs/business-baseline/Stage4_2_FinalFreezeReview.md` §9 |
-| 2 | **推送 Stage 14-CI 修复（2 提交）并重跑远端 CI 至三平台全绿**（AUD-002 闭环条件；run #126 ubuntu/macos 视觉探针真实失败已修复，见 §2）+ 发版评估（`[Unreleased]` 段如何切版本、手册阶段 C–F 功能章节补齐） | 体检 §11 发布风险 + run #126 定性 |
+| 2 | **发版评估与执行**：CHANGELOG `[Unreleased]` 段切版本（v2.8.0 后 63 提交，含阶段 A–F 用户可见功能）、手册阶段 C–F 功能章节补齐、打 tag + GitHub Release（body 粘贴对应 CHANGELOG 段）+ **新安装包产出与二轮真机验收**（现 Release 资产对应 v2.8.0/`fe7f46f` 旧基线，不覆盖阶段 A–F） | 体检 §11 发布风险 + Stage 14 Final |
 | 3 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
 | 4 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
-| 5 | 体检整改全链闭合（P1 0 OPEN / P2 仅 AUD-002 / P3 0 OPEN）；**第 5 轮全面体检候审**（前置条件：P1=0 ✅、P2=0 ❌（AUD-002 待 Stage 14-CI 修复推送 + 远端 CI 绿）、P3=0 OPEN ✅、Owner 决策待结 ✅（ADR-050 Option C 已闭合 `fb573cf`）、SSOT 同步 ✅——待 #2 落地后进入 Final Re-Audit）；③阶段 B 五点桌面复验（Owner 人工验收，修复均有回归测试）；④Release body 签核（#4，v2.8.0 body 待粘贴 CHANGELOG `[2.8.0]` 段） | `docs/health-check/FINDINGS_LEDGER.md`（已入库） |
-| 6 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
+| 5 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
 
 **可立项**：全链贯通回归测试（导入→配对确认→归档执行单条）；AUD-023 取消延迟修复。**明确不做**（历史裁决维持）：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2。
 

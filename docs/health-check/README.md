@@ -20,13 +20,13 @@
 | `UI_AUDIT.md` | UI 状态/交互/工作流（Stage 7） | — |
 | `CROSS_DIMENSION_RECONCILIATION.md` | 十维交叉矩阵（Stage 8） | — |
 | `FINAL_HEALTH_CHECK.md` | 体检终判（Stage 9）：**ATTENTION** | **历史快照**——结论已被 Stage 10–13D 整改取代（当时 P1×1/P2×10/P3×15） |
-| `FINDINGS_LEDGER.md` | **Finding 统一台账**（25 条：P1×1 / P2×10 / P3×14） | **当前有效**——状态字段为权威（14 FIXED + 1 ACCEPTED-RISK + 1 OPEN[AUD-002]） |
+| `FINDINGS_LEDGER.md` | **Finding 统一台账**（25 条：P1×1 / P2×10 / P3×14） | **当前有效**——状态字段为权威（2026-09-30 Stage 14 终态：23 FIXED + 1 ACCEPTED-RISK + AUD-002 CLOSED，无 OPEN） |
 | `evidence/` | 可复现证据：依赖扫描脚本+结果、覆盖率 JSON | 审计时点数据（coverage_stage4.json = 体检基线；stage13b = 整改后） |
 | `../development/evidence/stage-f-*.md` | Stage F 冻结评审报告与其真实性核验记录（历史评审材料） | 历史材料（评审对象为 `b3b8685`/`2823d1c`） |
 
 ## 与当前项目状态的关系
 
-- **Finding 台账是当前权威**：25 条发现中 P1 = 0 OPEN、P2 = 1 OPEN（`AUD-002` = 推送/远端 CI，属 Owner 操作）、P3 = 0 OPEN（`AUD-024` 为 ACCEPTED-RISK，ADR-053 记录假设）。
+- **Finding 台账是当前权威**：25 条发现全部终态（2026-09-30 Stage 14 Final Re-Audit）——P0 = 0、P1 = 0、P2 = 0、P3 = 0 OPEN，无 BLOCKED；23 FIXED + `AUD-024` ACCEPTED-RISK（ADR-053）+ `AUD-002` CLOSED（run #127 对最终 HEAD `5525d95` 三平台全绿）。
 - **整改结论均已进入 SSOT**：每条 FIXED 的处置落在 `.ai/ARCHITECTURE_DECISIONS.md`（ADR-042~053）、`.ai/PROJECT_STATUS.md`（§2 逐阶段记录）、`CHANGELOG.md`、`docs/development/`。
 - **历史快照标注**：`FINAL_HEALTH_CHECK.md` 与 `AUDIT_BASELINE.md` 中的数字反映审计时点，**不代表当前**（当前测试/覆盖率基线见 `PROJECT_STATUS.md` §5/覆盖率行）。
 
