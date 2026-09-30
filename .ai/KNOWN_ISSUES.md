@@ -6,7 +6,7 @@
 >
 > 动态维护，实时更新。问题解决后**立即删除**，不保留历史记录。
 >
-> Version: 1.18.0 ｜ Last Updated: 2026-09-29 ｜ Status: Live
+> Version: 1.19.0 ｜ Last Updated: 2026-09-30 ｜ Status: Live
 
 ---
 
@@ -47,7 +47,7 @@ _无 ISSUE-XXX 系未决条目。设计 / 平台 / 测试覆盖限制见下方�
 
 | ID | Severity | Description | Status | Impact | Planned Resolution |
 |---|---|---|---|---|---|
-| AUD-002 | P2 | main 领先 origin/main 44 提交未推送——HEAD 区间（阶段 C–F）未经远端三平台 CI 验证；CHANGELOG 无对应发行记录（本轮已补 `[Unreleased]` 段，版本切分待 owner） | Open | Medium | owner 推送 + 发版评估（PROJECT_STATUS §6 #3） |
+| AUD-002 | P2 | 推送已完成（origin/main = `fb573cf`）。首次远端三平台验证 run #126：windows ✅ / macos-stress ✅ / ubuntu ❌ 1 failed / macos ❌ 2 failed——失败全部为 `test_visual_system.py` 渲染探针真实断言失败（exit 1，非 LIMIT-006）：原生样式按平台调制亮度而保留色相家族，绝对像素相等属 Windows 巧合。平台无关化修复已本地提交（Stage 14-CI，commit `02e8cef`，5 项突变负向验证防御不降级）；**待 owner 推送并重跑远端 CI，绿之前保持 OPEN**。CHANGELOG `[Unreleased]` 版本切分仍待 owner | Open | Medium | owner push 修复 + 远端 CI 复验绿 + 发版评估（PROJECT_STATUS §6 #2） |
 
 ---
 
