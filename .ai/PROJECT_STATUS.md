@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.43.0 · Last Updated: 2026-09-30 · Status: Live
+> Version: 1.44.0 · Last Updated: 2026-09-30 · Status: Live
 
 ---
 
@@ -27,6 +27,8 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 **Stage 14 前置确认与跨平台视觉探针收敛（Stage 14-CI，2026-09-30）**——Owner 推送落地（origin/main = `fb573cf`）后首次远端三平台验证 **run #126**：windows ✅ / macos-stress ✅ / **ubuntu ❌（1 failed, 1380 passed）/ macos ❌（2 failed, 1379 passed）**——失败全部为 `test_visual_system.py` 渲染探针的真实断言失败（exit 1，非 LIMIT-006）。定性：探针要求单采样像素与期望 RGB 绝对相等，而原生按钮样式按平台**调制亮度、保留色相家族**（ubuntu primary `#247bc1` vs `#308cc6` value ×0.97；macOS `#16415c` ×0.46；macOS danger `#d66666` 白向调和；hue Δ≤3.6°）——绝对像素相等是 Windows 渲染路径巧合而非视觉契约；该文件位于 `35f9007..fb573cf` 首验区间，此前从未在 Linux/macOS 执行。修复（Stage 14-CI，`02e8cef`）：探针收敛为平台无关契约——无文字按钮内区 5 点采样取中位 + primary 相对**活调色板 Highlight** 的色相族窗口（±15°）/饱和度 ≥0.35/明度 ≥0.25 + danger 品牌红 QSS 字面量与渲染双验证（红相窗口环绕 0° ±15°）+ 与 normal 按钮饱和度差 ≥0.30（全部窗口取实测跨度 ≥1.4× 裕度并在测试内注明依据）。防御不降级：5 项突变负向验证（删 primary 规则 / 删 danger 规则 / 改涂 palette(Button) ×2 / 改涂 #2e8b57）逐一被捕获，生产文件逐字节还原；无新增 skip、无 fusion 强制、无平台豁免、生产行为零变更。本地验证：test_visual_system 18/18（本机深色主题 + 紫色强调色调色板亦绿，佐证活调色板相对断言）、全量 **1378 passed / 8 skipped / 0 failed**、ruff 全绿、mypy 261 文件零错。**[同日 Stage 14 Final 更新：owner 已推送 `02e8cef`+`5525d95`，run #127 三平台全绿，AUD-002 已闭环——见下段。]**
 
 **Stage 14 Final Re-Audit / Release Readiness（2026-09-30）**——Owner 推送 `02e8cef`+`5525d95`（origin/main = `5525d95`）后完成最终审计（只读优先，生产代码零修改）：**远端 CI run #127（id 36673035844，2026-09-30T05:21Z，attempt=1）对最终 HEAD `5525d95` 三平台全绿**——windows ✅ / ubuntu ✅ / macos ✅ / macos-stress ✅，SHA 完全对齐（run head_sha = HEAD = origin/main，GitHub API 实查）；pytest 摘要 ubuntu/macos 各 **1381 passed / 5 skipped**（Stage 14-CI 前的 1F/2F 视觉探针全部转绿）、windows **1384 passed / 2 skipped**；skip 全部为已登记豁免（2×PA_STRESS 专用 job + 3×Windows 专属 junction），no-skip 守卫步骤全过，无 skip 掩盖失败。**AUD-002 = CLOSED**（KNOWN_ISSUES v1.20.0 整条删除、台账改判 FIXED、三方同步）。台账终态（25 条 HEAD 抽查复核——Stage 13D 后生产代码零变更：fb573cf=docs、02e8cef=test-only、5525d95=docs，代码级结论沿用 + AUD-010/011/014/015/016/018/022/023 与 8 个审计测试文件在位确认）：**P0 0 / P1 0 / P2 0 / P3 0 OPEN，无 BLOCKED**——23 FIXED + AUD-024 ACCEPTED-RISK（ADR-053 维持）+ AUD-002 CLOSED；AUD-011 维持 Option C 收口（ADR-050，三 Protocol 在位、公开导出 3/3）。SSOT 一致性收口：无 OPEN/Decision Required 残留；health-check README 当前状态注与 DOCUMENT_INDEX v1.6.1 两处陈旧指针修正。Unknown 分类：远端 CI=已验证；生产库实际状态/安装包二轮验收（现 v2.8.0 资产对应 `fe7f46f` 旧基线，须随下次发版重新出包）/阶段 B 五点复验/业务基线签核/Release body/CHANGELOG 切版 = Owner 外部动作；依赖 CVE 审计（pip-audit）无既有门禁 = Known 可选加固（非 Finding、不阻塞）。**Final Re-Audit = PASS，Release Readiness = READY FOR OWNER RELEASE**（≠ RELEASED：切版/tag/Release/安装包决策均属 Owner）。
+
+**v2.8.1 版本切分（2026-09-30，Owner 裁决）**——发布元数据统一 2.8.1：pyproject `version` 与 `.env.example` `APP_VERSION` 已切 **2.8.1**；CHANGELOG `[Unreleased]` 整理为 **`[2.8.1] - 2026-09-30`**（Added = 阶段 A–F；Changed = 语义裁决 + 应用层端口化；Fixed = AUD-015/016/018/023 与跨平台视觉探针修复；Docs = 治理；两个重复 Changed 段归并，两条行为加固条目自 Docs 归位 Fixed），顶部保留空 `[Unreleased]`，历史 `[2.8.0]` 未改写。**tag / GitHub Release / 安装包尚未创建**——不把未执行操作写成已发布，为 owner 后续操作（§6 #2）。切版为纯元数据/文档变更，业务代码与整改逻辑零变更。
 
 **AUD-011 决策闭合（Stage 13D-A，2026-09-30）**——Owner 裁决 **Option C**：`RegisterPhotoUseCase` / `ScanPhotoFolderUseCase` / `PruneMissingPhotosUseCase` **保留**，定位为**兼容性 / 公开 API 层面的 Protocol，不要求作为 Service 的强制抽象**；不删除、不改公开导出（`application/__init__.py` 3/3 在位）、不改生产行为。HEAD `36a1d0f` 复核：三者无 presentation/workers/plugins/tests 消费者，所描述的服务为活的组合根能力（`ApplicationServices` 具体类字段；CLI `prune` 真实驱动），Protocol 作为已发布类型契约保留；"零边界消费者"为结构性事实，**不再作为待处理项**。AUD-011 决策门**关闭**（ADR-050「Owner 决策」段 + 台账）。整改链 Finding 全部落地：**P1 0 OPEN · P2 1 OPEN（AUD-002，Owner 推送/远端 CI）· P3 0 OPEN**。
 
@@ -91,7 +93,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 |---|---|---|
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
 | 人员导入重设计（阶段 A–F） | ✅ 实施完成 | 全部入库至 `2823d1c`；业务基线见 `docs/business-baseline/`；冻结待 owner 签核。 |
-| 版本链 | ⚠️ | v2.8.0 三处一致（pyproject / .env.example / CHANGELOG `[2.8.0]`）；**此后 47 个提交未发版**——CHANGELOG 已补 `[Unreleased]` 段（阶段 A–F 主要变更），无伪造发行版本。 |
+| 版本链 | 🟡 切版完成、待发行 | pyproject / .env.example = **2.8.1**（owner 裁决 2026-09-30）；CHANGELOG `[2.8.1] - 2026-09-30` 段已切分（原 `[Unreleased]`：阶段 A–F + 整改链 + 视觉探针修复）；**tag / Release / 安装包尚未创建**——最新 tag 仍为 v2.8.0，为 owner 后续操作。 |
 | 测试基线 | ✅ | 全量 **1378 passed / 8 skipped / 0 failed**（2026-09-30 实测 228.91s）；行覆盖 **93.8%**（AUD-021 可复现口径，见 §5 覆盖率行）；此前已知盲区（workers 错误分支、配对守卫）已由 Stage 12B 补齐（AUD-019）。 |
 | CI | ✅ | **run #127（2026-09-30T05:21Z，attempt=1）对最终 HEAD `5525d95` 三平台全绿**（windows/ubuntu/macos/macos-stress 全 success），SHA 对齐 = HEAD = origin/main；ubuntu/macos 各 1381 passed / 5 skipped、windows 1384 passed / 2 skipped，skip 均为已登记豁免；本地三质量门绿（ruff / mypy 261 文件 / pytest）；LIMIT-006 CI 自愈 + darwin skip 维持（本 run 未触发）。 |
 | 业务基线 | ✅ 已入库 | `docs/business-baseline/`（Stage1–3 现行有效 + Stage4/4.1 历史 + Stage4.2 冻结复审），基线 `2823d1c`，来源与有效性表见其 README。 |
@@ -149,7 +151,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | # | 事项 | 依据 |
 |---|---|---|
 | 1 | **业务基线冻结签核**（Stage4.2 八项条件已满足，签核即冻结生效） | `docs/business-baseline/Stage4_2_FinalFreezeReview.md` §9 |
-| 2 | **发版评估与执行**：CHANGELOG `[Unreleased]` 段切版本（v2.8.0 后 63 提交，含阶段 A–F 用户可见功能）、手册阶段 C–F 功能章节补齐、打 tag + GitHub Release（body 粘贴对应 CHANGELOG 段）+ **新安装包产出与二轮真机验收**（现 Release 资产对应 v2.8.0/`fe7f46f` 旧基线，不覆盖阶段 A–F） | 体检 §11 发布风险 + Stage 14 Final |
+| 2 | **发行 v2.8.1**（切版已完成：pyproject/.env.example/CHANGELOG = 2.8.1）：推送切版提交 → 打 `v2.8.1` tag → GitHub Release（body 粘贴 CHANGELOG `[2.8.1]` 段）→ 新安装包产出与二轮真机验收；手册阶段 C–F 功能章节补齐仍待 | 体检 §11 发布风险 + owner 切版裁决（2026-09-30） |
 | 3 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
 | 4 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
 | 5 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
