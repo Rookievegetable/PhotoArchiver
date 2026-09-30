@@ -213,6 +213,11 @@ PHOTO_EMPTY_BUSY = "任务进行中；完成后照片墙将按当前筛选自动
 BULK_ARCHIVE_BUTTON = "归档所选（{count}）"
 BULK_DELETE_BUTTON = "移除登记（{count}）"
 
+# ---- 照片库 · 选择操作簇（2026-09-30 选中态优化） ----
+# 「全选」常驻可见（0 选区时也能建立第一次选区）；「清除选择」仅在有选区时出现。
+SELECT_ALL_PHOTOS = "全选"
+CLEAR_SELECTION = "清除选择"
+
 # ---- 照片详情对话框（Batch 4） ----
 PHOTO_DETAIL_TITLE = "照片详情"
 PHOTO_DETAIL_NAME = "文件名：{name}"

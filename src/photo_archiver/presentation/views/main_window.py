@@ -505,10 +505,21 @@ class MainWindow(QMainWindow):
         guidance_row.addStretch()
         layout.addLayout(guidance_row)
 
-        # 选择态批量操作栏（Batch 4）：仅在有选区时出现，数量明确可见；
-        # 无选区时不显示任何危险批量操作（蓝图条 3）。Batch 7 视觉层级：
-        # 归档为主操作，移除登记为危险操作。
-        bulk_row = QHBoxLayout()
+        # 选择态操作栏（Batch 4 语义保持 + 2026-09-30 选中态优化）：选择操作
+        # 簇靠左、业务批量动作右对齐。「全选」常驻可见——0 选区时也能建立第一
+        # 次选区；「清除选择」仅在有选区时出现；危险批量操作（蓝图条 3）仍然
+        # 不在无选区时出现。Batch 7 视觉层级：归档为主操作，移除登记为危险操作。
+        selection_row = QHBoxLayout()
+        self._select_all_button = QPushButton(self)
+        self._select_all_button.setText(text.SELECT_ALL_PHOTOS)
+        self._select_all_button.clicked.connect(self._on_select_all_clicked)
+        selection_row.addWidget(self._select_all_button)
+        self._clear_selection_button = QPushButton(self)
+        self._clear_selection_button.setText(text.CLEAR_SELECTION)
+        self._clear_selection_button.clicked.connect(self._on_clear_selection_clicked)
+        self._clear_selection_button.setVisible(False)
+        selection_row.addWidget(self._clear_selection_button)
+        selection_row.addStretch()
         self._bulk_archive_button = QPushButton(self)
         self._bulk_archive_button.clicked.connect(self._on_archive_clicked)
         assign_role(self._bulk_archive_button, ROLE_PRIMARY)
@@ -517,9 +528,8 @@ class MainWindow(QMainWindow):
         assign_role(self._bulk_delete_button, ROLE_DANGER)
         for button in (self._bulk_archive_button, self._bulk_delete_button):
             button.setVisible(False)
-            bulk_row.addWidget(button)
-        bulk_row.addStretch()
-        layout.addLayout(bulk_row)
+            selection_row.addWidget(button)
+        layout.addLayout(selection_row)
 
         self._photo_list_model = PhotoListModel(parent=self)
         self._photo_list = QListView(self)
@@ -536,6 +546,10 @@ class MainWindow(QMainWindow):
         self._photo_list.setUniformItemSizes(True)
         self._photo_list.setGridSize(QSize(184, 202))
         self._photo_list.setSpacing(8)
+        # 2026-09-30 选中态优化：框选（橡皮筋）能力由 ExtendedSelection +
+        # IconMode 原生提供，此开关只负责让拖拽框选矩形可见（运行时探针实证：
+        # False 时选区照样发生，但拖拽期间没有任何视觉反馈）。
+        self._photo_list.setSelectionRectVisible(True)
         # P0-2: install the thumbnail delegate — the THUMBNAIL_ROLE consumer.
         # Without it the default delegate renders filenames only, leaving the
         # entire thumbnail pipeline invisible to the user.
@@ -796,9 +810,14 @@ class MainWindow(QMainWindow):
         Buttons carry the exact selected count; with no selection the bar
         disappears entirely and during a busy task both dangerous actions
         stay disabled (Batch 1 admission + Batch 4 context rule).
+        2026-09-30：「全选」常驻（仅 busy 置灰）；「清除选择」与批量动作
+        一样仅在有选区时可见，busy 期间一并置灰。
         """
         count = len(self._collect_selected_photo_ids())
         busy = self._task_coordinator.is_busy
+        self._select_all_button.setEnabled(not busy)
+        self._clear_selection_button.setVisible(count > 0)
+        self._clear_selection_button.setEnabled(count > 0 and not busy)
         for button, template in (
             (self._bulk_archive_button, text.BULK_ARCHIVE_BUTTON),
             (self._bulk_delete_button, text.BULK_DELETE_BUTTON),
@@ -806,6 +825,19 @@ class MainWindow(QMainWindow):
             button.setVisible(count > 0)
             button.setText(template.format(count=count))
             button.setEnabled(count > 0 and not busy)
+
+    @Slot()
+    def _on_select_all_clicked(self) -> None:
+        """全选当前照片墙——selectAll 作用于模型行，即当前筛选结果。
+
+        不得绕过 model/filter 直接选择数据库全部照片（筛选语义不变）。
+        """
+        self._photo_list.selectAll()
+
+    @Slot()
+    def _on_clear_selection_clicked(self) -> None:
+        """清除照片墙选区；批量栏随 selectionChanged → _update_bulk_bar 隐藏。"""
+        self._photo_list.clearSelection()
 
     @Slot(object)
     def _on_photo_double_clicked(self, index: object) -> None:

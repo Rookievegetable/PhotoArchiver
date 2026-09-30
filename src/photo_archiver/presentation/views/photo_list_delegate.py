@@ -6,6 +6,12 @@ delegate) but that was never written: without it the default delegate renders
 filenames only, and the whole thumbnail pipeline (generation → cache → async
 load → model) is invisible to the user.
 
+2026-09-30 选中态优化：State_Selected 的单元格在缩略图上追加内缘描边
+（palette Highlight）与左上角几何勾选章（Highlight 填充 + HighlightedText
+折线对勾），文件名沿用 HighlightedText——三重反馈全部取自活调色板，本模块
+不引入任何固定色值。无缩略图的行走平台 fallback 绘制（文档化降级，见
+KNOWN 决策：不为异常路径重复实现选中视觉）。
+
 The Path → QPixmap conversion happens here in Presentation; Domain and
 Application stay Qt-free. Pixmaps go through Qt's global ``QPixmapCache``
 (keyed by resolved path) so repeated repaints don't re-read the disk while
@@ -14,8 +20,17 @@ eviction stays Qt-managed — no hand-rolled cache to leak.
 
 from pathlib import Path
 
-from PySide6.QtCore import QRect, QSize, Qt
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPixmap, QPixmapCache
+from PySide6.QtCore import QPointF, QRect, QSize, Qt
+from PySide6.QtGui import (
+    QColor,
+    QFontMetrics,
+    QPainter,
+    QPalette,
+    QPen,
+    QPixmap,
+    QPixmapCache,
+    QPolygonF,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QStyle,
@@ -32,7 +47,22 @@ _THUMBNAIL_BOX = 160
 _TEXT_HEIGHT = 24
 _PADDING = 6
 
+# 2026-09-30 选中态三重反馈：内缘描边 + 左上角几何勾选章 + 文件名高亮。
+# 颜色一律取自 option.palette（活调色板），禁止硬编码 RGB——本机深色主题
+# 与 CI 浅色调色板不同，固定色值必然跨平台失真（Stage 14-CI 同一契约）。
+_SELECTION_STROKE_WIDTH = 2
+_CHECK_BADGE_SIZE = 16
+_CHECK_BADGE_MARGIN = 4
+
 _CACHE_KEY_PREFIX = "photo-thumbnail:"
+
+
+def name_color(palette: QPalette, selected: bool) -> QColor:
+    """Return the filename color: HighlightedText when selected, else Text."""
+    role = (
+        palette.ColorRole.HighlightedText if selected else palette.ColorRole.Text
+    )
+    return palette.color(role)
 
 
 class PhotoThumbnailDelegate(QStyledItemDelegate):
@@ -69,11 +99,21 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
-        painter.drawPixmap(
+        pixmap_rect = QRect(
             image_box.left() + (image_box.width() - scaled.width()) // 2,
             image_box.top() + (image_box.height() - scaled.height()) // 2,
-            scaled,
+            scaled.width(),
+            scaled.height(),
         )
+        painter.drawPixmap(pixmap_rect, scaled)
+
+        # 选中态：内缘描边 + 左上角勾选章（仅 State_Selected，绘制顺序在
+        # 缩略图之上、状态角标与文件名之前——后者各自重设画笔/画刷）。
+        palette = option.palette  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
+        if selected:
+            self._draw_selection_stroke(painter, palette, pixmap_rect)
+            self._draw_check_badge(painter, palette, pixmap_rect)
 
         # G-4：状态角标——识别状态 · 归档，右上角半透明小签（主题无关）。
         badge = index.data(STATUS_BADGE_ROLE)
@@ -104,15 +144,59 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
         elided = QFontMetrics(option.font).elidedText(  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
             str(name), Qt.TextElideMode.ElideRight, text_rect.width()
         )
-        palette = option.palette  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
-        selected = option.state & QStyle.StateFlag.State_Selected  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
-        painter.setPen(
-            palette.color(palette.ColorRole.HighlightedText)
-            if selected
-            else palette.color(palette.ColorRole.Text)
-        )
+        painter.setPen(name_color(palette, selected))
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter, elided)
         painter.restore()
+
+    def _draw_selection_stroke(
+        self, painter: QPainter, palette: QPalette, pixmap_rect: QRect,
+    ) -> None:
+        """选中缩略图的内缘描边（修正 2：内缘绘制，修正 1 审查定稿）。
+
+        画笔中心线落在 pixmap_rect 内缩半个笔宽的矩形上，描边最多覆盖
+        ``_SELECTION_STROKE_WIDTH`` 像素的照片边缘、永不越出 image_box——
+        不依赖单元格留白，也不会在任意纵横比下侵入文件名条。
+        """
+        inset = _SELECTION_STROKE_WIDTH // 2
+        if (
+            pixmap_rect.width() < 2 * _SELECTION_STROKE_WIDTH
+            or pixmap_rect.height() < 2 * _SELECTION_STROKE_WIDTH
+        ):
+            return
+        painter.setPen(
+            QPen(palette.color(palette.ColorRole.Highlight), _SELECTION_STROKE_WIDTH)
+        )
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(pixmap_rect.adjusted(inset, inset, -inset, -inset))
+
+    def _draw_check_badge(
+        self, painter: QPainter, palette: QPalette, pixmap_rect: QRect,
+    ) -> None:
+        """左上角圆形勾选章：Highlight 填充 + HighlightedText 几何折线对勾。
+
+        对勾以三点折线绘制而非 Unicode "✓" 文本——零字体/字体回退依赖，
+        Windows / Linux / CI runner 像素行为一致。颜色取活调色板。
+        """
+        x = pixmap_rect.left() + _CHECK_BADGE_MARGIN
+        y = pixmap_rect.top() + _CHECK_BADGE_MARGIN
+        size = _CHECK_BADGE_SIZE
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(palette.color(palette.ColorRole.Highlight))
+        painter.drawEllipse(QRect(x, y, size, size))
+        pen = QPen(palette.color(palette.ColorRole.HighlightedText), 2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        unit = size / 16.0
+        painter.drawPolyline(
+            QPolygonF(
+                [
+                    QPointF(x + 4.0 * unit, y + 8.5 * unit),
+                    QPointF(x + 6.8 * unit, y + 11.5 * unit),
+                    QPointF(x + 11.5 * unit, y + 5.0 * unit),
+                ]
+            )
+        )
 
     def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:  # type: ignore[override]
         """Return a constant cell size — data-INDEPENDENT by design.

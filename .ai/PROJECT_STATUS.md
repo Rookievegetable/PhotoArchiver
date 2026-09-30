@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.44.0 · Last Updated: 2026-09-30 · Status: Live
+> Version: 1.45.0 · Last Updated: 2026-09-30 · Status: Live
 
 ---
 
@@ -23,6 +23,8 @@
 M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 已落地；发布工程至 v2.8.0（2026-09-13）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**：阶段 A（两段式导入，09-21 owner 验收 ✅）→ 阶段 B（人员与分组页，09-23 owner 验收 ✅）→ **阶段 C/D/E/F（2026-09-24 ~ 09-28 全部实施完成并冻结审查）**。**2026-09-28 完成全面工程健康体检（Stage 0–9，判 ATTENTION）与治理基线恢复（Stage 10）**；业务基线冻结正式生效待 owner 签核（Stage4.2 复审 8 项条件已满足，见 `docs/business-baseline/`）。
 
 ## 2. Current Step（当前开发阶段）
+
+**照片库选中态可视化与多选可发现性（2026-09-30，feature，仅 Presentation 层）**——Owner 需求（选中状态更清晰 + 多选入口）；两轮只读方案审查 + 运行时探针确立事实基线：**多选机制早已存在**（`ExtendedSelection` + Ctrl/Shift/Ctrl+A + IconMode 框选 + B3 批量消费链全选集透传），真实缺口是**反馈不可见**——平台选中底色被缩略图覆盖（深色主题下不可察）、`selectionRectVisible=False` 时框选选区照常发生但矩形零渲染（探针实证 0 vs 820 变化像素）。实施（Owner 终版方案口径：修正 1(b) 选择操作簇 + 修正 2 内缘描边）：①`photo_list_delegate` 选中态三重反馈——缩略图**内缘描边**（活调色板 Highlight，笔宽 2、中心线内缩半笔宽，只覆盖照片边缘 ≤2px 且任意纵横比下不越出 image_box/不侵文件名条）+ **左上角几何勾选章**（Highlight 填充 + HighlightedText 三点折线对勾，零字体/字体回退依赖）+ 文件名 HighlightedText（既有行为，抽纯函数 `name_color` 钉契约）；②主窗口**选择操作簇**——「全选」常驻（`selectAll` 作用于模型行 = 当前筛选结果）+「清除选择」有选区可见 + 业务批量动作右对齐（行为/参数/测试语义零变化，仅视觉位置分组）；③`setSelectionRectVisible(True)`——只负责框选矩形可见性，不启用框选能力。业务语义零变更：共享归档入口 B3 语义（有选区归所选/无选区归全部 APPROVED）、移除登记、筛选全部保持并回归验证；Domain/Application/Infrastructure/QSS/迁移零触碰。**测试 16 项新增**（直绘渲染探针 5：选中/未选中/hover 组合/无缩略图文档化降级/调色板相对断言——全部对比交给委托的 palette 对象，禁止固定 RGB；页面交互 11：全选常驻与筛选作用域、空库 no-op、清除、busy 置灰、模型重载清空选区、QTest Ctrl/Shift、拖拽手势、**offscreen 子进程框选探针**——运行时探针发现 Windows 原生平台下 QTest/QCursor 合成的移动不携带鼠标按键、框选不推进（QtTest 平台限制，真实用户鼠标拖拽不受影响），框带可见性与真实扫掠选区在 offscreen 子进程钉死：框带像素可见 + 框带只覆盖 cell-0 时选区恰好 [0]）。全量 **1394 passed / 8 skipped / 0 failed**、ruff 全绿、mypy 261 文件零错。
 
 **Stage 14 前置确认与跨平台视觉探针收敛（Stage 14-CI，2026-09-30）**——Owner 推送落地（origin/main = `fb573cf`）后首次远端三平台验证 **run #126**：windows ✅ / macos-stress ✅ / **ubuntu ❌（1 failed, 1380 passed）/ macos ❌（2 failed, 1379 passed）**——失败全部为 `test_visual_system.py` 渲染探针的真实断言失败（exit 1，非 LIMIT-006）。定性：探针要求单采样像素与期望 RGB 绝对相等，而原生按钮样式按平台**调制亮度、保留色相家族**（ubuntu primary `#247bc1` vs `#308cc6` value ×0.97；macOS `#16415c` ×0.46；macOS danger `#d66666` 白向调和；hue Δ≤3.6°）——绝对像素相等是 Windows 渲染路径巧合而非视觉契约；该文件位于 `35f9007..fb573cf` 首验区间，此前从未在 Linux/macOS 执行。修复（Stage 14-CI，`02e8cef`）：探针收敛为平台无关契约——无文字按钮内区 5 点采样取中位 + primary 相对**活调色板 Highlight** 的色相族窗口（±15°）/饱和度 ≥0.35/明度 ≥0.25 + danger 品牌红 QSS 字面量与渲染双验证（红相窗口环绕 0° ±15°）+ 与 normal 按钮饱和度差 ≥0.30（全部窗口取实测跨度 ≥1.4× 裕度并在测试内注明依据）。防御不降级：5 项突变负向验证（删 primary 规则 / 删 danger 规则 / 改涂 palette(Button) ×2 / 改涂 #2e8b57）逐一被捕获，生产文件逐字节还原；无新增 skip、无 fusion 强制、无平台豁免、生产行为零变更。本地验证：test_visual_system 18/18（本机深色主题 + 紫色强调色调色板亦绿，佐证活调色板相对断言）、全量 **1378 passed / 8 skipped / 0 failed**、ruff 全绿、mypy 261 文件零错。**[同日 Stage 14 Final 更新：owner 已推送 `02e8cef`+`5525d95`，run #127 三平台全绿，AUD-002 已闭环——见下段。]**
 
@@ -93,9 +95,9 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 |---|---|---|
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
 | 人员导入重设计（阶段 A–F） | ✅ 实施完成 | 全部入库至 `2823d1c`；业务基线见 `docs/business-baseline/`；冻结待 owner 签核。 |
-| 版本链 | 🟡 切版完成、待发行 | pyproject / .env.example = **2.8.1**（owner 裁决 2026-09-30）；CHANGELOG `[2.8.1] - 2026-09-30` 段已切分（原 `[Unreleased]`：阶段 A–F + 整改链 + 视觉探针修复）；**tag / Release / 安装包尚未创建**——最新 tag 仍为 v2.8.0，为 owner 后续操作。 |
-| 测试基线 | ✅ | 全量 **1378 passed / 8 skipped / 0 failed**（2026-09-30 实测 228.91s）；行覆盖 **93.8%**（AUD-021 可复现口径，见 §5 覆盖率行）；此前已知盲区（workers 错误分支、配对守卫）已由 Stage 12B 补齐（AUD-019）。 |
-| CI | ✅ | **run #127（2026-09-30T05:21Z，attempt=1）对最终 HEAD `5525d95` 三平台全绿**（windows/ubuntu/macos/macos-stress 全 success），SHA 对齐 = HEAD = origin/main；ubuntu/macos 各 1381 passed / 5 skipped、windows 1384 passed / 2 skipped，skip 均为已登记豁免；本地三质量门绿（ruff / mypy 261 文件 / pytest）；LIMIT-006 CI 自愈 + darwin skip 维持（本 run 未触发）。 |
+| 版本链 | 🟡 切版/tag 完成、待发行 | pyproject / .env.example = **2.8.1**（owner 裁决 2026-09-30）；CHANGELOG `[2.8.1] - 2026-09-30` 段已切分；**v2.8.1 annotated tag 已创建并推送**（→ `8d8a126`，本地 + 远端 `git ls-remote` 双实查；历史 v2.8.0 未动）；**GitHub Release / 新安装包产出与二轮验收为 owner 剩余操作**。 |
+| 测试基线 | ✅ | 全量 **1394 passed / 8 skipped / 0 failed**（2026-09-30 实测 248.92s；含照片库选中态优化新增 16 项）；行覆盖 **93.9%**（10541/11229，AUD-021 可复现口径，见 §5 覆盖率行）；此前已知盲区（workers 错误分支、配对守卫）已由 Stage 12B 补齐（AUD-019）。 |
+| CI | ✅ | run #127/#128 对 `5525d95`/`57fb8d5` 三平台全绿（windows 1384+2 / ubuntu、macos 各 1381+5，skip 全为已登记豁免）；`8d8a126`（切版）已推送，**其后的照片库选中态优化 feature 提交待推送触发远端验证**；本地三质量门绿（ruff / mypy 261 文件 / pytest）。 |
 | 业务基线 | ✅ 已入库 | `docs/business-baseline/`（Stage1–3 现行有效 + Stage4/4.1 历史 + Stage4.2 冻结复审），基线 `2823d1c`，来源与有效性表见其 README。 |
 | 未决问题 | ✅ 清零 | 体检 25 条 Finding 终态（2026-09-30 Stage 14 Final）：**P0 0 / P1 0 / P2 0 / P3 0 OPEN，无 BLOCKED**——23 FIXED + AUD-024 ACCEPTED-RISK + AUD-002 CLOSED（run #127 三平台绿）；详见 `docs/health-check/FINDINGS_LEDGER.md`。 |
 | Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消粒度——说明已按体检修正：识别取消延迟=剩余队列排空，AUD-023）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS/Linux runner 环境漂移 SIGSEGV，CI 自愈 + darwin skip 维持），均 Low、不阻塞。 |
@@ -134,12 +136,12 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-30（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；两段工作：**①Stage 14-CI**——跨平台视觉探针收敛（`02e8cef` test + `5525d95` docs 同步），owner 已推送；**②Stage 14 Final Re-Audit**（本段）——run #127 三平台绿核验（SHA 对齐）+ AUD-002 闭环 + 台账 25 条 HEAD 抽查终审 + SSOT 收口（唯一提交=治理文档） |
-| 会话范围 | 只读优先审计：Git/远端 CI 证据（GitHub API 实查，gh 缺席走 git-credential 令牌）→ 台账复核（Stage 13D 后生产代码零变更：fb573cf=docs、02e8cef=test-only、5525d95=docs，代码级结论沿用 + HEAD 抽查：AUD-010/011/014/015/016/018/022/023 与 8 个审计测试文件在位）→ AUD-002/AUD-011/AUD-024 专项确认 → SSOT 一致性检查 → 治理文档收口 |
-| 关键产出 | run #127 三平台全绿证据（三平台 pytest 摘要 + skip 豁免清单 + 视觉探针 PASSED，日志 TEMP 留存 pa127_*.log）；AUD-002 CLOSED（KNOWN_ISSUES v1.20.0 登记节归零 / 台账 FIXED / 本文件 v1.43.0）；DOCUMENT_INDEX v1.6.1 两处陈旧指针修正；health-check README 当前状态注更新 |
-| 当前质量门 | 本地：1378 passed / 8 skipped / 0 failed、ruff 全绿、mypy 261 文件零错（2026-09-30 实测）；远端：run #127 三平台全绿（ubuntu/macos 各 1381+5、windows 1384+2，attempt=1） |
-| 覆盖率（可复现） | **93.8%（10480 / 11172 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（262 个 .py，经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`（非 `photo_archiver` 包）；无 `[tool.coverage]` 配置、无 `.coveragerc`、无 omit 规则（仅 coverage 默认的 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
-| 工作区 | main；本阶段收口提交后 **1 提交领先 origin（push 属 owner，GIT-020），未执行 push** |
+| 时间 | 2026-09-30（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；**照片库选中态可视化与多选可发现性 feature 轮**（v2.8.1 切版/tag 之后第一个功能优化） |
+| 会话范围 | 两轮只读方案审查（运行时探针实证选中/多选/框选行为基线与 QTest 平台限制）→ Owner 终版方案定稿（修正 1(b) 选择操作簇 + 修正 2 内缘描边）→ 实现 → 16 项新测试 → 三质量门 → SSOT 同步 |
+| 关键产出 | `photo_list_delegate`：选中态内缘描边（活调色板）+ 左上角几何勾选章 + `name_color` 纯函数；`main_window`：选择操作簇（「全选」常驻 /「清除选择」有选区可见 / 批量动作右对齐）+ `setSelectionRectVisible(True)`；`ui_text`：2 条新文案；`CHANGELOG [Unreleased]` 3 条（明确不写成"新增多选底层能力"）；测试：直绘渲染探针 5 + 页面交互 11（含 offscreen 子进程框选探针——QTest/QCursor 原生合成移动不带按键的平台限制已登记在测试 docstring） |
+| 当前质量门 | 本地：1394 passed / 8 skipped / 0 failed（248.92s）、ruff 全绿、mypy 261 文件零错（2026-09-30 实测）；远端 run #127/#128 对 5525d95/57fb8d5 绿，本 feature 提交待推送验证 |
+| 覆盖率（可复现） | **93.9%（10541 / 11229 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`；无 `[tool.coverage]` 配置、无 omit 规则（仅 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
+| 工作区 | main；本 feature 收口提交后 1 提交领先 origin（push 属 owner，GIT-020），未执行 push |
 | Remaining | 见 §6 Next Step。 |
 
 ---
@@ -151,7 +153,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | # | 事项 | 依据 |
 |---|---|---|
 | 1 | **业务基线冻结签核**（Stage4.2 八项条件已满足，签核即冻结生效） | `docs/business-baseline/Stage4_2_FinalFreezeReview.md` §9 |
-| 2 | **发行 v2.8.1**（切版已完成：pyproject/.env.example/CHANGELOG = 2.8.1）：推送切版提交 → 打 `v2.8.1` tag → GitHub Release（body 粘贴 CHANGELOG `[2.8.1]` 段）→ 新安装包产出与二轮真机验收；手册阶段 C–F 功能章节补齐仍待 | 体检 §11 发布风险 + owner 切版裁决（2026-09-30） |
+| 2 | **发行 v2.8.1**（切版 + tag 均已完成：v2.8.1 annotated tag → `8d8a126` 已推送远端）：GitHub Release（body 粘贴 CHANGELOG `[2.8.1]` 段）→ 新安装包产出与二轮真机验收；手册阶段 C–F 功能章节补齐仍待 | 体检 §11 发布风险 + owner 切版裁决（2026-09-30） |
 | 3 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
 | 4 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
 | 5 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
