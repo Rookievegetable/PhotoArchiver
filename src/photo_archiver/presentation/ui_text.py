@@ -227,6 +227,12 @@ PHOTO_DETAIL_CAPTURED_UNKNOWN = "拍摄时间：未知"
 PHOTO_DETAIL_STATUS = "状态：{badge}"
 PHOTO_DETAIL_THUMB_PENDING = "缩略图尚未生成；稍后重新打开即可查看。"
 
+# ---- 照片详情 · 高清预览（2026-09-30） ----
+# 用户点击【查看大图】后才异步受控解码原图；失败保留缩略图并轻提示。
+PHOTO_DETAIL_VIEW_FULL = "查看大图"
+PHOTO_DETAIL_HD_LOADING = "正在加载高清预览..."
+PHOTO_DETAIL_HD_FAILED = "高清预览加载失败，已保留缩略图"
+
 
 # ---- 审核对话框（ReviewDialog） ----
 REVIEW_DIALOG_TITLE = "审核待处理识别结果"

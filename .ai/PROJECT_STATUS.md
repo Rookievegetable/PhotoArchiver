@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.45.0 · Last Updated: 2026-09-30 · Status: Live
+> Version: 1.46.0 · Last Updated: 2026-10-01 · Status: Live
 
 ---
 
@@ -23,6 +23,8 @@
 M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 已落地；发布工程至 v2.8.0（2026-09-13）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**：阶段 A（两段式导入，09-21 owner 验收 ✅）→ 阶段 B（人员与分组页，09-23 owner 验收 ✅）→ **阶段 C/D/E/F（2026-09-24 ~ 09-28 全部实施完成并冻结审查）**。**2026-09-28 完成全面工程健康体检（Stage 0–9，判 ATTENTION）与治理基线恢复（Stage 10）**；业务基线冻结正式生效待 owner 签核（Stage4.2 复审 8 项条件已满足，见 `docs/business-baseline/`）。
 
 ## 2. Current Step（当前开发阶段）
+
+**照片详情高清预览（2026-09-30 ~ 10-01，feature/fix，仅 Presentation 层）**——Owner 需求：详情大图模糊。根因（代码实锤）：预览数据源是 **256px 缩略图管线产物被 `scaledToHeight(320)` 放大**。Owner 终版方案（两轮只读审查定稿，审核修正全部收编）："**缩略图即时显示 + 用户主动点击【查看大图】 + QThreadPool 异步受控解码**"——打开详情零原图 IO（Batch 4"无同步原图 IO"设计维持）；点击后 worker 内 QImageReader 受控解码（`setAutoTransform` EXIF + aspect-fit **640×480 固定逻辑包围盒 × DPR**，小图源 clamp 到原始像素尺寸不放大解码；JPEG 走 DCT 降采样、PNG 全量解码后内存缩放），输出端 `setDevicePixelRatio` 归位（显示逻辑尺寸恒等 fit，对话框不跳变）；结果经**显式 QueuedConnection** 回 UI 线程转 QPixmap；成功替换并隐藏按钮、失败保留缩略图轻提示可重试（绝不退回 pending）、`done()` 全路径关闭标志 + 递增 request_id 双防护（过期结果经 `_dropped_requests` 观测钩子丢弃）；解码函数为可注入边界（测试 Event 门控零 sleep）。明确不做：磁盘 Preview Cache / 自动加载 / 查看器 / 修改 ThumbnailGenerator——**管线无 EXIF 转置的既有现象**（带旋转标签照片的照片墙缩略图横躺，`pillow_thumbnail_generator.py` 无 exif_transpose）登记为独立未来项。测试 13 项新增：真实解码器单元级（T3 分辨率上限 / T4 三种宽高比 / T5 EXIF 竖直 / T8 中文路径）+ 对话框级注入桩（T1 打开零原图 IO / T2 点击才解码并替换 / T6 失败保缩略图可重试 / T7 双缺 pending / T9 关闭竞态 / T10 过期请求 / T11 非 GUI 线程）。**实现期修正两处自伤**：①`preview_decoded` Signal 只声明未 connect → job 执行但结果无人接收（最小探针定位）；②异步拾取后的即时断言是竞态断言，一律 `waitUntil`。全量 **1407 passed / 8 skipped / 0 failed**、ruff/mypy 绿、覆盖率 93.8%（10620/11319）。
 
 **照片库选中态可视化与多选可发现性（2026-09-30，feature，仅 Presentation 层）**——Owner 需求（选中状态更清晰 + 多选入口）；两轮只读方案审查 + 运行时探针确立事实基线：**多选机制早已存在**（`ExtendedSelection` + Ctrl/Shift/Ctrl+A + IconMode 框选 + B3 批量消费链全选集透传），真实缺口是**反馈不可见**——平台选中底色被缩略图覆盖（深色主题下不可察）、`selectionRectVisible=False` 时框选选区照常发生但矩形零渲染（探针实证 0 vs 820 变化像素）。实施（Owner 终版方案口径：修正 1(b) 选择操作簇 + 修正 2 内缘描边）：①`photo_list_delegate` 选中态三重反馈——缩略图**内缘描边**（活调色板 Highlight，笔宽 2、中心线内缩半笔宽，只覆盖照片边缘 ≤2px 且任意纵横比下不越出 image_box/不侵文件名条）+ **左上角几何勾选章**（Highlight 填充 + HighlightedText 三点折线对勾，零字体/字体回退依赖）+ 文件名 HighlightedText（既有行为，抽纯函数 `name_color` 钉契约）；②主窗口**选择操作簇**——「全选」常驻（`selectAll` 作用于模型行 = 当前筛选结果）+「清除选择」有选区可见 + 业务批量动作右对齐（行为/参数/测试语义零变化，仅视觉位置分组）；③`setSelectionRectVisible(True)`——只负责框选矩形可见性，不启用框选能力。业务语义零变更：共享归档入口 B3 语义（有选区归所选/无选区归全部 APPROVED）、移除登记、筛选全部保持并回归验证；Domain/Application/Infrastructure/QSS/迁移零触碰。**测试 16 项新增**（直绘渲染探针 5：选中/未选中/hover 组合/无缩略图文档化降级/调色板相对断言——全部对比交给委托的 palette 对象，禁止固定 RGB；页面交互 11：全选常驻与筛选作用域、空库 no-op、清除、busy 置灰、模型重载清空选区、QTest Ctrl/Shift、拖拽手势、**offscreen 子进程框选探针**——运行时探针发现 Windows 原生平台下 QTest/QCursor 合成的移动不携带鼠标按键、框选不推进（QtTest 平台限制，真实用户鼠标拖拽不受影响），框带可见性与真实扫掠选区在 offscreen 子进程钉死：框带像素可见 + 框带只覆盖 cell-0 时选区恰好 [0]）。全量 **1394 passed / 8 skipped / 0 failed**、ruff 全绿、mypy 261 文件零错。
 
@@ -96,7 +98,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
 | 人员导入重设计（阶段 A–F） | ✅ 实施完成 | 全部入库至 `2823d1c`；业务基线见 `docs/business-baseline/`；冻结待 owner 签核。 |
 | 版本链 | 🟡 切版/tag 完成、待发行 | pyproject / .env.example = **2.8.1**（owner 裁决 2026-09-30）；CHANGELOG `[2.8.1] - 2026-09-30` 段已切分；**v2.8.1 annotated tag 已创建并推送**（→ `8d8a126`，本地 + 远端 `git ls-remote` 双实查；历史 v2.8.0 未动）；**GitHub Release / 新安装包产出与二轮验收为 owner 剩余操作**。 |
-| 测试基线 | ✅ | 全量 **1394 passed / 8 skipped / 0 failed**（2026-09-30 实测 248.92s；含照片库选中态优化新增 16 项）；行覆盖 **93.9%**（10541/11229，AUD-021 可复现口径，见 §5 覆盖率行）；此前已知盲区（workers 错误分支、配对守卫）已由 Stage 12B 补齐（AUD-019）。 |
+| 测试基线 | ✅ | 全量 **1407 passed / 8 skipped / 0 failed**（2026-10-01 实测 276.80s；含照片库选中态 +16、照片详情高清预览 +13）；行覆盖 **93.8%**（10620/11319，AUD-021 可复现口径，见 §5 覆盖率行）；此前已知盲区（workers 错误分支、配对守卫）已由 Stage 12B 补齐（AUD-019）。 |
 | CI | ✅ | run #127/#128 对 `5525d95`/`57fb8d5` 三平台全绿（windows 1384+2 / ubuntu、macos 各 1381+5，skip 全为已登记豁免）；`8d8a126`（切版）已推送，**其后的照片库选中态优化 feature 提交待推送触发远端验证**；本地三质量门绿（ruff / mypy 261 文件 / pytest）。 |
 | 业务基线 | ✅ 已入库 | `docs/business-baseline/`（Stage1–3 现行有效 + Stage4/4.1 历史 + Stage4.2 冻结复审），基线 `2823d1c`，来源与有效性表见其 README。 |
 | 未决问题 | ✅ 清零 | 体检 25 条 Finding 终态（2026-09-30 Stage 14 Final）：**P0 0 / P1 0 / P2 0 / P3 0 OPEN，无 BLOCKED**——23 FIXED + AUD-024 ACCEPTED-RISK + AUD-002 CLOSED（run #127 三平台绿）；详见 `docs/health-check/FINDINGS_LEDGER.md`。 |
@@ -136,12 +138,13 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-30（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；**照片库选中态可视化与多选可发现性 feature 轮**（v2.8.1 切版/tag 之后第一个功能优化） |
-| 会话范围 | 两轮只读方案审查（运行时探针实证选中/多选/框选行为基线与 QTest 平台限制）→ Owner 终版方案定稿（修正 1(b) 选择操作簇 + 修正 2 内缘描边）→ 实现 → 16 项新测试 → 三质量门 → SSOT 同步 |
-| 关键产出 | `photo_list_delegate`：选中态内缘描边（活调色板）+ 左上角几何勾选章 + `name_color` 纯函数；`main_window`：选择操作簇（「全选」常驻 /「清除选择」有选区可见 / 批量动作右对齐）+ `setSelectionRectVisible(True)`；`ui_text`：2 条新文案；`CHANGELOG [Unreleased]` 3 条（明确不写成"新增多选底层能力"）；测试：直绘渲染探针 5 + 页面交互 11（含 offscreen 子进程框选探针——QTest/QCursor 原生合成移动不带按键的平台限制已登记在测试 docstring） |
-| 当前质量门 | 本地：1394 passed / 8 skipped / 0 failed（248.92s）、ruff 全绿、mypy 261 文件零错（2026-09-30 实测）；远端 run #127/#128 对 5525d95/57fb8d5 绿，本 feature 提交待推送验证 |
-| 覆盖率（可复现） | **93.9%（10541 / 11229 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`；无 `[tool.coverage]` 配置、无 omit 规则（仅 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
-| 工作区 | main；本 feature 收口提交后 1 提交领先 origin（push 属 owner，GIT-020），未执行 push |
+| 时间 | 2026-09-30 ~ 10-01（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；**照片详情高清预览轮**（选中态 feature 后第二个 UI 优化） |
+| 会话范围 | 两轮只读方案审查（根因=256px 缩略图放大；审核修正全部被 Owner 终版方案收编）→ Owner 批准实现 → QThreadPool 异步受控解码 + 四态 UI + 竞态防护 → T1–T11 新测试 → 三质量门 + 覆盖率 → SSOT |
+| 关键产出 | `photo_detail_dialog`：【查看大图】按钮 + THUMBNAIL/LOADING/HIGH_RES/FAILED 四态 + `_decode_preview` 可注入边界（640×480 包围盒 × DPR、EXIF、小图 clamp）+ request_id/_closed 双防护 + `_dropped_requests` 观测钩子；`ui_text` 3 文案；CHANGELOG Fixed 1 条；测试 13 项（Event 门控零 sleep） |
+| 实现期教训 | ①复用既有异步模式时 **Signal 只声明未 connect** → job 执行但结果无人接收（最小复现探针定位）；②异步拾取后的即时断言 = 竞态断言，一律 `waitUntil` |
+| 当前质量门 | 本地：1407 passed / 8 skipped / 0 failed（276.80s）、ruff 全绿、mypy 261 文件零错（2026-10-01 实测）；远端 run #127/#128 对 5525d95/57fb8d5 绿，**723a16a 起两个提交待推送验证** |
+| 覆盖率（可复现） | **93.8%（10620 / 11319 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`；无 `[tool.coverage]` 配置、无 omit 规则（仅 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
+| 工作区 | main；本 HD 预览收口提交后 **2 提交领先 origin**（723a16a 选中态 + 本提交；push 属 owner，GIT-020），未执行 push |
 | Remaining | 见 §6 Next Step。 |
 
 ---
