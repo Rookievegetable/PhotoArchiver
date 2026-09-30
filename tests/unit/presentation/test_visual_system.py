@@ -12,6 +12,14 @@ stylesheet. A future ``palette(Highlight)`` → ``palette.Highlight`` revert
 fails ``test_production_stylesheet_parses_without_qt_warning`` AND the
 render probes (Qt rejects the whole stylesheet, so primary/danger/focus
 colors collapse to the default button look).
+
+Cross-platform note (run #126, the first Linux/macOS CI run of the probes):
+native button styles modulate painted brightness while preserving the hue
+family (ubuntu ×0.97 / macOS ×0.46 value scaling of the same highlight hue),
+so the role probes assert platform-stable color axes — hue family,
+saturation, brightness floor and a saturation gap versus the neutral normal
+button — never absolute pixel RGB. See the tolerance model above the probe
+helpers.
 """
 
 import re
@@ -25,7 +33,8 @@ import pytest
 pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import qInstallMessageHandler
+from PySide6.QtCore import QSize, qInstallMessageHandler
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialogButtonBox,
     QLabel,
@@ -130,6 +139,35 @@ def test_broken_palette_syntax_is_detected_by_warning_capture(qapp) -> None:
 
 
 # ── AUDIT-UI-002 layer 2: minimal render probes (pixel sampling) ─────────────
+#
+# Platform tolerance model (evidence: run #126, the first Linux/macOS CI run
+# of these probes). Native button styles modulate painted brightness while
+# preserving the hue family, so absolute pixel equality is a Windows-only
+# coincidence, not the visual contract:
+#
+#   ubuntu  primary painted #247bc1 vs highlight #308cc6 → hue Δ3.6°, value ×0.97
+#   macOS   primary painted #16415c vs highlight #308cc6 → hue Δ0.0°, value ×0.46
+#   macOS   danger  painted #d66666 vs #c62828           → hue Δ0.0°, tinted lighter
+#
+# The probes therefore sample a text-less interior strip (no glyph
+# anti-aliasing) and assert the platform-stable axes: hue family relative to
+# the live palette, enough saturation to read as the role color, enough
+# brightness to not collapse toward black, and a saturation gap separating
+# the role paint from the neutral idle button. Every window is sized from
+# the observed cross-platform span (≥1.4× margin) and every window still
+# fails when a rule is dropped or the whole stylesheet is rejected — the
+# paint then collapses to the default neutral button look.
+
+PROBE_SIZE = QSize(140, 44)
+# Interior strip: ≥20px clear of the 1px QSS border and its AA halo.
+_PROBE_SAMPLE_FRACTIONS = (0.15, 0.325, 0.5, 0.675, 0.85)
+
+PRIMARY_HUE_TOLERANCE_DEG = 15.0  # drift observed ≤3.6°; teal (180°, 23° away) stays out
+DANGER_HUE_TOLERANCE_DEG = 15.0  # drift observed 0°; magenta (330°) and orange (≥25°) stay out
+ROLE_SATURATION_FLOOR = 0.35  # observed ≥0.52; default-button neutrals sit at ≤0.06
+ROLE_VALUE_FLOOR = 0.25  # observed ≥0.36; rejects renders too dark to read as the role color
+NORMAL_SATURATION_GAP = 0.30  # observed gap ≥0.46; a dropped/rejected rule collapses it to ~0
+HIGHLIGHT_PRECONDITION_SAT = 0.5  # Qt6 default highlight #308cc6 sits at sat 0.76
 
 
 @pytest.fixture
@@ -157,23 +195,139 @@ def _highlight(qapp) -> str:
     return color.name().lower()
 
 
-def test_render_primary_differs_from_normal_button(styled_app) -> None:
-    """Primary must really paint palette(Highlight) — not just carry a property."""
-    normal = QPushButton("Normal")
-    primary = QPushButton("Primary")
-    assign_role(primary, ROLE_PRIMARY)
+def _interior_colors(widget: QWidget) -> list[QColor]:
+    """Sample a horizontal interior strip of a rendered, text-less widget.
 
-    expected = _highlight(styled_app)
-    assert _center_color(primary) == expected
-    assert _center_color(normal) != expected
-    # Hierarchy beyond color: the primary keeps its emphasized padding/weight.
-    assert primary.font().bold() or primary.minimumSizeHint().width() > normal.minimumSizeHint().width()
+    Callers MUST pass a button without text: glyphs and their anti-aliasing
+    are the main source of single-pixel instability. The strip (not a single
+    point) keeps the probe stable when a native style shades the interior.
+    """
+    widget.resize(PROBE_SIZE)
+    image = widget.grab().toImage()
+    assert image.width() >= 120 and image.height() >= 36, (
+        "probe geometry regressed: button rendered smaller than the sampled strip"
+    )
+    y = image.height() // 2
+    return [image.pixelColor(int(image.width() * f), y) for f in _PROBE_SAMPLE_FRACTIONS]
+
+
+def _median_color(colors: list[QColor]) -> QColor:
+    """Per-channel median — robust to residual anti-aliasing or shading."""
+    def median(values: list[int]) -> int:
+        return sorted(values)[len(values) // 2]
+
+    return QColor(
+        median([c.red() for c in colors]),
+        median([c.green() for c in colors]),
+        median([c.blue() for c in colors]),
+    )
+
+
+def _hsv(color: QColor) -> tuple[float | None, float, float]:
+    """(hue in degrees — None when achromatic, saturation, value)."""
+    hue, sat, value, _alpha = color.getHsvF()
+    return (None if hue < 0 else hue * 360.0), sat, value
+
+
+def _hue_distance_deg(hue: float, center: float) -> float:
+    """Circular hue distance in degrees (red wraps 350° → 10°)."""
+    delta = abs(hue - center) % 360.0
+    return min(delta, 360.0 - delta)
+
+
+def _assert_role_paint(
+    paint: QColor, hue_center: float, hue_tolerance: float, label: str,
+) -> float:
+    """Assert the painted median carries the role's platform-stable color axes.
+
+    Each window rejects a specific collapse: desaturation = the role rule is
+    gone (default-button neutral paint), hue drift = a different palette role
+    or a hardcoded color, near-black = the paint no longer reads as the role
+    color. Returns the median saturation for the normal-button gap check.
+    """
+    hue, sat, value = _hsv(paint)
+    assert sat >= ROLE_SATURATION_FLOOR, (
+        f"{label} paint is desaturated (sat={sat:.2f} < {ROLE_SATURATION_FLOOR}): "
+        "role rule likely dropped or the stylesheet was rejected"
+    )
+    assert hue is not None and _hue_distance_deg(hue, hue_center) <= hue_tolerance, (
+        f"{label} paint left its hue family (hue={hue}, center={hue_center}°): "
+        "wrong palette role or hardcoded color"
+    )
+    assert value >= ROLE_VALUE_FLOOR, (
+        f"{label} paint collapsed toward black (value={value:.2f} < {ROLE_VALUE_FLOOR})"
+    )
+    return sat
+
+
+def _assert_distinct_from_normal(role_sat: float, normal: QPushButton, label: str) -> None:
+    """The role paint must be far more saturated than the neutral idle button."""
+    normal_sat = _hsv(_median_color(_interior_colors(normal)))[1]
+    gap = role_sat - normal_sat
+    assert gap >= NORMAL_SATURATION_GAP, (
+        f"{label} paint is not visually distinct from a normal button "
+        f"(saturation gap={gap:.2f} < {NORMAL_SATURATION_GAP}): role rule likely dropped"
+    )
+
+
+def test_render_primary_differs_from_normal_button(styled_app) -> None:
+    """Primary must really paint palette(Highlight) — not just carry a property.
+
+    Platform-stable contract: the interior stays in the live palette
+    Highlight hue family (read here, not hardcoded), saturated and bright
+    enough to read as the primary color, and clearly more saturated than the
+    neutral normal button. Windows paints the exact palette RGB; Linux/macOS
+    shade brightness while keeping the hue (see the tolerance model above).
+    """
+    highlight = styled_app.palette().color(styled_app.palette().ColorRole.Highlight)
+    hue_center, highlight_sat, _value = _hsv(highlight)
+    assert highlight_sat >= HIGHLIGHT_PRECONDITION_SAT and hue_center is not None, (
+        "probe precondition: palette Highlight must be a saturated color "
+        f"(sat={highlight_sat:.2f}) — a neutral highlight voids the primary contract"
+    )
+
+    normal = QPushButton()
+    primary = QPushButton()
+    assign_role(primary, ROLE_PRIMARY)
+    role_sat = _assert_role_paint(
+        _median_color(_interior_colors(primary)),
+        hue_center, PRIMARY_HUE_TOLERANCE_DEG, "primary",
+    )
+    _assert_distinct_from_normal(role_sat, normal, "primary")
+
+    # Hierarchy beyond color, metric-level: text-ful buttons so the primary's
+    # emphasized padding/weight shows up in the size hint (text width dominates
+    # the hint on every platform, keeping this comparison safe).
+    text_normal = QPushButton("Normal")
+    text_primary = QPushButton("Primary")
+    assign_role(text_primary, ROLE_PRIMARY)
+    assert (
+        text_primary.font().bold()
+        or text_primary.minimumSizeHint().width() > text_normal.minimumSizeHint().width()
+    )
 
 
 def test_render_danger_paints_the_danger_color(styled_app) -> None:
-    danger = QPushButton("Danger")
+    """Danger must really paint the brand red — recognizably, on every platform.
+
+    The brand red is a stylesheet literal (``_DANGER_COLOR`` in
+    visual_style), so the exact constant is pinned at string level; the
+    render probe then proves it actually paints: red hue family, saturated
+    and bright enough to read as danger, clearly apart from the neutral
+    normal button. Native styles may tint the paint (macOS blended it toward
+    white) — the windows absorb that without admitting neutrals or other hues.
+    """
+    assert re.search(r"background-color:\s*#c62828", build_stylesheet()), (
+        "danger rule must keep the brand red literal #c62828 (visual_style._DANGER_COLOR)"
+    )
+
+    normal = QPushButton()
+    danger = QPushButton()
     assign_role(danger, ROLE_DANGER)
-    assert _center_color(danger) == "#c62828"
+    role_sat = _assert_role_paint(
+        _median_color(_interior_colors(danger)), 0.0, DANGER_HUE_TOLERANCE_DEG, "danger",
+    )
+    _assert_distinct_from_normal(role_sat, normal, "danger")
 
 
 def test_render_disabled_roles_keep_disabled_semantics(styled_app) -> None:
