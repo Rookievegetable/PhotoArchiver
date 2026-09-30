@@ -1,9 +1,10 @@
-"""Photo detail HD preview tests (2026-09-30 方案 §13 T1–T11).
+"""Photo detail HD preview tests (方案 §13 T1–T11 + EXIF 裁剪修复 T12/T13).
 
 Two layers, mirroring the plan's injectable boundary:
 
 - Unit level: the real ``_decode_preview`` directly (T3 分辨率/T4 宽高比/
-  T5 EXIF/T8 中文路径) — deterministic, no threads.
+  T5 EXIF/T8 中文路径/T12 Owner 场景回归/T13 非旋转回归) — deterministic,
+  no threads.
 - Dialog level: PhotoDetailDialog with an injected fake decoder
   (T1/T2/T6/T7/T9/T10/T11) — Event-gated, zero sleep (方案 §8 纪律).
 
@@ -144,7 +145,11 @@ def test_t4_aspect_ratio_preserved(tmp_path: Path, size: tuple[int, int]) -> Non
 
 
 def test_t5_exif_orientation_applied(tmp_path: Path) -> None:
-    """横传感数据 + Orientation=6 → 高清预览竖直显示（不与缩略图比对）。"""
+    """横传感数据 + Orientation=6 → 高清预览竖直显示（不与缩略图比对）。
+
+    raw 400×200 → oriented 200×400；aspect-fit 会放大到 240×480，被
+    "小图不放大解码" clamp 回 oriented 尺寸（§5.1 物理空间推导）。
+    """
     source = tmp_path / "rotated.jpg"
     image = Image.new("RGB", (400, 200), (9, 9, 9))
     exif = Image.Exif()
@@ -152,8 +157,52 @@ def test_t5_exif_orientation_applied(tmp_path: Path) -> None:
     image.save(source, exif=exif)
     decoded = _decode_preview(source, _PREVIEW_BOX, 1.0)
     assert not decoded.isNull()
-    assert (decoded.width(), decoded.height()) == (200, 400)  # 转置后 fit
+    assert (decoded.width(), decoded.height()) == (200, 400)  # 转置后（clamp）
     assert decoded.width() < decoded.height()  # 竖直向上
+    # 显示逻辑尺寸 ≤ 包围盒（本轮 EXIF 裁剪 bug 的逃逸盲区，必须钉死）
+    assert decoded.width() / decoded.devicePixelRatio() <= _PREVIEW_BOX.width()
+    assert decoded.height() / decoded.devicePixelRatio() <= _PREVIEW_BOX.height()
+
+
+def test_t12_owner_scenario_rotated_photo_fits_bounding_box(tmp_path: Path) -> None:
+    """T12（LEI00670 场景回归）：raw 800×600 横传感 + Orientation=8
+    （Rotate270，与真实照片同型）→ 高清预览必须竖直、完整落入包围盒。
+
+    修复前：fit 从原始横幅尺寸推导 → 显示逻辑 640×959 超高 → 居中裁剪
+    （顶部人头/底部花篮被切）。修复后：oriented 600×800 → 物理盒 800×600
+    fit → 450×600 → 显示逻辑 360×480（dpr 1.25）。
+    """
+    source = tmp_path / "rotated_big.jpg"
+    image = Image.new("RGB", (800, 600), (11, 22, 33))
+    exif = Image.Exif()
+    exif[274] = 8  # Orientation: rotate 270° CW for display（LEI00670 同型）
+    image.save(source, exif=exif)
+    decoded = _decode_preview(source, _PREVIEW_BOX, 1.25)
+    assert not decoded.isNull()
+    assert (decoded.width(), decoded.height()) == (450, 600)
+    assert decoded.devicePixelRatio() == 1.25
+    displayed_w = decoded.width() / decoded.devicePixelRatio()
+    displayed_h = decoded.height() / decoded.devicePixelRatio()
+    assert (displayed_w, displayed_h) == (360, 480)  # 完整显示，无裁剪
+    assert displayed_w <= _PREVIEW_BOX.width() and displayed_h <= _PREVIEW_BOX.height()
+    assert decoded.width() < decoded.height()  # 竖直方向正确
+
+
+@pytest.mark.parametrize("size", [(1600, 1200), (1200, 1600)])
+def test_t13_non_rotated_images_unaffected(tmp_path: Path, size: tuple[int, int]) -> None:
+    """T13：无 EXIF 图源在修复前后零行为变化（防轴交换逻辑误伤）。"""
+    source = tmp_path / f"plain_{size[0]}x{size[1]}.jpg"
+    Image.new("RGB", size, (12, 12, 12)).save(source)
+    decoded = _decode_preview(source, _PREVIEW_BOX, 1.25)
+    assert not decoded.isNull()
+    assert decoded.devicePixelRatio() == 1.25
+    displayed_w = decoded.width() / decoded.devicePixelRatio()
+    displayed_h = decoded.height() / decoded.devicePixelRatio()
+    assert displayed_w <= _PREVIEW_BOX.width()
+    assert displayed_h <= _PREVIEW_BOX.height()
+    expected = size[0] / size[1]
+    actual = displayed_w / displayed_h
+    assert abs(actual - expected) < 0.02  # 宽高比保持
 
 
 def test_t8_chinese_path_decoded(tmp_path: Path) -> None:

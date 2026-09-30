@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.46.0 · Last Updated: 2026-10-01 · Status: Live
+> Version: 1.47.0 · Last Updated: 2026-10-01 · Status: Live
 
 ---
 
@@ -23,6 +23,8 @@
 M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 已落地；发布工程至 v2.8.0（2026-09-13）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**：阶段 A（两段式导入，09-21 owner 验收 ✅）→ 阶段 B（人员与分组页，09-23 owner 验收 ✅）→ **阶段 C/D/E/F（2026-09-24 ~ 09-28 全部实施完成并冻结审查）**。**2026-09-28 完成全面工程健康体检（Stage 0–9，判 ATTENTION）与治理基线恢复（Stage 10）**；业务基线冻结正式生效待 owner 签核（Stage4.2 复审 8 项条件已满足，见 `docs/business-baseline/`）。
 
 ## 2. Current Step（当前开发阶段）
+
+**照片详情高清预览 EXIF 裁剪修复（2026-10-01，fix，仅 Presentation 层）**——Owner 真机验收发现：EXIF 旋转照片点击【查看大图】后方向正确但**显示溢出 640×480 包围盒被居中裁剪**（LEI00670.JPG 顶部/底部被切）。根因（合成图 + 真实照片双探针实锤）：`QImageReader.size()` 返回**原始存储尺寸（不含 autoTransform 转置）**、`setScaledSize` 使用**原始存储坐标空间**——旧实现按横幅 raw 尺寸推导 fit（3504×2336 → fit 640×427），解码旋转后 534×800 像素经宽度比值 DPR 归位 → 显示逻辑 640×959 超高被裁。修复（Owner 正式方案 + 审核钉死项）：①fit 从 **EXIF 转置后尺寸**推导——`transformation() & TransformationRotate90` **分量掩码**判定交换（PySide6 6.11 位标志仅 Mirror=1/Flip=2/Rotate90=4 三个基础位，Rotate270(7)/FlipAndRotate90(6)/MirrorAndRotate90(5) 均为组合别名——全 8 种 EXIF Orientation 探针实证掩码精确覆盖 5/6/7/8，无固定枚举清单；枚举静态引用路径 = `QImageIOHandler.Transformation`）；②尺寸推导全程**物理像素空间**（box×dpr 一次性 aspect-fit + clamp，避免多次舍入）；③`setScaledSize` 转置场景把 target 轴交换回原始坐标；④输出端固定 `setDevicePixelRatio(dpr)`（替代宽度比值公式）；⑤fallback 分支（元数据不可得）补 DPR 归位（审查 H3 同类溢出闭环）。测试 +3（**T12 Owner 场景回归**：raw 800×600/Orientation 8/dpr 1.25 → 显示 360×480 无裁剪；**T13 非旋转图零行为变化**×2；T5 强化显示逻辑 ≤ 包围盒断言）；真实照片探针：LEI00670 在 dpr 1.0/1.25 下均显示 **320×480 竖直完整**。全量 **1410 passed / 8 skipped / 0 failed**、ruff/mypy 绿、覆盖率 93.8%（10622/11320）。
 
 **照片详情高清预览（2026-09-30 ~ 10-01，feature/fix，仅 Presentation 层）**——Owner 需求：详情大图模糊。根因（代码实锤）：预览数据源是 **256px 缩略图管线产物被 `scaledToHeight(320)` 放大**。Owner 终版方案（两轮只读审查定稿，审核修正全部收编）："**缩略图即时显示 + 用户主动点击【查看大图】 + QThreadPool 异步受控解码**"——打开详情零原图 IO（Batch 4"无同步原图 IO"设计维持）；点击后 worker 内 QImageReader 受控解码（`setAutoTransform` EXIF + aspect-fit **640×480 固定逻辑包围盒 × DPR**，小图源 clamp 到原始像素尺寸不放大解码；JPEG 走 DCT 降采样、PNG 全量解码后内存缩放），输出端 `setDevicePixelRatio` 归位（显示逻辑尺寸恒等 fit，对话框不跳变）；结果经**显式 QueuedConnection** 回 UI 线程转 QPixmap；成功替换并隐藏按钮、失败保留缩略图轻提示可重试（绝不退回 pending）、`done()` 全路径关闭标志 + 递增 request_id 双防护（过期结果经 `_dropped_requests` 观测钩子丢弃）；解码函数为可注入边界（测试 Event 门控零 sleep）。明确不做：磁盘 Preview Cache / 自动加载 / 查看器 / 修改 ThumbnailGenerator——**管线无 EXIF 转置的既有现象**（带旋转标签照片的照片墙缩略图横躺，`pillow_thumbnail_generator.py` 无 exif_transpose）登记为独立未来项。测试 13 项新增：真实解码器单元级（T3 分辨率上限 / T4 三种宽高比 / T5 EXIF 竖直 / T8 中文路径）+ 对话框级注入桩（T1 打开零原图 IO / T2 点击才解码并替换 / T6 失败保缩略图可重试 / T7 双缺 pending / T9 关闭竞态 / T10 过期请求 / T11 非 GUI 线程）。**实现期修正两处自伤**：①`preview_decoded` Signal 只声明未 connect → job 执行但结果无人接收（最小探针定位）；②异步拾取后的即时断言是竞态断言，一律 `waitUntil`。全量 **1407 passed / 8 skipped / 0 failed**、ruff/mypy 绿、覆盖率 93.8%（10620/11319）。
 
@@ -98,7 +100,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
 | 人员导入重设计（阶段 A–F） | ✅ 实施完成 | 全部入库至 `2823d1c`；业务基线见 `docs/business-baseline/`；冻结待 owner 签核。 |
 | 版本链 | 🟡 切版/tag 完成、待发行 | pyproject / .env.example = **2.8.1**（owner 裁决 2026-09-30）；CHANGELOG `[2.8.1] - 2026-09-30` 段已切分；**v2.8.1 annotated tag 已创建并推送**（→ `8d8a126`，本地 + 远端 `git ls-remote` 双实查；历史 v2.8.0 未动）；**GitHub Release / 新安装包产出与二轮验收为 owner 剩余操作**。 |
-| 测试基线 | ✅ | 全量 **1407 passed / 8 skipped / 0 failed**（2026-10-01 实测 276.80s；含照片库选中态 +16、照片详情高清预览 +13）；行覆盖 **93.8%**（10620/11319，AUD-021 可复现口径，见 §5 覆盖率行）；此前已知盲区（workers 错误分支、配对守卫）已由 Stage 12B 补齐（AUD-019）。 |
+| 测试基线 | ✅ | 全量 **1410 passed / 8 skipped / 0 failed**（2026-10-01 实测 269.34s；含照片库选中态 +16、照片详情高清预览 +13、EXIF 裁剪修复 +3）；行覆盖 **93.8%**（10622/11320，AUD-021 可复现口径，见 §5 覆盖率行）；此前已知盲区（workers 错误分支、配对守卫）已由 Stage 12B 补齐（AUD-019）。 |
 | CI | ✅ | run #127/#128 对 `5525d95`/`57fb8d5` 三平台全绿（windows 1384+2 / ubuntu、macos 各 1381+5，skip 全为已登记豁免）；`8d8a126`（切版）已推送，**其后的照片库选中态优化 feature 提交待推送触发远端验证**；本地三质量门绿（ruff / mypy 261 文件 / pytest）。 |
 | 业务基线 | ✅ 已入库 | `docs/business-baseline/`（Stage1–3 现行有效 + Stage4/4.1 历史 + Stage4.2 冻结复审），基线 `2823d1c`，来源与有效性表见其 README。 |
 | 未决问题 | ✅ 清零 | 体检 25 条 Finding 终态（2026-09-30 Stage 14 Final）：**P0 0 / P1 0 / P2 0 / P3 0 OPEN，无 BLOCKED**——23 FIXED + AUD-024 ACCEPTED-RISK + AUD-002 CLOSED（run #127 三平台绿）；详见 `docs/health-check/FINDINGS_LEDGER.md`。 |
@@ -138,13 +140,13 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-09-30 ~ 10-01（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；**照片详情高清预览轮**（选中态 feature 后第二个 UI 优化） |
-| 会话范围 | 两轮只读方案审查（根因=256px 缩略图放大；审核修正全部被 Owner 终版方案收编）→ Owner 批准实现 → QThreadPool 异步受控解码 + 四态 UI + 竞态防护 → T1–T11 新测试 → 三质量门 + 覆盖率 → SSOT |
-| 关键产出 | `photo_detail_dialog`：【查看大图】按钮 + THUMBNAIL/LOADING/HIGH_RES/FAILED 四态 + `_decode_preview` 可注入边界（640×480 包围盒 × DPR、EXIF、小图 clamp）+ request_id/_closed 双防护 + `_dropped_requests` 观测钩子；`ui_text` 3 文案；CHANGELOG Fixed 1 条；测试 13 项（Event 门控零 sleep） |
-| 实现期教训 | ①复用既有异步模式时 **Signal 只声明未 connect** → job 执行但结果无人接收（最小复现探针定位）；②异步拾取后的即时断言 = 竞态断言，一律 `waitUntil` |
-| 当前质量门 | 本地：1407 passed / 8 skipped / 0 failed（276.80s）、ruff 全绿、mypy 261 文件零错（2026-10-01 实测）；远端 run #127/#128 对 5525d95/57fb8d5 绿，**723a16a 起两个提交待推送验证** |
-| 覆盖率（可复现） | **93.8%（10620 / 11319 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`；无 `[tool.coverage]` 配置、无 omit 规则（仅 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
-| 工作区 | main；本 HD 预览收口提交后 **2 提交领先 origin**（723a16a 选中态 + 本提交；push 属 owner，GIT-020），未执行 push |
+| 时间 | 2026-10-01（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；**高清预览 EXIF 裁剪修复轮**（HD 预览真机验收反馈） |
+| 会话范围 | 真机截图症状 → 合成图 + 真实照片（LEI00670）双探针实锤 Qt 语义（size() 原始空间 / setScaledSize 原始坐标 / transformation() 位标志）→ Owner 正式方案（分量掩码 + 物理空间统一）→ 审核（全 8 值掩码可行性探针）→ 实现 → T5 强化 + T12/T13 → 质量门 → 真实照片验证 → SSOT |
+| 关键产出 | `_decode_preview` 重构（oriented 尺寸推导 + 物理空间 fit + 轴交换 + 固定 DPR 归位 + fallback DPR 补齐）；T5 强化 + T12（Owner 场景）/T13（非旋转回归）；CHANGELOG Fixed 条目修订 |
+| 实现期教训（复用） | **`QImageReader.size()` 不含 autoTransform 转置、`setScaledSize` 用原始存储坐标**——EXIF 旋转照片的一切尺寸推导必须经 `transformation()` 位掩码（Rotate90 位）换轴；PySide6 6.11 该枚举不在 QImageReader 类上，静态引用路径 = `QImageIOHandler.Transformation`（位标志仅 Mirror=1/Flip=2/Rotate90=4 三个基础位） |
+| 当前质量门 | 本地：1410 passed / 8 skipped / 0 failed（269.34s）、ruff 全绿、mypy 261 文件零错（2026-10-01 实测）；远端 run #127/#128 对 5525d95/57fb8d5 绿，**723a16a 起三个提交待推送验证** |
+| 覆盖率（可复现） | **93.8%（10622 / 11320 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`；无 `[tool.coverage]` 配置、无 omit 规则（仅 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
+| 工作区 | main；本收口提交后 **3 提交领先 origin**（723a16a 选中态 + 28d21e7 高清预览 + 本提交；push 属 owner，GIT-020），未执行 push |
 | Remaining | 见 §6 Next Step。 |
 
 ---

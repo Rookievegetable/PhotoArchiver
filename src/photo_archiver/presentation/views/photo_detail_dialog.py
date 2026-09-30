@@ -9,7 +9,7 @@ the already-loaded Photo entity and the cached thumbnail file.
 - 打开即显示缓存缩略图（≤256px 源，自然尺寸居中于固定包围盒，不额外放大）；
 - 用户点击【查看大图】后，经 QThreadPool 异步受控解码原图
   （``photo.path.raw_path``：QImageReader + setAutoTransform + setScaledSize，
-  目标 = 固定包围盒 aspect-fit × devicePixelRatio，小图源 clamp 到原始
+  尺寸推导基于 EXIF 转置后尺寸、全程物理像素空间，小图源 clamp 到原始
   像素尺寸），成功替换并隐藏按钮；失败保留缩略图并轻提示，绝不退回
   pending。
 
@@ -27,7 +27,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QRunnable, QThreadPool, Signal, Slot
-from PySide6.QtGui import QImage, QImageReader, QPixmap
+from PySide6.QtGui import QImage, QImageIOHandler, QImageReader, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -40,47 +40,60 @@ from photo_archiver.domain import Photo
 from photo_archiver.presentation import ui_text as text
 
 # 固定预览包围盒（logical px）：aspect-fit 显示，缩略图与高清图同一区域，
-# 对话框尺寸不随照片长宽比跳变；解码目标 = 包围盒 fit × devicePixelRatio。
+# 对话框尺寸不随照片长宽比跳变；解码目标 = 包围盒 × devicePixelRatio（物理空间）。
 _PREVIEW_BOX = QSize(640, 480)
+
+# 含 90° 旋转分量的变换需要交换宽高（Owner 方案 §4.2：分量掩码判定，禁止
+# 固定枚举值清单）。PySide6 6.11 的 Transformation 位标志仅三个基础位——
+# Mirror=1 / Flip=2 / Rotate90=4；Rotate180(3)、FlipAndRotate90(6)、
+# MirrorAndRotate90(5)、Rotate270(7) 均为含 Rotate90 位的组合别名，掩码
+# 判定天然覆盖 EXIF Orientation 5/6/7/8 全部转置场景（全 8 值探针实证）。
+_ROTATE_90_FLAG = QImageIOHandler.Transformation.TransformationRotate90
 
 
 def _decode_preview(path: Path, box: QSize, dpr: float) -> QImage:
     """受控解码原图到预览物理尺寸（可注入测试边界）。
 
-    aspect-fit 到 ``box``（逻辑）后乘 ``dpr`` 得目标物理尺寸；小图源
-    clamp 到原始像素尺寸（不放大解码）。输出端经 ``setDevicePixelRatio``
-    归位，保证显示逻辑尺寸恒等于 fit 尺寸（盒内、不跳变）。原图不可读
-    （缺失/不支持/损坏）时返回 null QImage，调用方降级到缩略图。
+    尺寸推导全程在物理像素空间完成（§5.1）：
+    ① raw = reader.size() —— 原始存储尺寸，**不含** EXIF 转置（探针实证）；
+    ② transformation 含 Rotate90 位 → oriented 交换宽高（EXIF 转置后尺寸）；
+    ③ target = oriented aspect-fit (box × dpr)，clamp 到 oriented（小图不放大解码）；
+    ④ setScaledSize 使用**原始存储坐标空间**（探针实证）→ 转置场景把 target
+       轴交换回去；
+    ⑤ read() 返回转置后图 → ``setDevicePixelRatio(dpr)`` 归位，显示逻辑尺寸
+       = target/dpr ≤ 包围盒。
+    原图不可读（缺失/不支持/损坏）时返回 null QImage，调用方降级到缩略图。
     """
     reader = QImageReader(str(path))
     reader.setAutoTransform(True)
-    original = reader.size()
-    if original.isValid() and not original.isEmpty():
-        fit = original.scaled(box, Qt.AspectRatioMode.KeepAspectRatio)
-        target = QSize(round(fit.width() * dpr), round(fit.height() * dpr))
-        if target.width() > original.width() or target.height() > original.height():
-            target = QSize(original)
-        reader.setScaledSize(target)
+    raw = reader.size()
+    if raw.isValid() and not raw.isEmpty():
+        transposed = bool(reader.transformation() & _ROTATE_90_FLAG)
+        oriented = QSize(raw.height(), raw.width()) if transposed else QSize(raw)
+        physical_box = QSize(round(box.width() * dpr), round(box.height() * dpr))
+        target = oriented.scaled(physical_box, Qt.AspectRatioMode.KeepAspectRatio)
+        if target.width() > oriented.width() or target.height() > oriented.height():
+            target = QSize(oriented)
+        reader.setScaledSize(
+            QSize(target.height(), target.width()) if transposed else QSize(target)
+        )
     image = reader.read()
     if image.isNull():
         return QImage()
-    if not (original.isValid() and not original.isEmpty()):
-        # 元数据不可得的罕见格式：完整解码后内存内受控缩放兜底。
-        max_physical = QSize(
-            round(box.width() * dpr), round(box.height() * dpr),
-        )
+    if not (raw.isValid() and not raw.isEmpty()):
+        # 元数据不可得的罕见格式：完整解码后内存内受控缩放兜底——同样 DPR 归位，
+        # 否则 DPR>1 屏幕上按物理像素显示会超出逻辑包围盒（同类溢出，审查 H3）。
+        physical_box = QSize(round(box.width() * dpr), round(box.height() * dpr))
         if (
-            image.width() > max_physical.width()
-            or image.height() > max_physical.height()
+            image.width() > physical_box.width()
+            or image.height() > physical_box.height()
         ):
             image = image.scaled(
-                max_physical,
+                physical_box,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
-        return image
-    fit = original.scaled(box, Qt.AspectRatioMode.KeepAspectRatio)
-    image.setDevicePixelRatio(image.width() / fit.width())
+    image.setDevicePixelRatio(dpr)
     return image
 
 
