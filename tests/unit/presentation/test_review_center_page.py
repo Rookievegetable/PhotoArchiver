@@ -221,18 +221,19 @@ def test_missing_photo_entity_degrades_without_thumbnail_request(qtbot) -> None:
     source.load_thumbnail.assert_not_called()
 
 
-def test_double_click_opens_hd_preview_of_row_photo(qtbot, monkeypatch) -> None:
-    """双击行 → 打开对应照片的高清预览（auto_load_hd=True，人工辨别身份）。"""
-    result = _result(0.9)
-    controller = _controller([result])
+def test_double_click_opens_review_preview_with_snapshot(qtbot, monkeypatch) -> None:
+    """双击行 → 打开审核预览：队列快照 = 展示行、游标定位双击行、身份只读传递。"""
+    results = [_result(0.9), _result(0.8)]
+    controller = _controller(results)
     dialog = ReviewCenterPage(controller)
     qtbot.addWidget(dialog)
 
     opened: dict[str, object] = {}
 
-    class _FakeHdDialog:
-        def __init__(self, *args, **kwargs):
-            opened["args"] = args
+    class _FakePreview:
+        def __init__(self, entries, index, **kwargs):
+            opened["entries"] = entries
+            opened["index"] = index
             opened["kwargs"] = kwargs
 
         def exec(self):
@@ -240,13 +241,69 @@ def test_double_click_opens_hd_preview_of_row_photo(qtbot, monkeypatch) -> None:
             return 1
 
     monkeypatch.setattr(
-        "photo_archiver.presentation.views.review_center_page.PhotoDetailDialog",
-        _FakeHdDialog,
+        "photo_archiver.presentation.views.review_center_page.ReviewPreviewDialog",
+        _FakePreview,
     )
-    dialog._list.itemDoubleClicked.emit(dialog._list.item(0))
+    dialog._list.itemDoubleClicked.emit(dialog._list.item(1))
     assert opened["exec"] is True
-    assert opened["kwargs"].get("auto_load_hd") is True
-    controller.photo_for.assert_called_once_with(result)
+    assert opened["entries"] == results  # 队列快照与展示行一致
+    assert opened["index"] == 1  # 游标定位双击行
+    kwargs = opened["kwargs"]
+    assert kwargs["identity"] is None  # D2-A：页面选择器未指定
+    assert kwargs["identity_text"] == text.REVIEW_IDENTITY_UNRESOLVED
+    assert callable(kwargs["on_approve"]) and callable(kwargs["on_reject"])
+
+
+def test_double_click_passes_selected_identity_from_page_combo(qtbot, monkeypatch) -> None:
+    """D2-A：页面选择器已选人员 → 预览内只读展示并随回调提交该身份。"""
+    person_id = uuid4()
+    result = _result(0.9)
+    controller = _controller([result])
+    controller.list_persons = Mock(return_value=[(person_id, "Alice")])
+    dialog = ReviewCenterPage(controller)
+    qtbot.addWidget(dialog)
+
+    opened: dict[str, object] = {}
+
+    class _FakePreview:
+        def __init__(self, entries, index, **kwargs):
+            opened["entries"] = entries
+            opened["index"] = index
+            opened["kwargs"] = kwargs
+
+        def exec(self):
+            return 1
+
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.review_center_page.ReviewPreviewDialog",
+        _FakePreview,
+    )
+    dialog._identity_combo.setCurrentIndex(1)  # Alice
+    dialog._list.itemDoubleClicked.emit(dialog._list.item(0))
+    kwargs = opened["kwargs"]
+    assert kwargs["identity"] is person_id
+    assert kwargs["identity_text"] == "Alice"
+
+
+def test_double_click_preview_callbacks_drive_controller_and_wall_refresh(
+    qtbot,
+) -> None:
+    """预览回调 → bulk 路径 + 队列刷新 + review_changed（照片墙即时刷新）。"""
+    result = _result(0.9)
+    controller = _controller([result])
+    dialog = ReviewCenterPage(controller)
+    qtbot.addWidget(dialog)
+    changed = Mock()
+    dialog.review_changed.connect(changed)
+
+    dialog._apply_preview_approve(result, None)
+    controller.bulk_approve.assert_called_once_with((result.id,), None)
+    changed.assert_called()
+    controller.bulk_reject.reset_mock()
+    changed.reset_mock()
+    dialog._apply_preview_reject(result)
+    controller.bulk_reject.assert_called_once_with((result.id,))
+    changed.assert_called()
 
 
 def test_double_click_missing_photo_entity_is_silent(qtbot) -> None:

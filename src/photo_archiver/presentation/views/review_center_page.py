@@ -81,7 +81,7 @@ from photo_archiver.presentation.ui_text import (
     REVIEW_STATUS_LINE,
     STATUS_BADGE_PENDING,
 )
-from photo_archiver.presentation.views.photo_detail_dialog import PhotoDetailDialog
+from photo_archiver.presentation.views.review_preview_dialog import ReviewPreviewDialog
 
 # 行上的附加数据角色：UserRole = 结果 id（批量动作），UserRole+1 = 结果对象
 # （双击 → controller.photo_for → 高清预览）。
@@ -321,11 +321,11 @@ class ReviewCenterPage(QWidget):
 
     @Slot(QListWidgetItem)
     def _on_row_double_clicked(self, item: QListWidgetItem) -> None:
-        """双击行 → 该照片的高清预览（auto_load_hd 直出，人工辨别身份）。
+        """双击行 → 打开该照片的高清审核预览（D1-A/D2-A/D3-B/D4-A）。
 
-        行 → 结果 → controller.photo_for → Photo entity；实体缺失（已被删除
-        等）静默忽略。模态预览复用照片详情的受控解码基建（EXIF/DPR/竞态
-        防护全部继承）。
+        队列快照 = 页面当前展示行（与用户所见一致），游标定位双击行；
+        身份取页面当前选择器值（预览内只读展示，D2-A）；通过/拒绝经回调
+        走与页面按钮相同的 bulk 路径并触发照片墙刷新。
         """
         result = item.data(RESULT_DATA_ROLE)
         if not isinstance(result, RecognitionResult):
@@ -333,13 +333,41 @@ class ReviewCenterPage(QWidget):
         photo = self._controller.photo_for(result)
         if photo is None:
             return
-        PhotoDetailDialog(
-            photo,
-            badge=None,
-            thumbnail_path=None,
+        entries: list[RecognitionResult] = []
+        index = 0
+        for row in range(self._list.count()):
+            entry = self._list.item(row).data(RESULT_DATA_ROLE)
+            if not isinstance(entry, RecognitionResult):
+                continue
+            if entry.id == result.id:
+                index = len(entries)
+            entries.append(entry)
+        if not entries:
+            return
+        identity = self._selected_identity()
+        identity_text = self._identity_combo.currentText()
+        ReviewPreviewDialog(
+            entries,
+            index,
+            photo_for=self._controller.photo_for,
+            identity=identity,
+            identity_text=identity_text,
+            on_approve=self._apply_preview_approve,
+            on_reject=self._apply_preview_reject,
             parent=self,
-            auto_load_hd=True,
         ).exec()
+
+    def _apply_preview_approve(self, result: RecognitionResult, identity: UUID | None) -> None:
+        """预览「通过本条」回调：与页面按钮同一条 bulk 路径 + 即时刷新。"""
+        self._controller.bulk_approve((result.id,), identity)
+        self._refresh_list()
+        self.review_changed.emit()
+
+    def _apply_preview_reject(self, result: RecognitionResult) -> None:
+        """预览「拒绝本条」回调：与页面按钮同一条 bulk 路径 + 即时刷新。"""
+        self._controller.bulk_reject((result.id,))
+        self._refresh_list()
+        self.review_changed.emit()
 
     def _selected_ids(self) -> tuple[UUID, ...]:
         """Return the UUIDs carried by the currently selected list rows."""

@@ -26,7 +26,15 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QRunnable, QThreadPool, Signal, Slot
+from PySide6.QtCore import (
+    QObject,
+    QSize,
+    Qt,
+    QRunnable,
+    QThreadPool,
+    Signal,
+    Slot,
+)
 from PySide6.QtGui import QImage, QImageIOHandler, QImageReader, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
@@ -97,47 +105,76 @@ def _decode_preview(path: Path, box: QSize, dpr: float) -> QImage:
     return image
 
 
+class _DecodeDispatcher(QObject):
+    """解码结果分发器（应用级生命周期单例）。
+
+    Worker 线程只触碰分发器（永不触碰对话框——对话框可能正被 GUI 线程
+    销毁，跨线程 emit 会构成原生崩溃竞态）；分发器把结果连同对话框 key
+    以队列连接投回 GUI 线程。对话框作为接收者销毁时 Qt 自动断连，队列
+    中残留事件被安全丢弃。
+    """
+
+    decoded = Signal(int, int, QImage)  # (dialog_key, request_id, image)
+
+
+_decode_dispatcher: _DecodeDispatcher | None = None
+
+
+def _dispatcher() -> _DecodeDispatcher:
+    """Lazy singleton——首次解码时 QApplication 已存在。"""
+    global _decode_dispatcher
+    if _decode_dispatcher is None:
+        _decode_dispatcher = _DecodeDispatcher()
+    return _decode_dispatcher
+
+
+# 对话框 key：Qt Signal(int) 是 C++ 32 位 int——不能用 id(self)（64 位地址会
+# OverflowError），用模块内单调计数器（仅在 GUI 线程分配，无需加锁）。
+_decode_key_counter = 0
+
+
+def _next_decode_key() -> int:
+    global _decode_key_counter
+    _decode_key_counter += 1
+    return _decode_key_counter
+
+
 class _PreviewDecodeJob(QRunnable):
     """后台受控解码原图（模级 QRunnable，复用 _ThumbnailJob 同构模式）。
 
-    Worker 只做文件读取/解码/QImage；QWidget 与 QPixmap 只在 UI 线程触碰。
-    DPR 在点击时于 UI 线程捕获后传入，不在 worker 里调用 QWidget 方法。
+    Worker 只做文件读取/解码/QImage，完成后经分发器投递（worker 不持有
+    对话框引用——见 _DecodeDispatcher 的竞态说明）。DPR 在点击时于 UI
+    线程捕获后传入，不在 worker 里调用 QWidget 方法。
     """
 
     def __init__(
         self,
+        dialog_key: int,
         request_id: int,
         path: Path,
         box: QSize,
         dpr: float,
         decoder: Callable[[Path, QSize, float], QImage],
-        dialog: "PhotoDetailDialog",
     ) -> None:
         super().__init__()
+        self._dialog_key = dialog_key
         self._request_id = request_id
         self._path = path
         self._box = box
         self._dpr = dpr
         self._decoder = decoder
-        self._dialog = dialog
 
     def run(self) -> None:
         try:
             image = self._decoder(self._path, self._box, self._dpr)
         except Exception:  # noqa: BLE001 - 意外异常按失败降级，线程不携带异常退出
             image = QImage()
-        try:
-            self._dialog.preview_decoded.emit(self._request_id, image)
-        except RuntimeError:
-            # 对话框 C++ 对象已销毁（关闭竞态尾部）：结果无人接收，安全丢弃。
-            pass
+        # 分发器为应用级单例：从 worker 线程 emit 安全（跨线程队列投递）。
+        _dispatcher().decoded.emit(self._dialog_key, self._request_id, image)
 
 
 class PhotoDetailDialog(QDialog):
     """Show one photo's read-only details; double-click entry in the library."""
-
-    # (request_id, decoded QImage)；worker 线程 emit → 队列连接回 UI 线程。
-    preview_decoded = Signal(int, QImage)
 
     def __init__(
         self,
@@ -163,11 +200,11 @@ class PhotoDetailDialog(QDialog):
         self._request_id = 0
         # 测试/QA 钩子：过期/关闭后丢弃的结果计数（T9/T10 契约观测点）。
         self._dropped_requests = 0
-        # Worker 结果经显式 QueuedConnection 回 UI 线程（同 PhotoListController
-        # 的 thumbnail_loaded 接线）——QImage 跨线程传递、QPixmap 转换在 UI 线程。
-        self.preview_decoded.connect(
-            self._on_preview_decoded, Qt.QueuedConnection,  # type: ignore[attr-defined]
-        )
+        # Worker 只触碰分发器（应用级单例，worker 上 emit 永不触碰对话框——
+        # 消除对话框销毁跨线程竞态）；结果带 dialog_key 投回 GUI 线程，本
+        # 对话框作为接收者销毁时 Qt 自动断连，残留队列事件被安全丢弃。
+        self._decode_key = _next_decode_key()
+        _dispatcher().decoded.connect(self._on_dispatcher_decode)
         layout = QVBoxLayout(self)
 
         preview = QLabel(self)
@@ -195,25 +232,47 @@ class PhotoDetailDialog(QDialog):
         self._view_full_button.setVisible(has_thumbnail)
         layout.addWidget(self._view_full_button)
 
+        # 元数据标签持有引用：replace_photo（审核预览上一张/下一张）可重绑。
+        self._name_label = QLabel(self)
+        self._path_label = QLabel(self)
+        self._captured_label = QLabel(self)
+        self._badge_label = QLabel(self)
+        for label in (self._name_label, self._path_label,
+                      self._captured_label, self._badge_label):
+            layout.addWidget(label)
+        layout.addStretch()
+        self._apply_photo_details(photo, badge)
+        if auto_load_hd:
+            self._on_view_full_size_clicked()
+
+    def _apply_photo_details(self, photo: Photo, badge: str | None) -> None:
+        """(Re)fill the metadata labels for one photo (shared by navigation)."""
         name = photo.original_name or photo.path.raw_path
-        layout.addWidget(QLabel(text.PHOTO_DETAIL_NAME.format(name=name), self))
-        layout.addWidget(QLabel(
-            text.PHOTO_DETAIL_PATH.format(path=photo.path.raw_path), self,
-        ))
+        self._name_label.setText(text.PHOTO_DETAIL_NAME.format(name=name))
+        self._path_label.setText(text.PHOTO_DETAIL_PATH.format(path=photo.path.raw_path))
         if photo.captured_at is not None:
             captured = text.PHOTO_DETAIL_CAPTURED.format(
                 time=photo.captured_at.strftime("%Y-%m-%d %H:%M"),
             )
         else:
             captured = text.PHOTO_DETAIL_CAPTURED_UNKNOWN
-        layout.addWidget(QLabel(captured, self))
-        status = text.PHOTO_DETAIL_STATUS.format(
+        self._captured_label.setText(captured)
+        self._badge_label.setText(text.PHOTO_DETAIL_STATUS.format(
             badge=badge if badge else text.FILTER_STATUS_UNMATCHED,
-        )
-        layout.addWidget(QLabel(status, self))
-        layout.addStretch()
-        if auto_load_hd:
-            self._on_view_full_size_clicked()
+        ))
+
+    def replace_photo(self, photo: Photo, badge: str | None = None) -> None:
+        """导航宿主 API（审核预览上一张/下一张）：重绑照片并重启受控解码。
+
+        预览复位为"加载中"占位；在途的旧解码结果由 request_id 机制自动
+        丢弃。【查看大图】按钮隐藏（导航模式下解码自动进行）。
+        """
+        self._photo = photo
+        self._apply_photo_details(photo, badge)
+        self._hd_status_label.setVisible(False)
+        self._view_full_button.setVisible(False)
+        self._preview.setText(text.PHOTO_DETAIL_HD_LOADING)
+        self._on_view_full_size_clicked()
 
     @Slot()
     def _on_view_full_size_clicked(self) -> None:
@@ -225,13 +284,20 @@ class PhotoDetailDialog(QDialog):
         self._view_full_button.setText(text.PHOTO_DETAIL_HD_LOADING)
         self._view_full_button.setEnabled(False)
         QThreadPool.globalInstance().start(_PreviewDecodeJob(
+            self._decode_key,
             self._request_id,
             self._photo.path.raw_path,
             _PREVIEW_BOX,
             self.devicePixelRatioF(),  # UI 线程捕获 DPR 后传入 worker
             self._decoder,
-            self,
         ))
+
+    @Slot(int, int, QImage)
+    def _on_dispatcher_decode(self, dialog_key: int, request_id: int, image: QImage) -> None:
+        """分发器入口：过滤其他对话框的投递，其余语义同单队列契约。"""
+        if dialog_key != self._decode_key:
+            return
+        self._on_preview_decoded(request_id, image)
 
     @Slot(int, QImage)
     def _on_preview_decoded(self, request_id: int, image: QImage) -> None:

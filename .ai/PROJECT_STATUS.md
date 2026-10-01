@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.48.0 · Last Updated: 2026-10-01 · Status: Live
+> Version: 1.49.0 · Last Updated: 2026-10-01 · Status: Live
 
 ---
 
@@ -24,7 +24,9 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 ## 2. Current Step（当前开发阶段）
 
-**审核中心页面化 + 双击高清预览（2026-10-01，feature，仅 Presentation 层，两提交 `5d1f03c`+`d1e061f`）**——Owner 三项需求落地：①识别后未自动按名单归类（见 §6 已立项搁置的 B 方案）；②审核中心弹窗改固定页面；③双击待审核项查看高清图。**②实施（D1-A）**：`ReviewDialog` 模态弹窗退役（`git mv` 为 `review_center_page.py` 的常驻 `ReviewCenterPage`），业务语义零变化（同一 ReviewController 消费链、D-1 身份选择器与"未指定身份"显式告警、文本化置信度带、共享异步缩略图通道、空队列保持可检视）；导航映射改为行 0–4 全页面（数据工具索引 3→4）、行 5（设置）保持触发项；行为差异 = 无关闭按钮（进入页面/任务完成即刷新队列，`_refresh_review_pending` 直刷常驻页）、动作按钮纳入 busy 置灰（`set_busy`，构造期首次渲染经 getattr 守卫）、`review_changed` 信号驱动照片墙即时刷新（原模态关闭后刷新语义保持）；**WS1 引导条**：页面顶部常驻两条身份建立路径分工说明 + 「前往人物配对工作台」跳转按钮（`pairing_requested` → 切人员与分组页）——只引导不自动化（K-3/D-1 冻结语义不变）。**③实施**：`PhotoDetailDialog` 增 `auto_load_hd`（默认 False 保持打开详情零原图 IO 契约；True 打开即自动受控解码），审核页行双击 → `controller.photo_for` → 模态高清预览（EXIF/DPR/竞态防护全继承；实体缺失静默忽略）。测试：迁移改造 review board/empty-queue 两套件（git mv 为 test_review_center_*）+ aud025 导入替换 + 导航/工作区/任务协调三处窗口级测试改造（review 移出同步模态参数化）+ 新增 T14/T15 与双击两用例。全量 **1413 passed / 8 skipped**、ruff/mypy 绿、覆盖率 93.9%（10660/11357）。
+**审核高清预览审片闭环（2026-10-01，feature，仅 Presentation 层，Owner 裁决 D1-A/D2-A/D3-B/D4-A）**——审核双击打开的高清预览升级为审片闭环：新建 `ReviewPreviewDialog(PhotoDetailDialog)`（继承全部高清基建），叠加①**上一张/下一张**（队列快照内移动游标 + `replace_photo` 重绑照片/元数据并重启受控解码，首尾禁用，←/→ 键等价）；②**通过本条/拒绝本条**（D1-A 单条结果粒度；D2-A 身份取页面选择器值、预览内只读展示"批准时将指定：X"，未指定复用既有确认告警；回调走页面同一条 bulk 路径 + review_changed 即时刷新）；③**D3-B 停留原地**——审核后游标不动、按钮转已处理态防重复提交。实现期发现并修复**两处自身引入的问题**：①`id(self)` 作为信号 key 溢出 Qt 32 位 int（OverflowError）→ 改模块内单调计数器；②**长套件下偶发 access violation（段错误）根除**——原解码 job 持有对话框引用并在 worker 线程 emit，与 GUI 线程销毁构成竞态；重构为**分发器模式**：worker 只触碰应用级单例 `_DecodeDispatcher`（worker 上永不触碰对话框），结果带 key 经队列投递，对话框作为接收者销毁时 Qt 自动断连。`PhotoDetailDialog` 为支撑导航重构出 `replace_photo`/`_apply_photo_details`（标签引用化）。测试 +8（`test_review_preview_dialog.py`：初始态/导航重启解码/边界禁用/单条通过停留/无身份确认/拒绝/键盘/标签重绑）+ 审核页双击 3 用例改造（快照/游标/身份传递/回调驱动）。全量 **1423 passed / 8 skipped**、ruff/mypy 绿、覆盖率 93.9%（10821/11524）。
+
+**审核中心页面化 + 双击高清预览（2026-10-01，feature，仅 Presentation 层，两提交 `5d1f03c`+`d1e061f`）**——Owner 三项需求落地：①识别后未自动按名单归类（见 §6 已立项搁置的 B 方案）；②审核中心弹窗改固定页面；③双击待审核项查看高清图。**②实施（D1-A）**：`ReviewDialog` 模态弹窗退役（`git mv` 为 `review_center_page.py` 的常驻 `ReviewCenterPage`），业务语义零变化（同一 ReviewController 消费链、D-1 身份选择器与"未指定身份"显式告警、文本化置信度带、共享异步缩略图通道、空队列保持可检视）；导航映射改为行 0–4 全页面（数据工具索引 3→4）、行 5（设置）保持触发项；行为差异 = 无关闭按钮（进入页面/任务完成即刷新队列，`_refresh_review_pending` 直刷常驻页）、动作按钮纳入 busy 置灰（`set_busy`，构造期首次渲染经 getattr 守卫）、`review_changed` 信号驱动照片墙即时刷新（原模态关闭后刷新语义保持）；**WS1 引导条**：页面顶部常驻两条身份建立路径分工说明 + 「前往人物配对工作台」跳转按钮（`pairing_requested` → 切人员与分组页）——只引导不自动化（K-3/D-1 冻结语义不变）。**③实施**：`PhotoDetailDialog` 增 `auto_load_hd`（默认 False 保持打开详情零原图 IO 契约；True 打开即自动受控解码），审核页行双击 → `controller.photo_for` → 模态高清预览（EXIF/DPR/竞态防护全继承；实体缺失静默忽略）。测试：迁移改造 review board/empty-queue 两套件（git mv 为 test_review_center_*）+ aud025 导入替换 + 导航/工作区/任务协调三处窗口级测试改造（review 移出同步模态参数化）+ 新增 T14/T15 与双击两用例。
 
 **照片详情高清预览 EXIF 裁剪修复（2026-10-01，fix，仅 Presentation 层）**——Owner 真机验收发现：EXIF 旋转照片点击【查看大图】后方向正确但**显示溢出 640×480 包围盒被居中裁剪**（LEI00670.JPG 顶部/底部被切）。根因（合成图 + 真实照片双探针实锤）：`QImageReader.size()` 返回**原始存储尺寸（不含 autoTransform 转置）**、`setScaledSize` 使用**原始存储坐标空间**——旧实现按横幅 raw 尺寸推导 fit（3504×2336 → fit 640×427），解码旋转后 534×800 像素经宽度比值 DPR 归位 → 显示逻辑 640×959 超高被裁。修复（Owner 正式方案 + 审核钉死项）：①fit 从 **EXIF 转置后尺寸**推导——`transformation() & TransformationRotate90` **分量掩码**判定交换（PySide6 6.11 位标志仅 Mirror=1/Flip=2/Rotate90=4 三个基础位，Rotate270(7)/FlipAndRotate90(6)/MirrorAndRotate90(5) 均为组合别名——全 8 种 EXIF Orientation 探针实证掩码精确覆盖 5/6/7/8，无固定枚举清单；枚举静态引用路径 = `QImageIOHandler.Transformation`）；②尺寸推导全程**物理像素空间**（box×dpr 一次性 aspect-fit + clamp，避免多次舍入）；③`setScaledSize` 转置场景把 target 轴交换回原始坐标；④输出端固定 `setDevicePixelRatio(dpr)`（替代宽度比值公式）；⑤fallback 分支（元数据不可得）补 DPR 归位（审查 H3 同类溢出闭环）。测试 +3（**T12 Owner 场景回归**：raw 800×600/Orientation 8/dpr 1.25 → 显示 360×480 无裁剪；**T13 非旋转图零行为变化**×2；T5 强化显示逻辑 ≤ 包围盒断言）；真实照片探针：LEI00670 在 dpr 1.0/1.25 下均显示 **320×480 竖直完整**。
 
@@ -102,7 +104,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
 | 人员导入重设计（阶段 A–F） | ✅ 实施完成 | 全部入库至 `2823d1c`；业务基线见 `docs/business-baseline/`；冻结待 owner 签核。 |
 | 版本链 | 🟡 切版/tag 完成、待发行 | pyproject / .env.example = **2.8.1**（owner 裁决 2026-09-30）；CHANGELOG `[2.8.1] - 2026-09-30` 段已切分；**v2.8.1 annotated tag 已创建并推送**（→ `8d8a126`，本地 + 远端 `git ls-remote` 双实查；历史 v2.8.0 未动）；**GitHub Release / 新安装包产出与二轮验收为 owner 剩余操作**。 |
-| 测试基线 | ✅ | 全量 **1413 passed / 8 skipped / 0 failed**（2026-10-01 实测 224.03s；含照片库选中态 +16、照片详情高清预览 +13、EXIF 裁剪修复 +3、审核中心页面化与双击高清 +4/迁移改造 -1）；行覆盖 **93.9%**（10660/11357，AUD-021 可复现口径，见 §5 覆盖率行）；此前已知盲区（workers 错误分支、配对守卫）已由 Stage 12B 补齐（AUD-019）。 |
+| 测试基线 | ✅ | 全量 **1423 passed / 8 skipped / 0 failed**（2026-10-01 实测 249.08s；含照片库选中态 +16、照片详情高清预览 +13、EXIF 裁剪修复 +3、审核中心页面化与双击高清 +4/迁移改造 -1、审核预览闭环 +8）；行覆盖 **93.9%**（10821/11524，AUD-021 可复现口径，见 §5 覆盖率行）；**观测一例负载型 flake**：test_aud023_cancellation_latency::test_mid_run_cancel（全量下 completed_after_cancel 少 p1，单测复跑 3/3 绿——worker 调度序方差，与 AUD-023 轮"集合语义"教训同类，未改动）；此前已知盲区已由 Stage 12B 补齐（AUD-019）。 |
 | CI | ✅ | run #127/#128 对 `5525d95`/`57fb8d5` 三平台全绿（windows 1384+2 / ubuntu、macos 各 1381+5，skip 全为已登记豁免）；`8d8a126`（切版）已推送，**其后的照片库选中态优化 feature 提交待推送触发远端验证**；本地三质量门绿（ruff / mypy 261 文件 / pytest）。 |
 | 业务基线 | ✅ 已入库 | `docs/business-baseline/`（Stage1–3 现行有效 + Stage4/4.1 历史 + Stage4.2 冻结复审），基线 `2823d1c`，来源与有效性表见其 README。 |
 | 未决问题 | ✅ 清零 | 体检 25 条 Finding 终态（2026-09-30 Stage 14 Final）：**P0 0 / P1 0 / P2 0 / P3 0 OPEN，无 BLOCKED**——23 FIXED + AUD-024 ACCEPTED-RISK + AUD-002 CLOSED（run #127 三平台绿）；详见 `docs/health-check/FINDINGS_LEDGER.md`。 |
@@ -142,13 +144,13 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 
 | 项目 | 值 |
 |---|---|
-| 时间 | 2026-10-01（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；**审核中心页面化 + 双击高清轮**（同日第三轮 UI 优化，两 feature 提交 + 本治理提交） |
-| 会话范围 | Owner 三项需求 → 只读调研（发现导航行 3 为触发式导航项）→ 方案含业务语义厘清（问题 1 = 设计行为，自动化归属与 K-3 冲突）→ Owner 裁决（B 方案立项搁置 + D1-D3 默认）→ 页面化迁移（git mv 保留历史）→ auto_load_hd + 双击 → 质量门 → SSOT |
-| 关键产出 | `review_center_page.py`（ReviewDialog 页面化：信号 review_changed/pairing_requested + set_busy + refresh() + 引导条 + 双击高清）；导航映射 0–4 全页面；`PhotoDetailDialog.auto_load_hd`（默认 False 契约不回归）；`RESULT_DATA_ROLE` 行数据角色；测试迁移改造 6 文件 + 新增 4 用例 |
-| 实现期教训（复用） | ①`_render_workspace_actions` 在 MainWindow 构造期即被调用——新页面属性挂到该路径必须 getattr 守卫；②`git add -A` 差点带入 untracked `.zcodeignore`（Owner 本地配置），暂存后须核对 |
-| 当前质量门 | 本地：1413 passed / 8 skipped / 0 failed（224.03s）、ruff 全绿、mypy 261 文件零错（2026-10-01 实测）；远端 run #127/#128 对 5525d95/57fb8d5 绿，**723a16a 起五个提交待推送验证** |
-| 覆盖率（可复现） | **93.9%（10660 / 11357 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`；无 `[tool.coverage]` 配置、无 omit 规则（仅 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
-| 工作区 | main；本治理提交后 **5 提交领先 origin**（723a16a 选中态 + 28d21e7 高清预览 + 5935e50 EXIF 修复 + 5d1f03c 审核页 + d1e061f 双击高清；push 属 owner，GIT-020），未执行 push |
+| 时间 | 2026-10-01（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；**审核高清预览审片闭环轮**（页面化后第四轮 UI 优化，Owner 裁决 D1-A/D2-A/D3-B/D4-A） |
+| 会话范围 | 双功能需求 → 方案含粒度/身份/审核后行为/键盘四决策点 → Owner 裁决 → 实现（ReviewPreviewDialog 继承高清基建 + replace_photo 导航宿主）→ 修复两处自身引入问题（id(self) 溢出 int32、长套件段错误）→ 分发器模式重构 → 质量门 → SSOT |
+| 关键产出 | `review_preview_dialog.py`（ReviewPreviewDialog：导航 + 单条通过/拒绝 + 停留原地 + 键盘）；`PhotoDetailDialog`：`replace_photo`/`_apply_photo_details`（标签引用化）+ **分发器模式**（`_DecodeDispatcher` 应用级单例 + 单调计数器 key——worker 永不触碰对话框，根除长套件偶发段错误）；审核页双击改构造预览（快照/游标/身份/回调）；ui_text 9 文案；测试 +8 新文件 + 3 用例改造 |
+| 实现期教训（复用） | ①**Qt Signal(int) 是 C++ 32 位 int——id(self) 作 key 必 OverflowError**，跨信号传 key 用模块内单调计数器；②**worker 线程 emit 应用级单例 + 接收者销毁自动断连 = 消除对话框销毁竞态的正确姿势**（isValid 守卫只窄化窗口、不闭环）；③异步拾取断言一律 waitUntil（本轮三次踩中） |
+| 当前质量门 | 本地：1423 passed / 8 skipped / 0 failed（249.08s）、ruff 全绿、mypy 262 文件零错（2026-10-01 实测）；远端 run #127/#128 对 5525d95/57fb8d5 绿，**723a16a 起七个提交待推送验证** |
+| 覆盖率（可复现） | **93.9%（10821 / 11524 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`；无 `[tool.coverage]` 配置、无 omit 规则（仅 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
+| 工作区 | main；本收口提交后 **7 提交领先 origin**（723a16a / 28d21e7 / 5935e50 / 5d1f03c / d1e061f / 168a8a9 / 本提交；push 属 owner，GIT-020），未执行 push |
 | Remaining | 见 §6 Next Step。 |
 
 ---

@@ -233,6 +233,19 @@ PHOTO_DETAIL_VIEW_FULL = "查看大图"
 PHOTO_DETAIL_HD_LOADING = "正在加载高清预览..."
 PHOTO_DETAIL_HD_FAILED = "高清预览加载失败，已保留缩略图"
 
+# ---- 审核高清预览（2026-10-01 功能完善） ----
+# D1-A：通过/拒绝按单条结果；D2-A：身份取页面当前选择器（预览内只读展示）；
+# D3-B：审核后停留原地（按钮转已处理态）；D4-A：←/→ 键等价侧边按钮。
+REVIEW_PREVIEW_PREVIOUS = "‹ 上一张"
+REVIEW_PREVIEW_NEXT = "下一张 ›"
+REVIEW_PREVIEW_POSITION = "第 {index} / {total} 条"
+REVIEW_PREVIEW_APPROVE = "通过本条"
+REVIEW_PREVIEW_REJECT = "拒绝本条"
+REVIEW_PREVIEW_IDENTITY_PREFIX = "批准时将指定："
+REVIEW_PREVIEW_DONE_APPROVED = "本条已通过"
+REVIEW_PREVIEW_DONE_REJECTED = "本条已拒绝"
+REVIEW_PREVIEW_PHOTO_MISSING = "照片实体缺失，无法加载"
+
 
 # ---- 审核中心页面（2026-10-01 页面化，原 ReviewDialog） ----
 REVIEW_DIALOG_TITLE = "审核待处理识别结果"
