@@ -234,8 +234,16 @@ PHOTO_DETAIL_HD_LOADING = "正在加载高清预览..."
 PHOTO_DETAIL_HD_FAILED = "高清预览加载失败，已保留缩略图"
 
 
-# ---- 审核对话框（ReviewDialog） ----
+# ---- 审核中心页面（2026-10-01 页面化，原 ReviewDialog） ----
 REVIEW_DIALOG_TITLE = "审核待处理识别结果"
+# 引导条：两条身份建立路径的分工——冷启动配对链（ordered_suggestion → 人工确认）
+# 在「人员与分组」页；本页只做 D-1 个别处理。只引导，不自动化身份归属。
+REVIEW_GUIDANCE_TEXT = (
+    "冷启动身份建立：识别 → 运行人脸聚类 → 人物配对工作台（按名单顺序生成配对建议）"
+    "→ 人工确认后身份生效并沉淀样本。本页用于零散结果的个别处理：选择人员后「通过」"
+    "写入归属（人工身份为最终结果）。"
+)
+REVIEW_GUIDANCE_PAIRING_BUTTON = "前往人物配对工作台"
 REVIEW_APPROVE_SELECTED = "通过所选"
 REVIEW_REJECT_SELECTED = "拒绝所选"
 REVIEW_APPROVE_ALL = "全部通过"

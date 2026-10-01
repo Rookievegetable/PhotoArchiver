@@ -20,8 +20,8 @@ from PySide6.QtWidgets import QMessageBox
 
 from photo_archiver.domain import Photo, PhotoPath, RecognitionResult
 from photo_archiver.presentation import ui_text as text
-from photo_archiver.presentation.views.review_dialog import (
-    ReviewDialog,
+from photo_archiver.presentation.views.review_center_page import (
+    ReviewCenterPage,
     confidence_band,
 )
 
@@ -54,7 +54,7 @@ def test_confidence_band_wording(value, band) -> None:
 def test_row_shows_names_band_with_exact_value_and_status(qtbot) -> None:
     """A row reads as a sentence, not a bare decimal; the value stays visible."""
     controller = _controller([_result(0.87)])
-    dialog = ReviewDialog(controller)
+    dialog = ReviewCenterPage(controller)
     qtbot.addWidget(dialog)
 
     row = dialog._list.item(0).text()
@@ -66,13 +66,16 @@ def test_row_shows_names_band_with_exact_value_and_status(qtbot) -> None:
 
 def test_queue_header_with_total_sits_above_the_list(qtbot) -> None:
     controller = _controller([_result(0.9), _result(0.5)])
-    dialog = ReviewDialog(controller)
+    dialog = ReviewCenterPage(controller)
     qtbot.addWidget(dialog)
 
     assert dialog._status.text() == text.REVIEW_STATUS_LINE.format(count=2)
-    # Header is the top-most layout item, above the list (Batch 5 requirement).
+    # Header sits above the list (Batch 5 requirement); 2026-10-01 页面化后
+    # 顶部先有引导条行（guidance layout），状态行紧随其后。
     layout = dialog.layout()
-    assert layout.itemAt(0).widget() is dialog._status
+    assert layout.itemAt(0).widget() is None  # itemAt(0) = 引导条 layout
+    assert layout.itemAt(0).layout().indexOf(dialog._pairing_button) >= 0
+    assert layout.itemAt(1).widget() is dialog._status
     assert layout.indexOf(dialog._list) > layout.indexOf(dialog._status)
 
 
@@ -81,7 +84,7 @@ def test_queue_header_with_total_sits_above_the_list(qtbot) -> None:
 
 def test_buttons_carry_exact_selected_count(qtbot) -> None:
     pending = [_result(0.9), _result(0.8), _result(0.7)]
-    dialog = ReviewDialog(_controller(pending))
+    dialog = ReviewCenterPage(_controller(pending))
     qtbot.addWidget(dialog)
     dialog.show()
 
@@ -95,7 +98,7 @@ def test_buttons_carry_exact_selected_count(qtbot) -> None:
 
 
 def test_approve_all_button_states_the_queue_size(qtbot) -> None:
-    dialog = ReviewDialog(_controller([_result(0.9), _result(0.8)]))
+    dialog = ReviewCenterPage(_controller([_result(0.9), _result(0.8)]))
     qtbot.addWidget(dialog)
     assert dialog._approve_all.text() == text.REVIEW_APPROVE_ALL_COUNTED.format(count=2)
 
@@ -109,9 +112,9 @@ def test_approve_all_without_confirmation_changes_nothing(qtbot, monkeypatch) ->
     controller = _controller(pending)
     question = Mock(return_value=QMessageBox.StandardButton.No)
     monkeypatch.setattr(
-        "photo_archiver.presentation.views.review_dialog.QMessageBox.question", question,
+        "photo_archiver.presentation.views.review_center_page.QMessageBox.question", question,
     )
-    dialog = ReviewDialog(controller)
+    dialog = ReviewCenterPage(controller)
     qtbot.addWidget(dialog)
     dialog.show()
 
@@ -127,10 +130,10 @@ def test_approve_all_confirmed_batch_approves_everything(qtbot, monkeypatch) -> 
     pending = [_result(0.9), _result(0.8), _result(0.7)]
     controller = _controller(pending)
     monkeypatch.setattr(
-        "photo_archiver.presentation.views.review_dialog.QMessageBox.question",
+        "photo_archiver.presentation.views.review_center_page.QMessageBox.question",
         Mock(return_value=QMessageBox.StandardButton.Yes),
     )
-    dialog = ReviewDialog(controller)
+    dialog = ReviewCenterPage(controller)
     qtbot.addWidget(dialog)
     dialog.show()
 
@@ -163,7 +166,7 @@ def test_rows_request_thumbnails_via_injected_loader(qtbot) -> None:
     controller.photo_for.return_value = photo
     source = _FakeThumbnailSource()
 
-    dialog = ReviewDialog(controller, thumbnail_source=source)  # type: ignore[arg-type]
+    dialog = ReviewCenterPage(controller, thumbnail_source=source)  # type: ignore[arg-type]
     qtbot.addWidget(dialog)
 
     source.load_thumbnail.assert_called_once_with(photo.id, photo.path.raw_path)
@@ -178,7 +181,7 @@ def test_arriving_thumbnail_attaches_to_all_rows_of_that_photo(qtbot, tmp_path) 
     controller = _controller(results)
     controller.photo_for.return_value = photo
     source = _FakeThumbnailSource()
-    dialog = ReviewDialog(controller, thumbnail_source=source)  # type: ignore[arg-type]
+    dialog = ReviewCenterPage(controller, thumbnail_source=source)  # type: ignore[arg-type]
     qtbot.addWidget(dialog)
 
     pixmap_image = tmp_path / "thumb.png"
@@ -201,7 +204,7 @@ def test_thumbnail_miss_leaves_rows_without_icon(qtbot) -> None:
     controller = _controller([result])
     controller.photo_for.return_value = photo
     source = _FakeThumbnailSource()
-    dialog = ReviewDialog(controller, thumbnail_source=source)  # type: ignore[arg-type]
+    dialog = ReviewCenterPage(controller, thumbnail_source=source)  # type: ignore[arg-type]
     qtbot.addWidget(dialog)
 
     source.thumbnail_loaded.emit(photo.id, None)
@@ -213,6 +216,6 @@ def test_missing_photo_entity_degrades_without_thumbnail_request(qtbot) -> None:
     controller.photo_for.return_value = None
     source = _FakeThumbnailSource()
 
-    ReviewDialog(controller, thumbnail_source=source)  # type: ignore[arg-type]
+    ReviewCenterPage(controller, thumbnail_source=source)  # type: ignore[arg-type]
 
     source.load_thumbnail.assert_not_called()

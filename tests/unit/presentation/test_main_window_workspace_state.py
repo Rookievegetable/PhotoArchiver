@@ -282,18 +282,34 @@ def test_next_button_invokes_decorated_dialog_handler_after_idle_and_refreshes(
         workspace.state.value = READY
         return 1
 
-    monkeypatch.setattr(module, "SettingsDialog" if route == "settings" else "ReviewDialog",
-                        lambda *args, **kwargs: SimpleNamespace(exec=execute))
+    # 2026-10-01 页面化：review 路由不再开模态——改为断言"忙时被准入拦截、
+    # 空闲后进入审核页且队列即席刷新"。
+    page_refresh = Mock()
+    if route == "settings":
+        monkeypatch.setattr(module, "SettingsDialog",
+                            lambda *args, **kwargs: SimpleNamespace(exec=execute))
+    else:
+        monkeypatch.setattr(window._review_center_page, "refresh", page_refresh)
     reservation = window._task_coordinator.reserve("busy")
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     assert calls == []
+    assert page_refresh.call_count == 0
     window._task_coordinator.release(reservation)
     assert button.isEnabled()
     workspace.query.reset_mock()
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
-    assert calls == [route]
-    assert not window._task_coordinator.is_busy
-    workspace.query.assert_called_once_with(workspace.root)
+    if route == "settings":
+        assert calls == [route]
+        assert not window._task_coordinator.is_busy
+        workspace.query.assert_called_once_with(workspace.root)
+    else:
+        assert window._pages.currentIndex() == 3  # 审核中心页（页面化）
+        assert window._nav_list.currentRow() == 3
+        page_refresh.assert_called_once()  # 进入页面即刷新队列
+        # 原模态 execute() 内的状态翻转（PENDING→READY）由这里等价复现，
+        # 使随后的动作恢复断言与 settings 路由保持同一基线。
+        workspace.state.value = READY
+        window._refresh_workspace_state()
     assert window._match_action.isEnabled()
     assert window._archive_action.isEnabled()
 

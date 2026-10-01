@@ -225,12 +225,15 @@ def test_double_import_during_picker_and_submission_is_reserved(window, monkeypa
     assert submit.call_count == 1
 
 
-@pytest.mark.parametrize("path", ["review", "settings", "detect_duplicates", "delete_photos",
+@pytest.mark.parametrize("path", ["settings", "detect_duplicates", "delete_photos",
                                   "delete_person", "plugin"])
 def test_sync_modal_path_blocks_reentrant_task(window, monkeypatch, path):
     start = Mock()
     # 阶段 C：识别入口先开范围对话框；忙态下 @_exclusive 在对话框之前拦截，
     # 因此这里只桩提交入口验证「忙时不重入」。
+    # 2026-10-01 页面化：review 不再是同步模态路径（改为常驻页 + set_busy
+    # 置灰，准入覆盖见 test_main_window_workspace_state 路由测试），从本
+    # 参数化中移除。
     monkeypatch.setattr(window._recognition_run_controller, "start_run", start)
 
     def nested(*args, **kwargs):
@@ -241,9 +244,7 @@ def test_sync_modal_path_blocks_reentrant_task(window, monkeypatch, path):
         return 0
 
     dialog = SimpleNamespace(exec=nested)
-    if path == "review":
-        monkeypatch.setattr(module, "ReviewDialog", lambda *a: dialog)
-    elif path == "settings":
+    if path == "settings":
         monkeypatch.setattr(module, "SettingsDialog", lambda *a: dialog)
     elif path == "delete_person":
         monkeypatch.setattr(module, "PersonDeletionDialog", lambda *a, **k: dialog)

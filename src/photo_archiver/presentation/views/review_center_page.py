@@ -1,34 +1,36 @@
-"""ReviewDialog — Step 13 fix + Batch 5: a review board, not a blind batch.
+"""Review center page — the persistent review surface (2026-10-01 页面化).
 
-Modal ``QDialog`` listing pending recognition results with inline
-approve/reject controls. The dialog holds NO business logic:
+Formerly the modal ``ReviewDialog`` (Step 13 fix + Batch 5); the owner ruled
+the review center should be a fixed navigation page instead of a dialog. The
+page holds NO business logic and the review semantics are unchanged:
 
-- load on construction via the injected ``ReviewController``;
-- approve/reject forward to the controller synchronously (<10ms SQLite per
-  Step 12 裁决 A);
-- after each transition the list re-fetches ``list_pending`` so the user sees
-  the remaining queue shrink. An empty queue no longer auto-closes the dialog:
-  Batch 2 keeps it open with an explicit empty state so the entry point is
-  inspectable instead of appearing to "flash and vanish".
+- load via the injected ``ReviewController`` (list_pending / bulk_approve /
+  bulk_reject, synchronous <10ms SQLite per Step 12 裁决 A);
+- after each transition the list re-fetches so the queue visibly shrinks;
+  an emptied queue stays open and inspectable (Batch 2);
+- the D-1 identity selector stays: approving without an identity yields a
+  row the archive planner cannot select, so the user is asked explicitly;
+- rows render through the shared async thumbnail channel — the page itself
+  never touches disk.
 
-Batch 5 (可审阅而非盲批):
+Differences from the dialog era (页化带来的行为差异，业务语义零变化):
 
-- queue header moved to the TOP of the dialog and always states the pending
-  total;
-- each row is two lines: human-readable photo/person labels plus an explicit
-  textual confidence reading (band + exact value kept for audit) and the
-  record status — never a bare decimal, never color-only semantics;
-- optional ``thumbnail_source`` (the main window's PhotoListController) feeds
-  row thumbnails through the existing async loader — the dialog itself never
-  touches disk;
-- approve/reject buttons carry the exact selected count; "approve all"
-  requires an explicit confirmation stating the count and that there is no
-  in-app bulk undo.
+- no Close button — a page does not close; the queue refreshes when the
+  navigation enters the page and after each task completes;
+- action buttons disable while a task is busy (:meth:`set_busy`), mirroring
+  the window-level admission rules;
+- :attr:`review_changed` fires after every mutation so the MainWindow
+  refreshes the photo wall immediately (the modal did that only on close);
+- a guidance banner separates the two identity-establishing paths: the
+  cold-start pairing workbench (ordered_suggestion → 人工确认) vs. this
+  page's D-1 manual approval — 业务规则（K-3/D-1）不做任何自动化。
 
 Layout:
+    [引导条：冷启动配对 vs 本页个别处理]        [前往人物配对工作台]
     [待审核 N 条。…]
     QListWidget rows: "照片={file}　人员={name}" / "置信度：较高（0.87）· 状态：待审核"
-    [通过所选（n）] [拒绝所选（n）] [全部通过（N）] [Close]
+    [批准时指定人员 ▾] 提示行
+    [通过所选（n）] [拒绝所选（n）] [全部通过（N）]
 """
 
 from __future__ import annotations
@@ -36,12 +38,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QComboBox,
-    QDialog,
-    QDialogButtonBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -67,8 +67,9 @@ from photo_archiver.presentation.ui_text import (
     REVIEW_CONFIDENCE_MEDIUM,
     REVIEW_CONFIDENCE_NO_EVIDENCE,
     REVIEW_CONFIDENCE_VERY_HIGH,
-    REVIEW_DIALOG_TITLE,
     REVIEW_EMPTY,
+    REVIEW_GUIDANCE_PAIRING_BUTTON,
+    REVIEW_GUIDANCE_TEXT,
     REVIEW_IDENTITY_HINT,
     REVIEW_IDENTITY_LABEL,
     REVIEW_IDENTITY_UNRESOLVED,
@@ -111,8 +112,13 @@ def confidence_band(confidence: float | None) -> str:
     return REVIEW_CONFIDENCE_LOW
 
 
-class ReviewDialog(QDialog):
-    """Modal dialog for reviewing pending recognition results."""
+class ReviewCenterPage(QWidget):
+    """常驻审核中心页：待审核识别结果队列 + D-1 身份选择器 + 批量动作。"""
+
+    # 任一通过/拒绝成功后发射——主窗口据此立即刷新照片墙（原模态关闭后刷新）。
+    review_changed = Signal()
+    # 引导条按钮 → 主窗口切换到「人员与分组」页（聚类 / 配对工作台所在处）。
+    pairing_requested = Signal()
 
     def __init__(
         self,
@@ -120,7 +126,7 @@ class ReviewDialog(QDialog):
         parent: QWidget | None = None,
         thumbnail_source: PhotoListController | None = None,
     ) -> None:
-        """Initialize the dialog and load the pending queue.
+        """Build the page and load the pending queue.
 
         Args:
             controller: Bridge to the Application-layer ReviewRecognitionService.
@@ -128,14 +134,14 @@ class ReviewDialog(QDialog):
             thumbnail_source: Optional PhotoListController-like object providing
                 ``load_thumbnail(photo_id, source_path)`` and a
                 ``thumbnail_loaded(object, object)`` signal — the existing
-                async, off-UI-thread thumbnail channel. The dialog only
-                renders what arrives; it never reads the disk itself.
+                async, off-UI-thread thumbnail channel. The page only renders
+                what arrives; it never reads the disk itself.
         """
         super().__init__(parent)
-        self.setWindowTitle(REVIEW_DIALOG_TITLE)
         self._controller = controller
         self._thumbnail_source = thumbnail_source
         self._items_by_photo_id: dict[UUID, list[QListWidgetItem]] = {}
+        self._busy = False
         self._build_ui()
         if thumbnail_source is not None:
             # Connect once — _request_row_thumbnail may register many rows and
@@ -144,7 +150,19 @@ class ReviewDialog(QDialog):
         self._refresh_list()
 
     def _build_ui(self) -> None:
-        """Lay out the header, list and action buttons (Batch 5 order)."""
+        """Lay out the guidance banner, queue and action buttons."""
+
+        # 2026-10-01 引导条（WS1）：两条身份建立路径的分工——冷启动配对链
+        # （ordered_suggestion → 人工确认）在本页之外；本页只做 D-1 个别处理。
+        # 只做引导，不做任何自动化身份归属（K-3/D-1 冻结语义不变）。
+        guidance = QLabel(REVIEW_GUIDANCE_TEXT, self)
+        guidance.setWordWrap(True)
+        self._pairing_button = QPushButton(REVIEW_GUIDANCE_PAIRING_BUTTON, self)
+        self._pairing_button.clicked.connect(self.pairing_requested.emit)
+        guidance_row = QHBoxLayout()
+        guidance_row.addWidget(guidance, 1)
+        guidance_row.addWidget(self._pairing_button)
+
         self._status = QLabel(self)
         self._status.setWordWrap(True)
 
@@ -179,27 +197,30 @@ class ReviewDialog(QDialog):
         button_row.addWidget(self._reject_selected)
         button_row.addWidget(self._approve_all)
 
-        close_buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Close,
-            parent=self,
-        )
-        close_buttons.rejected.connect(self.reject)
-
         layout = QVBoxLayout(self)
+        layout.addLayout(guidance_row)
         layout.addWidget(self._status)  # 待审核总数常驻列表顶部（Batch 5）
         layout.addWidget(self._list, 1)
         layout.addLayout(identity_row)
         layout.addWidget(self._identity_hint)
         layout.addLayout(button_row)
-        layout.addWidget(close_buttons)
 
         # Wire selection changes → per-button enablement + counted texts (done
         # after the first refresh so construction-time selection changes are
         # inert). Keyboard multi-select works via ExtendedSelection defaults.
         self._list.itemSelectionChanged.connect(self._update_action_buttons)
 
+    def refresh(self) -> None:
+        """Public re-query hook：切页进入与任务完成时由 MainWindow 调用。"""
+        self._refresh_list()
+
+    def set_busy(self, busy: bool) -> None:
+        """任务运行期间禁用审核动作（与窗口级任务准入一致；选区保留）。"""
+        self._busy = busy
+        self._update_action_buttons()
+
     def _refresh_list(self) -> None:
-        """Reload pending results; keep the dialog open with an empty state."""
+        """Reload pending results; keep the page open with an empty state."""
         pending = self._controller.list_pending()
         self._list.clear()
         self._items_by_photo_id = {}
@@ -213,21 +234,19 @@ class ReviewDialog(QDialog):
             REVIEW_STATUS_LINE.format(count=len(pending)) if has_pending else REVIEW_EMPTY
         )
         self._update_action_buttons()
-        if has_pending:
-            self._list.setFocus()
 
     def _update_action_buttons(self) -> None:
         """Enable queue actions and state the exact object counts (Batch 5)."""
         has_rows = self._list.count() > 0
         selection = self._list.selectedItems()
-        self._approve_all.setEnabled(has_rows)
+        self._approve_all.setEnabled(has_rows and not self._busy)
         self._approve_all.setText(
             REVIEW_APPROVE_ALL_COUNTED.format(count=self._list.count())
             if has_rows
             else REVIEW_APPROVE_ALL
         )
-        self._approve_selected.setEnabled(has_rows and bool(selection))
-        self._reject_selected.setEnabled(has_rows and bool(selection))
+        self._approve_selected.setEnabled(has_rows and bool(selection) and not self._busy)
+        self._reject_selected.setEnabled(has_rows and bool(selection) and not self._busy)
         if selection:
             counted = REVIEW_APPROVE_SELECTED_COUNTED.format(count=len(selection))
             rejected = REVIEW_REJECT_SELECTED_COUNTED.format(count=len(selection))
@@ -346,6 +365,7 @@ class ReviewDialog(QDialog):
                 return
             self._controller.bulk_approve(ids, person_id)
         self._refresh_list()
+        self.review_changed.emit()
 
     def _on_reject_selected(self) -> None:
         """Reject each selected pending result; refresh the list afterwards."""
@@ -353,6 +373,7 @@ class ReviewDialog(QDialog):
         if ids:
             self._controller.bulk_reject(ids)
         self._refresh_list()
+        self.review_changed.emit()
 
     def _on_approve_all(self) -> None:
         """Approve every pending result — behind an explicit count confirmation.
@@ -381,3 +402,4 @@ class ReviewDialog(QDialog):
             return
         self._controller.bulk_approve(all_ids, person_id)
         self._refresh_list()
+        self.review_changed.emit()

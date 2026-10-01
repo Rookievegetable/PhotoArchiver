@@ -164,7 +164,7 @@ from photo_archiver.presentation.views.recognition_scope_dialog import Recogniti
 from photo_archiver.presentation.views.photo_list_model import (
     PHOTO_ID_ROLE, PhotoListModel, STATUS_BADGE_ROLE, THUMBNAIL_ROLE,
 )
-from photo_archiver.presentation.views.review_dialog import ReviewDialog
+from photo_archiver.presentation.views.review_center_page import ReviewCenterPage
 from photo_archiver.presentation.views.settings_dialog import SettingsDialog
 from photo_archiver.plugins import PluginRegistry
 from photo_archiver.workers import ConfirmImportTask, QtWorkerRunnable
@@ -180,9 +180,10 @@ DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
 _PROGRESS_RESOLUTION = 100
 
-# 导航行 ↔ 页面映射：0 概览 / 1 照片库 / 2 人员与分组 / 4 数据工具切页；
-# 行 3（审核中心）与行 5（设置）是触发式导航项（打开模态对话框，不切页）。
-_NAV_ROW_TO_PAGE = {0: 0, 1: 1, 2: 2, 4: 3}
+# 导航行 ↔ 页面映射：0 概览 / 1 照片库 / 2 人员与分组 / 3 审核中心 / 4 数据工具；
+# 2026-10-01 页面化：审核中心由触发式导航项（模态 ReviewDialog）改为常驻页面；
+# 行 5（设置）仍是触发式导航项（打开模态对话框，不切页）。
+_NAV_ROW_TO_PAGE = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4}
 _PAGE_TO_NAV_ROW = {page: row for row, page in _NAV_ROW_TO_PAGE.items()}
 _NAV_LABELS = (
     text.NAV_OVERVIEW, text.NAV_PHOTO_LIBRARY, text.NAV_PEOPLE,
@@ -470,7 +471,18 @@ class MainWindow(QMainWindow):
         self._pages.addWidget(self._overview_page)  # index 0: 概览
         self._pages.addWidget(self._build_photo_library_page())  # index 1: 照片库
         self._pages.addWidget(self._build_people_page())  # index 2: 人员与分组
-        self._pages.addWidget(self._build_data_tools_page())  # index 3: 数据工具
+        # 2026-10-01 页面化：审核中心常驻页（原 ReviewDialog 弹窗退役）。
+        self._review_center_page = ReviewCenterPage(
+            self._review_controller,
+            self,
+            thumbnail_source=self._photo_list_controller,
+        )
+        self._review_center_page.review_changed.connect(self._on_review_changed)
+        self._review_center_page.pairing_requested.connect(
+            lambda: self._nav_list.setCurrentRow(2),
+        )
+        self._pages.addWidget(self._review_center_page)  # index 3: 审核中心
+        self._pages.addWidget(self._build_data_tools_page())  # index 4: 数据工具
 
         central = QWidget(self)
         layout = QHBoxLayout(central)
@@ -686,14 +698,13 @@ class MainWindow(QMainWindow):
     def _on_nav_changed(self, row: int) -> None:
         """Switch pages for page rows; trigger dialogs for action rows.
 
-        Review-center and settings rows are triggers, not destinations: the
-        selection snaps back to the current page's row (signals blocked) so
-        the nav highlight always mirrors the visible page.
+        Review-center and settings rows: the review center is now a real page
+        (2026-10-01 页面化) whose queue refreshes on entry; only the settings
+        row remains a trigger, snapping the selection back so the nav
+        highlight always mirrors the visible page.
         """
-        if row == 3:  # 审核中心 → 模态对话框
-            self._snap_nav_to_page()
-            self._on_review_clicked()
-            return
+        if row == 3:  # 审核中心：进入页面即刷新待审核队列
+            self._review_center_page.refresh()
         if row == 5:  # 设置 → 模态对话框
             self._snap_nav_to_page()
             self._on_settings_clicked()
@@ -746,6 +757,10 @@ class MainWindow(QMainWindow):
             )),
         )
         busy = self._task_coordinator.is_busy
+        # 构造期首次渲染时审核页尚未创建（_build_central 之后才存在）。
+        review_page = getattr(self, "_review_center_page", None)
+        if review_page is not None:
+            review_page.set_busy(busy)
         for action, guidance in pairs:
             if busy:
                 self._action_states[action] = (guidance.enabled, guidance.tooltip)
@@ -1181,24 +1196,17 @@ class MainWindow(QMainWindow):
 
     @_exclusive(ACTION_REVIEW_PENDING)
     def _on_review_clicked(self) -> None:
-        """Open the modal ReviewDialog for inline approve/reject.
+        """Switch to the review center page (2026-10-01 页面化：弹窗退役）。
 
-        Step 13 fix: review is no longer a dead-end. The dialog lists pending
-        recognition results, forwards approve/reject to the controller
-        synchronously (<10ms SQLite per Step 12 裁决 A), and refreshes the
-        queue after each action. The "Use the CLI" info popup is retired.
-        Batch 5: rows render through the shared async thumbnail channel and
-        after close the photo wall (badges + counts) re-queries immediately —
-        approving here must be reflected in the library without a manual
-        refresh.
+        保留函数名以稳定工具栏 / 概览 CTA 接线。审核动作改为页面内常驻操作；
+        照片墙刷新由页面的 review_changed 信号驱动（原模态关闭后刷新语义
+        保持为动作后即时刷新）。任务运行期间页面按钮经 set_busy 置灰。
         """
-        dialog = ReviewDialog(
-            self._review_controller,
-            self,
-            thumbnail_source=self._photo_list_controller,
-        )
-        dialog.exec()
-        # Approve/reject inside the dialog changes pending/archivable counts.
+        self._nav_list.setCurrentRow(3)
+
+    @Slot()
+    def _on_review_changed(self) -> None:
+        """审核动作后立即刷新工作区状态与照片墙（原模态关闭后刷新语义）。"""
         self._refresh_workspace_state()
         self._refresh_photo_list()
 
@@ -1598,12 +1606,12 @@ class MainWindow(QMainWindow):
     def _refresh_review_pending(self) -> None:
         """Re-query recognition results so newly created PENDING entries surface.
 
-        Called after face recognition completes so the next ReviewDialog open
-        shows fresh pending results. Uses only the existing read API
-        (ReviewController.list_pending) and reflects the count in the status
-        bar as lightweight feedback — Review business rules are untouched.
+        Called after face recognition completes. 2026-10-01 页面化：直接刷新
+        常驻审核页的队列（原"下次打开 ReviewDialog 生效"），并保留状态栏计数
+        反馈——Review business rules are untouched.
         """
         pending = self._review_controller.list_pending()
+        self._review_center_page.refresh()
         self._status_label.setText(
             self._status_label.text() + " · " + STATUS_PENDING_REVIEW_COUNT.format(count=len(pending))
         )

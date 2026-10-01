@@ -26,7 +26,7 @@ from photo_archiver.app.repositories import build_sqlite_repositories
 from photo_archiver.domain import MatchStatus, RecognitionResult
 from photo_archiver.presentation.controllers.review_controller import ReviewController
 from photo_archiver.presentation.ui_text import REVIEW_EMPTY
-from photo_archiver.presentation.views.review_dialog import ReviewDialog
+from photo_archiver.presentation.views.review_center_page import ReviewCenterPage
 
 
 class _ExplodingRecognitionRepository:
@@ -57,7 +57,7 @@ def _dialog(repos, recognition_repository=None):  # noqa: ANN001, ANN202
         photo_repository=repos.photos,
         person_repository=repos.people,
     )
-    return ReviewDialog(controller)
+    return ReviewCenterPage(controller)
 
 
 def test_empty_queue_is_a_business_state_not_an_error(qtbot, tmp_path):  # noqa: ANN001

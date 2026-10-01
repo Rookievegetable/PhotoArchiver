@@ -1,9 +1,9 @@
 """Batch 3 navigation, overview CTA and persistent task panel (no workers).
 
 Information-architecture acceptance: six navigation entries (stage B adds
-人员与分组), page stack, trigger-style review/settings rows, data-tools page
-hosting the maintenance actions, and a task panel that stays visible on every
-page.
+人员与分组; 2026-10-01 turns the review center into a persistent page),
+page stack, settings trigger row, data-tools page hosting the maintenance
+actions, and a task panel that stays visible on every page.
 """
 
 from dataclasses import replace
@@ -111,29 +111,31 @@ def test_overview_cta_routes_through_the_real_import_picker(nav, monkeypatch) ->
     assert not nav.window._task_coordinator.is_busy
 
 
-def test_navigation_switches_between_the_four_pages(nav) -> None:
+def test_navigation_switches_between_the_five_pages(nav) -> None:
     window = nav.window
     assert window._pages.currentIndex() == 0  # 概览是首页
     window._nav_list.setCurrentRow(1)
     assert window._pages.currentIndex() == 1
     window._nav_list.setCurrentRow(2)
     assert window._pages.currentIndex() == 2  # 人员与分组（阶段 B 新页）
+    window._nav_list.setCurrentRow(3)
+    assert window._pages.currentIndex() == 3  # 审核中心（2026-10-01 页面化）
     window._nav_list.setCurrentRow(4)
-    assert window._pages.currentIndex() == 3  # 数据工具
+    assert window._pages.currentIndex() == 4  # 数据工具
     window._nav_list.setCurrentRow(0)
     assert window._pages.currentIndex() == 0
 
 
-def test_review_center_nav_opens_dialog_and_snaps_back(nav, monkeypatch) -> None:
-    exec_mock = Mock(return_value=1)
-    monkeypatch.setattr(
-        module, "ReviewDialog", lambda *args, **kwargs: SimpleNamespace(exec=exec_mock),
-    )
+def test_review_center_nav_switches_to_persistent_page(nav) -> None:
+    """2026-10-01 页面化：审核中心是常驻页面，高亮驻留、进入即刷新队列。"""
     window = nav.window
+    refresh = Mock(wraps=window._review_center_page.refresh)
+    window._review_center_page.refresh = refresh  # type: ignore[method-assign]
     window._nav_list.setCurrentRow(3)
-    exec_mock.assert_called_once()
-    assert window._pages.currentIndex() == 0  # 触发式导航不切页
-    assert window._nav_list.currentRow() == 0  # 高亮回到当前页
+    assert window._pages.currentIndex() == 3
+    assert window._nav_list.currentRow() == 3  # 页面行高亮驻留（不再回弹）
+    assert window._review_center_page.isVisible()
+    refresh.assert_called_once()
 
 
 def test_settings_nav_opens_dialog_and_snaps_back(nav, monkeypatch) -> None:
@@ -153,7 +155,7 @@ def test_task_panel_stays_visible_on_every_page(nav) -> None:
     window = nav.window
     cancel_button = window.findChild(QToolButton, "CancelTask")
     assert cancel_button is not None
-    for row in (0, 1, 2, 4, 0):  # 仅页面行；行 3/5 是触发式导航项（会开模态对话框）
+    for row in (0, 1, 2, 3, 4, 0):  # 页面行；行 5（设置）是触发式导航项（会开模态对话框）
         window._nav_list.setCurrentRow(row)
         assert window._status.isVisible()
         assert window._progress.isVisible()

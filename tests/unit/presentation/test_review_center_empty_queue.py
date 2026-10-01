@@ -13,14 +13,14 @@ from PySide6.QtWidgets import QDialog, QMessageBox
 
 from photo_archiver.domain import RecognitionResult
 from photo_archiver.presentation.ui_text import REVIEW_EMPTY, REVIEW_STATUS_LINE
-from photo_archiver.presentation.views.review_dialog import ReviewDialog
+from photo_archiver.presentation.views.review_center_page import ReviewCenterPage
 
 
 def test_empty_queue_stays_open_with_buttons_disabled(qtbot, monkeypatch):
     controller = Mock(list_pending=Mock(return_value=[]))
     accept = Mock()
     monkeypatch.setattr(QDialog, "accept", accept)
-    dialog = ReviewDialog(controller)
+    dialog = ReviewCenterPage(controller)
     qtbot.addWidget(dialog)
     dialog.show()
     accept.assert_not_called()
@@ -42,7 +42,7 @@ def test_empty_queue_stays_open_with_buttons_disabled(qtbot, monkeypatch):
 def test_selection_and_queue_transition_to_empty_stays_open(qtbot, button_name, method, monkeypatch):
     # Batch 5: 全部通过需要二次确认——确认路径在本测试中放行以聚焦队列语义。
     monkeypatch.setattr(
-        "photo_archiver.presentation.views.review_dialog.QMessageBox.question",
+        "photo_archiver.presentation.views.review_center_page.QMessageBox.question",
         Mock(return_value=QMessageBox.StandardButton.Yes),
     )
     result = RecognitionResult(photo_id=uuid4(), confidence=0.9, person_id=uuid4())
@@ -57,11 +57,9 @@ def test_selection_and_queue_transition_to_empty_stays_open(qtbot, button_name, 
     getattr(controller, method).side_effect = (
         lambda ids, person_id=None: pending.clear()
     )
-    dialog = ReviewDialog(controller)
+    dialog = ReviewCenterPage(controller)
     qtbot.addWidget(dialog)
     dialog.show()
-    accepted = Mock()
-    dialog.accepted.connect(accepted)
     assert dialog._status.text() == REVIEW_STATUS_LINE.format(count=1)
     assert dialog._approve_all.isEnabled()
     assert not dialog._approve_selected.isEnabled()
@@ -77,7 +75,8 @@ def test_selection_and_queue_transition_to_empty_stays_open(qtbot, button_name, 
     getattr(controller, method).assert_called_once_with(
         (result.id,), *expected_identity,
     )
-    accepted.assert_not_called()
+    # 2026-10-01 页面化：页面不会"关闭"（原 dialog.accepted 语义退役），
+    # 队列清空后保持可见可检视（Batch 2 语义不变）。
     assert dialog.isVisible()
     assert dialog._status.text() == REVIEW_EMPTY
     assert dialog._list.isHidden()
