@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
 
 from photo_archiver.domain import Photo, RecognitionResult
 from photo_archiver.presentation import ui_text as text
+from photo_archiver.presentation.combo_search import NameSearchComboBinder
+from photo_archiver.presentation.visual_style import mark_searchable_combo
 from photo_archiver.presentation.views.photo_detail_dialog import PhotoDetailDialog
 
 if TYPE_CHECKING:
@@ -112,6 +114,11 @@ class ReviewPreviewDialog(PhotoDetailDialog):
                     self._identity_combo.setCurrentIndex(i)
                     break
         self._identity_combo.currentIndexChanged.connect(self._on_identity_changed)
+        # 2026-10-01：身份下拉接智能搜索 + 放大展开按钮（Owner 功能完善）。
+        mark_searchable_combo(self._identity_combo)
+        self._identity_search = NameSearchComboBinder(
+            self._identity_combo, parent=self._identity_combo,
+        )
         self._approve_button = QPushButton(text.REVIEW_PREVIEW_APPROVE, self)
         self._approve_button.clicked.connect(self._on_approve_current)
         self._reject_button = QPushButton(text.REVIEW_PREVIEW_REJECT, self)

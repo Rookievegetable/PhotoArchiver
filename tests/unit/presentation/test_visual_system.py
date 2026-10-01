@@ -535,3 +535,36 @@ def test_status_semantics_are_not_color_only() -> None:
     assert text.STATUS_BADGE_PENDING and text.STATUS_BADGE_APPROVED
     assert text.STATUS_BADGE_REJECTED and text.STATUS_BADGE_UNMATCHED
     assert text.OVERVIEW_STEP_DONE_MARK != text.OVERVIEW_STEP_TODO_MARK
+
+
+# ── 2026-10-01 审核中心：可搜索下拉的展开按钮放大（属性选择器作用域） ─────────
+
+
+def test_searchable_combo_rule_declared_in_stylesheet() -> None:
+    qss = build_stylesheet()
+    assert 'QComboBox[searchableCombo="true"]::drop-down' in qss
+    assert 'QComboBox[searchableCombo="true"]::down-arrow' in qss
+
+
+def test_searchable_combo_arrow_is_enlarged(styled_app, qtbot) -> None:
+    """属性标记的子控件 rect 经 QSS 放大；未标记组合框不受影响。"""
+    from PySide6.QtWidgets import QComboBox, QStyle
+
+    from photo_archiver.presentation.visual_style import (
+        SEARCHABLE_COMBO_MARK,
+        SEARCHABLE_COMBO_PROPERTY,
+        mark_searchable_combo,
+    )
+
+    marked = QComboBox()
+    mark_searchable_combo(marked)
+    plain = QComboBox()
+    qtbot.addWidget(marked)
+    qtbot.addWidget(plain)
+
+    assert marked.property(SEARCHABLE_COMBO_PROPERTY) == SEARCHABLE_COMBO_MARK
+    # 展开区放大以平台无关的 comboboxMetrics 比例钉死（各平台默认 drop-down
+    # 宽度不同，像素断言会因平台基线漂移——Stage 14-CI 同一教训）。
+    indicator = marked.style().pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth)
+    assert marked.minimumWidth() >= indicator * 4
+    assert plain.minimumWidth() == 0  # 未标记组合框不受影响

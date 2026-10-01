@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.50.0 · Last Updated: 2026-10-01 · Status: Live
+> Version: 1.51.0 · Last Updated: 2026-10-01 · Status: Live
 
 ---
 
@@ -23,6 +23,8 @@
 M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 已落地；发布工程至 v2.8.0（2026-09-13）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**：阶段 A（两段式导入，09-21 owner 验收 ✅）→ 阶段 B（人员与分组页，09-23 owner 验收 ✅）→ **阶段 C/D/E/F（2026-09-24 ~ 09-28 全部实施完成并冻结审查）**。**2026-09-28 完成全面工程健康体检（Stage 0–9，判 ATTENTION）与治理基线恢复（Stage 10）**；业务基线冻结正式生效待 owner 签核（Stage4.2 复审 8 项条件已满足，见 `docs/business-baseline/`）。
 
 ## 2. Current Step（当前开发阶段）
+
+**审核身份下拉搜索 + 展开按钮放大（2026-10-01，feature，仅 Presentation 层）**——Owner 功能完善：①审核中心两处身份选择（页面选择器 + 高清预览内下拉）接入**智能搜索**——抽出共享助手 `NameSearchComboBinder`（`combo_search.py`）沿用 FilterBar 人员轴既有模式（editable + NoInsert + `QCompleter` + `person_name_ranker` 排名重建，同名落首个匹配项）；输入只影响补全列表、选中才落值语义与 FilterBar 一致。②展开按钮放大：新增属性标记 `searchableCombo` + 中央样式表 `QComboBox[searchableCombo="true"]::drop-down/down-arrow` 规则（作用域仅限被标记组合框，不影响 FilterBar 等其他下拉），并按平台指标 `PM_IndicatorWidth × 4` 设置最小宽度——**平台无关**（各平台默认 drop-down 宽度不同，像素断言会漂移；QSS 像素探针因本机 windows11 默认即 21px 无可区分增量，改为比例断言，Stage 14-CI 同一教训）。测试 +9（`test_combo_search.py` 5 项：editable/NoInsert、输入排名、空查询交回下拉全量列表、补全激活定位、同名首个；视觉系统 2 项：规则声明 + 比例断言 + 未标记组合框不受影响；页面/预览各 1 项接线断言）。全量 **1434 passed / 8 skipped**、ruff/mypy 绿（263 文件）。**实现期教训**：`QStyle.comboboxMetrics` 是 Qt4/Windows 私有 API，Qt6 已移除——平台无关尺寸断言改用 `pixelMetric(PM_IndicatorWidth)`；`QCompleter` 在 PySide6 位于 QtWidgets 而非 QtGui。
 
 **审核预览内身份选择（2026-10-01，feature，仅 Presentation 层）**——Owner 需求：审核高清预览中加入"指定人员"选项（原 D2-A 只读展示口径演进）。实现：`ReviewPreviewDialog` 的身份只读标签改为**可编辑下拉**（人员列表经 `persons` 注入 = 页面 `_available_persons()` 降级语义；初始值 = 页面选择器当前值，UUID 值匹配定位）；「通过本条」按当前下拉值提交（未指定身份仍复用既有确认告警，D-1 语义不变）；改选经 `identity_changed(object)` 信号**回写页面选择器**（连续双击时身份保持连续，页面端值匹配定位防 findData 陷阱）。测试 +2（T9 改选身份逐条生效 + 回写信号、T10 初始值定位与列表外回落）。全量 **1425 passed / 8 skipped**、ruff/mypy 绿。
 
@@ -106,7 +108,7 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
 | 人员导入重设计（阶段 A–F） | ✅ 实施完成 | 全部入库至 `2823d1c`；业务基线见 `docs/business-baseline/`；冻结待 owner 签核。 |
 | 版本链 | 🟡 切版/tag 完成、待发行 | pyproject / .env.example = **2.8.1**（owner 裁决 2026-09-30）；CHANGELOG `[2.8.1] - 2026-09-30` 段已切分；**v2.8.1 annotated tag 已创建并推送**（→ `8d8a126`，本地 + 远端 `git ls-remote` 双实查；历史 v2.8.0 未动）；**GitHub Release / 新安装包产出与二轮验收为 owner 剩余操作**。 |
-| 测试基线 | ✅ | 全量 **1425 passed / 8 skipped / 0 failed**（2026-10-01 实测 246.41s；含照片库选中态 +16、照片详情高清预览 +13、EXIF 裁剪修复 +3、审核中心页面化与双击高清 +4/迁移改造 -1、审核预览闭环 +8、预览内身份选择 +2）；行覆盖 **93.9%**（10821/11524，AUD-021 可复现口径，见 §5 覆盖率行）；**观测一例负载型 flake**：test_aud023_cancellation_latency::test_mid_run_cancel（全量下 completed_after_cancel 少 p1，单测复跑 3/3 绿——worker 调度序方差，与 AUD-023 轮"集合语义"教训同类，未改动）；此前已知盲区已由 Stage 12B 补齐（AUD-019）。 |
+| 测试基线 | ✅ | 全量 **1434 passed / 8 skipped / 0 failed**（2026-10-01 实测 245.48s；含照片库选中态 +16、照片详情高清预览 +13、EXIF 裁剪修复 +3、审核中心页面化与双击高清 +4/迁移改造 -1、审核预览闭环 +8、预览内身份选择 +2、下拉搜索与展开按钮放大 +9）；行覆盖 **93.9%**（AUD-021 可复现口径，见 §5 覆盖率行）；**观测一例负载型 flake**：test_aud023_cancellation_latency::test_mid_run_cancel（全量下 completed_after_cancel 少 p1，单测复跑 3/3 绿——worker 调度序方差，与 AUD-023 轮"集合语义"教训同类，未改动）；此前已知盲区已由 Stage 12B 补齐（AUD-019）。 |
 | CI | ✅ | run #127/#128 对 `5525d95`/`57fb8d5` 三平台全绿（windows 1384+2 / ubuntu、macos 各 1381+5，skip 全为已登记豁免）；`8d8a126`（切版）已推送，**其后的照片库选中态优化 feature 提交待推送触发远端验证**；本地三质量门绿（ruff / mypy 261 文件 / pytest）。 |
 | 业务基线 | ✅ 已入库 | `docs/business-baseline/`（Stage1–3 现行有效 + Stage4/4.1 历史 + Stage4.2 冻结复审），基线 `2823d1c`，来源与有效性表见其 README。 |
 | 未决问题 | ✅ 清零 | 体检 25 条 Finding 终态（2026-09-30 Stage 14 Final）：**P0 0 / P1 0 / P2 0 / P3 0 OPEN，无 BLOCKED**——23 FIXED + AUD-024 ACCEPTED-RISK + AUD-002 CLOSED（run #127 三平台绿）；详见 `docs/health-check/FINDINGS_LEDGER.md`。 |
@@ -144,13 +146,11 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 
 ## 5. Last Session（最近一次开发记录）
 
-| 时间 | 2026-10-01（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；**审核预览内身份选择轮**（同日第五轮 UI 优化） |
-| 会话范围 | Owner 需求（预览内指定人员，演进 D2-A 只读口径）→ 实现（预览内下拉 + 回写页面选择器）→ T9 踩中 headless 模态挂起陷阱（未指定身份确认告警未打桩）→ 质量门 → SSOT |
-| 关键产出 | `ReviewPreviewDialog`：身份下拉（persons 注入/UUID 值定位/初始值 = 页面选择器）+ `identity_changed` 回写信号 + 页面 `_apply_preview_identity` 回写；ui_text 调整；测试 +2 改造 3 |
-| 实现期教训（复用） | ①**headless 模态挂起陷阱再现**：未指定身份的确认告警（QMessageBox.question）在预览内首次通过必然触发——新交互测试必须在触发前打桩；②Qt Signal(int) = C++ int32——id(self) 作 key 必 OverflowError（上轮教训沿用） |
-| 当前质量门 | 本地：1425 passed / 8 skipped / 0 failed（246.41s）、ruff 全绿、mypy 262 文件零错（2026-10-01 实测）；远端 run #127/#128 对 5525d95/57fb8d5 绿，**723a16a 起九个提交待推送验证** |
-| 覆盖率（可复现） | **93.9%（10821 / 11524 行语句，coverage 7.16.0，branch coverage 关闭）**——测量范围 `src/photo_archiver/`（经 `pyproject` 的 `pythonpath = ["src"]` 解析）；**分母不含**：根入口 `main.py`（CLI）、`tools/`、`scripts/`、`tests/`、`alembic/`；无 `[tool.coverage]` 配置、无 omit 规则（仅 `# pragma: no cover`）。复现命令：`.venv/Scripts/python.exe -m pytest tests/ -q --cov=src/photo_archiver --cov-report=json`（本地）；CI 门禁命令 `pytest --cov=photo_archiver --cov-fail-under=90`（仅 Linux job，见 `.github/workflows/ci.yml`） |
-| 工作区 | main；本收口提交后 **9 提交领先 origin**（723a16a / 28d21e7 / 5935e50 / 5d1f03c / d1e061f / 168a8a9 / d29b56d / 本提交等；push 属 owner，GIT-020），未执行 push |
+| 时间 | 2026-10-01（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；**审核身份下拉搜索 + 展开按钮放大轮**（同日第六轮 UI 优化） |
+| 会话范围 | Owner 功能完善（两处身份下拉加搜索 + 放大展开按钮）→ 复用 FilterBar 人员轴搜索模式抽共享助手 → 属性标记 + 中央样式表放大（平台无关比例断言，QSS 像素探针因本机默认基线无增量而改为比例）→ 质量门 → SSOT |
+| 关键产出 | `combo_search.py`（NameSearchComboBinder：editable/NoInsert/QCompleter/rank_person_names 排名重建 + 同名落首个）；`visual_style`：searchableCombo 属性 + QSS drop-down/down-arrow 规则 + mark_searchable_combo（PM_IndicatorWidth × 4 最小宽度）；审核页与预览内身份下拉接线；测试 +9 |
+| 实现期教训（复用） | ①`QStyle.comboboxMetrics` 是 Qt4/Windows 私有 API，**Qt6 已移除**——平台无关尺寸断言用 `pixelMetric(PM_IndicatorWidth)`；②`QCompleter` 在 PySide6 位于 **QtWidgets**（非 QtGui）；③QSS 子控件像素断言会撞平台默认基线（本机 windows11 drop-down 本就 21px，标记前后无差异）——尺寸类断言一律走比例 |
+| 当前质量门 | 本地：1434 passed / 8 skipped / 0 failed（245.48s）、ruff 全绿、mypy 263 文件零错（2026-10-01 实测）；远端 run #127/#128 对 5525d95/57fb8d5 绿，**723a16a 起十个提交待推送验证** |
 | Remaining | 见 §6 Next Step。 |
 
 ---

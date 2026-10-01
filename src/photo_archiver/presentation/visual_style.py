@@ -26,12 +26,23 @@ light AND dark themes; buttons paint through a different path where
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QPushButton, QSizePolicy, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QPushButton,
+    QSizePolicy,
+    QStyle,
+    QWidget,
+)
 
 # Dynamic-property key carrying the visual role on QAbstractButton.
 ROLE_PROPERTY = "styleRole"
 ROLE_PRIMARY = "primary"
 ROLE_DANGER = "danger"
+
+# object 属性：可搜索下拉（审核中心身份选择等）——QSS 据此放大展开按钮。
+SEARCHABLE_COMBO_PROPERTY = "searchableCombo"
+SEARCHABLE_COMBO_MARK = "true"
 
 # objectName hooks for non-button building blocks.
 EMPTY_STATE_CARD_OBJECT_NAME = "EmptyStateCard"
@@ -77,6 +88,13 @@ QLineEdit:focus, QComboBox:focus, QDateTimeEdit:focus {
 }
 QListWidget:focus, QListView:focus {
     border: 1px solid palette(Highlight);
+}
+QComboBox[searchableCombo="true"]::drop-down {
+    width: 24px;
+}
+QComboBox[searchableCombo="true"]::down-arrow {
+    width: 16px;
+    height: 16px;
 }
 QWidget#EmptyStateCard {
     background-color: rgba(127, 127, 127, 0.12);
@@ -124,3 +142,17 @@ def style_empty_state_card(page: QWidget) -> None:
 def button_role(button: QPushButton) -> str | None:
     """Return the assigned role (test/QA hook)."""
     return button.property(ROLE_PROPERTY)
+
+
+def mark_searchable_combo(combo: QComboBox) -> None:
+    """Tag a combo as searchable — the stylesheet enlarges its drop-down.
+
+    2026-10-01 审核中心：身份下拉接智能搜索的同时放大展开按钮。除 QSS
+    属性选择器（各平台默认 drop-down 宽度不一）外，另按平台指标
+    (PM_IndicatorWidth) 比例设置最小宽度——保证"明显更大"在所有平台成立，
+    而不依赖平台默认基线。combo 整体宽度交给布局，不在此写死。
+    """
+    combo.setProperty(SEARCHABLE_COMBO_PROPERTY, SEARCHABLE_COMBO_MARK)
+    indicator = combo.style().pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth)
+    combo.setMinimumWidth(indicator * 4)
+    _repolish(combo)

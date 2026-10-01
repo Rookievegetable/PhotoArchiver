@@ -322,3 +322,13 @@ def test_double_click_missing_photo_entity_is_silent(qtbot) -> None:
     qtbot.addWidget(dialog)
     # 实体缺失（已删除等）：静默忽略，不弹预览不崩溃。
     dialog._list.itemDoubleClicked.emit(dialog._list.item(0))
+
+
+def test_identity_combo_is_searchable_and_marked(qtbot) -> None:
+    """审核页身份下拉：可编辑搜索 + 展开按钮放大标记（Owner 功能完善）。"""
+    dialog = ReviewCenterPage(_controller([_result(0.9)]))
+    qtbot.addWidget(dialog)
+    combo = dialog._identity_combo
+    assert combo.isEditable()
+    assert combo.completer() is not None
+    assert combo.property("searchableCombo") == "true"

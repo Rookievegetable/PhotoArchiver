@@ -203,3 +203,13 @@ def test_t10_initial_identity_selects_matching_combo_row(qtbot) -> None:
         qtbot, entries, 0, persons=[(alice, "Alice")], identity=alice,
     )
     assert dialog._identity_combo.currentData() == alice  # 值相等即定位
+
+
+def test_t11_identity_combo_is_searchable_and_marked(qtbot) -> None:
+    """预览身份下拉：可编辑搜索 + 展开按钮放大标记（Owner 功能完善）。"""
+    entries = [_entry() for _ in range(2)]
+    dialog, on_approve, on_reject = _make_dialog(qtbot, entries, 0)
+    combo = dialog._identity_combo
+    assert combo.isEditable()
+    assert combo.completer() is not None
+    assert combo.property("searchableCombo") == "true"

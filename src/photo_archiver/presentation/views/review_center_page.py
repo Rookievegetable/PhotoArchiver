@@ -54,6 +54,9 @@ from PySide6.QtWidgets import (
 
 from photo_archiver.domain import RecognitionResult
 from photo_archiver.presentation.controllers.review_controller import ReviewController
+from photo_archiver.presentation.combo_search import NameSearchComboBinder
+from photo_archiver.presentation import ui_text as text
+from photo_archiver.presentation.visual_style import mark_searchable_combo
 from photo_archiver.presentation.ui_text import (
     REVIEW_APPROVE_ALL,
     REVIEW_APPROVE_ALL_CONFIRM,
@@ -72,7 +75,6 @@ from photo_archiver.presentation.ui_text import (
     REVIEW_GUIDANCE_TEXT,
     REVIEW_IDENTITY_HINT,
     REVIEW_IDENTITY_LABEL,
-    REVIEW_IDENTITY_UNRESOLVED,
     REVIEW_NO_IDENTITY_WARNING,
     REVIEW_REJECT_SELECTED,
     REVIEW_REJECT_SELECTED_COUNTED,
@@ -186,9 +188,14 @@ class ReviewCenterPage(QWidget):
         # 写入身份，批准结果永远进不了归档。这里给审核人一个显式身份选择器，
         # 让"人工最终结果"能真正落到 person_id 上。
         self._identity_combo = QComboBox(self)
-        self._identity_combo.addItem(REVIEW_IDENTITY_UNRESOLVED, None)
+        self._identity_combo.addItem(text.REVIEW_IDENTITY_UNRESOLVED, None)
         for person_id, name in self._available_persons():
             self._identity_combo.addItem(name, person_id)
+        # 2026-10-01：身份下拉接智能搜索 + 放大展开按钮（Owner 功能完善）。
+        mark_searchable_combo(self._identity_combo)
+        self._identity_search = NameSearchComboBinder(
+            self._identity_combo, parent=self._identity_combo,
+        )
         self._identity_label = QLabel(REVIEW_IDENTITY_LABEL, self)
         self._identity_hint = QLabel(REVIEW_IDENTITY_HINT, self)
         self._identity_hint.setWordWrap(True)
