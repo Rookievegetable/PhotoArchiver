@@ -38,7 +38,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QComboBox,
@@ -81,6 +81,11 @@ from photo_archiver.presentation.ui_text import (
     REVIEW_STATUS_LINE,
     STATUS_BADGE_PENDING,
 )
+from photo_archiver.presentation.views.photo_detail_dialog import PhotoDetailDialog
+
+# 行上的附加数据角色：UserRole = 结果 id（批量动作），UserRole+1 = 结果对象
+# （双击 → controller.photo_for → 高清预览）。
+RESULT_DATA_ROLE = Qt.UserRole + 1  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
     from photo_archiver.presentation.controllers.photo_list_controller import (
@@ -209,6 +214,8 @@ class ReviewCenterPage(QWidget):
         # after the first refresh so construction-time selection changes are
         # inert). Keyboard multi-select works via ExtendedSelection defaults.
         self._list.itemSelectionChanged.connect(self._update_action_buttons)
+        # 双击行 → 该照片的高清预览（人工辨别身份；打开即自动受控解码）。
+        self._list.itemDoubleClicked.connect(self._on_row_double_clicked)
 
     def refresh(self) -> None:
         """Public re-query hook：切页进入与任务完成时由 MainWindow 调用。"""
@@ -282,6 +289,7 @@ class ReviewCenterPage(QWidget):
             ),
         )))
         item.setData(Qt.ItemDataRole.UserRole, result.id)
+        item.setData(RESULT_DATA_ROLE, result)
         self._request_row_thumbnail(item, result)
         return item
 
@@ -310,6 +318,28 @@ class ReviewCenterPage(QWidget):
         icon = QIcon(str(thumbnail))
         for item in items:
             item.setIcon(icon)
+
+    @Slot(QListWidgetItem)
+    def _on_row_double_clicked(self, item: QListWidgetItem) -> None:
+        """双击行 → 该照片的高清预览（auto_load_hd 直出，人工辨别身份）。
+
+        行 → 结果 → controller.photo_for → Photo entity；实体缺失（已被删除
+        等）静默忽略。模态预览复用照片详情的受控解码基建（EXIF/DPR/竞态
+        防护全部继承）。
+        """
+        result = item.data(RESULT_DATA_ROLE)
+        if not isinstance(result, RecognitionResult):
+            return
+        photo = self._controller.photo_for(result)
+        if photo is None:
+            return
+        PhotoDetailDialog(
+            photo,
+            badge=None,
+            thumbnail_path=None,
+            parent=self,
+            auto_load_hd=True,
+        ).exec()
 
     def _selected_ids(self) -> tuple[UUID, ...]:
         """Return the UUIDs carried by the currently selected list rows."""

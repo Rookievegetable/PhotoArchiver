@@ -118,6 +118,38 @@ def test_t2_click_starts_decode_and_replaces_thumbnail(qtbot, tmp_path) -> None:
     assert not dialog._hd_status_label.isVisible()
 
 
+def test_t14_auto_load_hd_starts_decode_on_open(qtbot, tmp_path) -> None:
+    """auto_load_hd=True（审核双击场景）：打开即自动解码，无需点击按钮。"""
+    decoder = _fake_decoder([_solid_qimage(300, 200, (10, 200, 30))])
+    dialog = PhotoDetailDialog(
+        _photo(tmp_path),
+        badge=None,
+        thumbnail_path=_write_thumbnail(tmp_path),
+        decoder=decoder,
+        auto_load_hd=True,
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.waitUntil(lambda: len(decoder.calls) == 1, timeout=5000)
+    _wait_pixmap(qtbot, dialog, 300)
+    assert not dialog._view_full_button.isVisible()  # 成功后隐藏
+
+
+def test_t15_default_open_still_defers_original_io(qtbot, tmp_path) -> None:
+    """默认 auto_load_hd=False：打开详情零原图 IO 的既有契约不回归。"""
+    decoder = _fake_decoder([_solid_qimage(300, 200, (10, 200, 30))])
+    dialog = PhotoDetailDialog(
+        _photo(tmp_path),
+        badge=None,
+        thumbnail_path=_write_thumbnail(tmp_path),
+        decoder=decoder,
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+    assert decoder.calls == []  # 构造同步完成，未提交任何解码任务
+    assert dialog._view_full_button.isVisible()
+
+
 # ---- T3/T4/T5/T8：真实解码器单元级契约 ----
 
 

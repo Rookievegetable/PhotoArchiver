@@ -146,11 +146,14 @@ class PhotoDetailDialog(QDialog):
         thumbnail_path: Path | None = None,
         parent: QWidget | None = None,
         decoder: Callable[[Path, QSize, float], QImage] | None = None,
+        auto_load_hd: bool = False,
     ) -> None:
         """Compose the preview and metadata rows from already-loaded data.
 
         ``decoder`` 仅测试注入（§8 可替换边界）；生产恒为真实
-        :func:`_decode_preview`。
+        :func:`_decode_preview`。``auto_load_hd``：打开即自动启动高清解码
+        （审核中心双击场景——审片人需要直出高清，无需再点【查看大图】）；
+        默认 False 保持"打开详情零原图 IO"契约。
         """
         super().__init__(parent)
         self.setWindowTitle(text.PHOTO_DETAIL_TITLE)
@@ -209,6 +212,8 @@ class PhotoDetailDialog(QDialog):
         )
         layout.addWidget(QLabel(status, self))
         layout.addStretch()
+        if auto_load_hd:
+            self._on_view_full_size_clicked()
 
     @Slot()
     def _on_view_full_size_clicked(self) -> None:

@@ -219,3 +219,40 @@ def test_missing_photo_entity_degrades_without_thumbnail_request(qtbot) -> None:
     ReviewCenterPage(controller, thumbnail_source=source)  # type: ignore[arg-type]
 
     source.load_thumbnail.assert_not_called()
+
+
+def test_double_click_opens_hd_preview_of_row_photo(qtbot, monkeypatch) -> None:
+    """双击行 → 打开对应照片的高清预览（auto_load_hd=True，人工辨别身份）。"""
+    result = _result(0.9)
+    controller = _controller([result])
+    dialog = ReviewCenterPage(controller)
+    qtbot.addWidget(dialog)
+
+    opened: dict[str, object] = {}
+
+    class _FakeHdDialog:
+        def __init__(self, *args, **kwargs):
+            opened["args"] = args
+            opened["kwargs"] = kwargs
+
+        def exec(self):
+            opened["exec"] = True
+            return 1
+
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.review_center_page.PhotoDetailDialog",
+        _FakeHdDialog,
+    )
+    dialog._list.itemDoubleClicked.emit(dialog._list.item(0))
+    assert opened["exec"] is True
+    assert opened["kwargs"].get("auto_load_hd") is True
+    controller.photo_for.assert_called_once_with(result)
+
+
+def test_double_click_missing_photo_entity_is_silent(qtbot) -> None:
+    controller = _controller([_result(0.9)])
+    controller.photo_for.return_value = None
+    dialog = ReviewCenterPage(controller)
+    qtbot.addWidget(dialog)
+    # 实体缺失（已删除等）：静默忽略，不弹预览不崩溃。
+    dialog._list.itemDoubleClicked.emit(dialog._list.item(0))
