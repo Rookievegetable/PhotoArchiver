@@ -16,7 +16,7 @@ pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox, QWidget
 
 from photo_archiver.domain import Photo, PhotoPath, RecognitionResult
 from photo_archiver.presentation import ui_text as text
@@ -222,7 +222,7 @@ def test_missing_photo_entity_degrades_without_thumbnail_request(qtbot) -> None:
 
 
 def test_double_click_opens_review_preview_with_snapshot(qtbot, monkeypatch) -> None:
-    """双击行 → 打开审核预览：队列快照 = 展示行、游标定位双击行、身份只读传递。"""
+    """双击行 → 打开审核预览：队列快照 = 展示行、游标定位双击行、身份传递。"""
     results = [_result(0.9), _result(0.8)]
     controller = _controller(results)
     dialog = ReviewCenterPage(controller)
@@ -230,9 +230,12 @@ def test_double_click_opens_review_preview_with_snapshot(qtbot, monkeypatch) -> 
 
     opened: dict[str, object] = {}
 
-    class _FakePreview:
+    class _FakePreview(QWidget):
+        identity_changed = Signal(object)
+
         def __init__(self, entries, index, **kwargs):
-            opened["entries"] = entries
+            super().__init__()
+            opened["entries"] = list(entries)
             opened["index"] = index
             opened["kwargs"] = kwargs
 
@@ -249,13 +252,13 @@ def test_double_click_opens_review_preview_with_snapshot(qtbot, monkeypatch) -> 
     assert opened["entries"] == results  # 队列快照与展示行一致
     assert opened["index"] == 1  # 游标定位双击行
     kwargs = opened["kwargs"]
-    assert kwargs["identity"] is None  # D2-A：页面选择器未指定
-    assert kwargs["identity_text"] == text.REVIEW_IDENTITY_UNRESOLVED
+    assert kwargs["identity"] is None  # 页面选择器未指定 → 预览下拉初始未指定
+    assert kwargs["persons"] == []  # 控制器无人员读侧时的降级空列表
     assert callable(kwargs["on_approve"]) and callable(kwargs["on_reject"])
 
 
-def test_double_click_passes_selected_identity_from_page_combo(qtbot, monkeypatch) -> None:
-    """D2-A：页面选择器已选人员 → 预览内只读展示并随回调提交该身份。"""
+def test_double_click_passes_persons_and_selected_identity(qtbot, monkeypatch) -> None:
+    """页面选择器已选人员 + 人员列表 → 预览下拉初始定位并可改选回写。"""
     person_id = uuid4()
     result = _result(0.9)
     controller = _controller([result])
@@ -265,10 +268,11 @@ def test_double_click_passes_selected_identity_from_page_combo(qtbot, monkeypatc
 
     opened: dict[str, object] = {}
 
-    class _FakePreview:
+    class _FakePreview(QWidget):
+        identity_changed = Signal(object)
+
         def __init__(self, entries, index, **kwargs):
-            opened["entries"] = entries
-            opened["index"] = index
+            super().__init__()
             opened["kwargs"] = kwargs
 
         def exec(self):
@@ -281,8 +285,13 @@ def test_double_click_passes_selected_identity_from_page_combo(qtbot, monkeypatc
     dialog._identity_combo.setCurrentIndex(1)  # Alice
     dialog._list.itemDoubleClicked.emit(dialog._list.item(0))
     kwargs = opened["kwargs"]
-    assert kwargs["identity"] is person_id
-    assert kwargs["identity_text"] == "Alice"
+    assert kwargs["identity"] is person_id  # 初始值 = 页面选择器当前值
+    assert kwargs["persons"] == [(person_id, "Alice")]
+    # 回写链路：预览内改选身份 → 页面选择器同步（连续双击身份保持连续）
+    page_combo = dialog._identity_combo
+    slot = dialog._apply_preview_identity
+    slot(person_id)
+    assert page_combo.currentData() == person_id
 
 
 def test_double_click_preview_callbacks_drive_controller_and_wall_refresh(

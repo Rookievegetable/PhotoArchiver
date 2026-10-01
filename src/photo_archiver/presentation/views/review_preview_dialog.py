@@ -20,8 +20,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 from uuid import UUID
 
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -41,15 +42,24 @@ if TYPE_CHECKING:
 
 
 class ReviewPreviewDialog(PhotoDetailDialog):
-    """审核高清预览：队列导航 + 当前结果直接通过/拒绝。"""
+    """审核高清预览：队列导航 + 当前结果直接通过/拒绝 + 预览内指定人员。
+
+    身份下拉（D2-A 演进，Owner 2026-10-01 功能完善）：初始值 = 页面选择器
+    当前值；审片时可在预览内直接改选，"通过本条"按当前下拉值提交；变更经
+    :attr:`identity_changed` 回写页面选择器（连续双击时身份保持连续）。
+    未指定身份仍复用既有确认告警（D-1 语义不变）。
+    """
+
+    # 预览内改选身份 → 页面回写（object 承载 UUID | None）。
+    identity_changed = Signal(object)
 
     def __init__(
         self,
         entries: list[RecognitionResult],
         index: int,
         photo_for: Callable[[RecognitionResult], Photo | None],
+        persons: list[tuple[UUID, str]],
         identity: UUID | None,
-        identity_text: str,
         on_approve: Callable[[RecognitionResult, UUID | None], None],
         on_reject: Callable[[RecognitionResult], None],
         parent: QWidget | None = None,
@@ -70,15 +80,15 @@ class ReviewPreviewDialog(PhotoDetailDialog):
         self._entries = list(entries)
         self._cursor = index
         self._photo_for = photo_for
-        self._identity = identity
-        self._identity_text = identity_text
         self._on_approve = on_approve
         self._on_reject = on_reject
         self._acted: dict[int, str] = {}
-        self._build_review_controls()
+        self._build_review_controls(persons, identity)
 
-    def _build_review_controls(self) -> None:
-        """Insert the navigation + action rows between preview and metadata."""
+    def _build_review_controls(
+        self, persons: list[tuple[UUID, str]], identity: UUID | None,
+    ) -> None:
+        """Insert the navigation + identity/action rows after the preview."""
         self._position_label = QLabel(self)
         self._prev_button = QPushButton(text.REVIEW_PREVIEW_PREVIOUS, self)
         self._prev_button.clicked.connect(self._on_previous)
@@ -89,15 +99,26 @@ class ReviewPreviewDialog(PhotoDetailDialog):
         nav_row.addWidget(self._position_label, 1)
         nav_row.addWidget(self._next_button)
 
-        self._identity_label = QLabel(
-            text.REVIEW_PREVIEW_IDENTITY_PREFIX + self._identity_text, self,
-        )
+        # D2-A 演进：身份在预览内可直接选择——初始值 = 页面选择器当前值；
+        # 变更经 identity_changed 回写页面（连续双击身份保持连续）。
+        self._identity_label = QLabel(text.REVIEW_IDENTITY_LABEL, self)
+        self._identity_combo = QComboBox(self)
+        self._identity_combo.addItem(text.REVIEW_IDENTITY_UNRESOLVED, None)
+        for person_id, name in persons:
+            self._identity_combo.addItem(name, person_id)
+        if identity is not None:
+            for i in range(self._identity_combo.count()):
+                if self._identity_combo.itemData(i) == identity:
+                    self._identity_combo.setCurrentIndex(i)
+                    break
+        self._identity_combo.currentIndexChanged.connect(self._on_identity_changed)
         self._approve_button = QPushButton(text.REVIEW_PREVIEW_APPROVE, self)
         self._approve_button.clicked.connect(self._on_approve_current)
         self._reject_button = QPushButton(text.REVIEW_PREVIEW_REJECT, self)
         self._reject_button.clicked.connect(self._on_reject_current)
         action_row = QHBoxLayout()
-        action_row.addWidget(self._identity_label, 1)
+        action_row.addWidget(self._identity_label)
+        action_row.addWidget(self._identity_combo, 1)
         action_row.addWidget(self._approve_button)
         action_row.addWidget(self._reject_button)
 
@@ -110,6 +131,15 @@ class ReviewPreviewDialog(PhotoDetailDialog):
         layout.insertLayout(3, action_row)
         layout.insertWidget(4, self._acted_hint)
         self._refresh_controls()
+
+    def _selected_identity(self) -> UUID | None:
+        """Return the identity chosen in the preview combo (D-1), if any."""
+        value = self._identity_combo.currentData()
+        return value if isinstance(value, UUID) else None
+
+    @Slot(int)
+    def _on_identity_changed(self, index: int) -> None:
+        self.identity_changed.emit(self._identity_combo.itemData(index))
 
     def _current(self) -> RecognitionResult:
         return self._entries[self._cursor]
@@ -162,9 +192,10 @@ class ReviewPreviewDialog(PhotoDetailDialog):
 
     def _on_approve_current(self) -> None:
         result = self._current()
-        if self._identity is None and not self._confirm_without_identity():
+        identity = self._selected_identity()
+        if identity is None and not self._confirm_without_identity():
             return
-        self._on_approve(result, self._identity)
+        self._on_approve(result, identity)
         self._acted[self._cursor] = "approved"
         self._refresh_controls()
 

@@ -345,17 +345,28 @@ class ReviewCenterPage(QWidget):
         if not entries:
             return
         identity = self._selected_identity()
-        identity_text = self._identity_combo.currentText()
-        ReviewPreviewDialog(
+        preview = ReviewPreviewDialog(
             entries,
             index,
             photo_for=self._controller.photo_for,
+            persons=self._available_persons(),
             identity=identity,
-            identity_text=identity_text,
             on_approve=self._apply_preview_approve,
             on_reject=self._apply_preview_reject,
             parent=self,
-        ).exec()
+        )
+        # 预览内改选身份 → 回写本页选择器（连续双击时身份保持连续）。
+        preview.identity_changed.connect(self._apply_preview_identity)
+        preview.exec()
+
+    def _apply_preview_identity(self, value: object) -> None:
+        """预览内改选身份 → 回写页面选择器（连续双击时身份保持连续）。"""
+        index = next(
+            (i for i in range(self._identity_combo.count())
+             if self._identity_combo.itemData(i) == value),
+            0,
+        )
+        self._identity_combo.setCurrentIndex(index)
 
     def _apply_preview_approve(self, result: RecognitionResult, identity: UUID | None) -> None:
         """预览「通过本条」回调：与页面按钮同一条 bulk 路径 + 即时刷新。"""
