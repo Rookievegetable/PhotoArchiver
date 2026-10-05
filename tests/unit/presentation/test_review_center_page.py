@@ -297,7 +297,11 @@ def test_double_click_passes_persons_and_selected_identity(qtbot, monkeypatch) -
 def test_double_click_preview_callbacks_drive_controller_and_wall_refresh(
     qtbot,
 ) -> None:
-    """预览回调 → bulk 路径 + 队列刷新 + review_changed（照片墙即时刷新）。"""
+    """预览回调 → 单条批准路径（S1-F）+ 队列刷新 + review_changed。
+
+    S1-F6：单条批准走 ``approve_single``——D-2 = B 的领域异常在该路径显式
+    传播给调用方（由页面弹提示），而非像批量那样静默跳过。
+    """
     result = _result(0.9)
     controller = _controller([result])
     dialog = ReviewCenterPage(controller)
@@ -306,7 +310,7 @@ def test_double_click_preview_callbacks_drive_controller_and_wall_refresh(
     dialog.review_changed.connect(changed)
 
     dialog._apply_preview_approve(result, None)
-    controller.bulk_approve.assert_called_once_with((result.id,), None)
+    controller.approve_single.assert_called_once_with(result.id, None)
     changed.assert_called()
     controller.bulk_reject.reset_mock()
     changed.reset_mock()

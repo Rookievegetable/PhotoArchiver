@@ -118,6 +118,20 @@ class ReviewController(QObject):
         """
         return self._use_case.approve(result_id, person_id)
 
+    def approve_single(
+        self,
+        result_id: UUID,
+        person_id: UUID | None = None,
+        cluster_id: UUID | None = None,
+    ) -> RecognitionResult | None:
+        """S1-F：单条身份批准——D-2 = B 的领域异常**显式传播**给调用方。
+
+        与 :meth:`bulk_approve` 的逐项跳过语义不同，单条路径（预览「通过本条」）
+        必须让「照片未聚类」等业务拒绝到达 UI 层提示用户，而不是静默留在队列。
+        ``cluster_id``（S1-F）：多簇合影的显式决策锚点。
+        """
+        return self._use_case.approve(result_id, person_id, cluster_id)
+
     def reject(self, result_id: UUID) -> RecognitionResult | None:
         """Mark a single pending result as rejected; return the transitioned result."""
         return self._use_case.reject(result_id)

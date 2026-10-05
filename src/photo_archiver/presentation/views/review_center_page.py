@@ -55,6 +55,13 @@ from PySide6.QtWidgets import (
 from photo_archiver.domain import RecognitionResult
 from photo_archiver.presentation.controllers.review_controller import ReviewController
 from photo_archiver.presentation.combo_search import NameSearchComboBinder
+from photo_archiver.domain.exceptions import (
+    ConcurrentDecisionConflictError,
+    ManualDecisionProtectedError,
+    PhotoNotClusteredError,
+    ReviewAnchorAmbiguousError,
+    ValidationError,
+)
 from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.visual_style import mark_searchable_combo
 from photo_archiver.presentation.ui_text import (
@@ -376,8 +383,30 @@ class ReviewCenterPage(QWidget):
         self._identity_combo.setCurrentIndex(index)
 
     def _apply_preview_approve(self, result: RecognitionResult, identity: UUID | None) -> None:
-        """预览「通过本条」回调：与页面按钮同一条 bulk 路径 + 即时刷新。"""
-        self._controller.bulk_approve((result.id,), identity)
+        """预览「通过本条」回调：单条批准路径 + 领域异常显式提示（S1-F6）。
+
+        D-2 = B：照片未聚类等业务拒绝经 :meth:`approve_single` 传播到这里，
+        以模态提示告知用户（与 D-1 未指定身份告警同一处理模式），队列随后
+        刷新——被拒的行保持在队列中可见。
+        """
+        try:
+            self._controller.approve_single(result.id, identity)
+        except (
+            PhotoNotClusteredError,
+            ManualDecisionProtectedError,
+            ConcurrentDecisionConflictError,
+            ValidationError,
+        ) as exc:
+            message = (
+                text.REVIEW_PHOTO_UNCLUSTERED
+                if isinstance(exc, PhotoNotClusteredError)
+                else (
+                    text.REVIEW_PHOTO_AMBIGUOUS
+                    if isinstance(exc, ReviewAnchorAmbiguousError)
+                    else (str(exc) or text.REVIEW_DECISION_BLOCKED_FALLBACK)
+                )
+            )
+            QMessageBox.warning(self, text.REVIEW_DECISION_BLOCKED_TITLE, message)
         self._refresh_list()
         self.review_changed.emit()
 

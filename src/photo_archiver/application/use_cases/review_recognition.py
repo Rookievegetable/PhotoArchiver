@@ -17,11 +17,14 @@ class ReviewRecognitionUseCase:
         self,
         result_id: UUID,
         person_id: UUID | None = None,  # type: ignore[empty-body]
+        cluster_id: UUID | None = None,  # type: ignore[empty-body]
     ) -> RecognitionResult | None:
         """Mark a single pending result as approved.
 
         ``person_id`` (Stage 4 D-1) is the human-decided identity written with
         the approval so the row can actually reach the archive planner.
+        ``cluster_id`` (S1-F) disambiguates the decision anchor when the photo
+        spans multiple clusters in the latest generation.
         """
         raise NotImplementedError
 

@@ -27,7 +27,22 @@ from photo_archiver.domain import (
     RecognitionResult,
 )
 from photo_archiver.domain.entities.archive import ArchiveRecord
+from photo_archiver.domain.entities.face_cluster import (
+    FaceCluster,
+    FaceClusterMember,
+    FaceClusterRun,
+)
+from photo_archiver.domain.entities.face_observation import FaceObservation
+from photo_archiver.domain.entities.recognition_run import RecognitionRun
 from photo_archiver.domain.value_objects.archive_path import ArchivePath
+from photo_archiver.domain.value_objects.face_box import FaceBox
+from photo_archiver.domain.value_objects.face_embedding import FaceEmbedding
+from photo_archiver.application.services.identity_decision_service import (
+    IdentityDecisionService,
+)
+from photo_archiver.application.services.projection_reconciler import (
+    ProjectionReconciler,
+)
 
 
 class _PathBuilder:
@@ -54,6 +69,52 @@ def _add_photo(repos, file_name: str = "p.jpg") -> Photo:
     )
     repos.photos.add(photo)
     return photo
+
+
+def _cluster_photo(repos, photo: Photo):
+    """D-2 = B：为照片播种"已聚类"事实（observation → member → cluster）。"""
+    run = RecognitionRun()
+    repos.recognition_runs.add_run(run)
+    cluster_run = FaceClusterRun(recognition_run_id=run.id, algorithm_version="test")
+    repos.face_clusters.add_cluster_run(cluster_run)
+    cluster = FaceCluster(
+        cluster_run_id=cluster_run.id, run_id=run.id,
+        ordinal=0, member_count=1, sort_key="k|000000",
+    )
+    repos.face_clusters.add_clusters([cluster])
+    observation = FaceObservation(
+        run_id=run.id, photo_id=photo.id, face_index=0, photo_face_count=1,
+        det_score=0.9, box=FaceBox(0, 0, 10, 10),
+        embedding=FaceEmbedding((1.0, 0.0)), scope_verdict="in_selected_scope",
+    )
+    repos.face_observations.add_many([observation])
+    repos.face_clusters.add_members(
+        [FaceClusterMember(cluster_id=cluster.id, observation_id=observation.id)]
+    )
+    return cluster
+
+
+def _any_cluster_id(repos):
+    return repos.face_clusters.list_all_cluster_runs()[0].id
+
+
+def _decision_service(repos) -> IdentityDecisionService:
+    reconciler = ProjectionReconciler(
+        recognition_repository=repos.recognition,
+        assignment_repository=repos.cluster_assignments,
+        cluster_repository=repos.face_clusters,
+        observation_repository=repos.face_observations,
+    )
+    return IdentityDecisionService(
+        recognition_repository=repos.recognition,
+        assignment_repository=repos.cluster_assignments,
+        cluster_repository=repos.face_clusters,
+        observation_repository=repos.face_observations,
+        person_repository=repos.people,
+        sample_repository=repos.person_face_samples,
+        reconciler=reconciler,
+        transaction_runner=repos._connection_provider.run_immediate,
+    )
 
 
 def _approve(repos, photo: Photo, person: Person) -> RecognitionResult:
@@ -271,19 +332,31 @@ def test_manual_approval_can_record_identity_and_reach_archive(tmp_path: Path) -
     repos = build_sqlite_repositories(tmp_path / "db.sqlite3")
     person = _add_person(repos, "周迅")
     photo = _add_photo(repos)
+    cluster = _cluster_photo(repos, photo)
     pending = RecognitionResult(photo_id=photo.id, confidence=None)
     repos.recognition.add(pending)
 
-    service = ReviewRecognitionService(repos.recognition)
+    # S1-F：身份批准走 Assignment → ProjectionReconciler 唯一链（D-2 = B）。
+    service = ReviewRecognitionService(
+        repos.recognition, identity_decision_service=_decision_service(repos),
+    )
     approved = service.approve(pending.id, person.id)
     assert approved is not None
     assert approved.person_id == person.id
     assert approved.status is MatchStatus.APPROVED
+    assert approved.assignment_id is not None, "S1：新 approved 必须携带支撑引用"
 
-    # 落库同样带身份（服务层返回值与 DB 必须一致）。
+    # 落库同样带身份（服务层返回值与 DB 必须一致），且 review 决策行存在。
     stored = repos.recognition.find_by_id(pending.id)
     assert stored is not None
     assert stored.person_id == person.id
+    assert stored.assignment_id == approved.assignment_id
+    decisions = repos.cluster_assignments.list_by_cluster(cluster.id)
+    assert any(
+        row.source == "review" and row.status == "confirmed"
+        and row.person_id == person.id
+        for row in decisions
+    )
 
     planner = ArchivePlanner(
         path_builder=_PathBuilder(),
@@ -327,17 +400,27 @@ def test_bulk_approval_does_not_overwrite_existing_identity(tmp_path: Path) -> N
     chosen = _add_person(repos, "批量默认人员")
     other = _add_person(repos, "行上已有人员")
     photo = _add_photo(repos)
+    cluster = _cluster_photo(repos, photo)
     first = RecognitionResult(photo_id=photo.id, confidence=None)
     second = RecognitionResult(photo_id=photo.id, confidence=None, person_id=other.id)
     repos.recognition.add(first)
     repos.recognition.add(second)
 
-    service = ReviewRecognitionService(repos.recognition)
+    # S1-F：带身份的批量批准逐项走决策链；同一 (photo, person) 幂等——
+    # 两个 pending 行都批准为 chosen 时只产生**一条** review 决策与一条投影。
+    service = ReviewRecognitionService(
+        repos.recognition, identity_decision_service=_decision_service(repos),
+    )
     assert service.bulk_approve((first.id, second.id), chosen.id) == 2
 
-    # 无身份的行补上默认身份；已有身份的行保持不变。
-    assert repos.recognition.find_by_id(first.id).person_id == chosen.id
-    assert repos.recognition.find_by_id(second.id).person_id == other.id
+    projection = repos.recognition.find_projection(photo.id, chosen.id)
+    assert projection is not None and projection.assignment_id is not None
+    decisions = repos.cluster_assignments.list_by_cluster(cluster.id)
+    confirmed = [row for row in decisions if row.status == "confirmed"]
+    assert len(confirmed) == 1, "同 pair 重复批准不得产生重复决策行"
+    assert confirmed[0].person_id == chosen.id
+    # second 行是旧链遗留形态（pending + 身份），不被决策链翻转成无主投影。
+    assert repos.recognition.find_by_id(second.id).status is MatchStatus.PENDING
 
 
 def test_rerun_does_not_overwrite_manual_approval(tmp_path: Path) -> None:

@@ -21,7 +21,7 @@ from photo_archiver.application.services import (
     PairingWorkbenchService,
     SuggestPairingsService,
 )
-from photo_archiver.domain import MatchStatus
+from photo_archiver.domain import MatchStatus, RecognitionResult
 from photo_archiver.infrastructure import (
     InMemoryClusterPersonAssignmentRepository,
     InMemoryFaceClusterRepository,
@@ -156,6 +156,12 @@ class _RosterRepo:
 
 
 class _RecognitionStub:
+    """S1：补齐投影所有权契约（与 SQLite 实现同语义）。
+
+    缺失任一方法都会让 ``ProjectionReconciler`` 抛 ``AttributeError``，而对话框
+    的 ``except Exception`` 会弹出未打桩的模态框 → headless 永久挂起。
+    """
+
     def __init__(self):
         self.rows: list = []
 
@@ -164,6 +170,43 @@ class _RecognitionStub:
 
     def list_by_photo(self, photo_id):
         return [row for row in self.rows if row.photo_id == photo_id]
+
+    def list_all_approved(self):
+        return [row for row in self.rows if row.status == MatchStatus.APPROVED]
+
+    def find_projection(self, photo_id, person_id):
+        for row in self.rows:
+            if (row.photo_id == photo_id and row.person_id == person_id
+                    and row.assignment_id is not None
+                    and row.status == MatchStatus.APPROVED):
+                return row
+        return None
+
+    def list_projections(self):
+        return [row for row in self.rows
+                if row.assignment_id is not None and row.status == MatchStatus.APPROVED]
+
+    def create_projection(self, photo_id, person_id, assignment_id):
+        row = RecognitionResult(
+            photo_id=photo_id, person_id=person_id, confidence=None,
+            status=MatchStatus.APPROVED, assignment_id=assignment_id,
+        )
+        self.rows.append(row)
+        return row
+
+    def retarget_projection(self, result_id, assignment_id):
+        for row in self.rows:
+            if row.id == result_id:
+                row.assignment_id = assignment_id
+                return 1
+        return 0
+
+    def terminate_projection(self, result_id):
+        for row in self.rows:
+            if row.id == result_id and row.status == MatchStatus.APPROVED:
+                row.status = MatchStatus.REJECTED
+                return 1
+        return 0
 
     def remove_results_for_person_photos(self, person_id, photo_ids):
         targets = set(photo_ids)
