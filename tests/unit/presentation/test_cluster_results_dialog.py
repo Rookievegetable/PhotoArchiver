@@ -8,6 +8,9 @@ pytest.importorskip("PySide6")
 from uuid import uuid4
 
 from photo_archiver.application.services import ClusterResultsService
+from photo_archiver.application.services.calibration_annotation_service import (
+    CalibrationAnnotationService,
+)
 from photo_archiver.domain import (
     FaceBox,
     FaceCluster,
@@ -17,6 +20,13 @@ from photo_archiver.domain import (
     FaceObservation,
     RecognitionRun,
     RunPhotoSnapshot,
+)
+from photo_archiver.domain.entities.calibration_annotation import (
+    VERDICT_OUT_OF_ROSTER,
+    VERDICT_PERSON,
+)
+from photo_archiver.infrastructure.repositories.in_memory_calibration_annotation_repository import (
+    InMemoryCalibrationAnnotationRepository,
 )
 from photo_archiver.infrastructure import (
     InMemoryFaceClusterRepository,
@@ -213,3 +223,89 @@ def test_member_rows_request_thumbnails_through_shared_channel(qtbot, tmp_path) 
     assert dialog._member_list.item(1).icon().isNull()  # 另一照片尚未到达
     dialog._attach_thumbnail(harness.photo_a, thumb_a)
     assert not dialog._member_list.item(1).icon().isNull()
+
+
+class TestCalibrationIdentityFailClosed:
+    """S4-B-2 Round-1 前置修复：无显式身份不得进入 Calibration 标注模式。
+
+    CP6：None / 空白构造期拒绝、"unknown" 回退移除、有效身份照常注入；
+    CP7：A/B 双人身份相互隔离，own view 均为本人的最新行且绝不落到 "unknown"。
+    全部使用 synthetic 身份与 in-memory 仓储，不触碰生产。
+    """
+
+    @staticmethod
+    def _service() -> CalibrationAnnotationService:
+        return CalibrationAnnotationService(InMemoryCalibrationAnnotationRepository())
+
+    def _open(self, qtbot, harness, **kwargs) -> ClusterResultsDialog:
+        dialog = ClusterResultsDialog(
+            harness.service, harness.recognition_run.id, **kwargs
+        )
+        qtbot.addWidget(dialog)
+        return dialog
+
+    def test_none_rejected_at_construction(self, qtbot):
+        harness = _Harness()
+        harness.add_generation()
+        with pytest.raises(ValueError, match="annotator_id"):
+            self._open(
+                qtbot, harness,
+                calibration_service=self._service(), annotator_id=None,
+            )
+
+    def test_empty_string_rejected(self, qtbot):
+        harness = _Harness()
+        harness.add_generation()
+        with pytest.raises(ValueError, match="annotator_id"):
+            self._open(
+                qtbot, harness,
+                calibration_service=self._service(), annotator_id="",
+            )
+
+    def test_whitespace_rejected(self, qtbot):
+        harness = _Harness()
+        harness.add_generation()
+        with pytest.raises(ValueError, match="annotator_id"):
+            self._open(
+                qtbot, harness,
+                calibration_service=self._service(), annotator_id="   ",
+            )
+
+    def test_valid_identity_injected_trimmed_without_unknown(self, qtbot):
+        """有效身份照常注入（trim 归一）；面板身份不存在 "unknown"。"""
+        harness = _Harness()
+        harness.add_generation()
+        dialog = self._open(
+            qtbot, harness,
+            calibration_service=self._service(),
+            annotator_id="  annotator-a  ",
+            persons_provider=lambda: [],
+        )
+        assert dialog._calibration_active is True
+        assert dialog._calibration_panel is not None
+        assert dialog._calibration_panel._annotator_id == "annotator-a"
+        assert dialog._calibration_panel._annotator_id != "unknown"
+
+    def test_read_only_mode_allows_missing_identity(self, qtbot):
+        """不启用 calibration 时 annotator_id 缺省 None —— 历史只读语义不变。"""
+        harness = _Harness()
+        harness.add_generation()
+        dialog = self._open(qtbot, harness)
+        assert dialog._calibration_active is False
+        assert dialog._calibration_panel is None
+
+    def test_ab_identity_isolated_and_own_view_not_unknown(self):
+        """CP7：A/B 同簇双标互不串扰；各自 own view 是本人最新行（append-only）。"""
+        service = self._service()
+        cluster_id = uuid4()
+        service.annotate(cluster_id, "annotator-a", VERDICT_OUT_OF_ROSTER)
+        service.annotate(cluster_id, "annotator-b", VERDICT_PERSON, person_id=uuid4())
+
+        own_a = service.latest_own_annotation(cluster_id, "annotator-a")
+        own_b = service.latest_own_annotation(cluster_id, "annotator-b")
+
+        assert own_a is not None and own_a.annotator_id == "annotator-a"
+        assert own_b is not None and own_b.annotator_id == "annotator-b"
+        assert own_a.id != own_b.id
+        for own in (own_a, own_b):
+            assert own.annotator_id != "unknown"

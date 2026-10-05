@@ -1,10 +1,16 @@
-"""Cluster results dialog — D-4 聚类结果的只读展示.
+"""Cluster results dialog — D-4 聚类结果的只读展示 + Ground Truth 标注面板.
 
 展示持久化的 ``FaceClusterRun → FaceCluster → FaceClusterMember →
 FaceObservation`` 数据：代际选择器（同一识别运行的每次聚类一代）、代内
 簇列表（组号/成员数/首拍时间）、选中簇的成员明细（照片缩略图经共享异步
 通道加载，不阻塞 UI 线程）。**不含任何人员归属**——Person assignment 属
 Stage E；也不读取 legacy MatchPersons 数据。
+
+S4-B-1 Checkpoint 7：注入 ``calibration_service`` + ``annotator_id`` 后，追加
+Ground Truth 标注面板（:class:`CalibrationAnnotationPanel`）。标注面板与业务
+Assignment **完全隔离**——写调用只进 ``CalibrationAnnotationService``，结构上
+无法触达 Assignment / Review / Archive。标注模式下成员条目**隐藏 det/conf**
+（CP7.3 confirmation-bias 防护）；未注入时保持原只读行为不变。
 """
 
 from __future__ import annotations
@@ -27,7 +33,13 @@ from PySide6.QtWidgets import (
 
 from photo_archiver.application.dtos.cluster_results import ClusterRunResults
 from photo_archiver.application.services import ClusterResultsService
+from photo_archiver.application.services.calibration_annotation_service import (
+    CalibrationAnnotationService,
+)
 from photo_archiver.presentation import ui_text as text
+from photo_archiver.presentation.views.calibration_annotation_panel import (
+    CalibrationAnnotationPanel,
+)
 
 
 def _format_moment(moment) -> str:
@@ -44,14 +56,38 @@ class ClusterResultsDialog(QDialog):
         recognition_run_id: UUID,
         parent: QWidget | None = None,
         thumbnail_source=None,
+        calibration_service: CalibrationAnnotationService | None = None,
+        annotator_id: str | None = None,
+        persons_provider=None,
     ) -> None:
-        """Build the dialog; ``thumbnail_source`` is the shared async loader."""
+        """Build the dialog; ``thumbnail_source`` is the shared async loader.
+
+        S4-B-1：传入 ``calibration_service`` + ``annotator_id`` +
+        ``persons_provider`` 后启用 Ground Truth 标注面板（CP7）；不传
+        ``calibration_service`` 则保持纯只读模式，行为与历史版本一致。
+        S4-B-2 fail-closed：启用 Calibration 模式时 ``annotator_id`` 为
+        None/空白将在构造期抛出 :class:`ValueError` —— 标注面板绝不以
+        无身份（或回退身份）状态存在。
+        """
         super().__init__(parent)
         self.setWindowTitle(text.CLUSTER_RESULTS_TITLE)
         self.setMinimumSize(720, 480)
         self._results_service = results_service
         self._recognition_run_id = recognition_run_id
         self._thumbnail_source = thumbnail_source
+        self._calibration_service = calibration_service
+        self._persons_provider = persons_provider
+        self._calibration_active = calibration_service is not None
+        self._calibration_panel: CalibrationAnnotationPanel | None = None
+        self._calibration_service_typed = calibration_service
+        self._annotator_id_typed: str | None = None
+        if self._calibration_active:
+            # S4-B-2 Round-1 fail-closed：Calibration 模式必须由调用方显式注入
+            # 标注员身份；None/空白在构造期直接拒绝 —— 不存在 "unknown" 回退，
+            # 无身份的标注在任何路径上都无法落库（身份不得猜测/自动生成）。
+            if annotator_id is None or not annotator_id.strip():
+                raise ValueError(text.CALIBRATION_ANNOTATOR_ID_REQUIRED)
+            self._annotator_id_typed = annotator_id.strip()
         self._items_by_photo_id: dict[UUID, list[QListWidgetItem]] = {}
         self._current: ClusterRunResults | None = None
         self._build_ui()
@@ -90,6 +126,21 @@ class ClusterResultsDialog(QDialog):
         self._empty_label = QLabel(self)
         self._empty_label.setWordWrap(True)
         layout.addWidget(self._empty_label)
+
+        # S4-B-1：Ground Truth 标注面板（仅 calibration 模式）。身份已在构造期
+        # fail-closed 校验；此处的 None 分支运行时不可达，仅为类型收窄保留。
+        if (
+            self._calibration_active
+            and self._calibration_service_typed is not None
+            and self._annotator_id_typed is not None
+        ):
+            self._calibration_panel = CalibrationAnnotationPanel(
+                calibration_service=self._calibration_service_typed,
+                annotator_id=self._annotator_id_typed,
+                persons_provider=self._persons_provider,
+                parent=self,
+            )
+            layout.addWidget(self._calibration_panel)
 
     # ── Data + rendering ────────────────────────────────────────────────
 
@@ -179,9 +230,12 @@ class ClusterResultsDialog(QDialog):
         """Render the selected cluster's member details (thumbnails requested)."""
         self._member_list.clear()
         self._items_by_photo_id = {}
+        cluster_id = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
+        if self._calibration_active and self._calibration_panel is not None:
+            # S4-B-1 CP7.15：切换簇时推送新 cluster_id 给标注面板（清残留）。
+            self._calibration_panel.set_cluster(cluster_id)
         if self._current is None or current is None:
             return
-        cluster_id = current.data(Qt.ItemDataRole.UserRole)
         detail = next(
             (d for d in self._current.clusters if d.cluster_id == cluster_id), None,
         )
@@ -189,12 +243,19 @@ class ClusterResultsDialog(QDialog):
             return
         for member in detail.members:
             photo_name = member.photo_path.replace("\\", "/").rsplit("/", 1)[-1]
-            item = QListWidgetItem(text.CLUSTER_RESULTS_MEMBER_ENTRY.format(
-                photo=photo_name or "—",
-                index=member.face_index + 1,
-                det=member.det_score,
-                conf=member.confidence,
-            ))
+            if self._calibration_active:
+                # CP7.3：标注模式下隐藏 det/conf（confirmation-bias 防护）。
+                item = QListWidgetItem(text.CALIBRATION_MEMBER_ENTRY_NEUTRAL.format(
+                    photo=photo_name or "—",
+                    index=member.face_index + 1,
+                ))
+            else:
+                item = QListWidgetItem(text.CLUSTER_RESULTS_MEMBER_ENTRY.format(
+                    photo=photo_name or "—",
+                    index=member.face_index + 1,
+                    det=member.det_score,
+                    conf=member.confidence,
+                ))
             self._member_list.addItem(item)
             self._request_row_thumbnail(item, member)
 

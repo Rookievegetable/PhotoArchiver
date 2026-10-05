@@ -16,8 +16,8 @@ from alembic import command
 
 _ALEMBIC_CFG = Path(__file__).resolve().parents[2] / "alembic.ini"
 _OLD_REVISION = "003_import_batches_and_roster"
-# Stage 4：008 之后 alembic head。
-_HEAD_REVISION = "008_archive_identity_and_confidence"
+# S1：009 之后 alembic head（recognition_results.assignment_id）。
+_HEAD_REVISION = "012_single_expert_ground_truth"
 
 
 def _load_backfill_service(db_path: Path):
@@ -114,6 +114,19 @@ def _snapshot(db: Path) -> dict:
     return snap
 
 
+def _columns(db: Path, table: str) -> list[str]:
+    conn = sqlite3.connect(db)
+    names = [row[1] for row in conn.execute(f'PRAGMA table_info("{table}")')]
+    conn.close()
+    return names
+
+
+def _project(snapshot: dict, table: str, columns: list[str]) -> list[dict]:
+    """Keep only ``columns`` so a migration adding a column is not read as data change."""
+    return [{key: row[key] for key in columns if key in row}
+            for row in snapshot[table]]
+
+
 def _alembic_version(db: Path) -> str:
     conn = sqlite3.connect(db)
     row = conn.execute("SELECT version_num FROM alembic_version").fetchone()
@@ -133,14 +146,29 @@ def _upgrade_to_head(db: Path) -> None:
 def test_upgrade_preserves_all_existing_data(old_db: Path) -> None:
     before = _snapshot(old_db)
     assert _alembic_version(old_db) == _OLD_REVISION
+    # 迁移**前**的列集合——S1 009 会新增 recognition_results.assignment_id，
+    # 新列本身不是数据变化（其全 NULL 另行断言）。
+    pre_columns = {
+        table: _columns(old_db, table)
+        for table in ("people", "photos", "recognition_results",
+                      "import_batches", "import_draft_rows")
+    }
 
     _upgrade_to_head(old_db)
     after = _snapshot(old_db)
 
     assert _alembic_version(old_db) == _HEAD_REVISION
-    # 既有表逐行零丢失、零字段变化。
-    for table in before:
-        assert after[table] == before[table], f"table {table} changed during upgrade"
+    # 既有表逐行零丢失、零字段变化。比较时只投影迁移前已存在的列。
+    for table in ("people", "photos", "recognition_results", "import_batches",
+                  "import_draft_rows"):
+        columns = pre_columns[table]
+        assert _project(after, table, columns) == _project(before, table, columns), (
+            f"table {table} changed during upgrade"
+        )
+    # S1：存量 approved 行必须保持无主（legacy 人工决策），不得被回填猜测身份。
+    assert all(
+        row["assignment_id"] is None for row in after["recognition_results"]
+    ), "009 不得回填存量行的assignment_id"
     # FK 完整性：无 orphan。
     assert after["fk_violations"] == []
 

@@ -44,6 +44,10 @@ _ALL_TABLES = (
     "face_cluster_members",
     "cluster_person_assignments",
     "person_face_embeddings",
+    # S4-B-1：Ground Truth 标注体系（与业务链严格分离）
+    "calibration_annotations",
+    "calibration_ground_truth",
+    "calibration_datasets",
 )
 # 显式命名索引（002 的 5 个 + 003 的 2 个；SQLite UNIQUE 自动索引不计入）
 _ALL_INDEXES = (
@@ -68,10 +72,21 @@ _ALL_INDEXES = (
     "idx_person_face_embeddings_person_id",
     "idx_person_face_embeddings_observation_id",
     "idx_archive_records_person_id",
+    # S1 / migration 009：投影归属 + Assignment 最新决策查询。
+    "idx_rr_photo_person_projection",
+    "idx_rr_assignment_id",
+    "idx_cpa_cluster_latest",
+    # S4-B-1
+    "idx_calib_ann_cluster",
+    "idx_calib_ann_annotator",
+    "idx_calib_gt_cluster",
+    "idx_calib_gt_dataset",
+    # calibration_datasets 的唯一性由复合主键 (id, version) 隐含，
+    # 011 不再额外建 idx_calib_dataset_version。
 )
 
 # Stage 4：008 之后 alembic head（BLK-1 / BLK-5 schema 变更）。
-_HEAD = "008_archive_identity_and_confidence"
+_HEAD = "012_single_expert_ground_truth"
 
 
 @pytest.fixture
@@ -190,14 +205,17 @@ def test_migration_upgrade_idempotent(tmp_db: Path) -> None:
         assert _alembic_version(conn) == _HEAD
         # 表仍存在不重复创建
         tables = _list_tables(conn)
-        assert len(tables) == 18  # 17 tables + alembic_version
+        # 按 _ALL_TABLES 断言而非硬编码数量：每次新增迁移都会让硬编码失效，
+        # 而这里要验证的是"幂等 upgrade 不改变表集合"，不是表的数量。
+        assert set(_ALL_TABLES) <= set(tables)
+        assert "alembic_version" in tables
 
 
 # ── Schema 版本一致 ─────────────────────────────────────────────────────────
 
 
 def test_schema_version_consistent_after_upgrade(tmp_db: Path) -> None:
-    """upgrade head 后 Schema 版本一致——alembic_version=008 + 全部表与索引。"""
+    """upgrade head 后 Schema 版本一致——alembic_version=head + 全部表与索引。"""
     cfg = _make_alembic_config(tmp_db)
     command.upgrade(cfg, "head")
 
@@ -330,3 +348,139 @@ def test_008_backfills_archive_person_id_by_unique_name(tmp_db: Path) -> None:
         ).fetchall())
         assert rows[photo_unique] == unique_id, "唯一姓名应回填身份"
         assert rows[photo_dup] is None, "重名行必须留空（不猜身份）"
+
+
+# ── S1 / migration 009：projection ownership ────────────────────────────────
+
+
+def _schema_snapshot(conn: sqlite3.Connection) -> tuple:
+    """Full schema fingerprint: SQL text, columns, FKs, indexes, integrity."""
+    tables = sorted(
+        r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+            " AND name NOT LIKE 'sqlite_%'"
+        )
+    )
+    objects = sorted(
+        (r[0], r[1], (r[2] or "").strip())
+        for r in conn.execute(
+            "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL"
+        )
+    )
+    columns = {
+        table: [
+            (r[1], r[2], r[3], r[5])
+            for r in conn.execute(f'PRAGMA table_info("{table}")')
+        ]
+        for table in tables
+    }
+    foreign_keys = {
+        table: [tuple(r) for r in conn.execute(f'PRAGMA foreign_key_list("{table}")')]
+        for table in tables
+    }
+    indexes = sorted(
+        (r[0], r[1], r[2])
+        for r in conn.execute(
+            "SELECT name, tbl_name, sql FROM sqlite_master WHERE type='index'"
+        )
+    )
+    return (objects, columns, foreign_keys, indexes,
+            conn.execute("PRAGMA integrity_check").fetchone()[0],
+            conn.execute("PRAGMA foreign_key_check").fetchall())
+
+
+def test_009_adds_assignment_id_and_support_indexes(tmp_db: Path) -> None:
+    """009 为recognition_results 增assignment_id，并建三条查询索引。"""
+    cfg = _make_alembic_config(tmp_db)
+    command.upgrade(cfg, "head")
+
+    with sqlite3.connect(str(tmp_db)) as conn:
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(recognition_results)")}
+        assert "assignment_id" in columns
+        indexes = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index'"
+        )}
+        assert {"idx_rr_photo_person_projection", "idx_rr_assignment_id",
+                "idx_cpa_cluster_latest"} <= indexes
+        fks = {r[2] for r in conn.execute("PRAGMA foreign_key_list(recognition_results)")}
+        assert "cluster_person_assignments" in fks
+
+
+def test_009_leaves_existing_rows_unowned(tmp_db: Path) -> None:
+    """009 不回填历史 approved 行——迁移前没有支撑信息，回填等于猜身份。"""
+    cfg = _make_alembic_config(tmp_db)
+    command.upgrade(cfg, "008_archive_identity_and_confidence")
+    now = "2026-01-01 00:00:00"
+    with sqlite3.connect(str(tmp_db)) as conn:
+        conn.execute("INSERT INTO people (id,name,created_at) VALUES (?,?,?)",
+                     (str(uuid4()), "张三", now))
+        conn.execute(
+            "INSERT INTO photos (id, raw_path, path_base, original_name, created_at)"
+            " VALUES (?,?,'absolute','x.jpg',?)", (str(uuid4()), "/tmp/x.jpg", now))
+        photo_id = conn.execute("SELECT id FROM photos").fetchone()[0]
+        conn.execute(
+            "INSERT INTO recognition_results (id, photo_id, status, confidence, created_at)"
+            " VALUES (?,?, 'approved', NULL, ?)", (str(uuid4()), photo_id, now))
+        conn.commit()
+
+    command.upgrade(cfg, "head")
+    with sqlite3.connect(str(tmp_db)) as conn:
+        rows = conn.execute(
+            "SELECT assignment_id FROM recognition_results WHERE status='approved'"
+        ).fetchall()
+        assert rows and all(row[0] is None for row in rows), "存量 approved 必须保持无主（legacy）"
+
+
+def test_009_upgrade_downgrade_upgrade_round_trip(tmp_db: Path) -> None:
+    """upgrade → downgrade → upgrade 往返：schema 与关键数据完全一致。"""
+    cfg = _make_alembic_config(tmp_db)
+    command.upgrade(cfg, "009_projection_ownership")
+
+    now = "2026-01-01 00:00:00"
+    with sqlite3.connect(str(tmp_db)) as conn:
+        conn.execute("INSERT INTO people (id,name,created_at) VALUES (?,?,?)",
+                     (str(uuid4()), "张三", now))
+        conn.execute(
+            "INSERT INTO photos (id, raw_path, path_base, original_name, created_at)"
+            " VALUES (?,?,'absolute','x.jpg',?)", (str(uuid4()), "/tmp/x.jpg", now))
+        photo_id = conn.execute("SELECT id FROM photos").fetchone()[0]
+        conn.execute(
+            "INSERT INTO recognition_results"
+            " (id, photo_id, person_id, status, confidence, created_at, assignment_id)"
+            " VALUES (?,?,?, 'rejected', NULL, ?, NULL)",
+            (str(uuid4()), photo_id, None, now))
+        conn.commit()
+
+    def data_fingerprint() -> tuple:
+        with sqlite3.connect(str(tmp_db)) as conn:
+            return (
+                sorted(conn.execute(
+                    "SELECT id, photo_id, person_id, status, confidence, created_at"
+                    " FROM recognition_results"
+                ).fetchall()),
+                sorted(conn.execute("SELECT id, name FROM people").fetchall()),
+            )
+
+    with sqlite3.connect(str(tmp_db)) as conn:
+        upgraded_schema = _schema_snapshot(conn)
+    upgraded_data = data_fingerprint()
+
+    command.downgrade(cfg, "008_archive_identity_and_confidence")
+    with sqlite3.connect(str(tmp_db)) as conn:
+        downgraded_schema = _schema_snapshot(conn)
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(recognition_results)")}
+        assert "assignment_id" not in columns
+        indexes = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index'")}
+        assert "idx_rr_assignment_id" not in indexes
+    downgraded_data = data_fingerprint()
+
+    command.upgrade(cfg, "009_projection_ownership")
+    with sqlite3.connect(str(tmp_db)) as conn:
+        reupgraded_schema = _schema_snapshot(conn)
+    reupgraded_data = data_fingerprint()
+
+    assert upgraded_schema == reupgraded_schema, "upgrade→downgrade→upgrade 的schema 必须一致"
+    assert upgraded_data == reupgraded_data, "往返不得丢失或改变业务数据"
+    assert upgraded_data == downgraded_data, "downgrade 不得删除业务行"
+    assert upgraded_schema != downgraded_schema, "downgrade 必须真正回退 schema"

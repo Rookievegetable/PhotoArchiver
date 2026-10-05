@@ -279,6 +279,11 @@ REVIEW_IDENTITY_UNRESOLVED = "（未指定）"
 REVIEW_IDENTITY_HINT = (
     "新识别结果不含身份归属；在此选择人员后「通过」才会写入归属并可进入归档。"
 )
+REVIEW_DECISION_BLOCKED_TITLE = "无法完成审核"
+REVIEW_DECISION_BLOCKED_FALLBACK = "该操作当前无法完成，请稍后重试。"
+REVIEW_PHOTO_UNCLUSTERED = "该照片尚未完成聚类，请先运行聚类后再审核。"
+REVIEW_PHOTO_AMBIGUOUS = "该照片包含多个聚类分组，请在「人员与分组」页的配对工作台中按组逐一确认归属。"
+
 REVIEW_NO_IDENTITY_WARNING = (
     "未选择人员：通过后该结果不会进入归档计划（归档只消费带人员归属的已通过记录）。"
 )
@@ -440,6 +445,52 @@ CLUSTER_RESULTS_EMPTY_CLUSTERS = "该代聚类没有产生任何簇（范围内�
 CLUSTER_RESULTS_CLUSTER_ENTRY = "第 {ordinal} 组 · {count} 张脸 · 首拍 {time}"
 CLUSTER_RESULTS_NO_CAPTURED = "时间缺失"
 CLUSTER_RESULTS_MEMBER_ENTRY = "{photo} · 脸 {index} · 检测 {det:.2f} · 证据 {conf:.2f}"
+CALIBRATION_MEMBER_ENTRY_NEUTRAL = "{photo} · 脸 {index}"
+CALIBRATION_PANEL_TITLE = "Ground Truth 标注"
+CALIBRATION_ANNOTATOR_ID_REQUIRED = (
+    "Calibration 模式需要显式标注员身份：annotator_id 不能为空或空白"
+)
+CALIBRATION_VERDICT_PERSON = "Person"
+CALIBRATION_VERDICT_OUT_OF_ROSTER = "Out of roster"
+CALIBRATION_VERDICT_UNDECIDABLE = "Undecidable"
+CALIBRATION_PERSON_LABEL = "Person:"
+CALIBRATION_PERSON_SEARCH = "搜索人员…"
+CALIBRATION_DIFFICULTY_LABEL = "Difficulty:"
+CALIBRATION_SUBMIT = "提交标注"
+CALIBRATION_STATUS_NO_CLUSTER = "未选择簇。"
+CALIBRATION_STATUS_UNLABELED = "未标注。"
+CALIBRATION_STATUS_OWN_LATEST = "我的最新标注：{verdict} · {person} · {time}"
+CALIBRATION_ERROR_NO_CLUSTER = "未选择簇。"
+CALIBRATION_ERROR_NO_VERDICT = "请先选择标注类型。"
+CALIBRATION_ERROR_NO_PERSON = "请选择人员。"
+CALIBRATION_ERROR_NO_DIFFICULTY = "请选择难例原因。"
+
+
+def calibration_verdict_label(verdict: str) -> str:
+    """Map a calibration verdict to its Chinese display label."""
+    return {
+        VERDICT_PERSON_LABEL: "人员",
+        VERDICT_OUT_OF_ROSTER_LABEL: "名单外",
+        VERDICT_UNDECIDABLE_LABEL: "无法判断",
+    }.get(verdict, verdict)
+
+
+VERDICT_PERSON_LABEL = "person"
+VERDICT_OUT_OF_ROSTER_LABEL = "out_of_roster"
+VERDICT_UNDECIDABLE_LABEL = "undecidable"
+
+
+def calibration_difficulty_label(reason: str) -> str:
+    """Map a difficulty reason to its Chinese display label."""
+    return {
+        "occlusion": "遮挡",
+        "profile": "侧脸",
+        "too_small": "人脸过小",
+        "blur": "模糊",
+        "lighting": "光照异常",
+        "compression": "重度压缩",
+        "other": "其他",
+    }.get(reason, reason)
 
 # ---- 人物配对工作台（Stage E） ----
 PAIRING_WORKBENCH_TITLE = "人物配对工作台"
