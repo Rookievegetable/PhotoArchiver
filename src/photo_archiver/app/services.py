@@ -41,6 +41,12 @@ from photo_archiver.application import (
     SettingsService,
 )
 from photo_archiver.application.dtos.workspace import ModelAvailability
+from photo_archiver.application.services.identity_decision_service import (
+    IdentityDecisionService,
+)
+from photo_archiver.application.services.projection_reconciler import (
+    ProjectionReconciler,
+)
 from photo_archiver.application.services.workspace_readiness import WorkspaceReadinessService
 from photo_archiver.infrastructure import (
     DispatchingPersonImportReader,
@@ -162,6 +168,23 @@ def build_application_services(
         max_image_pixels=settings.max_image_pixels,
     )
     unit_of_work = SQLiteUnitOfWork(repositories._connection_provider)
+    connection_provider = repositories._connection_provider
+    projection_reconciler = ProjectionReconciler(
+        recognition_repository=repositories.recognition,
+        assignment_repository=repositories.cluster_assignments,
+        cluster_repository=repositories.face_clusters,
+        observation_repository=repositories.face_observations,
+    )
+    identity_decisions = IdentityDecisionService(
+        recognition_repository=repositories.recognition,
+        assignment_repository=repositories.cluster_assignments,
+        cluster_repository=repositories.face_clusters,
+        observation_repository=repositories.face_observations,
+        person_repository=repositories.people,
+        sample_repository=repositories.person_face_samples,
+        reconciler=projection_reconciler,
+        transaction_runner=connection_provider.run_immediate,
+    )
 
     archive_path_builder = ArchivePathBuilderService()
     archive_planner = ArchivePlanner(
@@ -184,6 +207,7 @@ def build_application_services(
     review_service = ReviewRecognitionService(
         repositories.recognition,
         unit_of_work=unit_of_work,
+        identity_decision_service=identity_decisions,
     )
     settings_service = SettingsService(
         user_settings_store=InMemoryUserSettingsStore(),
@@ -308,6 +332,7 @@ def build_application_services(
             repositories.people,
             repositories.recognition,
             repositories.person_face_samples,
+            reconciler=projection_reconciler,
         ),
         recognition_failures=RecognitionFailureService(
             repositories.recognition_runs,

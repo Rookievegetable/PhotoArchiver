@@ -17,6 +17,12 @@ from photo_archiver.domain import (
     RecognitionRunRepository,
     FaceObservationRepository,
 )
+from photo_archiver.domain.repositories.calibration_annotation_repository import (
+    CalibrationAnnotationRepository,
+)
+from photo_archiver.infrastructure.database.sqlite_calibration_annotation_repository import (
+    SQLiteCalibrationAnnotationRepository,
+)
 from photo_archiver.infrastructure import (
     SQLiteArchiveRecordRepository,
     SQLiteClusterPersonAssignmentRepository,
@@ -51,6 +57,7 @@ class ApplicationRepositories:
     cluster_assignments: ClusterPersonAssignmentRepository
     person_face_samples: PersonFaceSampleRepository
     import_batches: ImportBatchRepository
+    calibration_annotations: CalibrationAnnotationRepository
 
 
 def build_sqlite_repositories(database_path: Path) -> ApplicationRepositories:
@@ -76,4 +83,7 @@ def build_sqlite_repositories(database_path: Path) -> ApplicationRepositories:
         person_face_samples=SQLitePersonFaceSampleRepository(connection_provider),
         face_embeddings=SQLiteFaceEmbeddingRepository(connection_provider),
         import_batches=SQLiteImportBatchRepository(connection_provider),
+        calibration_annotations=SQLiteCalibrationAnnotationRepository(
+            connection_provider
+        ),
     )

@@ -21,10 +21,20 @@ from photo_archiver.domain.entities import (
     RunPhotoSnapshot,
     classify_scope,
 )
+from photo_archiver.domain.entities.calibration_annotation import (
+    DATASET_STATUS_DRAFT,
+    DATASET_STATUS_FROZEN,
+    LATEST_ANNOTATION_ORDER,
+    CalibrationAnnotation,
+    CalibrationDataset,
+    CalibrationGroundTruth,
+)
 from photo_archiver.domain.exceptions import (
     ImageUnreadableError,
+    ManualDecisionProtectedError,
     PhotoArchiverDomainError,
     RepositoryError,
+    ReviewAnchorAmbiguousError,
     ValidationError,
 )
 from photo_archiver.domain.repositories import (
@@ -147,5 +157,13 @@ __all__ = [
     "RunPhotoSnapshot",
     "ImageUnreadableError",
     "RepositoryError",
+    "CalibrationAnnotation",
+    "CalibrationDataset",
+    "CalibrationGroundTruth",
+    "DATASET_STATUS_DRAFT",
+    "DATASET_STATUS_FROZEN",
+    "LATEST_ANNOTATION_ORDER",
+    "ManualDecisionProtectedError",
+    "ReviewAnchorAmbiguousError",
     "ValidationError",
 ]
