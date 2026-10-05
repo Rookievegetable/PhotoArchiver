@@ -416,9 +416,11 @@ def test_clusters_more_than_persons_unmatched_cluster_not_claimed(tmp_path):
     assert result.archived_count == 2
     records = repos.archive_records.list_all()
     assert {record.person_id for record in records} == {zhang.id, li.id}
-    # 未确认的第三张照片：识别期 PENDING 兼容行保留待人工审核，且无 APPROVED 归属
+    # S1 D-3：确认时该照片的识别期 PENDING 占位行被**就地复用**为 APPROVED
+    # 投影（不新增第二行、也不遗留 PENDING）。因此只有未被确认的第三张照片
+    # 仍留在审核队列。
     pending_rows = repos.recognition.list_pending()
-    assert len(pending_rows) == 3          # 确认不改写识别期 PENDING 行（新增 APPROVED 行）
+    assert len(pending_rows) == 1, "已确认照片的 PENDING 占位行应被复用翻转"
     approved_photo_ids = {
         row.photo_id
         for person in (zhang, li)
@@ -426,6 +428,7 @@ def test_clusters_more_than_persons_unmatched_cluster_not_claimed(tmp_path):
     }
     unclaimed = [photo for photo in repos.photos.list_all() if photo.original_name == "c.jpg"]
     assert unclaimed[0].id not in approved_photo_ids   # 未确认簇未被错误归属
+    assert pending_rows[0].photo_id == unclaimed[0].id, "队列里只剩未确认的那张"
 
 
 def test_execution_partial_failure_is_isolated_and_retryable(tmp_path):

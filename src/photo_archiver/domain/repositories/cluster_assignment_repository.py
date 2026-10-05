@@ -33,6 +33,21 @@ class ClusterPersonAssignmentRepository(Protocol):
     def list_by_cluster(self, cluster_id: UUID) -> list[ClusterPersonAssignment]:
         """Return the cluster's decision history, newest first."""
 
+    def list_latest_decision(self, cluster_id: UUID) -> ClusterPersonAssignment | None:
+        """S0 INV-1：一个 Cluster 的当前身份 = 它的**最新一条决策事件**。
+
+        语义契约（与 status 无关地先取最新，**不得**先过滤 ACTIVE 再取首行——
+        那会让 ``confirmed → unassigned`` 之后重新读出已终态化的旧 confirmed）：
+
+        - 按 ``(created_at DESC, id DESC)`` 取第一条；
+        - 返回的行**可能**处于 TERMINAL（unassigned / rejected）——由调用方判定
+          为「当前无人」；
+        - 无决策行时返回 ``None``。
+
+        本方法只提供**读取语义**（判定唯一），**不提供**并发保护；并发读-改-写
+        的串行化由事务层负责。
+        """
+
     def list_by_cluster_run(self, cluster_run_id: UUID) -> list[ClusterPersonAssignment]:
         """Return every decision of one clustering generation, newest first."""
 

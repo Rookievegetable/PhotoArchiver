@@ -41,6 +41,18 @@ class RecognitionResult:
     with ``field(default_factory=uuid4)`` so the type signature honestly
     expresses the post-init non-null guarantee — mypy and callers no longer
     need to None-check a field that is always populated after construction.
+
+    ``assignment_id``（S1 / migration 009）区分 approved 行的两种来源，**不是**归档
+    资格的判据：
+    - ``None`` → **legacy 人工决策**。ADR-045 D-1 的审核批准行属于此类：人工裁决，
+      从不经过 Assignment 表。S0 INV-4 要求它们不被 reconcile / rebuild 触碰。
+    - 非 ``None`` → **Assignment-derived projection**。其存在性由「该
+      ``(photo, person)`` 是否仍有 active supporting Assignment」决定；该字段只是
+      **当前支撑引用**，可被 retarget 到另一个支撑（同一 pair 可被多个 Assignment
+      支撑）。
+
+    删除人员时 ``cluster_person_assignments`` 经 FK CASCADE 被删，本字段随之置
+    NULL；同时 ``person_id`` 也被置 NULL（ADR-052），此类行不参与任何身份判断。
     """
 
     photo_id: UUID
@@ -49,6 +61,7 @@ class RecognitionResult:
     person_id: UUID | None = None
     status: MatchStatus = MatchStatus.PENDING
     created_at: datetime | None = None
+    assignment_id: UUID | None = None
 
     def __post_init__(self) -> None:
         """Validate fields and initialize generated values."""

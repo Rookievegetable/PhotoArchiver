@@ -220,6 +220,28 @@ class SQLiteFaceClusterRepository(FaceClusterRepository):
             )
             return cursor.rowcount
 
+    def list_all_cluster_runs(self) -> list[FaceClusterRun]:
+        """S1：返回全部聚类代际（按创建序），供 projection 全量重建遍历。"""
+        with self._connection_provider.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM face_cluster_runs ORDER BY created_at, id",
+            ).fetchall()
+        return [face_cluster_run_from_row(row) for row in rows]
+
+    def list_clusters_of_observation(
+        self, observation_id: UUID,
+    ) -> list[FaceCluster]:
+        """S1：返回包含该观测的全部簇（跨代际，按簇序稳定排序）。"""
+        with self._connection_provider.connect() as connection:
+            rows = connection.execute(
+                "SELECT face_clusters.* FROM face_clusters "
+                "JOIN face_cluster_members ON face_cluster_members.cluster_id = face_clusters.id "
+                "WHERE face_cluster_members.observation_id = ? "
+                "ORDER BY face_clusters.created_at, face_clusters.id",
+                (str(observation_id),),
+            ).fetchall()
+        return [face_cluster_from_row(row) for row in rows]
+
     def list_members(self, cluster_run_id: UUID) -> list[FaceClusterMember]:
         """Return the cluster run's memberships ordered by ``cluster ordinal, id``."""
         with self._connection_provider.connect() as connection:

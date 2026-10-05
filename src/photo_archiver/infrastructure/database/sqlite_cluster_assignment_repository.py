@@ -125,6 +125,21 @@ class SQLiteClusterPersonAssignmentRepository(ClusterPersonAssignmentRepository)
             ).fetchall()
         return [_assignment_from_row(row) for row in rows]
 
+    def list_latest_decision(self, cluster_id: UUID) -> ClusterPersonAssignment | None:
+        """S0 INV-1：取最新一条决策事件，**与 status 无关**。
+
+        先过滤 ACTIVE 再取首行会让 ``confirmed → unassigned`` 之后重新读出已终态化
+        的旧 confirmed（已实证）。``idx_cpa_cluster_latest``（migration 009）覆盖
+        ``(cluster_id, created_at DESC, id DESC)``，本查询无需额外排序。
+        """
+        with self._connection_provider.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM cluster_person_assignments WHERE cluster_id = ? "
+                "ORDER BY created_at DESC, id DESC LIMIT 1",
+                (str(cluster_id),),
+            ).fetchone()
+        return _assignment_from_row(row) if row is not None else None
+
     def list_by_cluster_run(self, cluster_run_id: UUID) -> list[ClusterPersonAssignment]:
         with self._connection_provider.connect() as connection:
             rows = connection.execute(

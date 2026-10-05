@@ -7,6 +7,7 @@
 """
 
 from collections.abc import Callable, Iterable, Sequence
+from datetime import datetime
 from uuid import UUID
 
 from photo_archiver.domain.entities.cluster_assignment import (
@@ -50,6 +51,20 @@ class InMemoryClusterPersonAssignmentRepository(ClusterPersonAssignmentRepositor
             if assignment.cluster_id == cluster_id
         ]
         return sorted(rows, key=lambda a: (a.created_at or a.id, str(a.id)), reverse=True)
+
+    def list_latest_decision(self, cluster_id: UUID) -> ClusterPersonAssignment | None:
+        """S0 INV-1：与 SQLite 实现同语义——取最新一条，与 status 无关。
+
+        tie-break 必须与 SQLite 的 ``ORDER BY created_at DESC, id DESC`` 一致：
+        ``created_at`` 相同则按 ``id`` 字符串序降序。
+        """
+        rows = [
+            assignment for assignment in self._assignments.values()
+            if assignment.cluster_id == cluster_id
+        ]
+        if not rows:
+            return None
+        return max(rows, key=lambda a: (a.created_at or datetime.min, str(a.id)))
 
     def list_by_cluster_run(self, cluster_run_id: UUID) -> list[ClusterPersonAssignment]:
         cluster_ids = self._cluster_ids_of_run(cluster_run_id)

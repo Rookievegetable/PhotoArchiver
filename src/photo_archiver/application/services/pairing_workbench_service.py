@@ -19,7 +19,7 @@
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from loguru import logger
@@ -33,17 +33,22 @@ from photo_archiver.application.commands.pairing import (
 )
 from photo_archiver.domain import (
     ClusterPersonAssignment,
+    ManualDecisionProtectedError,
     FaceClusterRepository,
     FaceObservationRepository,
-    MatchStatus,
     PersonFaceSample,
     PersonRepository,
-    RecognitionResult,
     ValidationError,
 )
 from photo_archiver.domain.entities.cluster_assignment import (
     ASSIGNMENT_SOURCE_MANUAL,
+    ASSIGNMENT_STATUS_CONFIRMED,
     ACTIVE_ASSIGNMENT_STATUSES,
+    HUMAN_ACTOR,
+    MANUAL_ASSIGNMENT_SOURCES,
+)
+from photo_archiver.application.services.projection_reconciler import (
+    ProjectionReconciler,
 )
 from photo_archiver.domain.entities.face_cluster import (
     CLUSTER_STATUS_IGNORED,
@@ -54,6 +59,53 @@ from photo_archiver.domain.repositories.cluster_assignment_repository import (
     PersonFaceSampleRepository,
 )
 from photo_archiver.domain.repositories.recognition_repository import RecognitionRepository
+
+_ONE_MICROSECOND = timedelta(microseconds=1)
+
+
+def _assert_mutable_by_machine(
+    assignment: ClusterPersonAssignment, actor: str, operation: str,
+) -> None:
+    """S0 INV-4（P0-5）：机器操作不得修改/撤销人工身份决策。
+
+    - ``actor == HUMAN_ACTOR`` → 放行：人工可以改派/解除任何来源的行，这是 INV-4
+      允许的唯一覆盖路径（全部既有 UI 路径的缺省值）。
+    - **其余一律按机器处理**（含 ``MACHINE_ACTOR`` 与任何拼错的字符串）——
+      **fail-closed**：只有显式的 ``HUMAN_ACTOR`` 才获得人工权限。S4 的机器调用
+      若忘记/写错 actor，会被当作机器而非被误当作人工。
+    - 机器遇到 ``MANUAL_ASSIGNMENT_SOURCES``（manual / review）的行 → 拒绝。
+    - **无论 source**：机器撤销 ``confirmed`` 行一律拒绝——confirmed 只能由人工
+      动作产生（工作台原地确认产生 confirmed+machine source，见 PR-15；INV-6
+      下无自动确认），其最终性来自"人工确认过"这一事实，不由 source 承载。
+      决策历史一旦被机器改成 terminal，reconcile 重算支撑就会发现"无 active
+      Assignment"并连带删除投影——INV-4 无法在投影层补救（运行时已实证），
+      守卫必须在 mutation 层。机器可撤回的只有自己的 ``suggested`` 行。
+    """
+    if actor == HUMAN_ACTOR:
+        return
+    if assignment.source in MANUAL_ASSIGNMENT_SOURCES or (
+        assignment.status == ASSIGNMENT_STATUS_CONFIRMED
+    ):
+        raise ManualDecisionProtectedError(
+            f"{operation} refused: assignment {assignment.id} is a human-final "
+            f"decision (source={assignment.source}, status={assignment.status})"
+        )
+
+
+def _next_created_at(previous: ClusterPersonAssignment | None) -> datetime:
+    """Return a creation timestamp strictly after ``previous``.
+
+    S0 INV-1 identifies the cluster's current identity by its **latest** decision
+    row, ordered by ``(created_at DESC, id DESC)``. When two decisions land in the
+    same clock tick the tie-break falls to the random UUID and the "latest" row
+    becomes arbitrary — which silently made a retraction skip the row it was meant
+    to retract. Bumping by one microsecond keeps the order total without needing
+    a sequence column.
+    """
+    now = datetime.now()
+    if previous is None or previous.created_at is None:
+        return now
+    return max(now, previous.created_at + _ONE_MICROSECOND)
 
 
 def clamp_unit(score: float) -> float:
@@ -88,6 +140,7 @@ class PairingWorkbenchService:
         person_repository: PersonRepository,
         recognition_repository: RecognitionRepository,
         sample_repository: PersonFaceSampleRepository,
+        reconciler: ProjectionReconciler | None = None,
     ) -> None:
         self._assignment_repository = assignment_repository
         self._cluster_repository = cluster_repository
@@ -95,6 +148,13 @@ class PairingWorkbenchService:
         self._person_repository = person_repository
         self._recognition_repository = recognition_repository
         self._sample_repository = sample_repository
+        # S1：投影的唯一物化出口。缺省构造让纯服务层测试与既有装配保持兼容。
+        self._reconciler = reconciler or ProjectionReconciler(
+            recognition_repository=recognition_repository,
+            assignment_repository=assignment_repository,
+            cluster_repository=cluster_repository,
+            observation_repository=observation_repository,
+        )
 
     def get_assignment(self, assignment_id: UUID) -> ClusterPersonAssignment | None:
         """Read one decision row（UI 追溯展示用）。"""
@@ -148,11 +208,17 @@ class PairingWorkbenchService:
             )
         return PairingOperationResult(assignment_id=assignment.id, status=assignment.status)
 
-    def unassign(self, command: UnassignClusterCommand) -> PairingOperationResult:
+    def unassign(
+        self, command: UnassignClusterCommand, actor: str = HUMAN_ACTOR,
+    ) -> PairingOperationResult:
         """解除映射/撤销：最新一条未 unassigned 行 → unassigned（历史保留）。
 
         覆盖 suggested（撤回建议）、confirmed（解除映射）与 rejected
         （撤销拒绝）三种入口——全部是该行状态机的合法迁移。
+
+        ``actor``（S0 INV-4 / P0-5）：默认 :data:`HUMAN_ACTOR`（UI 按钮路径）。
+        机器侧调用**必须**显式传 :data:`MACHINE_ACTOR`——任何非 human 值都被
+        守卫当作机器（fail-closed），机器不得撤销人工最终决策。
         """
         history = self._assignment_repository.list_by_cluster(command.cluster_id)
         target = next(
@@ -164,6 +230,7 @@ class PairingWorkbenchService:
             raise ValidationError(
                 f"Cluster {command.cluster_id} has no assignable decision"
             )
+        _assert_mutable_by_machine(target, actor, "unassign")
         target.unassign()
         if self._assignment_repository.update_assignment(target) != 1:
             raise ValidationError(
@@ -182,12 +249,27 @@ class PairingWorkbenchService:
 
     # ── 人工改派 / 新增指派 ─────────────────────────────────────────────
 
-    def assign_person(self, command: AssignClusterPersonCommand) -> PairingOperationResult:
-        """Manually assign a person; the explicit choice is a confirmation."""
+    def assign_person(
+        self, command: AssignClusterPersonCommand, actor: str = HUMAN_ACTOR,
+    ) -> PairingOperationResult:
+        """Manually assign a person; the explicit choice is a confirmation.
+
+        ``actor``（S0 INV-4 / P0-5）：改派会**终态化**当前有效行——机器 actor
+        遇到人工最终决策必须拒绝；human 不受限（人工再修改是 INV-4 允许的唯一
+        覆盖路径）。机器调用**必须**显式传 :data:`MACHINE_ACTOR`。
+        """
         cluster = self._require_cluster(command.cluster_id)
         person = self._require_person(command.person_id)
-        active = self._active_assignment(command.cluster_id)
+        # S0 INV-1：先取**最新决策事件**（不论状态）。它既是替换目标（若仍active），
+        # 也是新行时间戳的基准——用 latest 而非 active：撤回后 latest 已是terminal，
+        # 只看 active 会退回 datetime.now()，可能与既有行同刻，tie-break 于是退化为
+        # 随机 UUID，"最新决策"变成任意行。
+        latest = self._assignment_repository.list_latest_decision(command.cluster_id)
+        active = latest
+        if active is not None and active.status not in ACTIVE_ASSIGNMENT_STATUSES:
+            active = None
         if active is not None:
+            _assert_mutable_by_machine(active, actor, "assign_person(retire)")
             active.unassign()
             if self._assignment_repository.update_assignment(active) != 1:
                 raise ValidationError(
@@ -201,6 +283,7 @@ class PairingWorkbenchService:
             cluster_id=command.cluster_id,
             person_id=command.person_id,
             source=ASSIGNMENT_SOURCE_MANUAL,
+            created_at=_next_created_at(latest),
         )
         self._assignment_repository.add_assignments([assignment])
         snapshot = {
@@ -266,12 +349,17 @@ class PairingWorkbenchService:
         return person
 
     def _active_assignment(self, cluster_id: UUID) -> ClusterPersonAssignment | None:
-        history = self._assignment_repository.list_by_cluster(cluster_id)
-        return next(
-            (assignment for assignment in history
-             if assignment.status in ACTIVE_ASSIGNMENT_STATUSES),
-            None,
-        )
+        """S0 INV-1：当前身份 = 最新一条决策事件；若其状态非 ACTIVE 则视为无人。
+
+        S1 修复 P0-3：旧实现先按 ``ORDER BY created_at DESC`` 取历史、再过滤
+        ACTIVE，因此 ``confirmed → unassigned`` 之后会跳过新的 unassigned 行、
+        重新读出已终态化的旧 confirmed。``list_latest_decision`` 与 status 无关地
+        先取最新行，语义才正确。
+        """
+        latest = self._assignment_repository.list_latest_decision(cluster_id)
+        if latest is None or latest.status not in ACTIVE_ASSIGNMENT_STATUSES:
+            return None
+        return latest
 
     def _sink_confirmation(self, assignment, cluster, person_id: UUID) -> tuple[int, int]:
         """D3 兼容适配 + D4 样本沉淀；返回 (compat_results, samples) 计数。"""
@@ -311,37 +399,18 @@ class PairingWorkbenchService:
         ]
         self._sample_repository.add_samples(new_samples)
 
-        # D3 兼容适配（E-SG-6）：同一 (person, photo) 至多一条当前有效
-        # APPROVED 归属；不同 person 的同照片归属互不覆盖（E-P1-1）。
-        # Stage 4 BLK-5：confidence 表达"相似度证据"。按位置配对
-        # （ordered_suggestion）与人工指派（manual）没有余弦证据 ->
-        # 写 NULL（无证据），**不是 0.0**；样本匹配（sample_match）写真实余弦。
-        compat_written = 0
-        seen_photos: set[UUID] = set()
-        confidence = (
-            clamp_unit(assignment.score) if assignment.score is not None else None
+        # D3 兼容适配（S1）：投影改由 ProjectionReconciler 物化。
+        # 与旧的 ``already_current`` 幂等判断语义等价，但判定依据从「该照片是否已有
+        # 该 person 的 APPROVED 行」换成「该 (photo, person) 是否仍有 active
+        # supporting Assignment」——后者才能正确处理「多 Assignment 支撑同一 pair」
+        # （撤掉一个支撑不得删除投影）。
+        # Stage 4 BLK-5：confidence 语义不变——reconciler 为 sample_match 保留
+        # 真实余弦，为位次配对/人工指派写 NULL（无相似度证据，不是 0.0）。
+        compat_written = sum(
+            1
+            for photo_id in self._reconciler.photos_of_cluster(cluster)
+            if self._reconciler.reconcile_pair(photo_id, person_id).action == "created"
         )
-        for observation in member_observations:
-            if observation.photo_id in seen_photos:
-                continue
-            seen_photos.add(observation.photo_id)
-            existing_results = self._recognition_repository.list_by_photo(
-                observation.photo_id,
-            )
-            already_current = any(
-                result.status == MatchStatus.APPROVED
-                and result.person_id == person_id
-                for result in existing_results
-            )
-            if already_current:
-                continue
-            self._recognition_repository.add(RecognitionResult(
-                photo_id=observation.photo_id,
-                person_id=person_id,
-                confidence=confidence,
-                status=MatchStatus.APPROVED,
-            ))
-            compat_written += 1
         return compat_written, len(new_samples)
 
     def _retract_confirmation(self, cluster, person_id: UUID) -> int:
@@ -359,9 +428,16 @@ class PairingWorkbenchService:
             and member.observation_id in observations
             and observations[member.observation_id].embedding.vector
         ]
-        photo_ids = list(dict.fromkeys(o.photo_id for o in member_observations))
-        retracted = self._recognition_repository.remove_results_for_person_photos(
-            person_id, photo_ids,
+        photo_ids = list(self._reconciler.photos_of_cluster(cluster))
+        # S1：不再按 (person_id, photo_id) 毯式 DELETE。撤销一个 Assignment 只代表
+        # 少了一个支撑；该 pair 若仍被其他 active Assignment 支撑（例如同一照片的
+        # 另一张脸落进另一个簇且同指此人），投影必须保留——这正是 P0-1 的成因。
+        # legacy 行（assignment_id IS NULL）被 reconciler 完全排除，S0 INV-4 保护
+        # 的人工决策不受解除映射影响。
+        retracted = sum(
+            1
+            for photo_id in photo_ids
+            if self._reconciler.reconcile_pair(photo_id, person_id).action == "terminated"
         )
         self._sample_repository.disable_samples(
             person_id, [o.id for o in member_observations],

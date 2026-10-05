@@ -56,3 +56,21 @@ class FaceClusterRepository(Protocol):
         只允许生命周期字段迁移，成员关系与排序字段不动（原始聚类数据
         不被破坏）。Returns 受影响行数（0 = cluster 不存在）。
         """
+
+    def list_all_cluster_runs(self) -> list[FaceClusterRun]:
+        """S1：返回全部聚类代际（按创建序），供 projection 全量重建遍历。
+
+        Stage D/E 的 ``list_cluster_runs`` 需要一个 recognition run id，
+        而 S1 的重建必须覆盖**所有**代际——包括历史 run 的簇（它们仍可能
+        持有支撑当前身份的有效 Assignment）。
+        """
+
+    def list_clusters_of_observation(
+        self, observation_id: UUID,
+    ) -> list[FaceCluster]:
+        """S1：返回包含该观测的全部簇（跨代际）。
+
+        ``face_cluster_members`` 的唯一性作用域是 ``(cluster_id, observation_id)``
+        且索引非唯一，因此同一观测可出现在不同代际的不同簇里——这正是
+        "同一 (photo, person) 被多个 Assignment 支撑"的来源之一。
+        """

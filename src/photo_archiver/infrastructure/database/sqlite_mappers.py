@@ -136,6 +136,11 @@ def recognition_result_from_row(row: Row) -> RecognitionResult:
     result.person_id = UUID(row["person_id"]) if row["person_id"] is not None else None
     result.status = status
     result.created_at = text_to_datetime(row["created_at"])
+    # S1 / migration 009：NULL = legacy 人工决策（D-1 审核批准行），S0 INV-4
+    # 禁止 reconcile / rebuild 触碰；非 NULL = 当前 supporting Assignment 引用。
+    result.assignment_id = (
+        UUID(row["assignment_id"]) if row["assignment_id"] is not None else None
+    )
     return result
 
 

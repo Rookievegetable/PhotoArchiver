@@ -1,11 +1,16 @@
 """SQLite connection and schema management for repository implementations."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 import sqlite3
 import threading
-from typing import Optional
+import time
+from typing import Optional, TypeVar
+
+from photo_archiver.domain.exceptions import ConcurrentDecisionConflictError
+
+T = TypeVar("T")
 
 # P0-5 (Phase B, data-safety floor): WAL decouples readers from the writer so a
 # long scan transaction no longer makes concurrent review/import writes fail
@@ -27,6 +32,12 @@ def _configure_connection(connection: sqlite3.Connection, database_path: Path | 
     connection.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
     if str(database_path) != IN_MEMORY_DATABASE:
         connection.execute(f"PRAGMA journal_mode = {WAL_JOURNAL_MODE}")
+
+
+def _is_busy_error(exc: sqlite3.OperationalError) -> bool:
+    """Return True when ``exc`` is a lock/timeout conflict worth retrying."""
+    message = str(exc).lower()
+    return "locked" in message or "busy" in message
 
 
 class _SharedConnection:
@@ -93,13 +104,17 @@ class SQLiteConnectionProvider:
         return connection
 
     @contextmanager
-    def transaction(self) -> Iterator[sqlite3.Connection]:
+    def transaction(self, begin_mode: str = "DEFERRED") -> Iterator[sqlite3.Connection]:
         """Bind a single connection as the transaction scope for nested repository calls.
 
         The connection is bound to the current thread; concurrent threads may open
         their own transactions independently. On normal exit the connection is
         committed; on exception it is rolled back. The connection is closed in
         either case and the provider is restored to per-call connection mode.
+
+        ``begin_mode``（S1-F）：``"DEFERRED"``（缺省，历史行为）或 ``"IMMEDIATE"``
+        ——后者在 BEGIN 时立即获取写锁，串行化并发读-改-写（S1 §3：deferred 在
+        WAL 下升级写锁会立即失败且 busy_timeout 不重试快照冲突）。
 
         Nested transactions on the same thread are NOT supported — SQLite
         SAVEPOINTs are deliberately avoided to keep the boundary simple and
@@ -113,7 +128,7 @@ class SQLiteConnectionProvider:
 
         connection = sqlite3.connect(str(self.database_path))
         _configure_connection(connection, self.database_path)
-        connection.execute("BEGIN")
+        connection.execute(f"BEGIN {begin_mode}")
         self._active_connection = connection
         try:
             yield connection
@@ -124,6 +139,42 @@ class SQLiteConnectionProvider:
         finally:
             self._active_connection = None
             connection.close()
+
+    def run_immediate(
+        self,
+        operation: Callable[[sqlite3.Connection], T],
+        *,
+        max_attempts: int = 3,
+        backoff_seconds: float = 0.15,
+    ) -> T:
+        """Execute ``operation`` inside one IMMEDIATE transaction, retrying as a whole.
+
+        S1-F9 契约：读 → 校验 → Assignment 变更 → reconcile → COMMIT 的**完整
+        attempt** 是重试单位——busy 冲突时 ROLLBACK（由 :meth:`transaction` 完成）、
+        退避、然后从 BEGIN 重新开始并**重新读取最新状态**。禁止只重试某一条 SQL。
+
+        ``operation`` receives the live transaction connection and must reach the
+        database through repositories bound to this provider (they join the
+        thread-local transaction automatically via :meth:`connect`).
+
+        Raises:
+            ConcurrentDecisionConflictError: when every attempt hits a lock
+                conflict; no partial write ever survives.
+        """
+        last_error: sqlite3.OperationalError | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with self.transaction(begin_mode="IMMEDIATE") as connection:
+                    return operation(connection)
+            except sqlite3.OperationalError as exc:
+                if not _is_busy_error(exc):
+                    raise
+                last_error = exc
+                if attempt < max_attempts:
+                    time.sleep(backoff_seconds * attempt)
+        raise ConcurrentDecisionConflictError(
+            f"concurrent decision conflict after {max_attempts} attempts"
+        ) from last_error
 
     def initialize_schema(self) -> None:
         """Initialize the database schema via Alembic migrations (ADR-027).

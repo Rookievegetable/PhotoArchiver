@@ -34,15 +34,17 @@ class SQLiteRecognitionRepository(RecognitionRepository):
             connection.execute(
                 """
                 INSERT INTO recognition_results (
-                    id, photo_id, person_id, status, confidence, created_at
+                    id, photo_id, person_id, status, confidence, created_at,
+                    assignment_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     photo_id = excluded.photo_id,
                     person_id = excluded.person_id,
                     status = excluded.status,
                     confidence = excluded.confidence,
-                    created_at = excluded.created_at
+                    created_at = excluded.created_at,
+                    assignment_id = excluded.assignment_id
                 """,
                 (
                     str(result.id),
@@ -51,6 +53,7 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                     result.status.value,
                     result.confidence,
                     datetime_to_text(self._require_created_at(result)),
+                    str(result.assignment_id) if result.assignment_id is not None else None,
                 ),
             )
 
@@ -71,6 +74,7 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                 result.status.value,
                 result.confidence,
                 datetime_to_text(self._require_created_at(result)),
+                str(result.assignment_id) if result.assignment_id is not None else None,
             )
             for result in results
         ]
@@ -78,15 +82,17 @@ class SQLiteRecognitionRepository(RecognitionRepository):
             connection.executemany(
                 """
                 INSERT INTO recognition_results (
-                    id, photo_id, person_id, status, confidence, created_at
+                    id, photo_id, person_id, status, confidence, created_at,
+                    assignment_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     photo_id = excluded.photo_id,
                     person_id = excluded.person_id,
                     status = excluded.status,
                     confidence = excluded.confidence,
-                    created_at = excluded.created_at
+                    created_at = excluded.created_at,
+                    assignment_id = excluded.assignment_id
                 """,
                 rows,
             )
@@ -99,6 +105,151 @@ class SQLiteRecognitionRepository(RecognitionRepository):
                 (str(result_id),),
             ).fetchone()
         return recognition_result_from_row(row) if row is not None else None
+
+    def find_projection(
+        self, photo_id: UUID, person_id: UUID,
+    ) -> RecognitionResult | None:
+        """Return the **live** Assignment-derived projection for ``(photo, person)``.
+
+        S1：``assignment_id IS NOT NULL`` 是硬门槛——legacy 人工决策
+        （D-1 审核批准行）永不在此返回，因S0 INV-4 它们不受 reconcile 管理。
+
+        只返回 ``status='approved'`` 的行：已终结（rejected）的投影保留
+        ``assignment_id`` 以维持审计痕迹与可恢复性，但不算作「当前存在的投影」。
+        """
+        with self._connection_provider.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM recognition_results "
+                "WHERE photo_id = ? AND person_id = ? AND assignment_id IS NOT NULL "
+                "AND status = ? ORDER BY created_at, id LIMIT 1",
+                (str(photo_id), str(person_id), MatchStatus.APPROVED.value),
+            ).fetchone()
+        return recognition_result_from_row(row) if row is not None else None
+
+    def list_projections(self) -> list[RecognitionResult]:
+        """Return every Assignment-derived projection (``assignment_id IS NOT NULL``)."""
+        with self._connection_provider.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM recognition_results WHERE assignment_id IS NOT NULL "
+                "ORDER BY created_at, id",
+            ).fetchall()
+        return [recognition_result_from_row(row) for row in rows]
+
+    def list_all_approved(self) -> list[RecognitionResult]:
+        """S1：全部 approved 行（含 legacy 与 projection），供 rebuild 统计与审计。"""
+        with self._connection_provider.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM recognition_results WHERE status = ? "
+                "ORDER BY created_at, id",
+                (MatchStatus.APPROVED.value,),
+            ).fetchall()
+        return [recognition_result_from_row(row) for row in rows]
+
+    def list_projections_of_assignment(
+        self, assignment_id: UUID,
+    ) -> list[RecognitionResult]:
+        """Return all projections currently referencing ``assignment_id``.
+
+        S1：可以返回多行——一个 Assignment 覆盖一个簇的多张照片时每个 photo 一行。
+        """
+        with self._connection_provider.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM recognition_results WHERE assignment_id = ? "
+                "ORDER BY created_at, id",
+                (str(assignment_id),),
+            ).fetchall()
+        return [recognition_result_from_row(row) for row in rows]
+
+    def create_projection(
+        self, photo_id: UUID, person_id: UUID, assignment_id: UUID,
+    ) -> RecognitionResult:
+        """Create an approved projection owned by ``assignment_id``.
+
+        S1 D-3：若该 ``(photo, person)`` 上已有 pending 占位行（识别期写入，
+        ``person_id IS NULL``），**复用**该行就地翻转为 approved——避免产生第二条
+        行，也避免遗留 pending 行继续留在审核队列。
+        """
+        now = datetime.now()
+        with self._connection_provider.connect() as connection:
+            pending = connection.execute(
+                "SELECT * FROM recognition_results "
+                "WHERE photo_id = ? AND status = ? AND person_id IS NULL "
+                "ORDER BY created_at, id LIMIT 1",
+                (str(photo_id), MatchStatus.PENDING.value),
+            ).fetchone()
+            if pending is not None:
+                connection.execute(
+                    "UPDATE recognition_results "
+                    "SET status = ?, person_id = ?, assignment_id = ? WHERE id = ?",
+                    (
+                        MatchStatus.APPROVED.value,
+                        str(person_id),
+                        str(assignment_id),
+                        pending["id"],
+                    ),
+                )
+                row = connection.execute(
+                    "SELECT * FROM recognition_results WHERE id = ?",
+                    (pending["id"],),
+                ).fetchone()
+                return recognition_result_from_row(row)
+            result = RecognitionResult(
+                photo_id=photo_id,
+                person_id=person_id,
+                confidence=None,  # BLK-5：位次配对/人工指派无相似度证据
+                status=MatchStatus.APPROVED,
+                created_at=now,
+                assignment_id=assignment_id,
+            )
+            connection.execute(
+                """
+                INSERT INTO recognition_results (
+                    id, photo_id, person_id, status, confidence, created_at,
+                    assignment_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(result.id),
+                    str(photo_id),
+                    str(person_id),
+                    MatchStatus.APPROVED.value,
+                    None,
+                    datetime_to_text(now),
+                    str(assignment_id),
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM recognition_results WHERE id = ?",
+                (str(result.id),),
+            ).fetchone()
+            return recognition_result_from_row(row)
+
+    def retarget_projection(self, result_id: UUID, assignment_id: UUID) -> int:
+        """Point an existing projection at another supporting Assignment.
+
+        S1：支撑引用改变**不改变**投影存在性——只要 active_supports 非空就保留。
+        """
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE recognition_results SET assignment_id = ? WHERE id = ?",
+                (str(assignment_id), str(result_id)),
+            )
+            return cursor.rowcount
+
+    def terminate_projection(self, result_id: UUID) -> int:
+        """Terminate a projection: ``approved`` → ``rejected``（不 DELETE）。
+
+        仅当该 ``(photo, person)`` 已无任何 active supporting Assignment 时调用。
+        转 rejected 保留审计痕迹；DELETE 会破坏归档去重的历史可查性。
+        """
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE recognition_results SET status = ? "
+                "WHERE id = ? AND status = ?",
+                (MatchStatus.REJECTED.value, str(result_id), MatchStatus.APPROVED.value),
+            )
+            return cursor.rowcount
 
     def list_by_photo(self, photo_id: UUID) -> list[RecognitionResult]:
         """Return all recognition results for the given photo."""
@@ -300,8 +451,9 @@ class SQLiteRecognitionRepository(RecognitionRepository):
         result_id: UUID,
         status: MatchStatus,
         person_id: UUID | None = None,
+        assignment_id: UUID | None = None,
     ) -> int:
-        """Transition a recognition result's review status.
+        """Transition a recognition result's review status (and optionally identity).
 
         ``person_id`` (Stage 4 D-1) is written **alongside** the status when
         supplied, so a manual approval can also record the decided identity —
@@ -309,24 +461,37 @@ class SQLiteRecognitionRepository(RecognitionRepository):
         planner (``WHERE person_id = ? AND status = 'approved'``) can never
         consume it. ``None`` leaves the column untouched (reject path).
 
+        ``assignment_id`` (S1) is written only when supplied, and is used by
+        :class:`ProjectionReconciler` to restore/retarget a projection. It is
+        never used to *create* an unowned approved row.
+
         Returns:
             The number of rows affected (1 on hit, 0 when the result id is
             missing). A 0 signals concurrent deletion rather than silent success.
         """
+        assignments: list[str] = []
+        person_param: str | None = None
+        if person_id is not None:
+            person_param = str(person_id)
+            assignments.append("person_id = ?")
+        if assignment_id is not None:
+            assignments.append("assignment_id = ?")
+        extra: tuple[str | None, ...] = ()
+        if person_param is not None:
+            extra += (person_param,)
+        if assignment_id is not None:
+            extra += (str(assignment_id),)
+
+        statement = "UPDATE recognition_results SET status = ?"
+        if assignments:
+            statement += ", " + ", ".join(assignments)
+        statement += " WHERE id = ?"
+
         with self._connection_provider.connect() as connection:
-            if person_id is None:
-                cursor = connection.execute(
-                    "UPDATE recognition_results SET status = ? WHERE id = ?",
-                    (status.value, str(result_id)),
-                )
-            else:
-                # COALESCE-free: an explicit human decision always wins over a
-                # stale automated attribution on the same pending row.
-                cursor = connection.execute(
-                    "UPDATE recognition_results SET status = ?, person_id = ? "
-                    "WHERE id = ?",
-                    (status.value, str(person_id), str(result_id)),
-                )
+            cursor = connection.execute(
+                statement,
+                (status.value, *extra, str(result_id)),
+            )
             return cursor.rowcount
 
     @staticmethod

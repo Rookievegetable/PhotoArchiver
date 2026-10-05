@@ -103,6 +103,53 @@ class RecognitionRepository(Protocol):
     def list_pending(self) -> list[RecognitionResult]:
         """Return all recognition results awaiting user review."""
 
+    def find_projection(
+        self, photo_id: UUID, person_id: UUID,
+    ) -> RecognitionResult | None:
+        """Return the Assignment-derived projection for one ``(photo, person)``.
+
+        S1：查询**必须**同时带 ``photo_id`` 与 ``person_id``，并以
+        ``assignment_id IS NOT NULL`` 为门槛。禁止只按 ``assignment_id`` 定位——
+        一个 Assignment 覆盖一个簇的多张照片，会返回多行并导致跨照片串号。
+
+        ``assignment_id IS NULL`` 的 legacy 人工决策**永不**在此返回：它们不由
+        Assignment 支撑，S0 INV-4 禁止 reconcile / rebuild 触碰。
+        """
+
+    def list_projections(self) -> list[RecognitionResult]:
+        """Return every Assignment-derived projection (``assignment_id IS NOT NULL``)."""
+
+    def list_projections_of_assignment(
+        self, assignment_id: UUID,
+    ) -> list[RecognitionResult]:
+        """Return all projections currently referencing ``assignment_id``（可能多行）."""
+
+    def create_projection(
+        self, photo_id: UUID, person_id: UUID, assignment_id: UUID,
+    ) -> RecognitionResult:
+        """Create an approved projection owned by ``assignment_id``.
+
+        复用该 ``(photo, person)`` 上已存在的 pending 行（若有）就地翻转为
+        approved 并写入支撑引用——S1 D-3：pending 行不被遗留，也不产生第二条行。
+        """
+
+    def retarget_projection(
+        self, result_id: UUID, assignment_id: UUID,
+    ) -> int:
+        """Point an existing projection at another supporting Assignment.
+
+        S1：支撑引用改变**不改变**投影的存在性——只要 ``active_supports`` 非空就保留，
+        只更新引用。Returns 受影响行数。
+        """
+
+    def terminate_projection(self, result_id: UUID) -> int:
+        """Terminate a projection: ``approved`` → ``rejected``（不 DELETE）。
+
+        仅当该 ``(photo, person)`` 已无任何 active supporting Assignment 时调用。
+        转 rejected 而非删除是为了保留审计痕迹（INV-5 的照片级去重语义也依赖
+        历史行可查）。Returns 受影响行数。
+        """
+
     def list_approved_by_person(self, person_id: UUID) -> list[RecognitionResult]:
         """Return all APPROVED recognition results for the given person.
 
@@ -110,6 +157,9 @@ class RecognitionRepository(Protocol):
         for归档组织。Results are ordered by ``created_at`` then ``id`` so
         the planner produces a stable archive ordering under re-invocation.
         """
+
+    def list_all_approved(self) -> list[RecognitionResult]:
+        """S1：返回全部 approved 行（含 legacy 与 projection），供 rebuild 统计与审计。"""
 
     def remove_results_for_person_photos(
         self, person_id: UUID, photo_ids: Sequence[UUID],
@@ -130,8 +180,13 @@ class RecognitionRepository(Protocol):
         result_id: UUID,
         status: MatchStatus,
         person_id: UUID | None = None,
+        assignment_id: UUID | None = None,
     ) -> int:
-        """Transition a recognition result's review status.
+        """Transition a recognition result's review status (and optionally identity).
+
+        ``assignment_id``（S1）由 :class:`ProjectionReconciler` 传入以恢复/重指向
+        投影；调用方**不得**用它创建无 Assignment 支撑的 approved 行——那属于
+        legacy 人工决策的领域，由审核中心经 Assignment 路径产生。
 
         ``person_id``（Stage 4 D-1）：人工审核批准时**同时**写入身份归属。
         新识别链路的兼容行 ``person_id`` 恒为 NULL（``person_embeddings`` 无

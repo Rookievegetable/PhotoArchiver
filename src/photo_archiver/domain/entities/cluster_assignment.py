@@ -45,17 +45,53 @@ ASSIGNMENT_STATUSES = frozenset(
 ACTIVE_ASSIGNMENT_STATUSES = frozenset(
     {ASSIGNMENT_STATUS_SUGGESTED, ASSIGNMENT_STATUS_CONFIRMED}
 )
+# **归档投影支撑**状态（S1）。刻意窄于 ACTIVE_ASSIGNMENT_STATUSES：
+#
+# ``suggested`` 表示机器归类建议仍在等待人工核实。基线 CORE-05 / BA-01
+# 「配对确认 = 归档门槛」要求机器建议**不得**产生可归档投影——否则一条未被人看
+# 过的建议就能把照片送进归档链（这正是 K-3 / D-1 要消除的风险）。
+#
+# 两个集合的用途不可混用：
+# - ACTIVE_ASSIGNMENT_STATUSES → 「这个簇当前是否有人」（INV-1 判定 + 改派替换目标）
+# - PROJECTION_SUPPORT_STATUSES → 「这个簇的身份是否已确定到可以归档」
+#
+# S4 引入 ``auto_confirmed``（自动确认）时在此加入，不改动上者的语义。
+PROJECTION_SUPPORT_STATUSES = frozenset({ASSIGNMENT_STATUS_CONFIRMED})
 
 ASSIGNMENT_SOURCE_ORDERED_SUGGESTION = "ordered_suggestion"
 ASSIGNMENT_SOURCE_MANUAL = "manual"
 ASSIGNMENT_SOURCE_SAMPLE_MATCH = "sample_match"
+ASSIGNMENT_SOURCE_REVIEW = "review"
 ASSIGNMENT_SOURCES = frozenset(
     {
         ASSIGNMENT_SOURCE_ORDERED_SUGGESTION,
         ASSIGNMENT_SOURCE_MANUAL,
         ASSIGNMENT_SOURCE_SAMPLE_MATCH,
+        ASSIGNMENT_SOURCE_REVIEW,
     }
 )
+
+# **人工来源**的决策（S0 INV-4 / P0-5）。machine 侧 mutation（自动撤回、自动重跑
+# 覆盖）遇到这些来源必须拒绝——人工再修改不受限。S1-F：Review 的身份确认是人工
+# 决策（source="review"），与人工指派同等最终。
+MANUAL_ASSIGNMENT_SOURCES = frozenset(
+    {ASSIGNMENT_SOURCE_MANUAL, ASSIGNMENT_SOURCE_REVIEW}
+)
+
+# ── actor 词表（S0 INV-4 的显式化） ────────────────────────────────────────────
+#
+# actor 标注"谁在改这条决策"。它**不是**数据字段（不落库、不进 assignment 行），
+# 而是 mutation 入口的必填契约：守卫据此判断能否触碰人工最终决策。
+#
+# 为何需要具名的 MACHINE_ACTOR 而非"任何非 human 字符串"：
+# * 无 MACHINE_ACTOR 时，S4 的机器调用方可能随手写一个字符串、甚至**忘记传
+#   actor** 而落到签名默认值 —— 默认值是 human，于是机器静默获得人工权限
+#   （fail-open）。具名常量让机器入口的写法可被code review 一眼识别。
+# * 未知 actor 一律按机器处理（保守默认 fail-closed），见
+#   :func:`photo_archiver.application.services.pairing_workbench_service.
+#   _assert_mutable_by_machine`。
+HUMAN_ACTOR = "human"
+MACHINE_ACTOR = "machine"
 
 _ALLOWED_ASSIGNMENT_TRANSITIONS = {
     ASSIGNMENT_STATUS_SUGGESTED: frozenset(

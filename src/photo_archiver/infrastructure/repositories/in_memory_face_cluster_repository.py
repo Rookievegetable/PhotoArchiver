@@ -6,6 +6,7 @@
 """
 
 from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID
 
 from photo_archiver.domain.entities.face_cluster import (
@@ -107,6 +108,27 @@ class InMemoryFaceClusterRepository(FaceClusterRepository):
             created_at=cluster.created_at,
         )
         return 1
+
+    def list_all_cluster_runs(self) -> list[FaceClusterRun]:
+        """S1：全部聚类代际，按创建序（与 SQLite 的 ORDER BY created_at, id 对齐）。"""
+        return sorted(
+            self._cluster_runs.values(),
+            key=lambda run: (run.created_at or datetime.min, str(run.id)),
+        )
+
+    def list_clusters_of_observation(
+        self, observation_id: UUID,
+    ) -> list[FaceCluster]:
+        """S1：包含该观测的全部簇（跨代际）。"""
+        cluster_ids = {
+            member.cluster_id
+            for member in self._members.values()
+            if member.observation_id == observation_id
+        }
+        return sorted(
+            (cluster for cluster in self._clusters.values() if cluster.id in cluster_ids),
+            key=lambda cluster: (cluster.created_at or datetime.min, str(cluster.id)),
+        )
 
     def list_members(self, cluster_run_id: UUID) -> list[FaceClusterMember]:
         """Return the cluster run's memberships ordered by ``cluster ordinal, id``."""
