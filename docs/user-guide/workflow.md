@@ -120,5 +120,5 @@ PhotoArchiver-cli.exe prune-missing --execute    # 确认后移除这些登记
 | 导出数据 | `PhotoArchiver-cli.exe export <输出> [--format xlsx/csv/html] [--scope filtered --status ... --person ...]` |
 | 缩略图缓存清理 | `PhotoArchiver-cli.exe cleanup-thumbnails [--execute]`（默认 dry-run） |
 | 旧库迁移 | `PhotoArchiver-cli.exe migrate [--execute]`（默认 dry-run；复制不搬移） |
-| 人脸识别（无界面） | `PhotoArchiver-cli.exe recognize [--all] [--limit N]`（默认只跑未识别照片） |
+| 人脸识别（无界面） | `PhotoArchiver-cli.exe recognize [--all] [--limit N]`（默认只跑未识别照片；`--all` 跳过仍有待审核（PENDING）结果的照片，仅重跑已处置照片） |
 | 捕捉时刻纠错 | `PhotoArchiver-cli.exe backfill-capture-time [--execute]` |

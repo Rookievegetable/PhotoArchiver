@@ -217,7 +217,7 @@
 |---|---|
 | `PhotoArchiver-cli.exe scan <照片目录>` | 扫描注册（`--no-recursive` 仅扫一层，`--name` 显示名） |
 | `PhotoArchiver-cli.exe import-people <人员文件>` | 导入人员（`--no-header` / `--sheet-name`）。CLI 为直通导入，不弹预览与确认对话框 |
-| `PhotoArchiver-cli.exe recognize` | 人脸识别（默认续跑未识别的；`--all` 全量、`--limit N` 限量） |
+| `PhotoArchiver-cli.exe recognize` | 人脸识别（默认续跑未识别的；`--all` 重跑全部已处置照片但跳过仍有待审核（PENDING）结果的、`--limit N` 限量——被跳过的不占名额） |
 | `PhotoArchiver-cli.exe download-models` | 下载/校验识别模型包（在线版首次使用） |
 | `PhotoArchiver-cli.exe archive --archive-root <目录>` | 归档全部已通过照片（`--dry-run` / `--conflict-strategy`） |
 | `PhotoArchiver-cli.exe export <输出文件>` | 导出（`--scope filtered` + `--status/--person/--captured-from/--captured-to`） |

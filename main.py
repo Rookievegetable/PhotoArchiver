@@ -231,7 +231,11 @@ def build_argument_parser() -> ArgumentParser:
     recognize_parser.add_argument(
         "--all",
         action="store_true",
-        help="re-match every registered photo (default: only photos without any recognition result)",
+        help=(
+            "re-match every registered photo whose results are all finalized; "
+            "photos with pending results are skipped (default: only photos "
+            "without any recognition result)"
+        ),
     )
     recognize_parser.add_argument(
         "--limit",
@@ -696,7 +700,19 @@ def run_recognize_command(arguments: Namespace) -> int:
         return 2
     photo_ids = tuple(photo.id for photo in photos if photo.id is not None)
     if arguments.all:
-        pending = photo_ids
+        # AUD-030 防重：--all 仍重跑已处置（APPROVED/REJECTED）的照片，但跳过
+        # 存在任意 PENDING 记录的照片——判定依据该照片的全部识别记录，防止
+        # 重复执行时 Review 队列持续累积。查询与写入之间存在竞态窗口（单机
+        # CLI，非原子防重，已知限制）。
+        all_results = repositories.recognition.list_by_photo_ids(photo_ids)
+        pending_by_photo = {
+            result.photo_id
+            for result in all_results
+            if result.status == MatchStatus.PENDING
+        }
+        pending = tuple(
+            photo_id for photo_id in photo_ids if photo_id not in pending_by_photo
+        )
     else:
         already_matched = repositories.recognition.list_first_by_photo_ids(photo_ids)
         pending = tuple(pid for pid in photo_ids if pid not in already_matched)

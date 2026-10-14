@@ -603,10 +603,30 @@ def _match_cli_context(monkeypatch, tmp_path, *, people=1, photos=3, already_mat
             )
         )
     matched = {photo_rows[i].id: "sentinel" for i in range(already_matched)}
+
+    def _list_by_photo_ids(photo_ids):
+        """Stub：返回这些照片的全部（合成）识别记录。
+
+        ``already_matched`` 的照片各生成一条 APPROVED 哨兵行，其余照片零行——
+        与既有 ``list_first_by_photo_ids`` Stub 的语义保持一致。
+        """
+        results = []
+        for pid in photo_ids:
+            if pid in matched:
+                results.append(
+                    SimpleNamespace(
+                        photo_id=pid, status=MatchStatus.APPROVED
+                    )
+                )
+        return results
+
     repositories = SimpleNamespace(
         people=SimpleNamespace(list_all=lambda: people_rows),
         photos=SimpleNamespace(list_all=lambda: photo_rows),
-        recognition=SimpleNamespace(list_first_by_photo_ids=lambda ids: dict(matched)),
+        recognition=SimpleNamespace(
+            list_first_by_photo_ids=lambda ids: dict(matched),
+            list_by_photo_ids=_list_by_photo_ids,
+        ),
     )
     return repositories, photo_rows, MatchStatus
 
@@ -671,6 +691,227 @@ def test_main_recognize_limit_caps_batch(monkeypatch, tmp_path) -> None:
 
     assert exit_code == 0
     assert len(service.commands[0].photo_ids) == 2
+
+
+# ── AUD-030：--all 的 PENDING 防重过滤（仅 --all 路径；默认续跑不变） ────────
+
+
+def _match_cli_context_with_recognition_rows(
+    monkeypatch, tmp_path, *, photos, rows_by_index
+):
+    """CLI 上下文：photos 张照片，rows_by_index 指定各照片的既有识别记录状态列表。"""
+    from datetime import datetime
+
+    from photo_archiver.domain import Folder, MatchStatus, Person, Photo, PhotoPath
+
+    people_rows = [Person(name="Person0")]
+    folder = Folder(path=PhotoPath("photos"), total_photos=photos)
+    photo_rows = []
+    recognition_rows = []
+    for index in range(photos):
+        photo_rows.append(
+            Photo(
+                path=PhotoPath(f"photos/p{index}.jpg"),
+                folder_id=folder.id,
+                original_name=f"p{index}.jpg",
+                captured_at=datetime(2024, 1, 1, 8, 0, 0),
+            )
+        )
+        for order, status in enumerate(rows_by_index.get(index, [])):
+            from photo_archiver.domain import RecognitionResult
+
+            recognition_rows.append(
+                RecognitionResult(
+                    photo_id=photo_rows[index].id,
+                    person_id=None,
+                    confidence=None,
+                    status=status,
+                    created_at=datetime(2024, 1, 2, 8, 0, order),
+                )
+            )
+    repositories = SimpleNamespace(
+        people=SimpleNamespace(list_all=lambda: people_rows),
+        photos=SimpleNamespace(list_all=lambda: photo_rows),
+        recognition=SimpleNamespace(
+            list_first_by_photo_ids=lambda ids: {},
+            list_by_photo_ids=lambda ids: list(recognition_rows),
+        ),
+    )
+    return repositories, photo_rows, MatchStatus
+
+
+def _cli_recognize_all(monkeypatch, repositories, photo_rows):
+    from photo_archiver.application.dtos import MatchResult
+
+    results = tuple(MatchResult(photo_id=photo.id, box=None) for photo in photo_rows)
+    service = StubMatchServiceForCli(results)
+    context = SimpleNamespace(
+        services=SimpleNamespace(match_persons=service), repositories=repositories
+    )
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+    exit_code = main_module.main(["recognize", "--all"])
+    submitted = list(service.commands[0].photo_ids) if service.commands else []
+    return exit_code, submitted
+
+
+def test_aud030_all_without_results_processes_photo(monkeypatch, tmp_path) -> None:
+    """AUD-030 T01：无任何识别记录的照片在 --all 下仍被处理。"""
+    repositories, photo_rows, _ = _match_cli_context_with_recognition_rows(
+        monkeypatch, tmp_path, photos=1, rows_by_index={}
+    )
+    _, submitted = _cli_recognize_all(monkeypatch, repositories, photo_rows)
+    assert submitted == [photo_rows[0].id]
+
+
+def test_aud030_all_skips_photo_with_pending(monkeypatch, tmp_path) -> None:
+    """AUD-030 T02：存在 PENDING 的照片被 --all 跳过，不再追加记录。"""
+    from photo_archiver.domain import MatchStatus
+
+    repositories, photo_rows, _ = _match_cli_context_with_recognition_rows(
+        monkeypatch, tmp_path, photos=1, rows_by_index={0: [MatchStatus.PENDING]}
+    )
+    _, submitted = _cli_recognize_all(monkeypatch, repositories, photo_rows)
+    assert submitted == []
+
+
+def test_aud030_all_skips_photo_with_multiple_pending(monkeypatch, tmp_path) -> None:
+    """AUD-030 T03/T06：多条历史 PENDING（含与终态混合）均触发跳过。"""
+    from photo_archiver.domain import MatchStatus
+
+    repositories, photo_rows, _ = _match_cli_context_with_recognition_rows(
+        monkeypatch,
+        tmp_path,
+        photos=1,
+        rows_by_index={0: [MatchStatus.PENDING, MatchStatus.PENDING]},
+    )
+    _, submitted = _cli_recognize_all(monkeypatch, repositories, photo_rows)
+    assert submitted == []
+
+
+def test_aud030_all_keeps_approved_rerun(monkeypatch, tmp_path) -> None:
+    """AUD-030 T04：仅有 APPROVED（无 PENDING）的照片保留 --all 重跑语义。"""
+    from photo_archiver.domain import MatchStatus
+
+    repositories, photo_rows, _ = _match_cli_context_with_recognition_rows(
+        monkeypatch, tmp_path, photos=1, rows_by_index={0: [MatchStatus.APPROVED]}
+    )
+    _, submitted = _cli_recognize_all(monkeypatch, repositories, photo_rows)
+    assert submitted == [photo_rows[0].id]
+
+
+def test_aud030_all_keeps_rejected_rerun(monkeypatch, tmp_path) -> None:
+    """AUD-030 T05：仅有 REJECTED（无 PENDING）的照片保留 --all 重跑语义。"""
+    from photo_archiver.domain import MatchStatus
+
+    repositories, photo_rows, _ = _match_cli_context_with_recognition_rows(
+        monkeypatch, tmp_path, photos=1, rows_by_index={0: [MatchStatus.REJECTED]}
+    )
+    _, submitted = _cli_recognize_all(monkeypatch, repositories, photo_rows)
+    assert submitted == [photo_rows[0].id]
+
+
+def test_aud030_all_mixed_finalized_and_pending_skips(monkeypatch, tmp_path) -> None:
+    """AUD-030 T06：终态 + PENDING 混合 → 任一 PENDING 即跳过（不因首条终态放行）。"""
+    from photo_archiver.domain import MatchStatus
+
+    repositories, photo_rows, _ = _match_cli_context_with_recognition_rows(
+        monkeypatch,
+        tmp_path,
+        photos=1,
+        rows_by_index={0: [MatchStatus.APPROVED, MatchStatus.PENDING]},
+    )
+    _, submitted = _cli_recognize_all(monkeypatch, repositories, photo_rows)
+    assert submitted == []
+
+
+def test_aud030_all_limit_applies_after_pending_filter(
+    monkeypatch, tmp_path
+) -> None:
+    """AUD-030 T08：--limit 在 PENDING 过滤之后生效，被跳过的照片不占名额。"""
+    from photo_archiver.domain import MatchStatus
+
+    repositories, photo_rows, _ = _match_cli_context_with_recognition_rows(
+        monkeypatch,
+        tmp_path,
+        photos=4,
+        rows_by_index={0: [MatchStatus.PENDING]},
+    )
+    _, submitted = _cli_recognize_all_limit(
+        monkeypatch, repositories, photo_rows, limit=2
+    )
+    # 4 张照片中 p0 有 PENDING 被过滤 → 剩 p1、p2、p3 → 取前 2 张。
+    assert submitted == [photo_rows[1].id, photo_rows[2].id]
+
+
+def test_aud030_all_no_limit_no_extra_cap(monkeypatch, tmp_path) -> None:
+    """AUD-030 单元覆盖：无 --limit 时不产生额外限额，过滤后全部提交。"""
+    from photo_archiver.domain import MatchStatus
+
+    repositories, photo_rows, _ = _match_cli_context_with_recognition_rows(
+        monkeypatch, tmp_path, photos=3, rows_by_index={0: [MatchStatus.PENDING]}
+    )
+    _, submitted = _cli_recognize_all(monkeypatch, repositories, photo_rows)
+    assert submitted == [photo_rows[1].id, photo_rows[2].id]
+
+
+def test_aud030_all_default_resume_path_unchanged(monkeypatch, tmp_path) -> None:
+    """AUD-030：默认续跑模式不经过 --all 过滤，既有行为不变。"""
+
+    from photo_archiver.application.dtos import MatchResult
+    from photo_archiver.domain import MatchStatus
+
+    repositories, photo_rows, _ = _match_cli_context_with_recognition_rows(
+        monkeypatch, tmp_path, photos=2, rows_by_index={0: [MatchStatus.PENDING]}
+    )
+    from photo_archiver.domain import FaceBox
+
+    results = tuple(
+        MatchResult(photo_id=photo.id, box=FaceBox(x1=0, y1=0, x2=8, y2=8))
+        for photo in photo_rows[1:]
+    )
+    service = StubMatchServiceForCli(results)
+    context = SimpleNamespace(
+        services=SimpleNamespace(match_persons=service), repositories=repositories
+    )
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+
+    exit_code = main_module.main(["recognize"])
+
+    # 默认模式：p0 无记录 → 处理；p1 有 PENDING——默认模式按既有语义处理全部
+    # 无记录照片（p1），p0 无记录同样处理；此处断言提交集 = 无记录照片。
+    assert exit_code == 0
+    assert set(service.commands[0].photo_ids) == {
+        photo_rows[0].id,
+        photo_rows[1].id,
+    }
+
+
+def _cli_recognize_all_limit(monkeypatch, repositories, photo_rows, *, limit):
+    from photo_archiver.application.dtos import MatchResult
+
+    results = tuple(MatchResult(photo_id=photo.id, box=None) for photo in photo_rows)
+    service = StubMatchServiceForCli(results)
+    context = SimpleNamespace(
+        services=SimpleNamespace(match_persons=service), repositories=repositories
+    )
+    monkeypatch.setattr(main_module, "bootstrap_application", lambda: context)
+    exit_code = main_module.main(["recognize", "--all", "--limit", str(limit)])
+    submitted = list(service.commands[0].photo_ids) if service.commands else []
+    return exit_code, submitted
+
+
+def test_aud030_all_mixed_batch_order_stable(monkeypatch, tmp_path) -> None:
+    """AUD-030 T08 补充：过滤保持注册序相对顺序（不重排）。"""
+    from photo_archiver.domain import MatchStatus
+
+    repositories, photo_rows, _ = _match_cli_context_with_recognition_rows(
+        monkeypatch,
+        tmp_path,
+        photos=4,
+        rows_by_index={1: [MatchStatus.PENDING]},
+    )
+    _, submitted = _cli_recognize_all(monkeypatch, repositories, photo_rows)
+    assert submitted == [photo_rows[0].id, photo_rows[2].id, photo_rows[3].id]
 
 
 def test_main_recognize_refuses_without_people(monkeypatch, capsys, tmp_path) -> None:
