@@ -75,6 +75,7 @@ flowchart TD
 | `.ai/business/roadmap.md` | 15 步开发路线图与每步交付清单 | SSOT — 路线图 |
 | `docs/business-baseline/`（v1.4.0 新增登记） | **业务基线（现行/历史/冻结）**：Stage1_BusinessFacts / Stage2_BusinessRules / Stage3_BusinessDiagrams（三者现行有效，基线 `2823d1c`）+ Stage1/2_Handoff（历史交接）+ Stage4_FinalAudit / Stage4_1_FinalReview（冻结审查演进链）+ Stage4_2_FinalFreezeReview（当前冻结复审，8 项条件满足，**待 owner 签核**）；来源/基准/有效性表见该目录 README | SSOT — 业务基线（AUD-003 整改入库，2026-09-28） |
 | `docs/decisions/AUD-017-person-embeddings-decision.md` | person_embeddings 零写入者问题的决策材料（现状/数据链/三方案对比）——**owner 已裁决 Option C + K-3=suggested 层（2026-09-28），实现见 ADR-047** | 决策记录（已裁决） |
+| `docs/decisions/S4B2-*.md`（治理链 7 份：scoring-architecture / sb-reference-design / sb-reference-scope-amendment / sb-stage-gates / eval-unit-v2 / v2-architecture-final / sb6-f1-closure） | **S4B2 校准评估治理决策链**（D0–D7 / D-SB-1..12 / Scope Amendment / K-2-3-4 四门 / Evaluation Unit + v2 架构 / v2 Final Architecture + Token / S-B-6 F-1 关闭收口）——治理登记文件，**已提交（G3 commit `ebfa1759`，2026-10-14，docs(governance)）** | 决策记录（治理链，2026-10-06 ~ 10-09） |
 | `docs/development/people-import-face-clustering-development-plan.md` | 人员导入与人脸分组匹配重设计——业务方案（阶段 A–F 目标/规则/裁决引用） | 计划文档（实施已完成，保留为需求出处） |
 | `docs/development/people-import-face-clustering-execution-plan.md` | 同上——工程执行计划（阶段拆分/交付物/验收标准） | 计划文档（同上） |
 | `docs/development/stage-f-calibration-report.md` | Stage F 真实数据校准报告（473 照片分布证据；**match_threshold 证据缺口 = 体检 F1-2，待 AUD-017 裁决后补**） | 证据文档 |
@@ -150,6 +151,7 @@ flowchart TD
 | 业务基线（业务事实/规则/流程图/冻结结论） | `docs/business-baseline/`（现行 = Stage1+2+3；冻结 = Stage4_2，待 owner 签核） |
 | 当前体检发现台账 | `docs/health-check/FINDINGS_LEDGER.md`（已入库；2026-09-30 Stage 14 起无 OPEN 发现，状态字段为权威） |
 | AUD-017 裁决记录 | `docs/decisions/AUD-017-person-embeddings-decision.md` + `ARCHITECTURE_DECISIONS.md` ADR-047 |
+| S4B2 校准评估治理决策（D0–D7 / D-SB-1..12 / K-2-3-4 / Evaluation Unit / v2 Final / S-B-6 F-1 关闭） | `docs/decisions/S4B2-*.md`（治理链 7 份；各文件为其主题的登记） |
 | 配置项详解 | `docs/development/configuration.md` |
 | 目录结构详解 | `docs/deployment/project-structure.md` |
 | 架构详解 | `docs/architecture/overview.md` |
