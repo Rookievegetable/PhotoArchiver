@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
@@ -33,6 +34,7 @@ from photo_archiver.domain.entities import (
     RecognitionResult,
     RecognitionRun,
 )
+from photo_archiver.domain.entities.cluster_assignment import HUMAN_ACTOR
 from photo_archiver.domain.entities.recognition import MatchStatus
 from photo_archiver.domain.exceptions import ManualDecisionProtectedError
 from photo_archiver.domain.value_objects import (
@@ -128,12 +130,21 @@ class _World:
             index += 1
         return index
 
-    def confirm(self, cluster: FaceCluster, person: Person) -> ClusterPersonAssignment:
-        """Install a *confirmed* decision — the only archive-eligible support."""
+    def confirm(self, cluster: FaceCluster, person: Person,
+                *, created_at=None, confirmed_at=None) -> ClusterPersonAssignment:
+        """Install a *confirmed* decision — the only archive-eligible support.
+
+        AUD-033-F2：可选显式注入 ``created_at``/``confirmed_at``（确定化时间序
+        用，须严格递增；缺省保持真实时钟行为，其他调用点不受影响）。时间戳在
+        持久化前写入实体，经正常仓储链保存。
+        """
         assignment = ClusterPersonAssignment(
             cluster_id=cluster.id, person_id=person.id, source="manual",
+            created_at=created_at,
         )
         assignment.confirm()
+        if confirmed_at is not None:
+            assignment.confirmed_at = confirmed_at
         self.repos.cluster_assignments.add_assignments([assignment])
         return assignment
 
@@ -168,8 +179,23 @@ def test_c1_retargets_to_remaining_support_instead_of_deleting(tmp_path: Path) -
     photo = world.photo("P1")
     cluster_a = world.cluster([(photo, "a")])
     cluster_b = world.cluster([(photo, "b")])
-    assignment_a = world.confirm(cluster_a, person)
-    assignment_b = world.confirm(cluster_b, person)
+    # AUD-033-F2（C1）：显式确定化两次确认的时间序（双时间字段严格递增，消除
+    # 同刻 UUID 字典序决胜歧义；模式与 C3 一致）。时间戳在持久化前写入实体，
+    # 经正常仓储链保存。
+    confirm_base = datetime(2026, 1, 1, 8, 0, 0)
+    assignment_a = world.confirm(
+        cluster_a, person,
+        created_at=confirm_base, confirmed_at=confirm_base)
+    assignment_b = world.confirm(
+        cluster_b, person,
+        created_at=confirm_base + timedelta(seconds=1),
+        confirmed_at=confirm_base + timedelta(seconds=1))
+    # 最小时间序断言：第二条决策的两个时间字段均严格大于第一条（经真实仓储
+    # 读回，验证持久化值而非内存对象）。
+    first_persisted = world.repos.cluster_assignments.get_assignment(assignment_a.id)
+    second_persisted = world.repos.cluster_assignments.get_assignment(assignment_b.id)
+    assert second_persisted.created_at > first_persisted.created_at
+    assert second_persisted.confirmed_at > first_persisted.confirmed_at
 
     assert len(world.reconciler.active_supports(photo.id, person.id)) == 2
     outcome = world.reconciler.reconcile_pair(photo.id, person.id)
@@ -248,8 +274,22 @@ def test_c3_cross_run_retraction_keeps_projection(tmp_path: Path) -> None:
         [FaceClusterMember(cluster_id=cluster_2.id, observation_id=observation.id)]
     )
 
-    assignment_1 = world.confirm(cluster_1, person)
-    assignment_2 = world.confirm(cluster_2, person)
+    # AUD-033-F2：显式确定化两次确认的时间序（双时间字段严格递增，消除同刻
+    # UUID 字典序决胜歧义）。时间戳在持久化前写入实体，经正常仓储链保存。
+    confirm_base = datetime(2026, 1, 1, 8, 0, 0)
+    assignment_1 = world.confirm(
+        cluster_1, person,
+        created_at=confirm_base, confirmed_at=confirm_base)
+    assignment_2 = world.confirm(
+        cluster_2, person,
+        created_at=confirm_base + timedelta(seconds=1),
+        confirmed_at=confirm_base + timedelta(seconds=1))
+    # 最小时间序断言：第二条决策的两个时间字段均严格大于第一条（经真实仓储
+    # 读回，验证持久化值而非内存对象）。
+    first_persisted = world.repos.cluster_assignments.get_assignment(assignment_1.id)
+    second_persisted = world.repos.cluster_assignments.get_assignment(assignment_2.id)
+    assert second_persisted.created_at > first_persisted.created_at
+    assert second_persisted.confirmed_at > first_persisted.confirmed_at
     world.reconciler.reconcile_pair(photo.id, person.id)
     assert len(world.repos.recognition.list_projections_of_assignment(assignment_1.id)) == 1
 
@@ -601,6 +641,7 @@ def test_human_actor_still_reassigns_manual_assignment(tmp_path: Path) -> None:
     )
     result = workbench.assign_person(
         AssignClusterPersonCommand(cluster_id=cluster.id, person_id=li.id),
+        actor=HUMAN_ACTOR,
     )
     assert result.status == "confirmed"
     latest = world.repos.cluster_assignments.list_latest_decision(cluster.id)

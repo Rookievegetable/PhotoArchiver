@@ -9,7 +9,9 @@ D-2 = B（Owner 冻结 2026-10-02）：Review 只能批准**已聚类**照片。
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -613,7 +615,12 @@ def test_multi_person_explicit_anchor_targets_requested_cluster(
     cluster_c1 = world.cluster([photo])
     cluster_c2 = world.cluster([photo], same_run_as_last=True)
     pending = world.pending(photo)
-    second_row = RecognitionResult(photo_id=photo.id, confidence=None)
+    # D-3 复用取「(created_at, id) 最早的 pending 占位行」：第二审核项必须显式
+    # 晚于第一项建立，否则同刻 + UUID 字典序会让首次批准随机消费另一行（F-1）。
+    second_row = RecognitionResult(
+        photo_id=photo.id, confidence=None,
+        created_at=pending.created_at + timedelta(seconds=1),
+    )
     world.repos.recognition.add(second_row)
 
     world.review.approve(pending.id, zhang.id, cluster_id=cluster_c1.id)
@@ -624,6 +631,12 @@ def test_multi_person_explicit_anchor_targets_requested_cluster(
     latest_c1 = world.repos.cluster_assignments.list_latest_decision(cluster_c1.id)
     latest_c2 = world.repos.cluster_assignments.list_latest_decision(cluster_c2.id)
     assert latest_c1.person_id == zhang.id and latest_c2.person_id == li.id
+    # 逐条核验：每个审核项各自成为其所批人员的投影，队列清空（F-1 §5.2）。
+    first_after = world.repos.recognition.find_by_id(pending.id)
+    second_after = world.repos.recognition.find_by_id(second_row.id)
+    assert (first_after.status, first_after.person_id) == (MatchStatus.APPROVED, zhang.id)
+    assert (second_after.status, second_after.person_id) == (MatchStatus.APPROVED, li.id)
+    assert world.pending_count() == 0
 
 
 def test_multi_person_review_a_keeps_b_projection(tmp_path: Path) -> None:
@@ -635,19 +648,125 @@ def test_multi_person_review_a_keeps_b_projection(tmp_path: Path) -> None:
     cluster_c1 = world.cluster([photo])
     cluster_c2 = world.cluster([photo], same_run_as_last=True)
     pending = world.pending(photo)
-    second_row = RecognitionResult(photo_id=photo.id, confidence=None)
+    # 同上：第二审核项显式晚于第一项，钉定 D-3 复用的消费对象（F-1）。
+    second_row = RecognitionResult(
+        photo_id=photo.id, confidence=None,
+        created_at=pending.created_at + timedelta(seconds=1),
+    )
     world.repos.recognition.add(second_row)
 
     world.review.approve(pending.id, zhang.id, cluster_id=cluster_c1.id)
     world.review.approve(second_row.id, li.id, cluster_id=cluster_c2.id)
     projections_before = {p.id for p in world.repos.recognition.list_projections()}
 
-    # 重批 A（幂等，显式锚点）→ B 的投影保持。
-    world.review.approve(pending.id, zhang.id, cluster_id=cluster_c1.id)
+    # 重批 A（幂等，显式锚点）→ B 的投影保持。已终态化行被安全跳过。
+    assert world.review.approve(pending.id, zhang.id, cluster_id=cluster_c1.id) is None
 
     assert world.repos.recognition.find_projection(photo.id, li.id) is not None
     projections_after = {p.id for p in world.repos.recognition.list_projections()}
     assert projections_before == projections_after
+    # 逐条核验：两行各自承载其所批人员的投影，重批后零漂移（F-1 §5.2）。
+    first_after = world.repos.recognition.find_by_id(pending.id)
+    second_after = world.repos.recognition.find_by_id(second_row.id)
+    assert (first_after.status, first_after.person_id) == (MatchStatus.APPROVED, zhang.id)
+    assert (second_after.status, second_after.person_id) == (MatchStatus.APPROVED, li.id)
+    assert world.pending_count() == 0
+
+
+# ── F-1 整改：占位行选择确定性（同刻/UUID 序/重复批准） ─────────────────────
+
+_LO_ID = UUID("00000000-0000-0000-0000-0000000000aa")
+_HI_ID = UUID("00000000-0000-0000-0000-0000000000bb")
+_BASE_MOMENT = datetime(2026, 10, 2, 12, 0, 0)
+
+
+def _forced_two_row_world(
+    tmp_path: Path, *, row1_id: UUID, row2_id: UUID, same_tick: bool,
+):
+    """双审核项世界：两行 id 与 created_at 全显式，钉定 (created_at, id) 选择行为。"""
+    world = _World(tmp_path)
+    zhang = world.person("张三")
+    li = world.person("李四")
+    photo = world.photo("P1")
+    cluster_c1 = world.cluster([photo])
+    cluster_c2 = world.cluster([photo], same_run_as_last=True)
+    row1 = RecognitionResult(
+        photo_id=photo.id, confidence=None, created_at=_BASE_MOMENT, id=row1_id,
+    )
+    world.repos.recognition.add(row1)
+    row2 = RecognitionResult(
+        photo_id=photo.id, confidence=None,
+        created_at=_BASE_MOMENT if same_tick else _BASE_MOMENT + timedelta(seconds=1),
+        id=row2_id,
+    )
+    world.repos.recognition.add(row2)
+    return world, zhang, li, photo, cluster_c1, cluster_c2, row1, row2
+
+
+@pytest.mark.parametrize("reverse_ids", [False, True], ids=["row1_id_first", "row2_id_first"])
+def test_multi_person_uuid_order_does_not_change_outcomes(
+    tmp_path: Path, reverse_ids: bool,
+) -> None:
+    """F-1 §5.3：created_at 确定有序时，无关的 UUID 字典序不得改变归属结果。"""
+    row1_id, row2_id = (_LO_ID, _HI_ID) if not reverse_ids else (_HI_ID, _LO_ID)
+    world, zhang, li, photo, c1, c2, row1, row2 = _forced_two_row_world(
+        tmp_path, row1_id=row1_id, row2_id=row2_id, same_tick=False,
+    )
+
+    world.review.approve(row1.id, zhang.id, cluster_id=c1.id)
+    world.review.approve(row2.id, li.id, cluster_id=c2.id)
+
+    assert world.repos.recognition.find_projection(photo.id, zhang.id) is not None
+    assert world.repos.recognition.find_projection(photo.id, li.id) is not None
+    first_after = world.repos.recognition.find_by_id(row1.id)
+    second_after = world.repos.recognition.find_by_id(row2.id)
+    assert (first_after.status, first_after.person_id) == (MatchStatus.APPROVED, zhang.id)
+    assert (second_after.status, second_after.person_id) == (MatchStatus.APPROVED, li.id)
+    assert world.pending_count() == 0
+
+
+def test_repeat_approve_skipped_and_does_not_block_other_person(tmp_path: Path) -> None:
+    """F-1 §5.4：已终态化的审核项重复批准被跳过，且不阻断他人的合法审核。"""
+    world, zhang, li, photo, c1, c2, row1, row2 = _forced_two_row_world(
+        tmp_path, row1_id=_LO_ID, row2_id=_HI_ID, same_tick=False,
+    )
+
+    assert world.review.approve(row1.id, zhang.id, cluster_id=c1.id) is not None
+    assert world.review.approve(row1.id, zhang.id, cluster_id=c1.id) is None
+    assert world.pending_count() == 1  # 仅 row2 仍待审
+
+    assert world.review.approve(row2.id, li.id, cluster_id=c2.id) is not None
+    assert world.repos.recognition.find_projection(photo.id, li.id) is not None
+    assert world.repos.recognition.find_projection(photo.id, zhang.id) is not None
+
+
+def test_same_tick_reuse_consumes_earliest_row_and_stays_fail_closed(
+    tmp_path: Path,
+) -> None:
+    """F-1 机制钉定：同刻双占位行（D-3 域外状态）的 fail-closed 语义。
+
+    生产 GUI 链每照片至多一条 PENDING 占位行（识别兼容行的存在性守卫保证），
+    两条同刻占位行只在合成/legacy 形态出现。D-3 复用取 (created_at, id) 最早行：
+    本测试强制第二审核项的 id 排在最前，钉定首次批准消费它之后——对它的第二次
+    批准被安全拒绝（不抛错、不误归属），未消费行保持 pending 可继续处理。若未来
+    契约演进（如复用优先取被批准行），本测试须随裁决显式更新。
+    """
+    world, zhang, li, photo, c1, c2, row1, row2 = _forced_two_row_world(
+        tmp_path, row1_id=_HI_ID, row2_id=_LO_ID, same_tick=True,
+    )
+
+    world.review.approve(row1.id, zhang.id, cluster_id=c1.id)
+    # 最早的 (created_at, id) 行是 row2 → 被 zhang 的批准消费为投影。
+    consumed = world.repos.recognition.find_by_id(row2.id)
+    assert (consumed.status, consumed.person_id) == (MatchStatus.APPROVED, zhang.id)
+
+    # 对已终态化行的批准：安全跳过，不抛错、不产生 li 归属（无身份交叉）。
+    assert world.review.approve(row2.id, li.id, cluster_id=c2.id) is None
+    assert world.repos.recognition.find_projection(photo.id, li.id) is None
+    # 未被消费的 row1 仍 pending，可继续处理（队列不被误清）。
+    assert world.repos.recognition.find_by_id(row1.id).status == MatchStatus.PENDING
+    for projection in world.repos.recognition.list_projections():
+        assert projection.person_id == zhang.id
 
 
 def test_anchor_ambiguous_error_fails_closed(tmp_path: Path) -> None:
