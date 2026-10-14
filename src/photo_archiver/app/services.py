@@ -34,6 +34,10 @@ from photo_archiver.application import (
     RunRecognitionService,
     PruneMissingPhotosService,
     RegisterPhotoService,
+    ReferenceEligibilityService,
+    ReferenceIntakeService,
+    ReferenceSnapshotService,
+    PredictionArtifactService,
     ReviewRecognitionService,
     ScanAndRegisterPhotosService,
     ScanPhotoFolderService,
@@ -61,6 +65,7 @@ from photo_archiver.infrastructure import (
 )
 from photo_archiver.infrastructure.exporters.failure_list_writer import CsvFailureListWriter
 from photo_archiver.infrastructure.filesystem.archive_file_store import FilesystemArchiveFileStore
+from photo_archiver.infrastructure.filesystem.snapshot_store import FilesystemSnapshotStore
 from photo_archiver.infrastructure.config import AppSettings
 from photo_archiver.infrastructure.image import ContentHashCalculator, ThumbnailCache
 
@@ -83,6 +88,10 @@ class ApplicationServices:
     cluster_results: ClusterResultsService
     suggest_pairings: SuggestPairingsService
     pairing_workbench: PairingWorkbenchService
+    reference_intake: ReferenceIntakeService
+    reference_eligibility: ReferenceEligibilityService
+    reference_snapshot: ReferenceSnapshotService
+    prediction_artifact: PredictionArtifactService
     recognition_failures: RecognitionFailureService
     backfill_historical_people: BackfillHistoricalPeopleService
     archive_photos: ArchivePhotosService
@@ -174,6 +183,46 @@ def build_application_services(
         assignment_repository=repositories.cluster_assignments,
         cluster_repository=repositories.face_clusters,
         observation_repository=repositories.face_observations,
+    )
+    pairing_workbench = PairingWorkbenchService(
+        repositories.cluster_assignments,
+        repositories.face_clusters,
+        repositories.face_observations,
+        repositories.people,
+        repositories.recognition,
+        repositories.person_face_samples,
+        reconciler=projection_reconciler,
+    )
+    reference_intake_instance = ReferenceIntakeService(
+        repositories.calibration_annotations,
+        repositories.face_clusters,
+        repositories.face_observations,
+        repositories.photos,
+        ContentHashCalculator(),
+        pairing_workbench,
+    )
+    reference_eligibility_instance = ReferenceEligibilityService(
+        reference_intake=reference_intake_instance,
+        calibration_repository=repositories.calibration_annotations,
+        assignment_repository=repositories.cluster_assignments,
+        cluster_repository=repositories.face_clusters,
+        observation_repository=repositories.face_observations,
+        photo_repository=repositories.photos,
+        person_repository=repositories.people,
+        sample_repository=repositories.person_face_samples,
+        run_repository=repositories.recognition_runs,
+        content_hasher=ContentHashCalculator(),
+    )
+    reference_snapshot_instance = ReferenceSnapshotService(
+        eligibility_service=reference_eligibility_instance,
+        reference_intake=reference_intake_instance,
+        snapshot_store=FilesystemSnapshotStore(),
+        observation_repository=repositories.face_observations,
+        photo_repository=repositories.photos,
+    )
+    prediction_artifact_instance = PredictionArtifactService(
+        snapshot_service=reference_snapshot_instance,
+        artifact_store=FilesystemSnapshotStore(),
     )
     identity_decisions = IdentityDecisionService(
         recognition_repository=repositories.recognition,
@@ -325,15 +374,11 @@ def build_application_services(
             repositories.person_face_samples,
             NumpyCosineSimilarityFactory(),
         ),
-        pairing_workbench=PairingWorkbenchService(
-            repositories.cluster_assignments,
-            repositories.face_clusters,
-            repositories.face_observations,
-            repositories.people,
-            repositories.recognition,
-            repositories.person_face_samples,
-            reconciler=projection_reconciler,
-        ),
+        pairing_workbench=pairing_workbench,
+        reference_intake=reference_intake_instance,
+        reference_eligibility=reference_eligibility_instance,
+        reference_snapshot=reference_snapshot_instance,
+        prediction_artifact=prediction_artifact_instance,
         recognition_failures=RecognitionFailureService(
             repositories.recognition_runs,
             repositories.face_observations,

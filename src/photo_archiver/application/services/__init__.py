@@ -33,6 +33,10 @@ from photo_archiver.application.services.cleanup_thumbnail_cache_service import 
     CleanupThumbnailCacheService,
 )
 from photo_archiver.application.services.prune_missing_photos_service import PruneMissingPhotosService
+from photo_archiver.application.services.reference_eligibility_service import ReferenceEligibilityService
+from photo_archiver.application.services.reference_intake_service import ReferenceIntakeService
+from photo_archiver.application.services.prediction_artifact_service import PredictionArtifactService
+from photo_archiver.application.services.reference_snapshot_service import ReferenceSnapshotService
 from photo_archiver.application.services.register_photo_service import RegisterPhotoService
 from photo_archiver.application.services.review_recognition_service import ReviewRecognitionService
 from photo_archiver.application.services.scan_and_register_photos_service import ScanAndRegisterPhotosService
@@ -73,6 +77,10 @@ __all__ = [
     "PluginContextService",
     "CleanupThumbnailCacheService",
     "PruneMissingPhotosService",
+    "ReferenceEligibilityService",
+    "ReferenceIntakeService",
+    "PredictionArtifactService",
+    "ReferenceSnapshotService",
     "RegisterPhotoService",
     "ReviewRecognitionService",
     "ScanAndRegisterPhotosService",

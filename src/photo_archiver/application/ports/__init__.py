@@ -11,10 +11,12 @@ from photo_archiver.application.ports.photo_file_scanner import (
     DEFAULT_SCAN_MAX_DEPTH,
     PhotoFileScanner,
 )
+from photo_archiver.application.ports.photo_content_hasher import PhotoContentHasher
 from photo_archiver.application.ports.photo_metadata_reader import PhotoMetadataReader
 from photo_archiver.application.ports.plugin_context import PluginContext
 from photo_archiver.application.ports.progress_reporter import ProgressReporter
 from photo_archiver.application.ports.similarity_kernel import SimilarityKernelFactory
+from photo_archiver.application.ports.snapshot_store import SnapshotStore
 from photo_archiver.application.ports.system_settings import SystemSettings
 from photo_archiver.application.ports.thumbnail_cache import (
     DEFAULT_THUMBNAIL_SIZE,
@@ -34,10 +36,12 @@ __all__ = [
     "PersonMatcher",
     "DEFAULT_SCAN_MAX_DEPTH",
     "PhotoFileScanner",
+    "PhotoContentHasher",
     "PhotoMetadataReader",
     "PluginContext",
     "ProgressReporter",
     "SimilarityKernelFactory",
+    "SnapshotStore",
     "SystemSettings",
     "DEFAULT_THUMBNAIL_SIZE",
     "ThumbnailCache",

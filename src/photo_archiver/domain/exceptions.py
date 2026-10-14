@@ -62,3 +62,24 @@ class ImageUnreadableError(PhotoArchiverDomainError):
     dropped). Lives in the domain layer so both ``ai`` adapters (raise) and
     ``application`` services (handle) may reference it per DEP rules.
     """
+
+
+class ReferenceIsolationViolationError(PhotoArchiverDomainError):
+    """S-B 参考数据与 Frozen Evaluation 发生 photo_id 级交集（fail-closed）。
+
+    Owner 裁决 D-SB（``docs/decisions/S4B2-sb-reference-design-decisions.md``）
+    永久硬约束 4/5/6：EvalPhotoSet ∩ ReferencePhotoSet = ∅、same-cluster
+    leakage fail-closed、cross-run 按 photo_id 去重。隔离不变量**只能是
+    photo_id**——同一物理脸跨 recognition run 会复制出不同 observation_id，
+    observation_id 级检查不可靠。任何违例都必须中止 Reference Sample 创建：
+    禁止降级为警告、禁止部分写入后补救。
+    """
+
+
+class SnapshotAlreadyExistsError(PhotoArchiverDomainError):
+    """S-B-4（D-SB-6/§15）：Snapshot 文件不可变——拒绝覆盖已存在的 snapshot。
+
+    Snapshot 一经发布即冻结：变化只能通过创建**新 snapshot**（新 snapshot_id
+    + 新内容哈希），绝不允许改写或删除旧文件。文件存储实现（原子落位）在
+    目标已存在时 fail-closed 抛出本异常。
+    """
