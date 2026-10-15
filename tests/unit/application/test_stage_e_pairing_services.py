@@ -40,6 +40,13 @@ from photo_archiver.domain import (
     RunPhotoSnapshot,
     ValidationError,
 )
+from photo_archiver.domain.entities.cluster_assignment import (
+    ASSIGNMENT_SOURCE_ORDERED_AUTO_CONFIRM,
+    ASSIGNMENT_SOURCE_ORDERED_SUGGESTION,
+    HUMAN_ACTOR,
+    MACHINE_ACTOR,
+)
+from photo_archiver.domain.exceptions import ManualDecisionProtectedError
 from photo_archiver.infrastructure import (
     InMemoryClusterPersonAssignmentRepository,
     InMemoryFaceClusterRepository,
@@ -268,14 +275,18 @@ def test_suggestion_and_confirmation_end_to_end():
 
     summary = suggest.execute(StartSuggestPairingsCommand(generation.id))
 
-    # 无样本库 → 全部走顺序配对：两簇两人都拿到 suggested。
-    assert summary.suggestions == 2
-    assert summary.ordered == 2 and summary.sample_matched == 0
+    # S4 C-3：无样本库 + 数量相等 + 时间齐备 + 无拒绝对 → 整批位置自动确认
+    # （score 恒 NULL、source=ordered_auto_confirm、不沉淀样本、不写投影）。
+    assert summary.auto_confirmed == 2
+    assert summary.suggestions == 0
+    assert summary.ordered == 0 and summary.sample_matched == 0
+    assert summary.auto_confirm_blocked_reason is None
     active = results.assignments_active(generation.id)
     assert len(active) == 2
-    assert all(a.status == "suggested" for a in active)
+    assert all(a.status == "auto_confirmed" for a in active)
+    assert all(a.source == "ordered_auto_confirm" for a in active)
+    assert all(a.score is None for a in active)
 
-    # 确认两人簇（member_count == 2）的建议 → samples + D3 兼容 APPROVED。
     by_cluster = {
         cluster.id: cluster
         for cluster in harness.clusters.list_clusters(generation.id)
@@ -283,7 +294,19 @@ def test_suggestion_and_confirmation_end_to_end():
     target = next(
         a for a in active if by_cluster[a.cluster_id].member_count == 2
     )
-    result = workbench.confirm(ConfirmAssignmentCommand(target.id))
+    other = next(a for a in active if a.id != target.id)
+
+    # D6：机器不得撤销 auto_confirmed（fail-closed 守卫）。
+    with pytest.raises(ManualDecisionProtectedError):
+        workbench.unassign(UnassignClusterCommand(other.cluster_id),
+                           actor=MACHINE_ACTOR)
+
+    # 人工终审（D6 允许路径）：assign_person 退休 auto 行 + 新建 manual
+    # confirmed 决策 → samples + D3 兼容 APPROVED（确认即可归档）。
+    result = workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=target.cluster_id,
+                                   person_id=target.person_id),
+        actor=HUMAN_ACTOR)
 
     assert result.status == "confirmed"
     assert result.samples_written == 2  # 两成员观测沉淀为样本
@@ -291,10 +314,9 @@ def test_suggestion_and_confirmation_end_to_end():
     assert result.compat_results_written == 2
     samples = harness.samples.list_by_person(target.person_id)
     assert {sample.observation_id for sample in samples} == {o1.id, o2.id}
-    # 确认后：该簇行 confirmed，另一簇建议不受影响（顺序无关断言）。
+    # 终审后：该簇行 confirmed（manual），另一簇保持 auto_confirmed（D6）。
     active_statuses = sorted(a.status for a in results.assignments_active(generation.id))
-    assert active_statuses == ["confirmed", "suggested"]
-
+    assert active_statuses == ["auto_confirmed", "confirmed"]
 
 def test_confirm_requires_suggested_state():
     harness = _Harness()
@@ -321,11 +343,12 @@ def test_reject_then_unassign_lifecycle():
     suggest.execute(StartSuggestPairingsCommand(generation.id))
     assignment = results.assignments_active(generation.id)[0]
 
-    workbench.reject(RejectAssignmentCommand(assignment.id))
+    workbench.reject(RejectAssignmentCommand(assignment.id), actor=HUMAN_ACTOR)
     assert harness.assignments.get_assignment(assignment.id).status == "rejected"
     assert results.assignments_active(generation.id) == []  # rejected 不是有效行
 
-    workbench.unassign(UnassignClusterCommand(assignment.cluster_id))
+    workbench.unassign(
+        UnassignClusterCommand(assignment.cluster_id), actor=HUMAN_ACTOR)
     # unassign 复用同一条决策行（suggested→rejected→unassigned），
     # 历史以行内状态迁移表达，不新增行。
     history = harness.assignments.list_by_cluster(assignment.cluster_id)
@@ -344,6 +367,7 @@ def test_manual_assignment_replaces_active_and_confirms_immediately():
 
     result = workbench.assign_person(
         AssignClusterPersonCommand(cluster_id=original.cluster_id, person_id=p2.id),
+        actor=HUMAN_ACTOR,
     )
 
     assert result.status == "confirmed"
@@ -386,3 +410,85 @@ def test_suggestions_skip_clusters_with_active_assignment():
 
     assert summary.suggestions == 0  # 已有有效指派 → 幂等，不重复建议
     assert first.id == results.assignments_active(generation.id)[0].id
+
+
+def test_reject_machine_blocked_on_auto_confirmed_allowed_on_suggested():
+    """D6：机器不得拒绝 auto_confirmed；机器可拒回自己的 suggested 行。"""
+    harness = _Harness()
+    person = harness.add_person("李四", 1)
+    o1 = harness.add_observation(uuid4(), 0, 0.0)
+    generation = harness.add_generation([("k|a|000000", [o1])])
+    _, workbench, results, _ = harness.build_services()
+
+    auto_row = ClusterPersonAssignment(
+        cluster_id=generation.id, person_id=person.id,
+        source=ASSIGNMENT_SOURCE_ORDERED_AUTO_CONFIRM, id=uuid4(),
+    )
+    auto_row.auto_confirm({"sort_key": "k|a|000000"})
+    harness.assignments.add_assignments([auto_row])
+
+    with pytest.raises(ManualDecisionProtectedError):
+        workbench.reject(RejectAssignmentCommand(auto_row.id), actor=MACHINE_ACTOR)
+    assert harness.assignments.get_assignment(auto_row.id).status == "auto_confirmed"
+
+    workbench.reject(RejectAssignmentCommand(auto_row.id), actor=HUMAN_ACTOR)  # 人工（显式）
+    assert harness.assignments.get_assignment(auto_row.id).status == "rejected"
+
+    suggested_row = ClusterPersonAssignment(
+        cluster_id=generation.id, person_id=person.id,
+        source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, id=uuid4(),
+    )
+    harness.assignments.add_assignments([suggested_row])
+    workbench.reject(RejectAssignmentCommand(suggested_row.id), actor=MACHINE_ACTOR)
+    assert harness.assignments.get_assignment(suggested_row.id).status == "rejected"
+
+
+def test_reject_actor_is_required_omission_refused_at_interface():
+    """F-1：actor 必填——省略参数被接口层拒绝（TypeError），不得隐式获得人工权限。"""
+    harness = _Harness()
+    person = harness.add_person("李四", 1)
+    o1 = harness.add_observation(uuid4(), 0, 0.0)
+    generation = harness.add_generation([("k|a|000000", [o1])])
+    _, workbench, _, _ = harness.build_services()
+    auto_row = ClusterPersonAssignment(
+        cluster_id=generation.id, person_id=person.id,
+        source=ASSIGNMENT_SOURCE_ORDERED_AUTO_CONFIRM, id=uuid4(),
+    )
+    auto_row.auto_confirm({"sort_key": "k|a|000000"})
+    harness.assignments.add_assignments([auto_row])
+
+    with pytest.raises(TypeError):
+        workbench.reject(RejectAssignmentCommand(auto_row.id))
+
+    # 调用未发生：持久化状态与决策历史保持不变（auto 行未被拒绝）。
+    assert harness.assignments.get_assignment(auto_row.id).status == "auto_confirmed"
+    history = harness.assignments.list_by_cluster(generation.id)
+    assert [row.status for row in history] == ["auto_confirmed"]
+
+
+def test_assign_and_unassign_actor_is_required_omission_refused_at_interface():
+    """AUD-032：assign_person/unassign 的 actor 必填——省略参数被接口层拒绝
+    （TypeError），不得隐式获得人工权限；调用未发生，持久化状态与历史不变。"""
+    harness = _Harness()
+    person = harness.add_person("李四", 1)
+    o1 = harness.add_observation(uuid4(), 0, 0.0)
+    generation = harness.add_generation([("k|a|000000", [o1])])
+    _, workbench, _, _ = harness.build_services()
+    auto_row = ClusterPersonAssignment(
+        cluster_id=generation.id, person_id=person.id,
+        source=ASSIGNMENT_SOURCE_ORDERED_AUTO_CONFIRM, id=uuid4(),
+    )
+    auto_row.auto_confirm({"sort_key": "k|a|000000"})
+    harness.assignments.add_assignments([auto_row])
+
+    with pytest.raises(TypeError):
+        workbench.assign_person(
+            AssignClusterPersonCommand(cluster_id=generation.id,
+                                       person_id=person.id))
+    with pytest.raises(TypeError):
+        workbench.unassign(UnassignClusterCommand(generation.id))
+
+    # 两次调用均未发生：auto 行状态与决策历史保持不变。
+    assert harness.assignments.get_assignment(auto_row.id).status == "auto_confirmed"
+    history = harness.assignments.list_by_cluster(generation.id)
+    assert [row.status for row in history] == ["auto_confirmed"]

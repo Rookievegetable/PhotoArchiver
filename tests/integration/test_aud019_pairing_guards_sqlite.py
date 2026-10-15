@@ -65,6 +65,7 @@ from photo_archiver.domain import (
     FaceEmbedding,
     ValidationError,
 )
+from photo_archiver.domain.entities.cluster_assignment import HUMAN_ACTOR
 from photo_archiver.infrastructure import LocalPhotoFileScanner
 from photo_archiver.infrastructure.cosine_kernel import NumpyCosineSimilarityFactory
 from photo_archiver.infrastructure.database.sqlite_cluster_assignment_repository import (
@@ -118,9 +119,12 @@ def _seed_full_chain(repos, tmp_path: Path, photo_count: int = 2):
         vectors[name] = tuple(1.0 if axis == index else 0.0 for axis in range(4))
         names.append(name)
     csv_path = tmp_path / "roster.csv"
+    # S4 C-3：追加一名备用人员使数量不等 → 建议走既有 suggested 路径
+    # （本文件六项守卫测试的对象是 suggested 行；位次映射 a→张三、b→李四… 不变）。
     roster = [("张三", "E001", ""), ("李四", "E002", "")]
     if photo_count > 2:
         roster.append(("王五", "E003", ""))
+    roster.append(("备用人员", "E999", ""))
     lines = ["姓名,工号,部门"]
     lines.extend(f"{name},{identity},{department}" for name, identity, department in roster)
     csv_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -313,7 +317,9 @@ def test_reject_blocks_later_confirm(tmp_path):
     row = context["suggested_by_person"]["张三"]
     workbench = _workbench(repos)
 
-    rejected = workbench.reject(RejectAssignmentCommand(assignment_id=row.id))
+    rejected = workbench.reject(
+        RejectAssignmentCommand(assignment_id=row.id), actor=HUMAN_ACTOR,
+    )
     assert rejected.status == "rejected"
     with pytest.raises(ValidationError, match="Only suggested assignments"):
         workbench.confirm(ConfirmAssignmentCommand(assignment_id=row.id))

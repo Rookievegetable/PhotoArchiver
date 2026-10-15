@@ -497,7 +497,8 @@ PAIRING_WORKBENCH_TITLE = "人物配对工作台"
 PAIRING_WORKBENCH_ENTRY_BUTTON = "人物配对工作台"
 PAIRING_WORKBENCH_HINT = (
     "为聚类组指派人员：建议仅作参考（建议状态=待确认），人工确认后才写入"
-    "正式归属并沉淀人脸样本；拒绝/改派不影响原始聚类数据。"
+    "正式归属并沉淀人脸样本；「自动确认」为机器按位置规则生成的待人工终审"
+    "记录，人工终审确认后才沉淀样本并可归档；拒绝/改派不影响原始聚类数据。"
 )
 PAIRING_WORKBENCH_GENERATION_LABEL = "聚类代际"
 PAIRING_WORKBENCH_GENERATION_ENTRY = "{created_at} · {status} · {clusters} 簇"
@@ -505,6 +506,7 @@ PAIRING_WORKBENCH_GENERATE_BUTTON = "生成建议"
 PAIRING_WORKBENCH_CLUSTER_ENTRY = "第 {ordinal} 组 · {count} 张脸 · {assignment}"
 PAIRING_WORKBENCH_ASSIGNMENT_LABEL = {
     "suggested": "待确认（{source} · {score}）",
+    "auto_confirmed": "自动确认（待人工终审）：{person}",
     "confirmed": "已确认：{person}",
     "rejected": "已拒绝：{person}",
     "unassigned": "未指派",
@@ -512,6 +514,7 @@ PAIRING_WORKBENCH_ASSIGNMENT_LABEL = {
 PAIRING_WORKBENCH_SOURCE_LABELS = {
     "ordered_suggestion": "顺序建议",
     "sample_match": "样本匹配",
+    "ordered_auto_confirm": "位置自动确认",
     "manual": "人工指派",
 }
 PAIRING_WORKBENCH_MEMBER_LABEL = "人员"
@@ -527,7 +530,16 @@ PAIRING_WORKBENCH_NO_ROSTER = "人员名单为空；请先导入人员。"
 PAIRING_WORKBENCH_SUGGESTED_DONE = (
     "已生成 {suggestions} 条建议（样本匹配 {sample_matched} · 顺序配对 {ordered}）"
 )
+PAIRING_WORKBENCH_FINAL_CONFIRMED = "已人工终审确认：{person}"
 PAIRING_WORKBENCH_CONFIRMED = "已确认归属：{person}"
+PAIRING_WORKBENCH_AUTO_CONFIRM_DONE = "位置自动确认 {auto_confirmed} 项（待人工终审）"
+PAIRING_WORKBENCH_AUTO_CONFIRM_BLOCKED = "位置自动确认未执行（{reason}）"
+PAIRING_WORKBENCH_AUTO_CONFIRM_BLOCKED_REASONS = {
+    "COUNT_MISMATCH": "簇与人员数量不一致",
+    "EMPTY_INPUT": "无剩余可配对对象",
+    "MISSING_CAPTURE_TIME": "存在缺少拍摄时间的簇",
+    "REJECTED_POSITIONAL_PAIR": "存在被拒绝的位置对",
+}
 PAIRING_WORKBENCH_REJECTED = "已拒绝该建议"
 PAIRING_WORKBENCH_ASSIGNED = "已人工指派：{person}"
 PAIRING_WORKBENCH_UNASSIGNED = "已解除映射"

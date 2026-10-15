@@ -80,7 +80,7 @@ class _Harness:
         self.persons.append(person)
         return person
 
-    def seed_generation(self):
+    def seed_generation(self, *, captured: bool = False):
         from uuid import uuid4
 
         from photo_archiver.domain import (
@@ -89,6 +89,8 @@ class _Harness:
             FaceClusterRun,
             FaceObservation,
         )
+        from datetime import datetime
+
         run = self.recognition_run
         observations = []
         for index, angle in enumerate((0.0, 6.0, 180.0, 186.0)):
@@ -110,6 +112,7 @@ class _Harness:
             cluster = FaceCluster(
                 cluster_run_id=cluster_run.id, run_id=run.id, ordinal=ordinal,
                 member_count=len(members), sort_key=f"k|{ordinal}|000000",
+                first_captured_at=datetime(2026, 1, 1, 8, 0, 0) if captured else None,
             )
             self.clusters.add_clusters([cluster])
             self.clusters.add_members([
@@ -327,3 +330,49 @@ def test_no_clusters_shows_state(qtbot) -> None:
 
     assert "尚无聚类结果" in dialog._status_label.text()
     assert dialog._cluster_list.count() == 0
+
+def test_auto_confirmed_renders_distinct_label_and_feedback(qtbot) -> None:
+    """C4-1/C4-2：auto_confirmed 行显示独立状态（非"未指派"），反馈含自动确认计数。"""
+    harness = _Harness()
+    harness.seed_generation(captured=True)  # 时间齐备 → 整批位置自动确认
+    dialog = harness.build_dialog(qtbot)
+    dialog._on_generate_clicked()
+    item_text = dialog._cluster_list.item(0).text()
+    assert "自动确认（待人工终审）" in item_text
+    assert "未指派" not in item_text
+    assert "位置自动确认 2 项（待人工终审）" in dialog._status_label.text()
+    assert "未执行" not in dialog._status_label.text()
+
+def test_confirm_on_auto_confirmed_routes_to_final_confirmation(qtbot) -> None:
+    """C4-2：auto 行的确认按钮走 D-6 人工终审（assign_person），非原地升级。"""
+    harness = _Harness()
+    harness.seed_generation(captured=True)
+    dialog = harness.build_dialog(qtbot)
+    dialog._on_generate_clicked()
+    dialog._cluster_list.setCurrentRow(0)
+    person_id = dialog._person_combo.currentData()
+
+    dialog._on_confirm_clicked()
+
+    assert "已人工终审确认" in dialog._status_label.text()
+    assignment = dialog._assignments_by_cluster[dialog._selected_cluster_id]
+    assert assignment.status == "confirmed"
+    assert assignment.source == "manual"  # 新建人工决策行，非原地升级
+    assert assignment.person_id == person_id  # 终审确认的是 auto 行的原人员
+
+def test_suggested_path_confirm_still_works_when_counts_mismatch(qtbot) -> None:
+    """C4-2.5：数量不等 → suggested 路径保留，原地确认行为不变。"""
+    harness = _Harness()
+    harness.seed_generation(captured=True)
+    harness._make_person("王五", None)  # 3 人 × 2 簇 → COUNT_MISMATCH
+    dialog = harness.build_dialog(qtbot)
+    dialog._on_generate_clicked()
+    # 生成反馈含阻断原因（数量不一致）
+    assert "簇与人员数量不一致" in dialog._status_label.text()
+    dialog._cluster_list.setCurrentRow(0)
+
+    dialog._on_confirm_clicked()
+
+    assert "已确认归属" in dialog._status_label.text()
+    assignment = dialog._assignments_by_cluster[dialog._selected_cluster_id]
+    assert assignment.status == "confirmed"

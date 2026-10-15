@@ -42,6 +42,7 @@ from photo_archiver.domain import (
 )
 from photo_archiver.domain.entities.cluster_assignment import (
     ASSIGNMENT_SOURCE_MANUAL,
+    ASSIGNMENT_STATUS_AUTO_CONFIRMED,
     ASSIGNMENT_STATUS_CONFIRMED,
     ACTIVE_ASSIGNMENT_STATUSES,
     HUMAN_ACTOR,
@@ -74,6 +75,8 @@ def _assert_mutable_by_machine(
       **fail-closed**：只有显式的 ``HUMAN_ACTOR`` 才获得人工权限。S4 的机器调用
       若忘记/写错 actor，会被当作机器而非被误当作人工。
     - 机器遇到 ``MANUAL_ASSIGNMENT_SOURCES``（manual / review）的行 → 拒绝。
+    - **S4/D6**：机器撤销/退休 ``auto_confirmed`` 行一律拒绝——位置自动确认是
+      机器产生的待人工终审决策，只有人工（human actor）可确认/拒绝/解除/改派。
     - **无论 source**：机器撤销 ``confirmed`` 行一律拒绝——confirmed 只能由人工
       动作产生（工作台原地确认产生 confirmed+machine source，见 PR-15；INV-6
       下无自动确认），其最终性来自"人工确认过"这一事实，不由 source 承载。
@@ -84,7 +87,7 @@ def _assert_mutable_by_machine(
     if actor == HUMAN_ACTOR:
         return
     if assignment.source in MANUAL_ASSIGNMENT_SOURCES or (
-        assignment.status == ASSIGNMENT_STATUS_CONFIRMED
+        assignment.status in (ASSIGNMENT_STATUS_CONFIRMED, ASSIGNMENT_STATUS_AUTO_CONFIRMED)
     ):
         raise ManualDecisionProtectedError(
             f"{operation} refused: assignment {assignment.id} is a human-final "
@@ -198,9 +201,19 @@ class PairingWorkbenchService:
 
     # ── 拒绝 / 解除 ─────────────────────────────────────────────────────
 
-    def reject(self, command: RejectAssignmentCommand) -> PairingOperationResult:
-        """Reject one suggested assignment（后续建议排除该对）。"""
+    def reject(
+        self, command: RejectAssignmentCommand, actor: str,
+    ) -> PairingOperationResult:
+        """Reject one suggested assignment（后续建议排除该对）。
+
+        ``actor`` **必填**（F-1 选项 A：无缺省值——省略参数不再隐式获得人工
+        权限，消灭"机器忘传 actor 即 fail-open"的整类风险）。机器不得拒绝
+        auto_confirmed 行（fail-closed）；机器可拒回自己的 suggested 行
+        （INV-4）。人工不受限。
+        """
+
         assignment = self._require_assignment(command.assignment_id)
+        _assert_mutable_by_machine(assignment, actor, "reject")
         assignment.reject()
         if self._assignment_repository.update_assignment(assignment) != 1:
             raise ValidationError(
@@ -209,16 +222,17 @@ class PairingWorkbenchService:
         return PairingOperationResult(assignment_id=assignment.id, status=assignment.status)
 
     def unassign(
-        self, command: UnassignClusterCommand, actor: str = HUMAN_ACTOR,
+        self, command: UnassignClusterCommand, actor: str,
     ) -> PairingOperationResult:
         """解除映射/撤销：最新一条未 unassigned 行 → unassigned（历史保留）。
 
         覆盖 suggested（撤回建议）、confirmed（解除映射）与 rejected
         （撤销拒绝）三种入口——全部是该行状态机的合法迁移。
 
-        ``actor``（S0 INV-4 / P0-5）：默认 :data:`HUMAN_ACTOR`（UI 按钮路径）。
-        机器侧调用**必须**显式传 :data:`MACHINE_ACTOR`——任何非 human 值都被
-        守卫当作机器（fail-closed），机器不得撤销人工最终决策。
+        ``actor`` **必填**（AUD-032 选项：无缺省值——省略参数不再隐式获得人工
+        权限，与 reject 的 F-1 整改同型）。人工 UI 路径显式传
+        :data:`HUMAN_ACTOR`；机器侧调用必须显式传 :data:`MACHINE_ACTOR`——任何
+        非 human 值都被守卫当作机器（fail-closed），机器不得撤销人工最终决策。
         """
         history = self._assignment_repository.list_by_cluster(command.cluster_id)
         target = next(
@@ -250,13 +264,15 @@ class PairingWorkbenchService:
     # ── 人工改派 / 新增指派 ─────────────────────────────────────────────
 
     def assign_person(
-        self, command: AssignClusterPersonCommand, actor: str = HUMAN_ACTOR,
+        self, command: AssignClusterPersonCommand, actor: str,
     ) -> PairingOperationResult:
         """Manually assign a person; the explicit choice is a confirmation.
 
-        ``actor``（S0 INV-4 / P0-5）：改派会**终态化**当前有效行——机器 actor
-        遇到人工最终决策必须拒绝；human 不受限（人工再修改是 INV-4 允许的唯一
-        覆盖路径）。机器调用**必须**显式传 :data:`MACHINE_ACTOR`。
+        ``actor`` **必填**（AUD-032 选项：无缺省值——省略参数不再隐式获得人工
+        权限，与 reject/unassign 同型）。人工 UI 路径显式传
+        :data:`HUMAN_ACTOR`；机器侧调用必须显式传 :data:`MACHINE_ACTOR`。
+        改派会**终态化**当前有效行——机器 actor 遇到人工最终决策必须拒绝；
+        human 不受限（人工再修改是 INV-4 允许的唯一覆盖路径）。
         """
         cluster = self._require_cluster(command.cluster_id)
         person = self._require_person(command.person_id)

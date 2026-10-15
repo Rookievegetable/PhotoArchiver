@@ -52,13 +52,14 @@ class ClusterPersonAssignmentRepository(Protocol):
         """Return every decision of one clustering generation, newest first."""
 
     def list_active_by_cluster_run(self, cluster_run_id: UUID) -> list[ClusterPersonAssignment]:
-        """Return rows with status ∈ {suggested, confirmed}（当前有效行）。"""
+        """Return rows with status ∈ {suggested, confirmed, auto_confirmed}（当前有效行）。"""
 
     def list_rejected_pairs(self, cluster_run_id: UUID) -> list[tuple[UUID, UUID]]:
         """Return (cluster_id, person_id) pairs rejected within the generation."""
 
     def list_confirmed_person_ids(self, cluster_run_id: UUID) -> list[UUID]:
-        """Return persons with a confirmed assignment in the generation."""
+        """Return persons whose identity is taken in the generation（confirmed
+        或 auto_confirmed 决策——auto_confirmed 人员不得再进入规则①/③ 人员池）。"""
 
 
 class PersonFaceSampleRepository(Protocol):

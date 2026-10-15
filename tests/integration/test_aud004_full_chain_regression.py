@@ -37,8 +37,10 @@ from photo_archiver.application.commands.import_draft import (
 )
 from photo_archiver.infrastructure.filesystem.archive_file_store import FilesystemArchiveFileStore
 from photo_archiver.application.commands.pairing import (
+    AssignClusterPersonCommand,
     ConfirmAssignmentCommand,
     StartSuggestPairingsCommand,
+
 )
 from photo_archiver.application.commands.scan_and_register_photos import (
     ScanAndRegisterPhotosCommand,
@@ -76,6 +78,10 @@ from photo_archiver.domain import (
     FaceBox,
     FaceBoxEmbedding,
     FaceEmbedding,
+)
+from photo_archiver.domain.entities.cluster_assignment import HUMAN_ACTOR
+from photo_archiver.domain.services.positional_auto_confirm import (
+    ADMISSION_REASON_COUNT_MISMATCH,
 )
 from photo_archiver.infrastructure import LocalPhotoFileScanner
 from photo_archiver.infrastructure.filesystem.pillow_photo_metadata_reader import (
@@ -193,14 +199,23 @@ def _workbench(repos):
 
 
 def _confirm_all(repos, cluster_run):
+    """人工终审全部当前有效行：suggested 行原地 confirm；auto_confirmed 行
+    走 D-6 路径（assign_person 退休 auto 行 + 新建 manual confirmed + 沉淀 +
+    投影）——S4 C-3 后冷启动建议即 auto_confirmed，需人工终审才可归档。"""
     workbench = _workbench(repos)
-    return [
-        workbench.confirm(ConfirmAssignmentCommand(assignment_id=assignment.id))
-        for assignment in repos.cluster_assignments.list_active_by_cluster_run(
-            cluster_run.id,
-        )
-        if assignment.status == "suggested"
-    ]
+    results = []
+    for assignment in repos.cluster_assignments.list_active_by_cluster_run(
+        cluster_run.id,
+    ):
+        if assignment.status == "suggested":
+            results.append(workbench.confirm(
+                ConfirmAssignmentCommand(assignment_id=assignment.id)))
+        elif assignment.status == "auto_confirmed":
+            results.append(workbench.assign_person(
+                AssignClusterPersonCommand(cluster_id=assignment.cluster_id,
+                                           person_id=assignment.person_id),
+                actor=HUMAN_ACTOR))
+    return results
 
 
 def _archive(repos, archive_root: Path):
@@ -273,21 +288,33 @@ def test_cold_start_full_chain_import_to_archive_with_idempotent_rerun(tmp_path)
     clusters = repos.face_clusters.list_clusters(cluster_run.id)
     assert len(clusters) == 2
 
-    # 5. 冷启动建议：无样本 → 仅 ordered_suggestion（sort_key/roster_order 仅排序）
+    # 5. 冷启动建议：无样本 + 数量相等 → S4 C-3 整批位置自动确认
+    # （score 恒 NULL、source=ordered_auto_confirm；位次映射不变：a→张三、b→李四）
     summary = _suggest(repos, cluster_run)
-    assert (summary.suggestions, summary.sample_matched, summary.ordered) == (2, 0, 2)
+    assert (summary.suggestions, summary.sample_matched, summary.ordered) == (0, 0, 0)
+    assert summary.auto_confirmed == 2
     cluster_photo = _cluster_photo_names(repos, run, cluster_run)
     expected_identity = {"alpha.jpg": zhang.id, "beta.jpg": li.id}
     for cluster in clusters:
         row = [
             assignment for assignment in repos.cluster_assignments.list_by_cluster(cluster.id)
-            if assignment.status == "suggested"
+            if assignment.status == "auto_confirmed"
         ][0]
-        assert row.source == "ordered_suggestion"
+        assert row.source == "ordered_auto_confirm"
         assert row.score is None                          # 位次不是相似度证据
         assert row.person_id == expected_identity[cluster_photo[cluster.id]]
+        # S4 C-5 场景 1 补强：位次证据（sort_snapshot）落库可溯
+        assert set(row.sort_snapshot) >= {"sort_key", "first_captured_at", "auto_confirmed_at"}
+        assert row.sort_snapshot["sort_key"] == cluster.sort_key
+        assert row.sort_snapshot["first_captured_at"] == cluster.first_captured_at.isoformat()
+    # S4 C-5 场景 1 补强：终审前零副作用（BD-5/D1=A）
+    assert repos.person_face_samples.list_enabled() == []
+    assert repos.recognition.list_projections() == []
+    assert repos.recognition.list_all_approved() == []
+    assert repos.recognition.read_workspace_counts().archivable_count == 0
 
-    # 6. 人工确认 → confirmed + 兼容 APPROVED（身份来自人工决定）
+    # 6. 人工终审（D-6：assign_person 退休 auto 行 + 新建 manual confirmed）
+    # → samples + 兼容 APPROVED（身份来自人工决定；确认后方可归档——D1=A）
     confirm_results = _confirm_all(repos, cluster_run)
     assert len(confirm_results) == 2
     assert all(result.compat_results_written == 1 for result in confirm_results)
@@ -366,6 +393,13 @@ def test_clusters_fewer_than_persons_no_forced_identity(tmp_path):
     summary = _suggest(repos, cluster_run)
     assert (summary.suggestions, summary.ordered) == (1, 1)
     assert summary.persons_without_cluster == 1           # 李四无簇，不强配
+    # S4 C-5 场景 3 补强：1 簇 × 2 人 → 数量不等 → 整批不自动确认（0 auto，回退 suggested）
+    assert summary.auto_confirmed == 0
+    assert summary.auto_confirm_blocked_reason == ADMISSION_REASON_COUNT_MISMATCH
+    assert all(
+        row.status == "suggested" and row.source == "ordered_suggestion"
+        for row in repos.cluster_assignments.list_by_cluster_run(cluster_run.id)
+    )
 
     confirm_results = _confirm_all(repos, cluster_run)
     assert len(confirm_results) == 1
@@ -407,6 +441,18 @@ def test_clusters_more_than_persons_unmatched_cluster_not_claimed(tmp_path):
     summary = _suggest(repos, cluster_run)
     assert (summary.suggestions, summary.ordered) == (2, 2)
     assert summary.unmatched_clusters == 1                # 第三簇无人可配
+    # S4 C-5 场景 2 补强：3 簇 × 2 人 → 数量不等 → 整批不自动确认
+    assert summary.auto_confirmed == 0
+    assert summary.auto_confirm_blocked_reason == ADMISSION_REASON_COUNT_MISMATCH
+    assert all(
+        row.status == "suggested"
+        for row in repos.cluster_assignments.list_by_cluster_run(cluster_run.id)
+    )
+    unmatched = [
+        cluster for cluster in repos.face_clusters.list_clusters(cluster_run.id)
+        if not repos.cluster_assignments.list_by_cluster(cluster.id)
+    ]
+    assert len(unmatched) == 1                            # 第三簇无任何决策行
 
     confirm_results = _confirm_all(repos, cluster_run)
     assert len(confirm_results) == 2

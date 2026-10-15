@@ -23,6 +23,7 @@ from photo_archiver.application.services import (
     SuggestPairingsService,
 )
 from photo_archiver.application.services.archive_planner import ArchivePlanner
+from photo_archiver.domain.entities.cluster_assignment import HUMAN_ACTOR
 from photo_archiver.domain import (
     PhotoPathBase,
     FaceBox,
@@ -302,11 +303,12 @@ def test_same_person_photo_pair_is_idempotent_on_repeated_confirm():
     first_rows = harness.compat_for(harness.person_a.id)
 
     # 解除后重新确认同一人 → 幂等（不重复写行）。
-    harness.workbench.unassign(UnassignClusterCommand(cluster_a.id))
+    harness.workbench.unassign(
+        UnassignClusterCommand(cluster_a.id), actor=HUMAN_ACTOR)
     assert harness.compat_for(harness.person_a.id) == []  # 投影已回收
     harness.workbench.assign_person(AssignClusterPersonCommand(
         cluster_id=cluster_a.id, person_id=harness.person_a.id,
-    ))
+    ), actor=HUMAN_ACTOR)
 
     assert len(harness.compat_for(harness.person_a.id)) == len(first_rows) == 1
 
@@ -323,7 +325,8 @@ def test_unassign_retracts_projection_other_identity_unaffected():
     harness.workbench.confirm(ConfirmAssignmentCommand(asg_a.id))
     harness.workbench.confirm(ConfirmAssignmentCommand(asg_b.id))
 
-    harness.workbench.unassign(UnassignClusterCommand(asg_a.cluster_id))
+    harness.workbench.unassign(
+        UnassignClusterCommand(asg_a.cluster_id), actor=HUMAN_ACTOR)
 
     assert harness.compat_for(harness.person_a.id) == []      # A 投影回收
     assert len(harness.compat_for(harness.person_b.id)) == 1  # B 不受影响
@@ -349,13 +352,13 @@ def test_reassignment_chain_a_to_b_to_c_keeps_current_identity_consistent():
 
     harness.workbench.assign_person(AssignClusterPersonCommand(
         cluster_id=cluster_a.id, person_id=harness.person_b.id,
-    ))
+    ), actor=HUMAN_ACTOR)
     assert harness.compat_for(harness.person_a.id) == []
     assert len(harness.compat_for(harness.person_b.id)) == 1
 
     harness.workbench.assign_person(AssignClusterPersonCommand(
         cluster_id=cluster_a.id, person_id=person_c.id,
-    ))
+    ), actor=HUMAN_ACTOR)
     assert harness.compat_for(harness.person_b.id) == []
     assert len(harness.compat_for(person_c.id)) == 1
     # 主事实：当前有效行 = C；历史行保留（suggested→unassigned + manual confirmed）。
@@ -386,7 +389,7 @@ def test_disabled_samples_never_enter_future_suggestions():
     # 重新聚类生成新代际（同样的脸），A 的样本已被改派停用。
     harness.workbench.assign_person(AssignClusterPersonCommand(
         cluster_id=cluster_a.id, person_id=person_c.id,
-    ))
+    ), actor=HUMAN_ACTOR)
     new_generation = harness._generation([
         ("k|a2|000000", [harness.o_a]),
     ])
@@ -447,10 +450,11 @@ def test_archive_planner_reflects_reassignment_current_identity():
     cluster_a = harness.cluster_by_ordinal(0)
     asg_a = harness.active_for(cluster_a)
     harness.workbench.confirm(ConfirmAssignmentCommand(asg_a.id))
-    harness.workbench.unassign(UnassignClusterCommand(cluster_a.id))
+    harness.workbench.unassign(
+        UnassignClusterCommand(cluster_a.id), actor=HUMAN_ACTOR)
     harness.workbench.assign_person(AssignClusterPersonCommand(
         cluster_id=cluster_a.id, person_id=person_c.id,
-    ))
+    ), actor=HUMAN_ACTOR)
 
     person_repo = _FakePersonRepository(list(harness.persons))
     photo_repo = _FakePhotoRepository([

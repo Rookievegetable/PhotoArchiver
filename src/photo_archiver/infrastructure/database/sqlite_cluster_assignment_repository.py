@@ -12,6 +12,7 @@ from uuid import UUID
 from photo_archiver.domain.entities.cluster_assignment import (
     ClusterPersonAssignment,
     PersonFaceSample,
+    validate_status_source_combination,
 )
 from photo_archiver.domain.repositories.cluster_assignment_repository import (
     ClusterPersonAssignmentRepository,
@@ -48,9 +49,16 @@ class SQLiteClusterPersonAssignmentRepository(ClusterPersonAssignmentRepository)
         self._connection_provider = connection_provider
 
     def add_assignments(self, assignments: Sequence[ClusterPersonAssignment]) -> None:
-        """批量 INSERT 决策行（空输入 no-op）。"""
+        """批量 INSERT 决策行（空输入 no-op）。
+
+        AUD-027 方案 B：整批**先校验后写入**——任一实体跨字段组合非法时在
+        第一条 INSERT 之前拒绝，数据库零新增。
+        """
         if not assignments:
             return
+        for assignment in assignments:
+            validate_status_source_combination(
+                assignment.status, assignment.source, assignment.score)
         with self._connection_provider.connect() as connection:
             connection.executemany(
                 """
@@ -90,8 +98,27 @@ class SQLiteClusterPersonAssignmentRepository(ClusterPersonAssignmentRepository)
         return _assignment_from_row(row) if row is not None else None
 
     def update_assignment(self, assignment: ClusterPersonAssignment) -> int:
-        """Persist status/score/confirmed_at/sort_snapshot（created_at 不动）。"""
+        """Persist status/score/confirmed_at/sort_snapshot（created_at 不动）。
+
+        AUD-027 方案 B：UPDATE 不写 ``source``——最终落库组合由**数据库中
+        持久化的 source** × 本次写入的 status/score 决定，守卫在同一连接内
+        先读后验；同时对内存实体的 source 组合同验，防止改内存 source 绕过
+        （水合实体两者恒等，合法路径零影响）。目标行不存在时保持既有语义
+        （UPDATE 照常执行 → rowcount=0 → 调用方并发删除路径失败），无行可
+        损坏、不视作校验通过。
+        """
         with self._connection_provider.connect() as connection:
+            persisted = connection.execute(
+                "SELECT source FROM cluster_person_assignments WHERE id = ?",
+                (str(assignment.id),),
+            ).fetchone()
+            if persisted is not None:
+                # 有效落库组合：DB 持久化 source × 本次写入的 status/score。
+                validate_status_source_combination(
+                    assignment.status, persisted["source"], assignment.score)
+                # 内存组合同验：内存 source 被改也绕不过（双组合任一非法即拒）。
+                validate_status_source_combination(
+                    assignment.status, assignment.source, assignment.score)
             cursor = connection.execute(
                 """
                 UPDATE cluster_person_assignments SET
@@ -158,7 +185,7 @@ class SQLiteClusterPersonAssignmentRepository(ClusterPersonAssignmentRepository)
     def list_active_by_cluster_run(self, cluster_run_id: UUID) -> list[ClusterPersonAssignment]:
         return [
             assignment for assignment in self.list_by_cluster_run(cluster_run_id)
-            if assignment.status in ("suggested", "confirmed")
+            if assignment.status in ("suggested", "confirmed", "auto_confirmed")
         ]
 
     def list_rejected_pairs(self, cluster_run_id: UUID) -> list[tuple[UUID, UUID]]:
@@ -181,6 +208,7 @@ class SQLiteClusterPersonAssignmentRepository(ClusterPersonAssignmentRepository)
         ]
 
     def list_confirmed_person_ids(self, cluster_run_id: UUID) -> list[UUID]:
+        """该代际中身份已被占用的人员（confirmed 与 auto_confirmed 决策）。"""
         with self._connection_provider.connect() as connection:
             rows = connection.execute(
                 """
@@ -189,7 +217,7 @@ class SQLiteClusterPersonAssignmentRepository(ClusterPersonAssignmentRepository)
                 JOIN face_clusters ON face_clusters.id =
                     cluster_person_assignments.cluster_id
                 WHERE face_clusters.cluster_run_id = ?
-                    AND cluster_person_assignments.status = 'confirmed'
+                    AND cluster_person_assignments.status IN ('confirmed', 'auto_confirmed')
                     AND cluster_person_assignments.person_id IS NOT NULL
                 """,
                 (str(cluster_run_id),),

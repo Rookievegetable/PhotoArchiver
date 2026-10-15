@@ -373,6 +373,7 @@ def build_application_services(
             repositories.cluster_assignments,
             repositories.person_face_samples,
             NumpyCosineSimilarityFactory(),
+            transaction_runner=connection_provider.run_immediate,
         ),
         pairing_workbench=pairing_workbench,
         reference_intake=reference_intake_instance,

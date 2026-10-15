@@ -39,6 +39,7 @@ from photo_archiver.application.services import (
     SuggestPairingsService,
 )
 from photo_archiver.domain import ClusterPersonAssignment
+from photo_archiver.domain.entities.cluster_assignment import HUMAN_ACTOR
 from photo_archiver.presentation import ui_text as text
 
 
@@ -212,7 +213,7 @@ class PairingWorkbenchDialog(QDialog):
         """Render one assignment's state; suggestions carry source + score."""
         if assignment is None:
             return text.PAIRING_WORKBENCH_NO_ASSIGNMENT_HINT
-        if assignment.status in ("suggested", "confirmed", "rejected"):
+        if assignment.status in ("suggested", "auto_confirmed", "confirmed", "rejected"):
             person = self._person_name(assignment.person_id)
             if assignment.status == "suggested":
                 source = text.PAIRING_WORKBENCH_SOURCE_LABELS.get(
@@ -267,7 +268,7 @@ class PairingWorkbenchDialog(QDialog):
             self._assignments_by_cluster.get(self._selected_cluster_id)
             if self._selected_cluster_id is not None else None
         )
-        if assignment is not None and assignment.status == "suggested":
+        if assignment is not None and assignment.status in ("suggested", "auto_confirmed"):
             if assignment.person_id is not None:
                 index = self._person_combo.findData(assignment.person_id)
                 if index >= 0:
@@ -291,20 +292,50 @@ class PairingWorkbenchDialog(QDialog):
         summary = self._suggest_service.execute(
             StartSuggestPairingsCommand(cluster_run_id),
         )
-        self._status_label.setText(
-            text.PAIRING_WORKBENCH_SUGGESTED_DONE.format(
-                suggestions=summary.suggestions,
-                sample_matched=summary.sample_matched,
-                ordered=summary.ordered,
-            )
+        feedback = text.PAIRING_WORKBENCH_SUGGESTED_DONE.format(
+            suggestions=summary.suggestions,
+            sample_matched=summary.sample_matched,
+            ordered=summary.ordered,
         )
+        if summary.auto_confirmed:
+            feedback += "；" + text.PAIRING_WORKBENCH_AUTO_CONFIRM_DONE.format(
+                auto_confirmed=summary.auto_confirmed,
+            )
+        elif summary.auto_confirm_blocked_reason:
+            reason = text.PAIRING_WORKBENCH_AUTO_CONFIRM_BLOCKED_REASONS.get(
+                summary.auto_confirm_blocked_reason,
+                summary.auto_confirm_blocked_reason,
+            )
+            feedback += "；" + text.PAIRING_WORKBENCH_AUTO_CONFIRM_BLOCKED.format(
+                reason=reason,
+            )
+        self._status_label.setText(feedback)
         self.refresh()
 
     def _on_confirm_clicked(self) -> None:
         assignment_id = self._selected_assignment_id()
         if assignment_id is None:
             return
+        assignment = (
+            self._assignments_by_cluster.get(self._selected_cluster_id)
+            if self._selected_cluster_id is not None else None
+        )
         try:
+            if assignment is not None and assignment.status == "auto_confirmed":
+                # D-6 人工终审：退休 auto 行 + 新建 manual confirmed（同人员）。
+                assert assignment.person_id is not None  # 实体 __post_init__ 保证
+                result = self._workbench_service.assign_person(
+                    AssignClusterPersonCommand(cluster_id=assignment.cluster_id,
+                                               person_id=assignment.person_id),
+                    actor=HUMAN_ACTOR,
+                )
+                self._status_label.setText(
+                    text.PAIRING_WORKBENCH_FINAL_CONFIRMED.format(
+                        person=self._person_name(assignment.person_id),
+                    )
+                )
+                self.refresh()
+                return
             result = self._workbench_service.confirm(
                 ConfirmAssignmentCommand(assignment_id),
             )
@@ -323,7 +354,9 @@ class PairingWorkbenchDialog(QDialog):
         if assignment_id is None:
             return
         try:
-            self._workbench_service.reject(RejectAssignmentCommand(assignment_id))
+            self._workbench_service.reject(
+                RejectAssignmentCommand(assignment_id), actor=HUMAN_ACTOR,
+            )
         except Exception as exc:  # noqa: BLE001 - UI boundary
             self._warn(str(exc))
             return
@@ -338,6 +371,7 @@ class PairingWorkbenchDialog(QDialog):
         try:
             result = self._workbench_service.assign_person(
                 AssignClusterPersonCommand(cluster_id=cluster_id, person_id=person_id),
+                actor=HUMAN_ACTOR,
             )
         except Exception as exc:  # noqa: BLE001 - UI boundary
             self._warn(str(exc))
@@ -354,7 +388,9 @@ class PairingWorkbenchDialog(QDialog):
         if cluster_id is None:
             return
         try:
-            self._workbench_service.unassign(UnassignClusterCommand(cluster_id))
+            self._workbench_service.unassign(
+                UnassignClusterCommand(cluster_id), actor=HUMAN_ACTOR,
+            )
         except Exception as exc:  # noqa: BLE001 - UI boundary
             self._warn(str(exc))
             return

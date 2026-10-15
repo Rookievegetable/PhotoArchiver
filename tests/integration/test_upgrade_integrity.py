@@ -16,8 +16,8 @@ from alembic import command
 
 _ALEMBIC_CFG = Path(__file__).resolve().parents[2] / "alembic.ini"
 _OLD_REVISION = "003_import_batches_and_roster"
-# S1：009 之后 alembic head（recognition_results.assignment_id）。
-_HEAD_REVISION = "012_single_expert_ground_truth"
+# S4：013 之后 alembic head（cluster_person_assignments 词表扩展 auto_confirmed）。
+_HEAD_REVISION = "013_assignment_auto_confirm"
 
 
 def _load_backfill_service(db_path: Path):

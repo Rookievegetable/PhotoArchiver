@@ -77,7 +77,7 @@ class InMemoryClusterPersonAssignmentRepository(ClusterPersonAssignmentRepositor
     def list_active_by_cluster_run(self, cluster_run_id: UUID) -> list[ClusterPersonAssignment]:
         return [
             assignment for assignment in self.list_by_cluster_run(cluster_run_id)
-            if assignment.status in ("suggested", "confirmed")
+            if assignment.status in ("suggested", "confirmed", "auto_confirmed")
         ]
 
     def list_rejected_pairs(self, cluster_run_id: UUID) -> list[tuple[UUID, UUID]]:
@@ -94,7 +94,8 @@ class InMemoryClusterPersonAssignmentRepository(ClusterPersonAssignmentRepositor
         return list({
             assignment.person_id
             for assignment in self._assignments.values()
-            if assignment.status == "confirmed" and assignment.cluster_id in cluster_ids
+            if assignment.status in ("confirmed", "auto_confirmed")
+            and assignment.cluster_id in cluster_ids
             and assignment.person_id is not None
         })
 

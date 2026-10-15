@@ -85,8 +85,8 @@ _ALL_INDEXES = (
     # 011 不再额外建 idx_calib_dataset_version。
 )
 
-# Stage 4：008 之后 alembic head（BLK-1 / BLK-5 schema 变更）。
-_HEAD = "012_single_expert_ground_truth"
+# S4：013 之后 alembic head（cluster_person_assignments 词表扩展 auto_confirmed）。
+_HEAD = "013_assignment_auto_confirm"
 
 
 @pytest.fixture

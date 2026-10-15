@@ -30,6 +30,7 @@ from photo_archiver.application.services import (
     PairingWorkbenchService,
     SuggestPairingsService,
 )
+from photo_archiver.domain.entities.cluster_assignment import HUMAN_ACTOR
 from photo_archiver.domain import (
     FaceBox,
     FaceCluster,
@@ -217,7 +218,8 @@ def test_sample_suggestion_closed_loop_with_disabled_exclusion_idempotent_confir
     assert counts.archivable_count == 1                  # 兼容归属只来自人工确认
 
     # ── 解除 → 重建议 → 重复确认：样本幂等，不制造重复沉淀 ──────────────
-    workbench.unassign(UnassignClusterCommand(cluster_id=cluster1.id))
+    workbench.unassign(
+        UnassignClusterCommand(cluster_id=cluster1.id), actor=HUMAN_ACTOR)
     assert len(repos.person_face_samples.list_by_person(person_a.id)) == 3  # 停用保留
 
     summary2 = suggest.execute(StartSuggestPairingsCommand(cluster_run_id=cluster_run.id))
