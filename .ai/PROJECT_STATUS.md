@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.51.0 · Last Updated: 2026-10-01 · Status: Live
+> Version: 1.52.2 · Last Updated: 2026-10-15 · Status: Live
 
 ---
 
@@ -23,6 +23,25 @@
 M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官加固阶段 0–3 已落地；发布工程至 v2.8.0（2026-09-13）。**2026-09-20 立项「人员名单导入与人脸分组匹配」重设计**：阶段 A（两段式导入，09-21 owner 验收 ✅）→ 阶段 B（人员与分组页，09-23 owner 验收 ✅）→ **阶段 C/D/E/F（2026-09-24 ~ 09-28 全部实施完成并冻结审查）**。**2026-09-28 完成全面工程健康体检（Stage 0–9，判 ATTENTION）与治理基线恢复（Stage 10）**；业务基线冻结正式生效待 owner 签核（Stage4.2 复审 8 项条件已满足，见 `docs/business-baseline/`）。
 
 ## 2. Current Step（当前开发阶段）
+
+**C 链整组提交与 C-1..C-5 验收收口（2026-10-15，本段为当前状态摘要）**——冷启动位置
+自动确认链完成五个独立提交落库：AUD-030 `d43ecca`（fix(cli): recognize --all PENDING
+防重，6 路径 +421/−6）→ AUD-026/033 `1fde8b5`（test: S1 身份/投影夹具稳定化，2 路径
++170/−10）→ **C 链整组 `d3f90e9`**（feat(pairing): 位置自动确认，26 路径 +2820/−107：
+领域实体/组合守卫/Migration 013/纯函数准入/编排服务/workbench 终审路由/ui_text+对话框
++ 15 测试文件）；每轮提交均经隔离快照验收（C-5 快照 ↔ 提交 blob 26/26 SHA 一致）。
+**阶段验收（全部 PASS WITH FINDINGS）**：C-1 契约↔实现一致性（16 项不变量 VERIFIED，
+隔离快照 102 项测试）；C-2 Migration 013 离线验收（25 项 + sqlite_master 结构探针
+恰一词表变化、integrity/fk 双绿）；C-3 服务/事务原子性（73 项 + 批内中途失败探针
+0 行存活 + 双仓储同输入对照全等）；C-4 UI/跨链（52 项 Qt/回归 + EOF 单点修正授权
+完成）；C-5 整组最终审查（Manifest 26/26 闭合、综合回归 133 项）。**遗留 Owner-Gate
+（未解锁）**：生产 Migration 013 执行（生产最近已知 = 012）；F-C3-2 事务内 kernel
+构建性能观察；G0 三文件处置；本批 G-D/R2 治理文档组 commit（5 路径已暂存待批）；
+push。剩余工作区 = 3 个 G0 文件（独立 Owner-Gate）。
+
+**S4 冷启动链实施收口与 AUD 审计链全关闭（2026-10-12～14，本段为当前状态摘要；下文 2026-10-11 段为当日历史记录）**——C-1～C-5 已全部实施，交付物在当前工作树可核实（未提交；阶段计划见 `docs/development/S4-cold-start-position-autoconfirm-pre-implementation-review.md` §8）：C-1 迁移 013 + 领域实体（实施与独立验收记录于该文档 §10.2/§10.3，质量门独立复现 1788/8/0）；C-2 批次准入纯函数（`positional_auto_confirm.py` + 22 项专项测试）；C-3 服务编排（`suggest_pairings_service.py` 接线 156 行变更，单元 8 项 + SQLite 集成 6 项测试）；C-4 UI 与文案（`ui_text.py`/`pairing_workbench_dialog.py`）；C-5 全链回归（`test_s4_c5_link_acceptance_sqlite.py` 场景 4/8 + AUD-004 场景改造）。阶段验收以台账审计链为权威（`docs/health-check/FINDINGS_LEDGER.md`）：C-1 于 2026-10-11 经独立验收并 Owner 关闭（`C1-F1-CLOSE-APPROVED`，AUD-026 FIXED）；C-3 硬门 AUD-027 经整改与独立复验关闭（`AUD027-REAUDIT-VERIFIED`）、其“完整服务链测试验收”要求经独立审查确认由 C-5 场景 8 实质满足（`AUD029-REVIEW-VERIFIED`，均 2026-10-12 Owner 批准）；C-4 审计发现 AUD-031/032（actor 必填化）经整改与独立复验关闭；遗留入口 AUD-030 于 2026-10-14 经 Owner 批准关闭（方案 B，独立审核 `VERIFIED WITH NON-BLOCKING OBSERVATIONS`、未知状态专项 `UNKNOWN-STATE-UNREACHABLE`）——**台账 33 条，Status = FIXED 32 / OPEN 0 / ACCEPTED-RISK 1**。C-2～C-5 阶段级独立验收报告为会话交付、未落盘仓库（核实点 = 台账审计链 + 工作树交付物 + 交付测试 mtime 早于 2026-10-12/13 全量门运行）；C-5 计划中的 ADR/PROJECT_STATUS 文档登记项：ADR 未登记（待 Owner 裁决），PROJECT_STATUS 当前摘要即本段登记。质量门最近记录 = **1857 passed / 8 skipped / 0 failed**（2026-10-13 实施轮与独立复审轮两次全量实测，日志留存 %TEMP%/aud030_impl_fullsuite.log、%TEMP%/aud030_reaudit_fullsuite.log——执行环境临时日志未入仓；= 1845 + AUD-030 新增 12 项；本轮未重跑）。遗留（非阻塞，均 Owner 职权）：F-C3-2（run_immediate 事务内 kernel 构建，上一轮会话实测锁持有 125-181ms，修复须另行授权）、生产 Migration 013 未执行、生产存量 PENDING 未核查、aud023/s4b1 窗口间歇根因未确认（范围外登记）；全部工作树改动（31 M + 45 ??）未提交，commit/push 属 Owner。
+
+**FINDINGS_LEDGER 状态权威规则落纸与最小化文档整改（2026-10-11，Owner 决策 `FINDINGS-STATUS-AUTHORITY-APPROVED` + `FINDINGS-LEDGER-MINIMAL-REPAIR-AUTHORIZED`）**——依据同日只读一致性审计（`LEDGER-INCONSISTENT`，主表 30 行程序化复算）：①台账头部落纸**状态权威规则**——主表 `Status` 为当前处置状态唯一权威字段，标题/正文/Evidence 及历史报告中的 FIXED/RESOLVED/CLOSED 标记仅为历史处置记录；状态词汇更新为 OPEN/NEEDS-VERIFICATION/FIXED/ACCEPTED-RISK/WONT-FIX/DUPLICATE（`CONFIRMED`=证实非处置、`CLOSED` 按关闭原因归并，均不再作规范 Status 值；状态变更必须可追溯证据，不足置 NEEDS-VERIFICATION 并注明缺口）。②**逐条证据核定归位**：AUD-001/003/009/014 → FIXED（Stage 13D HEAD 复核归位）；AUD-005/006/007 → FIXED（PROJECT_STATUS「Stage 13A」段处置记载）；**AUD-008 OPEN→FIXED**（Stage 10/12C RESOLVED BY PRIOR STAGE + 当前树核验：KNOWN_ISSUES 双表合并说明/未决问题节空态说明/LIMIT-002 修正记载均在位，无重新打开记录）；**AUD-012/020 CONFIRMED→FIXED**（Stage 13B commit `eabb685` 当前树核验：matcher 更名 `person_name_ranker.py`；契约测试 git mv → `test_repository_protocol_conformance.py` + docstring 明示保证边界）；AUD-011 → FIXED（13D-A Option C 决策闭合，ADR-050）；AUD-018 复合值规范化 FIXED（018-A/B/C，ADR-052）；AUD-026 FIXED/CLOSED → FIXED（`C1-F1-CLOSE-APPROVED`，关闭事件保留于 Finding 列）。③**列结构归一**：14 行 7 列 → 6 列（处置标记并入 Finding 单元格，零内容丢失）。④**历史计数更正**（带日期更正行追加于台账计数块内，历史原文未动）：Stage 8 行「P3: 15 项 / 全部 15 项已处置（14 FIXED + AUD-024）」算术错误——可枚举历史 P3=14（处置=13 FIXED+1 ACCEPTED-RISK），「14 FIXED + AUD-024」与闭合清单重复记账 024。⑤**跨文档同步**：DOCUMENT_INDEX 两处过期声明更新（25→30 条、OPEN 现状、Status 权威表述）。⑥**S4 冷启动 C-1 链当前状态**：AUD-026 FIXED（Owner 决策 `C1-F1-CLOSE-APPROVED` 正式关闭）；AUD-027（P2，C-3 硬门）/ AUD-028/029/030（P3）维持 OPEN 原登记；**C-2～C-5 尚未启动**。修正后台账口径（30 条，程序化复算）：P1×2 / P2×11 / P3×17；Status = FIXED 25 / OPEN 4 / ACCEPTED-RISK 1。（2026-09-30 Stage 14「25 条全部终态 / OPEN=0」为当时快照，历史原文保留；状态权威规则与本条不追溯改写历史事实。链路详情：`docs/development/S4-cold-start-position-autoconfirm-pre-implementation-review.md` §10。）**整改闭环（2026-10-11）**：①AUD-018 Status 单一语义残留经整改并独立复审通过（`AUD018-STATUS-CLEANUP-VERIFIED`）；②F-U8a（§5 停点记录）经单单元格修复并独立复审通过（`F-U8A-FIX-VERIFIED`）；③**U3～U9 整体独立验收结论 = `DOC-U3-U9-REAUDIT-VERIFIED`**（原始 `DOC-U3-U9-REAUDIT-FINDINGS` 的 F-U8a 发现与修复证据保留可追溯，未删除或否定）。台账口径不变：30 条 = P1×2 / P2×11 / P3×17，Status = FIXED 25 / OPEN 4 / ACCEPTED-RISK 1（AUD-026 FIXED；AUD-027（P2）/028/029/030（P3）OPEN）。**C-2～C-5 尚未启动，C-2 须 Owner 明确授权**；文档治理完成 ≠ 所有 Finding 已关闭。
 
 **审核身份下拉搜索 + 展开按钮放大（2026-10-01，feature，仅 Presentation 层）**——Owner 功能完善：①审核中心两处身份选择（页面选择器 + 高清预览内下拉）接入**智能搜索**——抽出共享助手 `NameSearchComboBinder`（`combo_search.py`）沿用 FilterBar 人员轴既有模式（editable + NoInsert + `QCompleter` + `person_name_ranker` 排名重建，同名落首个匹配项）；输入只影响补全列表、选中才落值语义与 FilterBar 一致。②展开按钮放大：新增属性标记 `searchableCombo` + 中央样式表 `QComboBox[searchableCombo="true"]::drop-down/down-arrow` 规则（作用域仅限被标记组合框，不影响 FilterBar 等其他下拉），并按平台指标 `PM_IndicatorWidth × 4` 设置最小宽度——**平台无关**（各平台默认 drop-down 宽度不同，像素断言会漂移；QSS 像素探针因本机 windows11 默认即 21px 无可区分增量，改为比例断言，Stage 14-CI 同一教训）。测试 +9（`test_combo_search.py` 5 项：editable/NoInsert、输入排名、空查询交回下拉全量列表、补全激活定位、同名首个；视觉系统 2 项：规则声明 + 比例断言 + 未标记组合框不受影响；页面/预览各 1 项接线断言）。全量 **1434 passed / 8 skipped**、ruff/mypy 绿（263 文件）。**实现期教训**：`QStyle.comboboxMetrics` 是 Qt4/Windows 私有 API，Qt6 已移除——平台无关尺寸断言改用 `pixelMetric(PM_IndicatorWidth)`；`QCompleter` 在 PySide6 位于 QtWidgets 而非 QtGui。
 
@@ -108,16 +127,16 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 | 15 步产品路线图 | ✅ | Step 0.5–15 全部实现并验证。 |
 | 人员导入重设计（阶段 A–F） | ✅ 实施完成 | 全部入库至 `2823d1c`；业务基线见 `docs/business-baseline/`；冻结待 owner 签核。 |
 | 版本链 | 🟡 切版/tag 完成、待发行 | pyproject / .env.example = **2.8.1**（owner 裁决 2026-09-30）；CHANGELOG `[2.8.1] - 2026-09-30` 段已切分；**v2.8.1 annotated tag 已创建并推送**（→ `8d8a126`，本地 + 远端 `git ls-remote` 双实查；历史 v2.8.0 未动）；**GitHub Release / 新安装包产出与二轮验收为 owner 剩余操作**。 |
-| 测试基线 | ✅ | 全量 **1434 passed / 8 skipped / 0 failed**（2026-10-01 实测 245.48s；含照片库选中态 +16、照片详情高清预览 +13、EXIF 裁剪修复 +3、审核中心页面化与双击高清 +4/迁移改造 -1、审核预览闭环 +8、预览内身份选择 +2、下拉搜索与展开按钮放大 +9）；行覆盖 **93.9%**（AUD-021 可复现口径，见 §5 覆盖率行）；**观测一例负载型 flake**：test_aud023_cancellation_latency::test_mid_run_cancel（全量下 completed_after_cancel 少 p1，单测复跑 3/3 绿——worker 调度序方差，与 AUD-023 轮"集合语义"教训同类，未改动）；此前已知盲区已由 Stage 12B 补齐（AUD-019）。 |
+| 测试基线 | ✅ | 全量 **1434 passed / 8 skipped / 0 failed**（2026-10-01 实测 245.48s；含照片库选中态 +16、照片详情高清预览 +13、EXIF 裁剪修复 +3、审核中心页面化与双击高清 +4/迁移改造 -1、审核预览闭环 +8、预览内身份选择 +2、下拉搜索与展开按钮放大 +9）；行覆盖 **93.9%**（AUD-021 可复现口径，见 §5 覆盖率行）；**观测一例负载型 flake**：test_aud023_cancellation_latency::test_mid_run_cancel（全量下 completed_after_cancel 少 p1，单测复跑 3/3 绿——worker 调度序方差，与 AUD-023 轮"集合语义"教训同类，未改动）；此前已知盲区已由 Stage 12B 补齐（AUD-019）。**最近已记录的工作树全量验证（2026-10-11）**：**1792 passed / 8 skipped / 0 failed**，三轮独立复现（C-1 独立审计轮 1788 → F-1 整改后 1792×2；来源：C-1 审计、F-1 整改交付与独立复审报告）——含当时未提交的工作树交付（C-1/F-1），**属工作树验证结果，非已提交 HEAD 或发布版本的质量证明**，与 2026-10-01 的 1434 为不同代码状态的实测、非重复统计；同轮 ruff 全绿、mypy 284 文件零错。此后 AUD-018/U3-U9 仅为文档整改，不触及测试对象。**2026-10-12～14 更新**：C 链审计轮全量 **1845 passed / 8 skipped / 0 failed**（台账 AUD-027/028/029/033 关闭证据；2026-10-13 C1 复审轮日志 %TEMP%/c1_reaudit_fullsuite.log 在案，321.28s）；AUD-031/032 复审轮 1833/1836（台账 Evidence 列在案）；AUD-030 修复后最近记录 **1857 passed / 8 skipped / 0 failed**（2026-10-13 实施轮 + 独立复审轮两次全量实测，日志 %TEMP%/aud030_impl_fullsuite.log、%TEMP%/aud030_reaudit_fullsuite.log——执行环境临时日志未入仓；算术自洽 = 1845 + AUD-030 新增 12 项测试；上一轮已报告并经审核的结果，本轮未重跑全量验证）。 |
 | CI | ✅ | run #127/#128 对 `5525d95`/`57fb8d5` 三平台全绿（windows 1384+2 / ubuntu、macos 各 1381+5，skip 全为已登记豁免）；`8d8a126`（切版）已推送，**其后的照片库选中态优化 feature 提交待推送触发远端验证**；本地三质量门绿（ruff / mypy 261 文件 / pytest）。 |
 | 业务基线 | ✅ 已入库 | `docs/business-baseline/`（Stage1–3 现行有效 + Stage4/4.1 历史 + Stage4.2 冻结复审），基线 `2823d1c`，来源与有效性表见其 README。 |
-| 未决问题 | ✅ 清零 | 体检 25 条 Finding 终态（2026-09-30 Stage 14 Final）：**P0 0 / P1 0 / P2 0 / P3 0 OPEN，无 BLOCKED**——23 FIXED + AUD-024 ACCEPTED-RISK + AUD-002 CLOSED（run #127 三平台绿）；详见 `docs/health-check/FINDINGS_LEDGER.md`。 |
+| 未决问题 | ✅ Stage 14 时点清零；当前 OPEN 0（2026-10-14） | **历史快照（2026-09-30 Stage 14 Final，仅适用该时点）**：体检 25 条全部终态——**P0 0 / P1 0 / P2 0 / P3 0 OPEN，无 BLOCKED**，23 FIXED + AUD-024 ACCEPTED-RISK + AUD-002 CLOSED（run #127 三平台绿）。**当前（2026-10-14）**：台账 33 条（AUD-001..033，含 S4 链 AUD-026..033），Status = **FIXED 32 / OPEN 0 / ACCEPTED-RISK 1**（P1×2 / P2×13 / P3×18），**当前 OPEN = 0**——AUD-026（2026-10-11）与 AUD-027/028/029/031/032/033（2026-10-12）先后经 Owner 批准关闭，AUD-030（S4/AUD 链最后一项）于 2026-10-14 经 Owner 台账关闭任务书批准关闭：`recognize --all` 现跳过存在任意 PENDING 识别记录的照片、`--limit` 在过滤之后应用（工作区可核实：main.py 行级过滤 + test_main.py 10 单测 + aud030 集成 2 项 + 三份 user-guide 文档，未提交）；验收依据 = 独立审核 `VERIFIED WITH NON-BLOCKING OBSERVATIONS` + 未知状态专项 `UNKNOWN-STATE-UNREACHABLE`（限已审查 Schema 与受支持应用路径；两份报告会话交付、未落盘仓库，结论以台账为准）；残余限制（仍有效，非已解决）：并发先查后写竞态未消除（P3 接受）、历史 PENDING 未清理（走既有 Review 流程）、生产存量 PENDING 未核查、SQLite 集成未直接调 `main()`、`--limit` 无独立集成测试、进程级 CLI E2E 未运行；**最新状态以 `docs/health-check/FINDINGS_LEDGER.md` 主表为准**（`Status` 为唯一权威字段——FINDINGS-STATUS-AUTHORITY-APPROVED）。 |
 | Limit 登记 | 4 项 | LIMIT-001（真实缺模型 E2E 未入 CI）/ LIMIT-002（取消粒度——说明已按体检修正：识别取消延迟=剩余队列排空，AUD-023）/ LIMIT-004（Windows 本地子集顺序原生崩溃）/ LIMIT-006（macOS/Linux runner 环境漂移 SIGSEGV，CI 自愈 + darwin skip 维持），均 Low、不阻塞。 |
 | Release body | ⏳ 待 owner | GitHub Release v2.8.0 资产已发布；body 签核流程同前。 |
 
 ### 数据库 Schema
 
-Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `003_import_batches_and_roster` → `004_recognition_runs_and_observations` → `005_recognition_run_error_count` → `006_face_clusters` → `007_assignments_and_person_samples` → `008_archive_identity_and_confidence`**（head = 008）。003 导入批次/草稿 + roster_order；004/005 识别运行/观测；006 聚类；007 配对/样本；008 archive_records.person_id 回填 + recognition_results.confidence 可空（BLK-1/BLK-5，幂等守护 + downgrade 先回填 NULL）。每次启动 `alembic_runner` 自动 upgrade head（frozen 适配）。
+Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `003_import_batches_and_roster` → `004_recognition_runs_and_observations` → `005_recognition_run_error_count` → `006_face_clusters` → `007_assignments_and_person_samples` → `008_archive_identity_and_confidence` → `009_projection_ownership` → `010_assignment_source_review` → `011_calibration_annotations` → `012_single_expert_ground_truth` → `013_assignment_auto_confirm`**（**代码工作树 head = 013**——013 为 S4 C-1 未提交交付物；**生产数据库最近已知版本 = 012**，2026-10-11 只读审计探针在案、此后未变更，013 尚未在生产执行，生产迁移属 Owner 职权且未获授权）。003 导入批次/草稿 + roster_order；004/005 识别运行/观测；006 聚类；007 配对/样本；008 archive_records.person_id 回填 + recognition_results.confidence 可空（BLK-1/BLK-5，幂等守护 + downgrade 先回填 NULL）；009 recognition_results.assignment_id 投影所有权（S1）；010 source="review"（S1-F）；011/012 校准体系（S4-B）；013 status/source CHECK 词表扩展 auto_confirmed（S4 C-1，有损 downgrade）。每次启动 `alembic_runner` 自动 upgrade head（frozen 适配）。
 
 ---
 
@@ -126,7 +145,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 模块 | 状态 | 关键位置 |
 |---|---|---|
 | Logging / Configuration | ✅ | `infrastructure/logging/`、`infrastructure/config/`（ADR-035 用户数据目录锚定） |
-| Database | ✅ | Alembic 001–008（ADR-024/027）；17 张表全有读写方（体检对账） |
+| Database | ✅ | Alembic 001–013（**代码工作树**；013 为 C-1 未提交交付物；**生产库最近已知 = 012**，2026-10-11 只读审计记录；ADR-024/027）；17 张表全有读写方（体检对账，历史口径） |
 | Domain / Import / Scan / Thumbnail | ✅ | `domain/`、`application/services/`、`infrastructure/`；扫描枚举前置主线程（ADR-041） |
 | 模型部署（下载/解包/校验/frozen） | ✅ | `model_deployment.py`（sha256 fail-closed）+ `insightface_loader.py` + `download-models` CLI |
 | Recognition / Review（兼容链） | ✅ | InsightFace 检测/识别 + 审核闭环（D-1 身份选择器，`2823d1c`） |
@@ -146,12 +165,12 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 
 ## 5. Last Session（最近一次开发记录）
 
-| 时间 | 2026-10-01（Windows 11 build 26200 / Python 3.11.9 / PySide6 6.11.1）；**审核身份下拉搜索 + 展开按钮放大轮**（同日第六轮 UI 优化） |
-| 会话范围 | Owner 功能完善（两处身份下拉加搜索 + 放大展开按钮）→ 复用 FilterBar 人员轴搜索模式抽共享助手 → 属性标记 + 中央样式表放大（平台无关比例断言，QSS 像素探针因本机默认基线无增量而改为比例）→ 质量门 → SSOT |
-| 关键产出 | `combo_search.py`（NameSearchComboBinder：editable/NoInsert/QCompleter/rank_person_names 排名重建 + 同名落首个）；`visual_style`：searchableCombo 属性 + QSS drop-down/down-arrow 规则 + mark_searchable_combo（PM_IndicatorWidth × 4 最小宽度）；审核页与预览内身份下拉接线；测试 +9 |
+| 时间 | 2026-10-11（Windows 11 build 26200 / Python 3.11.9）；**FINDINGS_LEDGER 状态权威与文档一致性治理轮**（S4 C-1 链路多会话延续：实施→审计→F-1 闭环→台账整改→本轮 U3–U9） |
+| 会话范围 | S4 冷启动 C-1（Migration 013 + 领域实体）→ C-1 独立验收 → F-1 整改与独立复审（`C1-F1-CLOSE-APPROVED`）→ 台账状态权威规则落纸与逐条核定 → AUD-018 单一语义整改与复审 → U3～U9 文档一致性修订 → F-U8a 单单元格修复与独立复审（`F-U8A-FIX-VERIFIED`）→ **U3～U9 整体验收闭环（`DOC-U3-U9-REAUDIT-VERIFIED`）** |
+| 关键产出 | 台账统一：30 条/全六列/状态权威规则落纸，AUD-026 关闭、AUD-027~030 OPEN 登记（Status = FIXED 25 / OPEN 4 / ACCEPTED-RISK 1）；S4 C-1 交付（Migration 013 + `auto_confirmed` 领域契约）；F-1 整改（夹具确定性 + 4 钉定测试，突变实验锁定）；DOCUMENT_INDEX/PROJECT_STATUS 当前事实同步；**U3～U9 整体验收闭环 `DOC-U3-U9-REAUDIT-VERIFIED`**（验收链：初审 F-U8a → 单单元格修复 → `F-U8A-FIX-VERIFIED`） |
 | 实现期教训（复用） | ①`QStyle.comboboxMetrics` 是 Qt4/Windows 私有 API，**Qt6 已移除**——平台无关尺寸断言用 `pixelMetric(PM_IndicatorWidth)`；②`QCompleter` 在 PySide6 位于 **QtWidgets**（非 QtGui）；③QSS 子控件像素断言会撞平台默认基线（本机 windows11 drop-down 本就 21px，标记前后无差异）——尺寸类断言一律走比例 |
-| 当前质量门 | 本地：1434 passed / 8 skipped / 0 failed（245.48s）、ruff 全绿、mypy 263 文件零错（2026-10-01 实测）；远端 run #127/#128 对 5525d95/57fb8d5 绿，**723a16a 起十个提交待推送验证** |
-| Remaining | 见 §6 Next Step。 |
+| 当前质量门 | 最近已记录：**工作树全量 1792 passed / 8 skipped / 0 failed**（2026-10-11，F-1 整改后状态，三轮独立复现；含未提交 C-1/F-1 交付，非已提交 HEAD/发布版本证明）、ruff 全绿、mypy 284 文件零错（同轮实测）；历史基线：1434 passed / 8 skipped / 0 failed（2026-10-01 HEAD 实测，245.48s）；远端 run #127/#128 对 5525d95/57fb8d5 绿，**723a16a 起十个提交待推送验证** |
+| Remaining | 本轮 U3～U9 文档一致性修订已完成，等待审核 AI 独立验收；C-2～C-5 尚未启动（2026-10-11 时点记录；现状见 §2 2026-10-14 段——已实施并经审计链收口）。其他后续事项见 §6 Next Step。 |
 
 ---
 
@@ -166,9 +185,11 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 3 | 阶段 B 复审五点复验（中文文案/拖拽无空行/删除预选/导入即刷/移动选区跟随） | 历史在案（09-23） |
 | 4 | v2.8.0 Release body 签核 + A-1（CURRENT_BATCH）/ A-3（代码签名）决策 | 历史在案 |
 | 5 | AUD-017 尾随项：识别侧阈值边界证据补入校准报告（F1-2 闭合）；`person_embeddings` 遗留读清理与否（清理属独立裁决） | ADR-047 |
-| 6 | **【已立项·暂搁置】识别后自动按名单顺序写入身份归属**：Owner 2026-10-01 裁决执行 B 方案（推翻"只引导不自动化"口径）。实施前须**正式修订业务基线**——K-3（`ordered_suggestion ≠ 身份确认`）相关裁决、ADR 登记、`docs/business-baseline/` 同步，属独立立项轮；本轮仅完成审核中心页面化与引导条（D4-A 的引导部分保留为页面文案） | Owner 裁决 2026-10-01 |
+| 6 | **S4 冷启动位置自动确认——C-1 已实施并验收，C-2 待授权**：Owner 已批准 BD-1～BD-7 业务决策与 D1～D6 裁决、Migration 013（有损降级获批）；C-1（Migration 013 + 领域实体契约 + 测试）已实施并通过独立验收；F-1（多人审核测试间歇失败）经整改与复审关闭（Owner 决策 `C1-F1-CLOSE-APPROVED`）；台账 AUD-026 已关闭（FIXED），AUD-027（P2）/028/029/030（P3）保持 OPEN。**C-2（批次准入纯函数）尚未获得启动授权，C-3～C-5 未启动**（2026-10-11 时点记录；现状：C-2～C-5 已实施并经 AUD-026..033 审计链收口，AUD-030 于 2026-10-14 关闭、台账 OPEN=0——见 §2 2026-10-14 段）；链路详情见 `docs/development/S4-cold-start-position-autoconfirm-pre-implementation-review.md` §10。原「实施前须正式修订业务基线」要求现状：K-3 相关裁决已由 2026-10-10 D1–D6 裁决链承载（S4 审查报告 §10.1 登记在案），`docs/business-baseline/` 文档同步未执行且**不在当前已登记门禁清单**（S4 审查报告 §10.6：C-2 纯函数 / C-3 硬门 / C-4 / C-5），是否补登属 Owner 裁决 | Owner 裁决 2026-10-01（B 方案）→ 2026-10-10/11（D1–D6 与 C1-F1 链） |
 
-**可立项**：全链贯通回归测试（导入→配对确认→归档执行单条）；AUD-023 取消延迟修复。**明确不做**（历史裁决维持）：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2。
+**可立项**：全链贯通回归测试（导入→配对确认→归档执行单条）。*（历史更正 2026-10-11：原列于可立项的「AUD-023 取消延迟修复」已于 Stage 12C 修复并经验证——台账 AUD-023 FIXED、KNOWN_ISSUES LIMIT-002 修正记载与 `tests/integration/test_aud023_cancellation_latency.py` 在案，不再是待立项事项。）*
+
+**明确不做**（历史裁决维持）：i18n 实装、自动更新、macOS 安装包、批次撤销、重排性能 P1/P2。
 
 ---
 
@@ -185,7 +206,7 @@ Alembic 管理，迁移链 **`001_initial_v4` → `002_split_create_ddl` → `00
 | 体检报告与台账 | `docs/health-check/`（**已入库**，含 README 索引 + FINDINGS_LEDGER 状态字段为 Finding 权威） |
 | 用户使用手册 | `docs/user-guide/manual.md`（阶段 C–F 功能章节待补，Next Step #3） |
 | 依赖矩阵（SSOT） | `.ai/rules/dependency-rules.md` §4（v1.2.0 已对齐守卫测试） |
-| 数据库初始化/迁移 | `sqlite_connection.py`、`alembic_runner.py`（链 `001`→`008`，`alembic/versions/`） |
+| 数据库初始化/迁移 | `sqlite_connection.py`、`alembic_runner.py`（代码链 `001`→`013`，`alembic/versions/`；生产库最近已知 = 012） |
 | 可追溯识别运行 | `run_recognition_service.py` + `recognition_scope_dialog.py` + `recognition_failure_service.py` |
 | 聚类 / 配对 | `domain/services/face_clustering.py` / `pairing.py`；`cluster_faces_service.py` / `pairing_workbench_service.py` |
 | 归档（身份去重） | `archive_planner.py` / `archive_executor.py`（E-SG-6 + BLK-1） |

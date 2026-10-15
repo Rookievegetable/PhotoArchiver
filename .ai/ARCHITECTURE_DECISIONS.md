@@ -6,7 +6,7 @@
 >
 > 这是整个 AI Runtime Context 中最重要的稳定文档之一。长期保留，不会因版本变化删除。
 >
-> Version: 1.9.0 ｜ Status: Stable ｜ Last Updated: 2026-09-29
+> Version: 1.10.0 ｜ Status: Stable ｜ Last Updated: 2026-10-14
 
 ---
 
@@ -555,6 +555,17 @@
 | 决策 | **连接生命周期**：`UnitOfWork.transaction()` 与 backup/integrity 路径**显式 close**（``finally``，提交/回滚/异常三路径均覆盖）；per-call 路径（``SQLiteConnectionProvider.connect()``）的连接**关闭依赖 CPython 引用计数**（项目钉定 3.11）——每个仓储方法以 ``with … as connection`` 使用、不跨方法持有、不缓存、不跨线程共享（provider 为 thread-local），方法返回即释放。**判定：ACCEPTED-RISK**（有界、非泄漏）——不机械插入 ``close()``；契约以行为方式钉死：连接唯一性、UoW 三路径 close、嵌套事务拒绝、**异常后不滞留写锁**（真实 UNIQUE 冲突 → 后续写入成功）。异常路径下 traceback 可短暂持有帧引用使关闭延后至 GC——有界。跨解释器（无引用计数）保证不在本项目范围内（§21 决策门未触发：项目钉定 CPython 3.11）。**审核队列错误语义**：队列读取链（``ReviewDialog._refresh_list`` → ``ReviewController.list_pending`` → 仓储）**无 blanket catch**——读失败向上冒泡（构造期或刷新期），绝不退化为"暂无待审核"；空态仅表示**成功的空查询**。D-1 身份选择器读取（``_available_persons``）保留**文档化降级**（失败 → 选择器为空），其失败后果由既有"未指定身份"显式告警路径覆盖（批准仍可继续，告警不静默）——是否为其增加独立错误提示属**产品取舍**（不阻塞本项）。 |
 | 理由 | AUD-024 复核：体检"依赖隐式关闭"描述准确但未评估真实风险——实测无共享、无缓存、无跨调用持有，且三种非仓储路径已显式 close；剩余风险仅是 CPython 实现依赖（有界）。AUD-025 复核：体检所指吞错点（``review_dialog.py:304-317``）实为**身份选择器**读取，不是审核队列；队列读取本身从不吞错——故以契约测试固化该事实（ERROR≠EMPTY + 故障恢复），并把选择器降级明确记为设计而非缺陷。 |
 | 影响范围 | 生产代码零变更；新增 `tests/unit/infrastructure/test_aud024_connection_lifecycle.py`（7 项：spy 观测 UoW commit/rollback close、嵌套拒绝、per-call 唯一性、UNIQUE 冲突后无写锁、空事务 close）与 `tests/unit/presentation/test_aud025_review_error_semantics.py`（4 项：真实库空态 / 真实读失败冒泡 / 故障恢复 / 真实读路径对照）。 |
+
+---
+
+### ADR-054 — S4 冷启动位置自动确认与 Assignment 投影边界（S4 C-1..C-5 / BD-1..7 + D1-D6 Owner 裁决）
+
+| 字段 | 值 |
+|---|---|
+| 状态 | Accepted（Owner 裁决 2026-10-10：BD-1..7 为审查输入、D1-D6=A 与 Migration 013 有损降级批准，登记于 `docs/development/S4-cold-start-position-autoconfirm-pre-implementation-review.md` §10.1；实施与审计收口 2026-10-11～14，台账 AUD-026..033 全 FIXED、OPEN=0；本登记 2026-10-14 经 Owner 任务书批准执行。**Migration 013 为代码工作树交付物、未提交、尚未在生产执行**（生产库最近已知 = 012，2026-10-11 只读探针在案；生产迁移属 Owner 职权） |
+| 决策 | **1）auto_confirmed 状态/来源契约**：`cluster_person_assignments` 状态词表扩 `auto_confirmed`、来源词表扩 `ordered_auto_confirm`（Migration 013，010 模式表重建；**downgrade 有损**——auto_confirmed→suggested、ordered_auto_confirm→ordered_suggestion，已获批；跨列组合约束不加 DB CHECK，由域层共享不变量承载——与 ADR-052「域枚举是唯一状态机」口径一致）。语义：规则① sample_match 消耗后的剩余簇集与剩余人员集（D2=A）**数量相等且前置全满足**时，按既有严格位置序（簇 `sort_key` 升序 × 人员 `roster_order` 升序，BD-1 沿用既有序）整批生成机器确定性配对行——**“待人工最终确认”的当前身份，非最终人工确认**。准入为纯函数整批判定（`positional_auto_confirm.py`，四阻断优先级 COUNT_MISMATCH > EMPTY_INPUT > MISSING_CAPTURE_TIME > REJECTED_POSITIONAL_PAIR）：数量不一致（D3=A 仍生成现状 suggested 建议）、任一参与簇缺有效拍摄时间（D5=A）、任一严格位置对被拒（D4=A 不跳过不顺延）→ **整批不自动确认**；准入判定 + 落库在单个 `run_immediate` 写事务内（`SuggestPairingsService` 注入，`app/services.py`），无部分 auto_confirmed 存活路径。实体契约：`ACTIVE_ASSIGNMENT_STATUSES` 含 auto_confirmed（簇“有人”）；专用入口 `auto_confirm(sort_snapshot)`（仅 ordered_auto_confirm 来源可入；score 非 None 即 ValidationError——BD-4 score 恒 NULL、不伪造相似度证据；sort_snapshot 必填承载位次依据；confirmed_at 保持 None）；组合守卫 `validate_status_source_combination`（auto_confirmed⇒ordered_auto_confirm；ordered_auto_confirm 行不得就地 confirmed；score 恒 NULL）在构造期与仓储 INSERT/UPDATE 持久化前同验（AUD-027 方案 B）。**2）Assignment SSOT 与投影/归档边界**：Assignment 表为身份分配唯一权威（BD-6），`recognition_results` 保持单向兼容投影、不反向覆盖；**auto_confirmed 不加入 `PROJECTION_SUPPORT_STATUSES`**（D1=A，实际名单 = {confirmed}）→ 不产生 APPROVED 投影、不驱动归档；**auto_confirmed 不直接生成任何后续人脸样本**（BD-5，样本沉淀仍仅经人工动作入口）；归档人工门槛（CORE-05/BA-01）不变。**3）人工终审与 actor 约束**：人工终审 = 新建 manual/review 决策行（`assign_person` 终审路由）——auto 行**不得原地升格 confirmed**（`confirm()` 与组合守卫拒绝 ordered_auto_confirm 就地确认；source 不可变，S1-F INV-4 失效模式禁止复现），auto 行保留为可追溯历史、可被人工 reject/unassign 终态化（D6=A）；**机器不得撤销 auto_confirmed**（D6，服务层 actor 守卫 fail-closed）；`reject()`/`assign_person()`/`unassign()` 三方法 **actor 必填**、无缺省值（AUD-031/032）；人工身份 = 最终结果（D-1）原则不变。**4）范围边界**：人脸检测、聚类、样本匹配算法与阈值零改动（BD-7）；S-B-1..6 冻结行为不受影响（其 E-02 门要求 confirmed∧manual/review，机器来源行天然排除）。 |
+| 理由 | 等量剩余集下按既有确定性排序做位置配对，消除冷启动批次的逐簇人工确认成本；但机器确定性推导不得获得最终身份权——D1=A 把“归档必须经人工”（CORE-05/BA-01）与 BD-5“终审前不沉淀”对称钉死；D4/D5 整批哲学防止“半自动批次”污染严格位次语义；有损降级可接受——仅退回建议层，人工决策历史保留、无身份信息丢失；无缺省 actor 封堵机器调用方静默获得人工权限的 fail-open（AUD-031/032 审计结论）。 |
+| 影响范围 | `alembic/versions/013_assignment_auto_confirm.py`、`domain/entities/cluster_assignment.py`、`domain/services/positional_auto_confirm.py`（新）、`application/services/suggest_pairings_service.py`、`application/services/pairing_workbench_service.py`、`presentation/ui_text.py`、`presentation/views/pairing_workbench_dialog.py`、`app/services.py`；测试 = 实体 17 + 准入纯函数 22 + 服务 8 + C-3 SQLite 集成 6 + C-5 全链 2 + 迁移 8 项（全量门最近 1857 passed / 8 skipped / 0 failed，2026-10-13）；全部交付物当前为工作树未提交状态；追溯来源 = 评审文档 §0（BD-1..7）/§7（D1-D6 选项与推荐）/§10.1（裁决登记）+ 台账 AUD-026..033 |
 
 ---
 ---

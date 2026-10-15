@@ -6,7 +6,7 @@
 >
 > 任何 AI 在 30 秒内读完本文即可理解整个文档体系结构。
 >
-> Version: 1.6.1 ｜ Status: Stable ｜ Last Updated: 2026-09-30
+> Version: 1.7.3 ｜ Status: Stable ｜ Last Updated: 2026-10-14
 
 ---
 
@@ -76,16 +76,18 @@ flowchart TD
 | `docs/business-baseline/`（v1.4.0 新增登记） | **业务基线（现行/历史/冻结）**：Stage1_BusinessFacts / Stage2_BusinessRules / Stage3_BusinessDiagrams（三者现行有效，基线 `2823d1c`）+ Stage1/2_Handoff（历史交接）+ Stage4_FinalAudit / Stage4_1_FinalReview（冻结审查演进链）+ Stage4_2_FinalFreezeReview（当前冻结复审，8 项条件满足，**待 owner 签核**）；来源/基准/有效性表见该目录 README | SSOT — 业务基线（AUD-003 整改入库，2026-09-28） |
 | `docs/decisions/AUD-017-person-embeddings-decision.md` | person_embeddings 零写入者问题的决策材料（现状/数据链/三方案对比）——**owner 已裁决 Option C + K-3=suggested 层（2026-09-28），实现见 ADR-047** | 决策记录（已裁决） |
 | `docs/decisions/S4B2-*.md`（治理链 7 份：scoring-architecture / sb-reference-design / sb-reference-scope-amendment / sb-stage-gates / eval-unit-v2 / v2-architecture-final / sb6-f1-closure） | **S4B2 校准评估治理决策链**（D0–D7 / D-SB-1..12 / Scope Amendment / K-2-3-4 四门 / Evaluation Unit + v2 架构 / v2 Final Architecture + Token / S-B-6 F-1 关闭收口）——治理登记文件，**已提交（G3 commit `ebfa1759`，2026-10-14，docs(governance)）** | 决策记录（治理链，2026-10-06 ~ 10-09） |
+| `docs/development/S4B2-S-B-6-Mechanical-Scoring-Task-Specification.md` | S-B-6 机械评分任务书（修订版）——八项强制携带项（各含验收标准）+ 统一验收矩阵 + 能力清单（已有/计划新增/未证实）；**READY-FOR-OWNER-REVIEW，实施未授权** | 任务书（待 Owner 审查，2026-10-09） |
+| `docs/development/S4-cold-start-position-autoconfirm-pre-implementation-review.md` | S4 冷启动位置自动确认 实施前只读审查与开发任务书（审核 AI，2026-10-10）——§0 已批准业务决策 BD-1..7、§7 决策表 D1-D6、§8 分阶段任务书草案、§10 Owner 裁决登记（D1-D6=A + Migration 013 有损降级）与 C-1 验收/F-1 闭环登记；C-2..C-5 的计划来源与决策追溯材料。**正式架构决策以 `ARCHITECTURE_DECISIONS.md` ADR-054 为准**；已随 G-D/R2 治理文档组入库（2026-10-15，commit 待 Owner 批准） | 决策记录（已裁决；已随治理组入库） |
 | `docs/development/people-import-face-clustering-development-plan.md` | 人员导入与人脸分组匹配重设计——业务方案（阶段 A–F 目标/规则/裁决引用） | 计划文档（实施已完成，保留为需求出处） |
 | `docs/development/people-import-face-clustering-execution-plan.md` | 同上——工程执行计划（阶段拆分/交付物/验收标准） | 计划文档（同上） |
-| `docs/development/stage-f-calibration-report.md` | Stage F 真实数据校准报告（473 照片分布证据；**match_threshold 证据缺口 = 体检 F1-2，待 AUD-017 裁决后补**） | 证据文档 |
+| `docs/development/stage-f-calibration-report.md` | Stage F 真实数据校准报告（473 照片分布证据；match_threshold 证据缺口 = 体检 F1-2——**AUD-017 已于 2026-09-28 裁决 Option C + K-3=suggested 层并登记 ADR-047（非等待裁决）；尚待完成的是阈值边界证据补入校准报告，属 ADR-047 尾随项**） | 证据文档 |
 | `docs/development/evidence/` | 阶段证据 JSON（stage-f-real-run / lifecycle-stress / upgrade-real 等；部分文件工作树未入库） | 证据目录 |
 
 ### 2.3.1 体检与历史报告（`docs/health-check/`、`docs/roadmap/`）
 
 | 文档 | 职责 | 类型/状态 |
 |---|---|---|
-| `docs/health-check/`（README 索引 + AUDIT_BASELINE、九份分项报告、FINAL_HEALTH_CHECK、FINDINGS_LEDGER、evidence/） | 2026-09-28 全面工程健康体检（Stage 0–9，判 ATTENTION）与 Stage 10–13D 整改闭环产物——**当前 Findings 唯一台账**（状态字段权威：25 条全部终态，2026-09-30 Stage 14 起 P0/P1/P2/P3 OPEN = 0/0/0/0） | 审计产物（**已入库** 2026-09-30；报告正文为审计时点快照，当前状态以 PROJECT_STATUS 为准——见该目录 README「使用规则」） |
+| `docs/health-check/`（README 索引 + AUDIT_BASELINE、九份分项报告、FINAL_HEALTH_CHECK、FINDINGS_LEDGER、evidence/） | 2026-09-28 全面工程健康体检（Stage 0–9，判 ATTENTION）与 Stage 10–13D 整改闭环产物——**当前 Findings 唯一台账**（**30 条**，AUD-001..030；`Status` 为当前处置状态唯一权威字段——Owner 决策 `FINDINGS-STATUS-AUTHORITY-APPROVED` 2026-10-11；当前 OPEN = AUD-027（P2，C-3 硬门）+ AUD-028/029/030（P3）；2026-09-30 Stage 14 的「25 条全部终态 / OPEN=0/0/0/0」为当时快照，历史原文保留） | 审计产物（**已入库** 2026-09-30；报告正文为审计时点快照，当前状态以 PROJECT_STATUS 为准——见该目录 README「使用规则」） |
 | `docs/health-check/PROJECT_HEALTH_CHECK.md`、`PROJECT_HEALTH_CHECK_2026-09-10.md` | 历史体检报告（2026-09-02 / 2026-09-10 两轮） | 历史快照（结论已被后续轮次与 2026-09-28 体检取代） |
 | `docs/roadmap/DEVELOPMENT_ROADMAP.md` | 基于 2026-09-02 体检的后续开发计划 | **历史快照**（其"Current State"为 09-02 时点，此后状态全部演进；现行状态以 `.ai/PROJECT_STATUS.md` 为准） |
 | `docs/roadmap/NEXT_PHASE_FEATURE_DEVELOPMENT_PLAN.md` | 基于 2026-09-02 基线的下一阶段功能规划（Phase 9 P0 已实施） | **历史快照**（其缺口表部分行已被后续实现覆盖，如照片删除；现行状态以 `.ai/PROJECT_STATUS.md` 为准） |
@@ -149,9 +151,10 @@ flowchart TD
 | 文档一致性审计方法论 | `.ai/rules/audit-methodology.md` |
 | 15 步路线图 | `.ai/business/roadmap.md` |
 | 业务基线（业务事实/规则/流程图/冻结结论） | `docs/business-baseline/`（现行 = Stage1+2+3；冻结 = Stage4_2，待 owner 签核） |
-| 当前体检发现台账 | `docs/health-check/FINDINGS_LEDGER.md`（已入库；2026-09-30 Stage 14 起无 OPEN 发现，状态字段为权威） |
+| 当前体检发现台账 | `docs/health-check/FINDINGS_LEDGER.md`（已入库；**30 条**；`Status` 为当前处置状态唯一权威字段——2026-10-11 状态权威规则落纸；当前 OPEN 清单以台账为准） |
 | AUD-017 裁决记录 | `docs/decisions/AUD-017-person-embeddings-decision.md` + `ARCHITECTURE_DECISIONS.md` ADR-047 |
 | S4B2 校准评估治理决策（D0–D7 / D-SB-1..12 / K-2-3-4 / Evaluation Unit / v2 Final / S-B-6 F-1 关闭） | `docs/decisions/S4B2-*.md`（治理链 7 份；各文件为其主题的登记） |
+| S4 冷启动位置自动确认裁决（BD-1..7 / D1-D6 / Migration 013 有损降级） | `docs/development/S4-cold-start-position-autoconfirm-pre-implementation-review.md` §0/§10.1 + `ARCHITECTURE_DECISIONS.md` ADR-054 |
 | 配置项详解 | `docs/development/configuration.md` |
 | 目录结构详解 | `docs/deployment/project-structure.md` |
 | 架构详解 | `docs/architecture/overview.md` |
