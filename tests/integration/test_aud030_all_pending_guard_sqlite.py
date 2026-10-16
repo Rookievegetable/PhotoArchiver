@@ -60,7 +60,7 @@ def _world(tmp_path: Path):
     photos = []
     for index in range(3):
         photo = Photo(
-            path=PhotoPath(Path(f"P:/legacy/p{index}.jpg"), PhotoPathBase.ABSOLUTE),
+            path=PhotoPath(tmp_path / f"legacy_p{index}.jpg", PhotoPathBase.ABSOLUTE),
             captured_at=None,
         )
         repos.photos.add(photo)
