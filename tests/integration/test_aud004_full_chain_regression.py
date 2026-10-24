@@ -524,3 +524,61 @@ def test_execution_partial_failure_is_isolated_and_retryable(tmp_path):
     ]
     assert statuses.count(ArchiveStatus.FAILED) == 1 and statuses.count(ArchiveStatus.ARCHIVED) == 1
     assert repos.recognition.list_approved_by_person(zhang.id)[0].photo_id is not None
+
+
+def test_positional_auto_confirm_follows_capture_time_not_registration_order(tmp_path):
+    """T5b：注册序与拍摄序相反时，整批位置自动确认必须按真实拍摄时间序配对。
+
+    扫描器按路径字母序枚举（local_photo_file_scanner.py:94）→ alpha 必先注册；
+    alpha 拍摄时间（2026-03-01）晚于 zulu（2026-01-01）→ 注册序与拍摄序相反。
+    全链真实数据（真实 mtime → 真实聚类 → 真实 build_sort_key 产物 → 建议 →
+    整批 auto_confirmed）下：zulu 簇 → roster 1、alpha 簇 → roster 2。
+    """
+    repos = build_sqlite_repositories(tmp_path / "db_t5b.sqlite3")
+    photos_dir = tmp_path / "photos_t5b"
+    photos_dir.mkdir()
+    _make_image(photos_dir, "alpha.jpg", datetime(2026, 3, 1))
+    _make_image(photos_dir, "zulu.jpg", datetime(2026, 1, 1))
+    detector = _FakeDetector({
+        "alpha.jpg": [(0.9, V_A)],
+        "zulu.jpg": [(0.9, V_B)],
+    })
+
+    persons = _import_roster(
+        repos, tmp_path, [("张三", "E001", "研发部"), ("李四", "E002", "市场部")],
+    )
+    zhang, li = persons
+    assert [person.roster_order for person in persons] == [1, 2]
+
+    scan_result, photos = _scan(repos, photos_dir)
+    assert scan_result.registered_count == 2 and len(photos) == 2
+    # 注册序 = list_all（ORDER BY created_at, id）= 扫描字母序：alpha 先注册，
+    # 与拍摄时间序相反——本测试的判别力来源。
+    assert [photo.original_name for photo in photos] == ["alpha.jpg", "zulu.jpg"]
+
+    run = _recognize(repos, detector, photos)
+    assert run.face_count == 2
+    cluster_run = _cluster(repos, run)
+    clusters = repos.face_clusters.list_clusters(cluster_run.id)
+    assert len(clusters) == 2
+
+    summary = _suggest(repos, cluster_run)
+    assert (summary.suggestions, summary.sample_matched, summary.ordered) == (0, 0, 0)
+    assert summary.auto_confirmed == 2
+
+    cluster_photo = _cluster_photo_names(repos, run, cluster_run)
+    # 拍摄时间序决定位置配对：较早的 zulu → roster 1（张三）、较晚的 alpha →
+    # roster 2（李四）。若按注册序配对则映射颠倒，本断言即失败。
+    expected_identity = {"zulu.jpg": zhang.id, "alpha.jpg": li.id}
+    for cluster in clusters:
+        row = [
+            assignment
+            for assignment in repos.cluster_assignments.list_by_cluster(cluster.id)
+            if assignment.status == "auto_confirmed"
+        ][0]
+        assert row.source == "ordered_auto_confirm"
+        assert row.score is None                          # 位次不是相似度证据
+        assert row.person_id == expected_identity[cluster_photo[cluster.id]]
+        # 位次证据可溯：持久化快照与真实簇一致（对应关系来自运行结果）。
+        assert row.sort_snapshot["sort_key"] == cluster.sort_key
+        assert row.sort_snapshot["first_captured_at"] == cluster.first_captured_at.isoformat()

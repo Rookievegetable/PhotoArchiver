@@ -278,7 +278,8 @@ def order_cluster_keys(
     ``keys[i]`` is ``(captured_at_iso, path_key, tiebreak)``; clusters without a
     capture time sort last (never substituted by registration time), then by
     stable path key, then by the caller's tiebreak (candidate creation order).
-    ISO 文本序即时间序（同一序列化格式下），混合时区标注的极端情况仍确定。
+    排序键时间文本由调用方以 datetime 值比较选定的最早时间经 isoformat()
+    派生；本函数按文本排序，输入同型契约下文本序即时间序。
     """
     return tuple(sorted(
         range(len(keys)),

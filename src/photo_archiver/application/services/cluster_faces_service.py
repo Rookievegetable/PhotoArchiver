@@ -14,7 +14,7 @@ owner 裁决）→ 以方案 §D-3 排序键落库 Cluster/Member → 记录统�
 - 失败隔离：算法纯函数不落库；持久化异常将 cluster run 置 failed 后抛出。
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Event
 from uuid import UUID
 
@@ -153,8 +153,8 @@ class ClusterFacesService(ClusterFacesUseCase):
             snapshot.photo_id: snapshot
             for snapshot in self._run_repository.list_run_photos(recognition_run_id)
         }
-        # 每簇一次扫描同时得到排序键部件与 first_captured_at（ISO 文本序比较，
-        # 混合 tz 标注不会崩溃且结果确定）。
+        # 每簇一次扫描同时得到排序键部件与 first_captured_at（datetime 值比较；
+        # 同簇内混入 aware 等异型时间时比较抛 TypeError → run=failed、零簇落库）。
         decorated: list[tuple[str | None, str, int, datetime | None]] = []
         for creation_index, assignment in enumerate(assignments):
             earliest_iso, path_key, earliest_dt = self._earliest_capture(
@@ -200,27 +200,42 @@ class ClusterFacesService(ClusterFacesUseCase):
     ) -> tuple[str | None, str, datetime | None]:
         """(earliest captured_at ISO, stable path key, earliest datetime) per cluster.
 
-        最早时间取成员照片（run_photos 快照）中非空 captured_at 的最小 ISO
-        值（ISO 文本序比较，混合 tz 标注不会崩溃且结果确定）；同刻多照片取
-        路径字典序最小者；全簇无时间 → (None, "~", None)，不得用照片注册
-        时间替代（方案 §D-3）。
+        最早时间取成员照片（run_photos 快照）中非空 captured_at 的最小
+        datetime 值（直接值比较，表达方案 §D-3 时间序；同簇内 naive/aware
+        混型比较抛 TypeError——契约外输入 fail-closed，不做类型归一）；
+        同刻多照片取路径字典序最小者；全簇无时间 → (None, "~", None)，
+        不得用照片注册时间替代（方案 §D-3）。ISO 文本恒为六位微秒精度
+        （timespec=microseconds）：同代际内时间段定宽，文本序==时间序。
+        aware 时间的排序文本统一为 UTC 绝对表示（astimezone(utc)）：不同
+        偏移的同一瞬间得到相同时间分量，同刻路径决胜对跨偏移表述成立；
+        naive 保持原文本与语义，不假设其时区。
         """
-        earliest_iso: str | None = None
         earliest_dt: datetime | None = None
         earliest_paths: list[str] = []
         for item_index in assignment.members:
             snapshot = photo_meta.get(participating[item_index].photo_id)
             if snapshot is None or snapshot.captured_at is None:
                 continue
-            captured_iso = snapshot.captured_at.isoformat()
-            if earliest_iso is None or captured_iso < earliest_iso:
-                earliest_iso = captured_iso
-                earliest_dt = snapshot.captured_at
+            captured_at = snapshot.captured_at
+            if earliest_dt is None or captured_at < earliest_dt:
+                earliest_dt = captured_at
                 earliest_paths = [snapshot.raw_path]
-            elif captured_iso == earliest_iso:
+            elif captured_at == earliest_dt:
                 earliest_paths.append(snapshot.raw_path)
         path_key = min(earliest_paths) if earliest_paths else "~"
-        return earliest_iso, path_key, earliest_dt
+        return (
+            (
+                earliest_dt.astimezone(timezone.utc).isoformat(
+                    timespec="microseconds"
+                )
+                if earliest_dt.tzinfo is not None
+                else earliest_dt.isoformat(timespec="microseconds")
+            )
+            if earliest_dt is not None
+            else None,
+            path_key,
+            earliest_dt,
+        )
 
     def _report(self, current: int, total: int, message: str) -> None:
         if self._progress_reporter is not None:

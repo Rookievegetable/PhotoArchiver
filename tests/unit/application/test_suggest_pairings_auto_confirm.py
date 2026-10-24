@@ -6,13 +6,13 @@
 不接入生产数据库；排序断言验证 sort_key 与 roster_order 语义。
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from photo_archiver.application.commands.pairing import (
     StartSuggestPairingsCommand,
 )
 from photo_archiver.application.services import SuggestPairingsService
-from photo_archiver.domain import RecognitionRun
+from photo_archiver.domain import RecognitionRun, build_sort_key
 from photo_archiver.domain.entities.face_cluster import FaceCluster, FaceClusterRun
 from photo_archiver.domain.entities.person import Person
 from photo_archiver.domain.services.positional_auto_confirm import (
@@ -30,6 +30,27 @@ from photo_archiver.infrastructure import (
 )
 
 _BASE = datetime(2026, 1, 1, 8, 0, 0)
+
+
+def _real_sort_keys() -> list[str]:
+    """真实 ``build_sort_key`` 产物（P4-T5a）：插入序 c,b,a（注册序）与拍摄
+    时间序 a<b<c 相反；时间文本与生产一致恒为六位微秒精度（timespec=
+    microseconds，含 a 的整秒 .000000 形态），a、b 同处 8:00:00 一秒内——
+    真实键的不规则结构（可变长路径段）由此进入配对链。"""
+    return [
+        build_sort_key(
+            datetime(2026, 1, 1, 8, 0, 2).isoformat(timespec="microseconds"),
+            "photos/c.jpg", 0,
+        ),
+        build_sort_key(
+            datetime(2026, 1, 1, 8, 0, 0, 500000).isoformat(timespec="microseconds"),
+            "photos/b.jpg", 1,
+        ),
+        build_sort_key(
+            datetime(2026, 1, 1, 8, 0, 0).isoformat(timespec="microseconds"),
+            "photos/a.jpg", 2,
+        ),
+    ]
 
 
 class _ClusterRepo(InMemoryFaceClusterRepository):
@@ -118,7 +139,7 @@ def test_cold_start_admitted_creates_auto_confirmed_rows():
     world = _World()
     for i in range(3):
         world.add_person(f"人员{i}", i + 1)
-    generation = world.add_generation(["k|c|000001", "k|a|000002", "k|b|000003"])
+    generation = world.add_generation(_real_sort_keys())
 
     summary = world.build_services().execute(
         StartSuggestPairingsCommand(generation.id))
@@ -136,13 +157,17 @@ def test_cold_start_admitted_creates_auto_confirmed_rows():
 
 
 def test_positional_pairing_follows_sort_key_and_roster_order():
-    """严格位置对 = sort_key 升序簇 × roster_order 升序人员（输入乱序也一致）。"""
+    """真实 build_sort_key 产物驱动位置配对：拍摄时间序簇 × roster_order 升序人员。
+
+    键为真实 ``build_sort_key`` 产物（非合成字符串）：插入序 c,b,a（注册序）
+    与拍摄时间序 a<b<c 相反；a 秒级、b 微秒级（同秒 8:00:00 内混合）、c 秒级。
+    """
     world = _World()
     # roster 故意与插入序不同：p_c=1、p_a=2、p_b=3
     p_a = world.add_person("甲", 2)
     p_b = world.add_person("乙", 3)
     p_c = world.add_person("丙", 1)
-    generation = world.add_generation(["k|c|000001", "k|a|000002", "k|b|000003"])
+    generation = world.add_generation(_real_sort_keys())
     cluster_by_key = {
         c.sort_key.split("|")[1]: c
         for c in world.clusters.list_clusters(generation.id)
@@ -151,10 +176,11 @@ def test_positional_pairing_follows_sort_key_and_roster_order():
     world.build_services().execute(StartSuggestPairingsCommand(generation.id))
 
     rows = {r.cluster_id: r for r in world.active_rows(generation.id)}
-    # sort_key 升序：a → roster 1（丙）、b → roster 2（甲）、c → roster 3（乙）
-    assert rows[cluster_by_key["a"].id].person_id == p_c.id
-    assert rows[cluster_by_key["b"].id].person_id == p_a.id
-    assert rows[cluster_by_key["c"].id].person_id == p_b.id
+    # 拍摄时间序 a(8:00:00) < b(8:00:00.5) < c(8:00:02)：
+    # a → roster 1（丙）、b → roster 2（甲）、c → roster 3（乙）。
+    assert rows[cluster_by_key["photos/a.jpg"].id].person_id == p_c.id
+    assert rows[cluster_by_key["photos/b.jpg"].id].person_id == p_a.id
+    assert rows[cluster_by_key["photos/c.jpg"].id].person_id == p_b.id
 
 
 def test_auto_confirmed_rows_carry_positional_sort_snapshot():
@@ -289,3 +315,66 @@ def test_repeat_execution_is_idempotent_after_admitted_batch():
     assert second.auto_confirmed == 0
     assert second.auto_confirm_blocked_reason == ADMISSION_REASON_EMPTY_INPUT
     assert len(world.assignments.list_by_cluster_run(generation.id)) == before
+
+
+def test_cross_offset_aware_clusters_positional_pairing_follows_absolute_time():
+    """T11：跨 UTC 偏移 aware 簇经真实 SuggestPairingsService 整批位置配对
+    按绝对时间序（A-min 消费端）。
+
+    簇 A=`09:00+08:00`(01:00Z 早, photos/z.jpg)、簇 B=`02:00+00:00`(02:00Z
+    晚, photos/a.jpg)——时间序与路径序刻意相反；独立全 aware 用例（不与
+    naive 键混排，不固化 naive/aware 边界序）。修复前原始偏移文本序会把
+    B 排前 → 配对颠倒；修复后 A→roster 1、B→roster 2。
+    """
+    world = _World()
+    p_first = world.add_person("甲", 1)
+    p_second = world.add_person("乙", 2)
+    cluster_run = FaceClusterRun(
+        recognition_run_id=world.recognition_run.id, algorithm_version="v1",
+    )
+    world.clusters.add_cluster_run(cluster_run)
+    aware_specs = [
+        (
+            datetime(2026, 1, 1, 9, 0, 0, tzinfo=timezone(timedelta(hours=8))),
+            "photos/z.jpg",
+        ),
+        (
+            datetime(2026, 1, 1, 2, 0, 0, tzinfo=timezone.utc),
+            "photos/a.jpg",
+        ),
+    ]
+    clusters = []
+    for ordinal, (captured, path_key) in enumerate(aware_specs):
+        cluster = FaceCluster(
+            cluster_run_id=cluster_run.id,
+            run_id=world.recognition_run.id,
+            ordinal=ordinal,
+            member_count=1,
+            sort_key=build_sort_key(
+                captured.astimezone(timezone.utc).isoformat(
+                    timespec="microseconds"),
+                path_key, ordinal,
+            ),
+            first_captured_at=captured,
+        )
+        world.clusters.add_clusters([cluster])
+        clusters.append(cluster)
+    cluster_run.start()
+    cluster_run.complete(len(clusters), len(clusters), 0)
+
+    summary = world.build_services().execute(
+        StartSuggestPairingsCommand(cluster_run.id))
+
+    assert summary.auto_confirmed == 2
+    assert summary.auto_confirm_blocked_reason is None
+    rows = {r.cluster_id: r for r in world.active_rows(cluster_run.id)}
+    cluster_by_path = {c.sort_key.split("|")[1]: c for c in clusters}
+    # 绝对时间序：A(01:00Z, photos/z.jpg) → roster 1（甲）；B(02:00Z,
+    # photos/a.jpg) → roster 2（乙）。若按注册序/原始偏移文本序配对则颠倒。
+    assert rows[cluster_by_path["photos/z.jpg"].id].person_id == p_first.id
+    assert rows[cluster_by_path["photos/a.jpg"].id].person_id == p_second.id
+    for cluster in clusters:
+        row = rows[cluster.id]
+        assert row.sort_snapshot["sort_key"] == cluster.sort_key
+        assert row.sort_snapshot["first_captured_at"] == (
+            cluster.first_captured_at.isoformat())

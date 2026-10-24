@@ -7,7 +7,7 @@ excluded_count、rerun 新代际不覆盖、空输入、取消（算法期）、
 """
 
 import math
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -268,7 +268,7 @@ def test_sort_key_orders_by_captured_at_with_missing_times_last():
     assert rows[0].first_captured_at == datetime(2026, 1, 1)
     assert rows[1].first_captured_at == datetime(2026, 3, 1)
     assert rows[2].first_captured_at is None  # 无时间组排末
-    assert rows[0].sort_key.startswith("2026-01-01T00:00:00|photos/早.jpg")
+    assert rows[0].sort_key.startswith("2026-01-01T00:00:00.000000|photos/早.jpg")
     assert rows[2].sort_key.startswith("~")
 
 
@@ -286,6 +286,158 @@ def test_earliest_captured_at_crosses_photos_within_cluster():
     rows = harness.clusters.list_clusters(cluster_run.id)
     assert len(rows) == 1
     assert rows[0].first_captured_at == datetime(2026, 2, 1)
+
+
+def test_same_instant_earliest_time_orders_by_path_key():
+    """§D-3 同刻决胜：两簇最早时间相等时按路径键字典序决定位次。
+
+    观测插入顺序 b 先 a 后（与路径序 a < b 相反）；无论内部确定性序
+    （det_score/bbox/id 兜底）产生的创建序如何，同刻簇的 ordinal 必须
+    由路径键决定——a 簇在前。
+    """
+    harness = _Harness()
+    run = harness.add_run()
+    harness.add_photo("b_first", "photos/b.jpg", datetime(2026, 1, 1, 8, 0, 0))
+    harness.add_photo("a_second", "photos/a.jpg", datetime(2026, 1, 1, 8, 0, 0))
+    harness.add_observation("b_first", 0, 0.0)
+    harness.add_observation("a_second", 0, 120.0)  # 正交嵌入 → 两个独立簇
+
+    cluster_run = harness.service.execute(StartClusteringRunCommand(run.id))
+
+    rows = harness.clusters.list_clusters(cluster_run.id)
+    assert len(rows) == 2
+    assert all(row.first_captured_at == datetime(2026, 1, 1, 8, 0, 0) for row in rows)
+    assert rows[0].sort_key.startswith("2026-01-01T08:00:00.000000|photos/a.jpg|")
+    assert rows[1].sort_key.startswith("2026-01-01T08:00:00.000000|photos/b.jpg|")
+
+
+def test_second_precision_orders_before_microsecond_same_wall_clock():
+    """秒级 EXIF 形态与微秒 mtime 形态同 wall-clock 组合按时间值保序。
+
+    路径序 a < b 与时间序 b(整秒) < a(+0.5s) 刻意相反：位次必须由时间值
+    决定、不得被路径序掩盖（保序回归锁定；纯 naive 下文本序与时间序本就
+    一致——P2-O-2 界定，本用例非新旧实现判别器）。
+    """
+    harness = _Harness()
+    run = harness.add_run()
+    harness.add_photo("micro_a", "photos/a.jpg", datetime(2026, 1, 1, 8, 0, 0, 500000))
+    harness.add_photo("second_b", "photos/b.jpg", datetime(2026, 1, 1, 8, 0, 0))
+    harness.add_observation("micro_a", 0, 0.0)
+    harness.add_observation("second_b", 0, 120.0)
+
+    cluster_run = harness.service.execute(StartClusteringRunCommand(run.id))
+
+    rows = harness.clusters.list_clusters(cluster_run.id)
+    assert len(rows) == 2
+    assert rows[0].first_captured_at == datetime(2026, 1, 1, 8, 0, 0)
+    assert rows[0].sort_key.startswith("2026-01-01T08:00:00.000000|photos/b.jpg|")
+    assert rows[1].first_captured_at == datetime(2026, 1, 1, 8, 0, 0, 500000)
+    assert rows[1].sort_key.startswith("2026-01-01T08:00:00.500000|photos/a.jpg|")
+
+
+def test_mixed_naive_aware_same_cluster_fails_run_closed():
+    """同簇 naive/aware 混型时间 → datetime 值比较抛 TypeError → run=failed
+    且零 Cluster/Member 落库（fail-closed 契约保护）。
+
+    保证范围仅限同簇内实际发生混型比较；簇间各自同型、簇间异型的极端
+    输入不在本测试与实现保证范围（P2 修订版统一表述）。
+    """
+    # 前置校验轮（P2 复审 N-1）：同构造双 naive 确认两照片聚为单一双成员簇。
+    harness = _Harness()
+    run = harness.add_run()
+    harness.add_photo("p1", "photos/p1.jpg", datetime(2026, 1, 1))
+    harness.add_photo("p2", "photos/p2.jpg", datetime(2026, 1, 3))
+    harness.add_observation("p1", 0, 0.0)
+    harness.add_observation("p2", 0, 8.0)  # 同人：相似嵌入跨照片成簇（:279 先例同构造）
+    pre = harness.service.execute(StartClusteringRunCommand(run.id))
+    assert pre.status == "completed"
+    pre_rows = harness.clusters.list_clusters(pre.id)
+    assert len(pre_rows) == 1 and pre_rows[0].member_count == 2
+
+    # 正式轮：同一构造，一 naive 一 aware → 混型比较失败且零落库。
+    harness = _Harness()
+    run = harness.add_run()
+    harness.add_photo("p1", "photos/p1.jpg", datetime(2026, 1, 2))
+    harness.add_photo("p2", "photos/p2.jpg", datetime(2026, 1, 2, tzinfo=timezone.utc))
+    harness.add_observation("p1", 0, 0.0)
+    harness.add_observation("p2", 0, 8.0)
+
+    with pytest.raises(TypeError):
+        harness.service.execute(StartClusteringRunCommand(run.id))
+
+    failed = harness.clusters.list_cluster_runs(run.id)[0]
+    assert failed.status == "failed"
+    assert harness.clusters.list_clusters(failed.id) == []
+    assert harness.clusters.list_members(failed.id) == []
+
+
+def test_cross_offset_aware_clusters_order_by_absolute_time():
+    """T9：跨 UTC 偏移的 aware 簇按绝对时间排序（A-min）。
+
+    A=`09:00+08:00`(01:00Z 早)、B=`02:00+00:00`(02:00Z 晚)；路径序 a<b 与
+    时间序 A<B 刻意相反——修复前原始偏移文本字典序会把 B 排前（缺陷），
+    修复后排序时间文本归一为 UTC，必须按绝对时间序 A 在前。
+    """
+    harness = _Harness()
+    run = harness.add_run()
+    harness.add_photo(
+        "late_b", "photos/a.jpg",
+        datetime(2026, 1, 1, 2, 0, 0, tzinfo=timezone.utc),
+    )
+    harness.add_photo(
+        "early_a", "photos/z.jpg",
+        datetime(2026, 1, 1, 9, 0, 0, tzinfo=timezone(timedelta(hours=8))),
+    )
+    harness.add_observation("late_b", 0, 0.0)
+    harness.add_observation("early_a", 0, 120.0)  # 正交嵌入 → 两个独立簇
+
+    cluster_run = harness.service.execute(StartClusteringRunCommand(run.id))
+
+    rows = harness.clusters.list_clusters(cluster_run.id)
+    assert len(rows) == 2
+    assert rows[0].first_captured_at == datetime(
+        2026, 1, 1, 9, 0, 0, tzinfo=timezone(timedelta(hours=8)),
+    )
+    assert rows[0].sort_key.startswith(
+        "2026-01-01T01:00:00.000000+00:00|photos/z.jpg|")
+    assert rows[1].first_captured_at == datetime(
+        2026, 1, 1, 2, 0, 0, tzinfo=timezone.utc)
+    assert rows[1].sort_key.startswith(
+        "2026-01-01T02:00:00.000000+00:00|photos/a.jpg|")
+
+
+def test_same_instant_cross_offset_falls_back_to_path_key():
+    """T10：同一瞬间不同偏移表述 → 排序时间文本恒等 → 按路径键决胜。
+
+    X=`09:00+08:00`(photos/a.jpg) 与 Y=`01:00+00:00`(photos/b.jpg) 同为
+    01:00Z；归一后时间分量相同，X 因路径 a<b 在前；first_captured_at 保留
+    各簇原始 datetime（不因排序文本归一被替换为 UTC）。
+    """
+    harness = _Harness()
+    run = harness.add_run()
+    harness.add_photo(
+        "x", "photos/a.jpg",
+        datetime(2026, 1, 1, 9, 0, 0, tzinfo=timezone(timedelta(hours=8))),
+    )
+    harness.add_photo(
+        "y", "photos/b.jpg",
+        datetime(2026, 1, 1, 1, 0, 0, tzinfo=timezone.utc),
+    )
+    harness.add_observation("x", 0, 0.0)
+    harness.add_observation("y", 0, 120.0)
+
+    cluster_run = harness.service.execute(StartClusteringRunCommand(run.id))
+
+    rows = harness.clusters.list_clusters(cluster_run.id)
+    assert len(rows) == 2
+    assert rows[0].sort_key.startswith(
+        "2026-01-01T01:00:00.000000+00:00|photos/a.jpg|")
+    assert rows[1].sort_key.startswith(
+        "2026-01-01T01:00:00.000000+00:00|photos/b.jpg|")
+    assert rows[0].first_captured_at == datetime(
+        2026, 1, 1, 9, 0, 0, tzinfo=timezone(timedelta(hours=8)))
+    assert rows[1].first_captured_at == datetime(
+        2026, 1, 1, 1, 0, 0, tzinfo=timezone.utc)
 
 
 def test_progress_reports_coarse_stages():
