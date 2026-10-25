@@ -40,6 +40,16 @@ class RecognitionRunRepository(Protocol):
     def add_run_photos(self, run_id: UUID, snapshots: Sequence[RunPhotoSnapshot]) -> None:
         """保存 run 创建时的照片输入快照（一次写入，之后不增不改）。空输入 no-op。"""
 
+    def update_run_photo_outcome(self, run_id: UUID, photo_id: UUID, outcome: str) -> int:
+        """Update one snapshot photo's processing outcome（界面优化 §6.2）.
+
+        状态只来自实际处理分支（faces/no_face/unreadable/error），快照写入
+        时即登记 ``not_processed``；历史 run 的 NULL 保持未知，不伪造回填。
+
+        Returns:
+            1 on hit, 0 when the snapshot row is missing (concurrent deletion).
+        """
+
     def add_run_scopes(self, run_id: UUID, ranges: Sequence[FaceCountRange]) -> None:
         """保存 run 选中的人脸数范围（按传入顺序赋 ordinal，一次写入）。空输入 no-op。"""
 

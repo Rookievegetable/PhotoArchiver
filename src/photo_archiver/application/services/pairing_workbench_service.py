@@ -399,8 +399,11 @@ class PairingWorkbenchService:
         ]
 
         # D4 样本沉淀：成员观测 → person_face_embeddings（跳过已沉淀对）。
+        # 界面优化 §7 修复：停用样本（enabled=0，改派/解除的历史遗留）不得被
+        # 当作"已启用正常沉淀"跳过——重新确认同一映射时按需恢复（enable），
+        # 新观测照常沉淀；UNIQUE(person_id, observation_id) 保证零重复。
         existing = {
-            sample.observation_id
+            sample.observation_id: sample.enabled
             for sample in self._sample_repository.list_by_person(person_id)
         }
         new_samples = [
@@ -414,6 +417,16 @@ class PairingWorkbenchService:
             if observation.id not in existing
         ]
         self._sample_repository.add_samples(new_samples)
+        revived = self._sample_repository.enable_samples(
+            person_id,
+            [observation.id for observation in member_observations
+             if existing.get(observation.id) is False],
+        )
+        if revived:
+            logger.info(
+                "PairingWorkbenchService: revived {} disabled sample(s) for person {}",
+                revived, person_id,
+            )
 
         # D3 兼容适配（S1）：投影改由 ProjectionReconciler 物化。
         # 与旧的 ``already_current`` 幂等判断语义等价，但判定依据从「该照片是否已有

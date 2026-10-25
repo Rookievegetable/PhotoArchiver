@@ -11,6 +11,9 @@ from photo_archiver.domain.repositories.face_observation_repository import FaceO
 from photo_archiver.domain.repositories.folder_repository import FolderRepository
 from photo_archiver.domain.repositories.import_batch_repository import ImportBatchRepository
 from photo_archiver.domain.repositories.person_repository import PersonRepository
+from photo_archiver.domain.repositories.photo_ignore_state_repository import (
+    PhotoIgnoreStateRepository,
+)
 from photo_archiver.domain.repositories.photo_repository import PhotoRepository
 from photo_archiver.domain.repositories.recognition_repository import RecognitionRepository
 from photo_archiver.domain.repositories.recognition_run_repository import RecognitionRunRepository
@@ -25,6 +28,7 @@ __all__ = [
     "FolderRepository",
     "ImportBatchRepository",
     "PersonRepository",
+    "PhotoIgnoreStateRepository",
     "PhotoRepository",
     "RecognitionRepository",
     "RecognitionRunRepository",

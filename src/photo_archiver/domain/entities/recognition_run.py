@@ -27,6 +27,23 @@ RUN_STATUS_COMPLETED = "completed"
 RUN_STATUS_FAILED = "failed"
 RUN_STATUS_CANCELLED = "cancelled"
 
+# 照片级处理结果（界面优化 §6；recognition_run_photos.photo_outcome）。
+# ``None`` 表示历史 run 的未知状态——不得展示为"0 张人脸"。
+RUN_PHOTO_OUTCOME_NOT_PROCESSED = "not_processed"
+RUN_PHOTO_OUTCOME_FACES = "faces"
+RUN_PHOTO_OUTCOME_NO_FACE = "no_face"
+RUN_PHOTO_OUTCOME_UNREADABLE = "unreadable"
+RUN_PHOTO_OUTCOME_ERROR = "error"
+RUN_PHOTO_OUTCOMES = frozenset(
+    {
+        RUN_PHOTO_OUTCOME_NOT_PROCESSED,
+        RUN_PHOTO_OUTCOME_FACES,
+        RUN_PHOTO_OUTCOME_NO_FACE,
+        RUN_PHOTO_OUTCOME_UNREADABLE,
+        RUN_PHOTO_OUTCOME_ERROR,
+    }
+)
+
 RUN_STATUSES = frozenset(
     {
         RUN_STATUS_CREATED,
@@ -164,9 +181,21 @@ class RunPhotoSnapshot:
 
     仅记录 run 启动时刻的处理输入（路径 / 拍摄时刻）——不是为绕过照片
     删除而永久保存 Observation；照片删除时本快照按 FK CASCADE 一并删除。
+
+    ``photo_outcome``（界面优化 §6）：照片级处理结果；新 run 写入快照时
+    即为 ``not_processed``，处理分支更新为实际结果；历史 run 的旧行保持
+    ``None``（未知，不伪造回填）。
     """
 
     run_id: UUID
     photo_id: UUID
     raw_path: str
     captured_at: datetime | None = None
+    photo_outcome: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate the outcome vocabulary when present."""
+        if self.photo_outcome is not None and self.photo_outcome not in RUN_PHOTO_OUTCOMES:
+            raise ValidationError(
+                f"Unknown run photo outcome: {self.photo_outcome!r}"
+            )

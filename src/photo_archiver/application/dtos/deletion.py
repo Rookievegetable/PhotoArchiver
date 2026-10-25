@@ -239,3 +239,51 @@ class DuplicateDisposalResult:
     rejected: int
     groups_affected: int
 
+
+
+@dataclass(frozen=True, slots=True)
+class BatchRosterDeletionPreview:
+    """Confirmation preview for deleting one import batch's people（§4.3）.
+
+    people: The batch's *current* members at preview time (name + id for the
+    explicit list display). ``merge_note`` reflects that merged people may
+    have been re-attributed to this batch by later imports.
+    batch_record_found / draft_row_count: Present only when the optional
+    batch-record cleanup is being considered.
+    """
+
+    person_ids: tuple[UUID, ...]
+    people_names: tuple[str, ...]
+    missing_ids: tuple[UUID, ...]
+    embedding_count: int
+    recognition_count: int
+    batch_record_found: bool
+    draft_row_count: int
+
+    @property
+    def person_count(self) -> int:
+        """Return how many people will be removed."""
+        return len(self.person_ids)
+
+    @property
+    def is_empty(self) -> bool:
+        """Return whether there is nothing to delete."""
+        return not self.person_ids
+
+
+@dataclass(frozen=True, slots=True)
+class BatchRosterDeletionResult:
+    """Outcome of a confirmed batch/clear-all people deletion run（§4.3）."""
+
+    requested: int
+    removed: int
+    missing: int
+    embedding_cascade: int
+    recognition_orphaned: int
+    batch_record_deleted: int
+    draft_rows_deleted: int
+
+    @property
+    def succeeded(self) -> bool:
+        """Return whether every requested id was removed or absent."""
+        return self.removed + self.missing == self.requested

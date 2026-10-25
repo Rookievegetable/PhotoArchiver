@@ -17,7 +17,9 @@ from alembic import command
 _ALEMBIC_CFG = Path(__file__).resolve().parents[2] / "alembic.ini"
 _OLD_REVISION = "003_import_batches_and_roster"
 # S4：013 之后 alembic head（cluster_person_assignments 词表扩展 auto_confirmed）。
-_HEAD_REVISION = "013_assignment_auto_confirm"
+# 界面优化新增 014/015 迁移后迁移头前移；本套件断言的是"升级到当前头
+# 且数据保全"，不是冻结版本号。
+_HEAD_REVISION = "015_run_photo_outcome"
 
 
 def _load_backfill_service(db_path: Path):

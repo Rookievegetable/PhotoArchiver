@@ -100,7 +100,6 @@ PEOPLE_PAGE_COL_IDENTITY = "工号"
 PEOPLE_PAGE_COL_DEPARTMENT = "部门"
 PEOPLE_PAGE_COL_NOTE = "备注"
 PEOPLE_PAGE_COL_BATCH = "来源批次"
-PEOPLE_PAGE_COL_ACTIONS = "操作"
 PEOPLE_PAGE_MANUAL_SOURCE = "手工新增"
 PEOPLE_PAGE_EMPTY = "名单为空。可用「新增人员」手工录入，或用工具栏「导入人员」批量导入名单。"
 PEOPLE_PAGE_EMPTY_FILTERED = "该批次没有仍在名单中的人员（人员可能在后续导入中被合并或删除）。"
@@ -115,6 +114,10 @@ PEOPLE_PAGE_CANCEL_BUTTON = "取消"
 PEOPLE_PAGE_ADDED = "已新增「{name}」，排在名单末尾。"
 PEOPLE_PAGE_EDITED = "已保存「{name}」的修改。"
 PEOPLE_PAGE_REORDERED = "名单顺序已保存（{count} 人）。"
+PEOPLE_PAGE_REORDER_HINT = (
+    "名单顺序已调整：配对工作台中既有待确认建议可能与新顺序不一致，"
+    "重新生成建议将采用最新顺序（不自动改写已确认配对）。"
+)
 PEOPLE_PAGE_DELETED = "已删除「{name}」：照片全部保留、历史识别归属转为未分配。"
 PEOPLE_PAGE_SAVE_FAILED = "保存失败：{detail}"
 PEOPLE_PAGE_SAVE_FAILED_TITLE = "无法保存名单修改"
@@ -494,7 +497,6 @@ def calibration_difficulty_label(reason: str) -> str:
 
 # ---- 人物配对工作台（Stage E） ----
 PAIRING_WORKBENCH_TITLE = "人物配对工作台"
-PAIRING_WORKBENCH_ENTRY_BUTTON = "人物配对工作台"
 PAIRING_WORKBENCH_HINT = (
     "为聚类组指派人员：建议仅作参考（建议状态=待确认），人工确认后才写入"
     "正式归属并沉淀人脸样本；「自动确认」为机器按位置规则生成的待人工终审"
@@ -520,10 +522,6 @@ PAIRING_WORKBENCH_SOURCE_LABELS = {
 PAIRING_WORKBENCH_MEMBER_LABEL = "人员"
 PAIRING_WORKBENCH_CONFIRM_BUTTON = "确认建议"
 PAIRING_WORKBENCH_REJECT_BUTTON = "拒绝建议"
-PAIRING_WORKBENCH_ASSIGN_BUTTON = "指派该人员"
-PAIRING_WORKBENCH_UNASSIGN_BUTTON = "解除映射"
-PAIRING_WORKBENCH_UNKNOWN_BUTTON = "标记陌生人"
-PAIRING_WORKBENCH_IGNORE_BUTTON = "忽略组"
 PAIRING_WORKBENCH_NO_CLUSTERS = "该代没有可指派的簇。"
 PAIRING_WORKBENCH_NO_ASSIGNMENT_HINT = "尚未生成建议；可点击「生成建议」或直接指派人员。"
 PAIRING_WORKBENCH_NO_ROSTER = "人员名单为空；请先导入人员。"
@@ -545,6 +543,67 @@ PAIRING_WORKBENCH_ASSIGNED = "已人工指派：{person}"
 PAIRING_WORKBENCH_UNASSIGNED = "已解除映射"
 PAIRING_WORKBENCH_STATE_SET = "已标记为 {state}"
 PAIRING_WORKBENCH_OP_FAILED_TITLE = "配对操作失败"
+
+# ---- 聚类结果 + 配对整合界面（界面优化 §5/§3.3） ----
+CLUSTER_PAIRING_HINT = (
+    "左侧选择聚类组：确认/拒绝作用于「当前簇 × 目标人员」的配对关系；"
+    "在照片区多选后可忽略/恢复照片（按代际作用，不影响其他组）。"
+)
+CLUSTER_PAIRING_GENERATE_BUTTON = "生成建议"
+CLUSTER_PAIRING_ORDER_HINT = (
+    "生成建议按当前名单顺序配对；调整顺序后请重新生成建议以应用新顺序"
+    "（既有待确认建议与已确认配对不受影响）。"
+)
+CLUSTER_PAIRING_PERSON_LABEL = "目标人员"
+CLUSTER_PAIRING_CONFIRM_BUTTON = "确认"
+CLUSTER_PAIRING_REJECT_BUTTON = "拒绝"
+CLUSTER_PAIRING_IGNORE_BUTTON = "忽略所选照片"
+CLUSTER_PAIRING_RESTORE_BUTTON = "恢复所选照片"
+CLUSTER_PAIRING_NO_TARGET = "请先选择目标人员。"
+CLUSTER_PAIRING_NO_SELECTION = "请先在左侧选择聚类组。"
+CLUSTER_PAIRING_MEMBER_ENTRY = "{photo} · 脸{index}/{faces} · {outcome}{ignored}"
+CLUSTER_PAIRING_IGNORED_MARK = "（已忽略）"
+CLUSTER_PAIRING_DETAIL_BUTTON = "查看大图"
+CLUSTER_PAIRING_DETAIL_PREV = "上一张"
+CLUSTER_PAIRING_DETAIL_NEXT = "下一张"
+CLUSTER_PAIRING_PHOTOS_LABEL = "组内照片（可多选后忽略/恢复；双击查看大图）："
+CLUSTER_PAIRING_DECISIONS_LABEL = "当前有效决策涉及人物数：{count}（按决策记录统计，非识别算法人数）"
+CLUSTER_PAIRING_RUN_STATUS = (
+    "本 run 照片处理：共 {total} · 有脸 {faces} · 0 脸 {no_face} · "
+    "不可读 {unreadable} · 出错 {error} · 未处理 {not_processed} · 未知 {unknown}"
+)
+RUN_PHOTO_OUTCOME_LABELS = {
+    "faces": "已分析",
+    "no_face": "0 张脸",
+    "unreadable": "不可读",
+    "error": "处理出错",
+    "not_processed": "尚未处理",
+    None: "处理状态未知（历史 run）",
+}
+CLUSTER_PAIRING_BATCH_DONE = "成功 {succeeded} · 跳过 {skipped} · 失败 {failed}"
+CLUSTER_PAIRING_BATCH_DETAIL = "{details}"
+CLUSTER_PAIRING_UNMATCHED = "未匹配"
+CLUSTER_PAIRING_CONFIRM_PLAN_TITLE = "批量操作确认"
+CLUSTER_PAIRING_IGNORE_SCOPE = (
+    "将忽略 {count} 张照片（仅当前聚类代际）：\n"
+    "· 这些照片在本代际内将不再参与后续建议生成；\n"
+    "· 其既有照片归属投影将同步撤销（其他照片与其他代际不受影响）；\n"
+    "· 恢复后可重新参与后续归类，但此前撤销的投影不会自动恢复。"
+)
+CLUSTER_PAIRING_RESTORE_SCOPE = (
+    "将恢复 {count} 张照片的参与资格（仅当前聚类代际）。\n"
+    "此前因忽略而撤销的照片归属投影不会自动恢复；"
+    "后续归属通过现有确认流程重新建立。"
+)
+CLUSTER_PAIRING_CONFIRMED_SKIP = "已确认给该人员"
+PAIRING_WORKBENCH_REJECT_IMPACT_NOTE = (
+    "注意：拒绝后重新生成建议时，该配对将被排除；若剩余簇与剩余人员"
+    "数量一致且存在被拒绝的位置对，整批自动确认将不执行（回退为建议），"
+    "其余位置对可能按剩余人员顺延换人。"
+)
+CLUSTER_PAIRING_REJECT_NO_PAIR = "该簇没有此人待确认/自动确认的建议行"
+CLUSTER_PAIRING_REJECT_CONFIRMED = "已确认的配对无法拒绝"
+CLUSTER_ENTRY_PHOTOS = "第 {ordinal} 组 · {person} · {photos} 照片/{faces} 脸"
 
 CLUSTER_RUN_STATUS_LABELS = {
     "created": "已创建",
@@ -659,6 +718,47 @@ PERSON_DELETE_BUTTON = "删除该人员"
 PERSON_DELETE_EMPTY = "库中暂无人员——请先通过「导入人员」导入人员名单。"
 PERSON_DELETE_DONE = (
     "已移除人员「{name}」（删除嵌入 {embedding_cascade} 条、识别归属置空 {recognition_orphaned} 条）。"
+)
+
+# ---- 按批次删除人员 / 清空全部人员（界面优化 §4.3） ----
+PEOPLE_PAGE_DELETE_BATCH_BUTTON = "按批次删除…"
+PEOPLE_PAGE_CLEAR_ALL_BUTTON = "清空所有人员…"
+BATCH_DELETE_DIALOG_TITLE = "按导入批次删除人员"
+BATCH_DELETE_SELECTOR_LABEL = "选择要删除的导入批次："
+BATCH_DELETE_MEMBERS_LABEL = "该批次当前归属人员（基于执行时点的批次归属）："
+BATCH_DELETE_IMPACT = (
+    "将删除 {person_count} 名人员：{names}\n\n"
+    "· 身份决策历史（含人工终审记录与排序快照）将按外键级联删除；\n"
+    "· {embedding_count} 条人脸嵌入将一并删除；\n"
+    "· {recognition_count} 条识别结果将保留但归属置空（不再进入归档）；\n"
+    "· 校准标注与 Ground Truth 的人员归属将置空（标注内容保留）；\n"
+    "· 照片文件、识别运行、聚类结果与成员关系全部保留。\n\n"
+    "注意：被合并或迁移的人员可能已归属于其他批次——本操作只删除当前"
+    "归属该批次的人员。"
+)
+BATCH_DELETE_EMPTY = "该批次当前没有归属人员。"
+BATCH_DELETE_CLEANUP_CHECKBOX = "同时删除该批次记录和导入草稿"
+BATCH_DELETE_CLEANUP_WARNING = (
+    "勾选后：该批次记录与全部 {draft_row_count} 条导入草稿（含原始导入轨迹）"
+    "将一并删除，且不可恢复。"
+)
+BATCH_DELETE_DONE = (
+    "已删除批次「{batch}」人员 {removed} 名（嵌入 {embedding_cascade} 条、"
+    "识别归属置空 {recognition_orphaned} 条）。"
+)
+BATCH_DELETE_DONE_CLEANUP = BATCH_DELETE_DONE + " 批次记录与 {draft_rows_deleted} 条导入草稿已删除。"
+CLEAR_ALL_DIALOG_TITLE = "清空所有人员"
+CLEAR_ALL_IMPACT = (
+    "将删除库中全部 {person_count} 名人员：\n{names}\n\n"
+    "· 全部身份决策历史（含人工终审记录）将按外键级联删除；\n"
+    "· {embedding_count} 条人脸嵌入将一并删除；\n"
+    "· {recognition_count} 条识别结果将保留但归属置空；\n"
+    "· 照片文件、识别运行、聚类结果与成员关系全部保留。"
+)
+CLEAR_ALL_CONFIRM_CHECKBOX = "我已了解将删除全部人员及其身份决策历史，且不可恢复"
+CLEAR_ALL_DONE = (
+    "已清空全部人员（删除 {removed} 名、嵌入 {embedding_cascade} 条、"
+    "识别归属置空 {recognition_orphaned} 条）。"
 )
 
 # ---- 删除失败提示（照片/人员共用） ----

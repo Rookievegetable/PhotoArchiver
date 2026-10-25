@@ -159,7 +159,6 @@ from photo_archiver.presentation.visual_style import (
 )
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
 from photo_archiver.presentation.views.cluster_results_dialog import ClusterResultsDialog
-from photo_archiver.presentation.views.pairing_workbench_dialog import PairingWorkbenchDialog
 from photo_archiver.presentation.views.recognition_scope_dialog import RecognitionScopeDialog
 from photo_archiver.presentation.views.photo_list_model import (
     PHOTO_ID_ROLE, PhotoListModel, STATUS_BADGE_ROLE, THUMBNAIL_ROLE,
@@ -650,7 +649,6 @@ class MainWindow(QMainWindow):
         # D-4 聚类入口：页面发请求信号，主窗口经 TaskCoordinator 统一准入。
         page.cluster_run_requested.connect(self._on_cluster_run_clicked)
         page.cluster_results_requested.connect(self._on_cluster_results_clicked)
-        page.pairing_workbench_requested.connect(self._on_pairing_workbench_clicked)
         self._people_admin_page = page
         return page
 
@@ -1531,27 +1529,16 @@ class MainWindow(QMainWindow):
         if run_id is None:
             self._status_label.setText(text.CLUSTER_PAGE_NO_RUNS)
             return
+        # 界面优化 §5：配对功能整合进聚类结果界面（独立工作台入口已移除）。
         ClusterResultsDialog(
             self._context.services.cluster_results,
             run_id,
             parent=self,
             thumbnail_source=self._photo_list_controller,
-        ).exec()
-
-    @_exclusive(text.PAIRING_WORKBENCH_TITLE)
-    def _on_pairing_workbench_clicked(self) -> None:
-        """Open the identity-assignment workbench for the selected run (Stage E)."""
-        run_id = self._people_admin_page.selected_recognition_run_id()
-        if run_id is None:
-            self._status_label.setText(text.CLUSTER_PAGE_NO_RUNS)
-            return
-        PairingWorkbenchDialog(
-            self._context.services.suggest_pairings,
-            self._context.services.pairing_workbench,
-            self._context.services.cluster_results,
-            self._context.services.list_persons,
-            run_id,
-            parent=self,
+            suggest_service=self._context.services.suggest_pairings,
+            workbench_service=self._context.services.pairing_workbench,
+            ignore_service=self._context.services.photo_ignore,
+            list_persons=self._context.services.list_persons,
         ).exec()
 
     # ------------------------------------------------------------------

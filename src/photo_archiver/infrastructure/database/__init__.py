@@ -17,6 +17,9 @@ from photo_archiver.infrastructure.database.sqlite_face_embedding_repository imp
 from photo_archiver.infrastructure.database.sqlite_folder_repository import SQLiteFolderRepository
 from photo_archiver.infrastructure.database.sqlite_import_batch_repository import SQLiteImportBatchRepository
 from photo_archiver.infrastructure.database.sqlite_person_repository import SQLitePersonRepository
+from photo_archiver.infrastructure.database.sqlite_photo_ignore_state_repository import (
+    SQLitePhotoIgnoreStateRepository,
+)
 from photo_archiver.infrastructure.database.sqlite_photo_repository import SQLitePhotoRepository
 from photo_archiver.infrastructure.database.sqlite_recognition_repository import (
     SQLiteRecognitionRepository,
@@ -39,6 +42,7 @@ __all__ = [
     "SQLiteFolderRepository",
     "SQLiteImportBatchRepository",
     "SQLitePersonRepository",
+    "SQLitePhotoIgnoreStateRepository",
     "SQLitePhotoRepository",
     "SQLiteRecognitionRepository",
     "SQLiteRecognitionRunRepository",

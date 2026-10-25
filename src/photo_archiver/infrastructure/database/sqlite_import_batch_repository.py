@@ -145,3 +145,11 @@ class SQLiteImportBatchRepository:
                 "SELECT * FROM import_batches ORDER BY created_at DESC, id"
             ).fetchall()
         return [_batch_from_row(row) for row in rows]
+
+    def remove_batch(self, batch_id: UUID) -> int:
+        """Delete the batch row; draft rows cascade via FK（界面优化 §4.3）."""
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM import_batches WHERE id = ?", (str(batch_id),),
+            )
+            return cursor.rowcount

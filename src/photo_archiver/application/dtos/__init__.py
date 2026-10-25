@@ -46,6 +46,14 @@ from photo_archiver.application.dtos.recognition import (
     MatchCandidate,
     MatchResult,
 )
+from photo_archiver.application.dtos.photo_ignore import (
+    OUTCOME_FAILED,
+    OUTCOME_IGNORED,
+    OUTCOME_RESTORED,
+    OUTCOME_SKIPPED,
+    PhotoIgnoreOutcome,
+    PhotoIgnoreResult,
+)
 from photo_archiver.application.dtos.register_photo import RegisterPhotoResult
 from photo_archiver.application.dtos.scan_and_register_photos import ScanAndRegisterPhotosResult
 from photo_archiver.application.dtos.settings import (
@@ -103,8 +111,16 @@ __all__ = [
     "RawRosterTable",
     "MatchResult",
     "MissingPhotoItem",
+    "OUTCOME_FAILED",
+    "OUTCOME_IGNORED",
+    "OUTCOME_RESTORED",
+    "OUTCOME_SKIPPED",
+    "BatchRosterDeletionPreview",
+    "BatchRosterDeletionResult",
     "PersonDeletionPreview",
     "PersonDeletionResult",
+    "PhotoIgnoreOutcome",
+    "PhotoIgnoreResult",
     "PersonImportRow",
     "PhotoDeletionPreview",
     "PhotoDeletionResult",

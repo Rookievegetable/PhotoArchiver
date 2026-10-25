@@ -171,3 +171,104 @@ def test_run_marks_cancelled_and_keeps_processed_observations(tmp_path: Path) ->
 
     assert run.status == "cancelled"
     assert run.face_count <= 2
+
+
+def test_run_records_per_photo_outcomes_for_every_branch(tmp_path: Path) -> None:
+    """§6.2：faces / no_face / unreadable / error 四分支逐一落照片级状态。"""
+    paths = [tmp_path / f"{i}.jpg" for i in range(4)]
+    for path in paths:
+        path.write_bytes(b"x")
+    photo_ids = [uuid4() for _ in paths]
+    run_repo = InMemoryRecognitionRunRepository()
+    obs_repo = InMemoryFaceObservationRepository()
+    service = RunRecognitionService(
+        _Detector({paths[0]: [_pair(0)],
+                    paths[1]: [],
+                    paths[2]: ImageUnreadableError("bad"),
+                    paths[3]: RuntimeError("boom")}),
+        _Matcher(), _Embeddings(), _Results(), run_repo, obs_repo, max_workers=2,
+    )
+
+    run = service.execute(StartRecognitionRunCommand(
+        tuple(photo_ids), tuple(paths), (FaceCountRange(1, None),), {"model": "test"},
+    ))
+
+    outcomes = {
+        snapshot.photo_id: snapshot.photo_outcome
+        for snapshot in run_repo.list_run_photos(run.id)
+    }
+    assert outcomes[photo_ids[0]] == "faces"
+    assert outcomes[photo_ids[1]] == "no_face"
+    assert outcomes[photo_ids[2]] == "unreadable"
+    assert outcomes[photo_ids[3]] == "error"
+
+
+def test_run_snapshots_start_as_not_processed(tmp_path: Path) -> None:
+    """§6.2：快照写入即登记 not_processed（取消/失败 run 的未处理照片不冒充 0 脸）。"""
+    image = tmp_path / "photo.jpg"
+    image.write_bytes(b"x")
+    photo_id = uuid4()
+    run_repo = InMemoryRecognitionRunRepository()
+    service = RunRecognitionService(
+        _Detector({image: []}), _Matcher(), _Embeddings(), _Results(),
+        run_repo, InMemoryFaceObservationRepository(),
+    )
+
+    class InterruptingRunRepo:
+        """Snapshot the not_processed state right after input registration."""
+
+        def __init__(self, inner):
+            self.inner = inner
+            self.outcome_at_insert = None
+
+        def __getattr__(self, name):
+            return getattr(self.inner, name)
+
+        def add_run_photos(self, run_id, snapshots):
+            self.inner.add_run_photos(run_id, snapshots)
+            self.outcome_at_insert = [
+                snapshot.photo_outcome for snapshot in self.inner.list_run_photos(run_id)
+            ]
+
+    recording = InterruptingRunRepo(run_repo)
+    service._run_repository = recording  # noqa: SLF001
+    run = service.execute(StartRecognitionRunCommand(
+        (photo_id,), (image,), (FaceCountRange(1, None),),
+    ))
+
+    assert recording.outcome_at_insert == ["not_processed"]
+    # 处理完成后（0 脸分支）状态被更新为 no_face。
+    final = {
+        s.photo_id: s.photo_outcome for s in run_repo.list_run_photos(run.id)
+    }
+    assert final[photo_id] == "no_face"
+
+
+def test_cancelled_run_keeps_unprocessed_photos_as_not_processed(tmp_path: Path) -> None:
+    """§6.2/§6.3：取消 run 的未处理照片保持 not_processed，绝不展示为 0 脸。"""
+    first = tmp_path / "first.jpg"
+    second = tmp_path / "second.jpg"
+    first.write_bytes(b"x")
+    second.write_bytes(b"x")
+    run_repo = InMemoryRecognitionRunRepository()
+    service = RunRecognitionService(
+        _Detector({first: [_pair(0)], second: [_pair(1)]}), _Matcher(), _Embeddings(),
+        _Results(), run_repo, InMemoryFaceObservationRepository(),
+    )
+
+    class CancellingDetector:
+        def detect_with_embeddings(self, image):
+            if image == first:
+                service.cancel()
+            return [_pair(0 if image == first else 1)]
+
+    service._detector = CancellingDetector()  # noqa: SLF001
+    run = service.execute(StartRecognitionRunCommand(
+        (uuid4(), uuid4()), (first, second), (FaceCountRange(1, 1),),
+    ))
+
+    outcomes = {s.photo_id: s.photo_outcome for s in run_repo.list_run_photos(run.id)}
+    values = set(outcomes.values())
+    assert "no_face" not in values
+    assert values <= {"faces", "not_processed"}
+    assert run.status == "cancelled"

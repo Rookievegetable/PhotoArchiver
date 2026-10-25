@@ -24,7 +24,9 @@ from alembic.config import Config
 
 _ALEMBIC_CFG = Path(__file__).resolve().parents[2] / "alembic.ini"
 _PRE_REVISION = "012_single_expert_ground_truth"
-_HEAD_REVISION = "013_assignment_auto_confirm"
+# 界面优化新增 014/015 迁移后迁移头前移；本套件断言的是"升级到当前头
+# 且数据保全"，不是冻结版本号。
+_HEAD_REVISION = "015_run_photo_outcome"
 
 _UUID_PERSON = "11111111-1111-1111-1111-111111111111"
 _UUID_FOLDER = "77777777-7777-7777-7777-777777777777"

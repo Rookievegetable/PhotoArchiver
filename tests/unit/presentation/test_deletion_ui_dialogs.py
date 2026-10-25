@@ -176,3 +176,106 @@ def test_duplicate_report_dialog_readonly_without_disposal(qtbot, tmp_path: Path
     qtbot.addWidget(dialog)
 
     assert dialog._disposal is None
+
+# ── 界面优化 §4.3：按批次删除 / 清空全部人员对话框 ──────────────────────────
+
+
+def _batch_world(tmp_path: Path):
+    """一个批次 + 两名归属人员 + 一名手工人员 + 批次草稿两行。"""
+    from photo_archiver.application.services.manage_people_service import (
+        ManagePeopleService,
+    )
+    from photo_archiver.domain import ImportBatch, ImportDraftRow
+    from photo_archiver.infrastructure.database.sqlite_import_batch_repository import (
+        SQLiteImportBatchRepository,
+    )
+    from photo_archiver.infrastructure.database.sqlite_unit_of_work import (
+        SQLiteUnitOfWork,
+    )
+
+    provider = create_provider(tmp_path)
+    batches = SQLiteImportBatchRepository(provider)
+    people_repo = SQLitePersonRepository(provider)
+    batch = ImportBatch(
+        file_name="名单A.txt", file_hash="hash-a", source_type="txt",
+    )
+    batches.add_batch(batch)
+    batches.replace_draft_rows(batch.id, [
+        ImportDraftRow(batch_id=batch.id, source_row=0, raw_values=["r0"],
+                       parsed_name="张三", order_index=0),
+        ImportDraftRow(batch_id=batch.id, source_row=1, raw_values=["r1"],
+                       parsed_name="李四", order_index=1),
+    ])
+    person_a = _add_person(provider, "张三")
+    person_a.source_batch_id = batch.id
+    people_repo.add(person_a)
+    person_b = _add_person(provider, "李四")
+    person_b.source_batch_id = batch.id
+    people_repo.add(person_b)
+    _add_person(provider, "王五")
+    manage = ManagePeopleService(people_repo, batches)
+    from photo_archiver.infrastructure.database.sqlite_recognition_repository import (
+        SQLiteRecognitionRepository,
+    )
+    from photo_archiver.infrastructure.database.sqlite_photo_repository import (
+        SQLitePhotoRepository,
+    )
+
+    service = DeletePersonService(
+        people_repo, SQLitePhotoRepository(provider),
+        SQLiteRecognitionRepository(provider),
+        SQLiteFaceEmbeddingRepository(provider),
+        unit_of_work=SQLiteUnitOfWork(provider), import_batch_repository=batches,
+    )
+    return manage, service, batch, provider
+
+
+def test_batch_person_deletion_dialog_previews_and_executes(qtbot, tmp_path: Path):
+    """批次选择 → 成员清单与影响摘要 → 执行（默认保留批次记录）。"""
+    manage, service, batch, provider = _batch_world(tmp_path)
+    from photo_archiver.presentation.views.batch_person_deletion_dialog import (
+        BatchPersonDeletionDialog,
+    )
+
+    dialog = BatchPersonDeletionDialog(manage, service)
+    qtbot.addWidget(dialog)
+
+    assert dialog._impact_label.text().startswith("将删除 2 名人员")
+    assert dialog._members_list.count() == 2
+    assert not dialog._cleanup_checkbox.isChecked()
+    assert dialog._cleanup_warning.isHidden()
+
+    dialog._cleanup_checkbox.setChecked(True)
+    assert not dialog._cleanup_warning.isHidden()
+    assert "2 条导入草稿" in dialog._cleanup_warning.text()
+
+    dialog._on_confirm()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    from photo_archiver.infrastructure.database.sqlite_import_batch_repository import (
+        SQLiteImportBatchRepository,
+    )
+    batches = SQLiteImportBatchRepository(provider)
+    assert batches.get_batch(batch.id) is None
+    assert "草稿" in dialog.last_message() or "已删除批次" in dialog.last_message()
+
+
+def test_clear_all_people_dialog_requires_explicit_awareness(qtbot, tmp_path: Path):
+    """清空对话框：未勾选知悉时确认按钮禁用；勾选后可执行。"""
+    manage, service, _batch, _provider = _batch_world(tmp_path)
+    from photo_archiver.presentation.views.batch_person_deletion_dialog import (
+        ClearAllPeopleDialog,
+    )
+
+    dialog = ClearAllPeopleDialog(manage, service)
+    qtbot.addWidget(dialog)
+
+    assert "全部 3 名人员" in dialog._impact_label.text()
+    assert not dialog._buttons.button(
+        dialog._buttons.StandardButton.Ok
+    ).isEnabled()
+
+    dialog._aware_checkbox.setChecked(True)
+    assert dialog._buttons.button(dialog._buttons.StandardButton.Ok).isEnabled()
+    dialog._on_confirm()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    assert "已清空全部人员" in dialog.last_message()

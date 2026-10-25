@@ -101,6 +101,12 @@ class ProjectionReconciler:
     The **only** component allowed to create / retarget / terminate
     Assignment-derived projections. Incremental updates and :meth:`rebuild_all`
     both go through :meth:`reconcile_pair`, so the two paths cannot drift apart.
+
+    照片级忽略（界面优化 §3.2）：注入 ``photo_ignore_repository`` 后，
+    ``(cluster_run_id, photo_id)`` 被忽略的照片在该代际内的所有支撑一律
+    失效——``photos_of_cluster`` 不再为忽略照片产出投影目标，
+    ``active_supports`` 不再统计来自忽略代际的支撑；其他代际/其他照片
+    完全不受影响。未注入时行为与历史版本逐字一致（测试与旧库兼容）。
     """
 
     def __init__(
@@ -109,11 +115,13 @@ class ProjectionReconciler:
         assignment_repository: ClusterPersonAssignmentRepository,
         cluster_repository: FaceClusterRepository,
         observation_repository: FaceObservationRepository,
+        photo_ignore_repository=None,
     ) -> None:
         self._recognition = recognition_repository
         self._assignments = assignment_repository
         self._clusters = cluster_repository
         self._observations = observation_repository
+        self._ignores = photo_ignore_repository
 
     # ── 支撑查询 ──────────────────────────────────────────────────────
 
@@ -154,9 +162,18 @@ class ProjectionReconciler:
                 and photo ∈ photos(A.cluster)
                 and A is that cluster's latest decision   (S0 INV-1)
                 and A.status ∈ PROJECTION_SUPPORT_STATUSES
+
+        界面优化 §3.2：照片在支撑簇所属聚类代际内被忽略时，该簇的支撑
+        失效（其他代际的支撑照常统计）——被忽略照片不会因后续 reconcile
+        意外恢复投影。
         """
+        ignored_runs = self._ignored_runs_for_photo(photo_id)
         supports: list[ClusterPersonAssignment] = []
         for cluster_id in self.clusters_touching(photo_id):
+            if ignored_runs is not None:
+                cluster = self._clusters.get_cluster(cluster_id)
+                if cluster is not None and cluster.cluster_run_id in ignored_runs:
+                    continue
             latest = self._assignments.list_latest_decision(cluster_id)
             if latest is None or latest.person_id != person_id:
                 continue
@@ -170,7 +187,11 @@ class ProjectionReconciler:
 
         Deduplicating by photo (not by observation) is what keeps a multi-face
         group photo from producing one projection per face — S0-5.
+
+        界面优化 §3.2：该簇所属代际内被忽略的照片不产出——确认终审不会
+        为忽略照片创建投影。
         """
+        ignored = self._ignored_photo_ids(cluster.cluster_run_id)
         observations = {
             observation.id: observation
             for observation in self._observations.list_by_run(cluster.run_id)
@@ -181,6 +202,8 @@ class ProjectionReconciler:
                 continue
             observation = observations.get(member.observation_id)
             if observation is None or not observation.embedding.vector:
+                continue
+            if observation.photo_id in ignored:
                 continue
             if observation.photo_id not in photo_ids:
                 photo_ids.append(observation.photo_id)
@@ -321,6 +344,19 @@ class ProjectionReconciler:
         )
 
     # ── 内部 ──────────────────────────────────────────────────────────
+
+    def _ignored_photo_ids(self, cluster_run_id: UUID) -> set[UUID]:
+        """Ignored photo ids of one generation; empty set when the port is absent."""
+        if self._ignores is None:
+            return set()
+        return set(self._ignores.list_photo_ids(cluster_run_id))
+
+    def _ignored_runs_for_photo(self, photo_id: UUID) -> set[UUID] | None:
+        """Cluster-run ids where ``photo_id`` is ignored, or ``None`` when the
+        ignore port is absent (keeps the historical no-filter behaviour)."""
+        if self._ignores is None:
+            return None
+        return self._ignores.list_ignore_run_ids(photo_id)
 
     def _projection_or_none(
         self, photo_id: UUID, person_id: UUID,

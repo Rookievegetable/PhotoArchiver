@@ -249,7 +249,9 @@ def test_row_drop_reorders_the_roster_without_a_blank_row(populated) -> None:
     assert [p.roster_order for p in repositories.people.list_all()] == [1, 2, 3]
     assert table.rowCount() == 3
     assert [table.item(row, 1).text() for row in range(3)] == ["王五", "张三", "李四"]
-    assert all(table.cellWidget(row, 6) is not None for row in range(3))  # 操作列不空
+    # 界面优化 §4.1：行内操作列已取消（编辑移至工具栏）。
+    assert table.columnCount() == 6
+    assert all(table.cellWidget(row, 5) is None for row in range(3))
     # 落点降级成功：Qt 不会动模型，被拖动的人在自己的新位置保持选中
     assert [index.row() for index in table.selectionModel().selectedRows()] == [0]
 

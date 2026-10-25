@@ -86,7 +86,8 @@ _ALL_INDEXES = (
 )
 
 # S4：013 之后 alembic head（cluster_person_assignments 词表扩展 auto_confirmed）。
-_HEAD = "013_assignment_auto_confirm"
+# 界面优化新增 014/015 迁移后迁移头前移（数据保全语义不变）。
+_HEAD = "015_run_photo_outcome"
 
 
 @pytest.fixture

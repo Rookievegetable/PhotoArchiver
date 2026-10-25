@@ -126,8 +126,9 @@ class SQLiteRecognitionRunRepository(RecognitionRunRepository):
             connection.executemany(
                 """
                 INSERT INTO recognition_run_photos (
-                    run_id, photo_id, raw_path_snapshot, captured_at_snapshot
-                ) VALUES (?, ?, ?, ?)
+                    run_id, photo_id, raw_path_snapshot, captured_at_snapshot,
+                    photo_outcome
+                ) VALUES (?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -137,10 +138,23 @@ class SQLiteRecognitionRunRepository(RecognitionRunRepository):
                         datetime_to_text(snapshot.captured_at)
                         if snapshot.captured_at is not None
                         else None,
+                        snapshot.photo_outcome,
                     )
                     for snapshot in snapshots
                 ],
             )
+
+    def update_run_photo_outcome(
+        self, run_id: UUID, photo_id: UUID, outcome: str,
+    ) -> int:
+        """Update one photo's processing outcome; 0 when the snapshot is absent."""
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE recognition_run_photos SET photo_outcome = ? "
+                "WHERE run_id = ? AND photo_id = ?",
+                (outcome, str(run_id), str(photo_id)),
+            )
+            return cursor.rowcount
 
     def add_run_scopes(self, run_id: UUID, ranges: Sequence[FaceCountRange]) -> None:
         """Insert the selected ranges in their explicit UI order."""
@@ -162,7 +176,8 @@ class SQLiteRecognitionRunRepository(RecognitionRunRepository):
         """Return photo snapshots in their persisted submission order."""
         with self._connection_provider.connect() as connection:
             rows = connection.execute(
-                "SELECT run_id, photo_id, raw_path_snapshot, captured_at_snapshot "
+                "SELECT run_id, photo_id, raw_path_snapshot, captured_at_snapshot, "
+                "photo_outcome "
                 "FROM recognition_run_photos WHERE run_id = ? "
                 "ORDER BY rowid",
                 (str(run_id),),
@@ -177,6 +192,7 @@ class SQLiteRecognitionRunRepository(RecognitionRunRepository):
                     if row["captured_at_snapshot"] is not None
                     else None
                 ),
+                photo_outcome=row["photo_outcome"],
             )
             for row in rows
         ]

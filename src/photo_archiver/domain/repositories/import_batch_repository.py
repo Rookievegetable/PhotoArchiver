@@ -26,3 +26,11 @@ class ImportBatchRepository(Protocol):
 
     def list_batches(self) -> list[ImportBatch]:
         """Return all batches, newest first (batch source review)."""
+
+    def remove_batch(self, batch_id: UUID) -> int:
+        """Delete the batch row; draft rows cascade via FK（界面优化 §4.3）.
+
+        Returns 1 when the batch existed, 0 otherwise (idempotent). People are
+        never touched — ``people.source_batch_id`` is a soft reference without
+        an FK and keeps its (now dangling) value.
+        """

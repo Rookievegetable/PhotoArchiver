@@ -54,6 +54,24 @@ class InMemoryRecognitionRunRepository(RecognitionRunRepository):
         """Append the run's photo snapshots（保持写入顺序）."""
         self._photos.setdefault(run_id, []).extend(snapshots)
 
+    def update_run_photo_outcome(
+        self, run_id: UUID, photo_id: UUID, outcome: str,
+    ) -> int:
+        """Update one snapshot photo's processing outcome（界面优化 §6.2）."""
+        snapshots = self._photos.get(run_id, [])
+        for index, snapshot in enumerate(snapshots):
+            if snapshot.photo_id == photo_id:
+                updated = RunPhotoSnapshot(
+                    run_id=snapshot.run_id,
+                    photo_id=snapshot.photo_id,
+                    raw_path=snapshot.raw_path,
+                    captured_at=snapshot.captured_at,
+                    photo_outcome=outcome,
+                )
+                snapshots[index] = updated
+                return 1
+        return 0
+
     def add_run_scopes(self, run_id: UUID, ranges: Sequence[FaceCountRange]) -> None:
         """Append the run's selected ranges（ordinal = 传入顺序）."""
         self._scopes.setdefault(run_id, []).extend(ranges)

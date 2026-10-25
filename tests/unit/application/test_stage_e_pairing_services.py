@@ -492,3 +492,135 @@ def test_assign_and_unassign_actor_is_required_omission_refused_at_interface():
     assert harness.assignments.get_assignment(auto_row.id).status == "auto_confirmed"
     history = harness.assignments.list_by_cluster(generation.id)
     assert [row.status for row in history] == ["auto_confirmed"]
+
+# ── 界面优化 §7：样本停用后重新确认的复活修复 ────────────────────────────────
+
+
+def _confirmed_samples_world():
+    """一簇两观测（同人跨照片）→ 人工终审确认 → 样本与投影就绪。"""
+    harness = _Harness()
+    person = harness.add_person("张三", 1)
+    photo_a = uuid4()
+    harness.add_photo_snapshot(photo_a, "photos/a.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    o2 = harness.add_observation(uuid4(), 0, 6.0)
+    cluster_run = harness.add_generation([
+        ("k|a|000000", [o1, o2]),
+    ])
+    cluster = harness.clusters.list_clusters(cluster_run.id)[0]
+    _, workbench, results, _ = harness.build_services()
+    result = workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=cluster.id, person_id=person.id),
+        actor=HUMAN_ACTOR,
+    )
+    assert result.status == "confirmed"
+    assert result.samples_written == 2
+    return harness, workbench, results, cluster_run, cluster, person, o1, o2
+
+
+def test_samples_revive_after_unassign_then_reconfirm():
+    """停用 → 重新确认同映射：样本恢复启用（不新增行）。"""
+    harness, workbench, results, cluster_run, cluster, person, o1, o2 = (
+        _confirmed_samples_world()
+    )
+
+    workbench.unassign(UnassignClusterCommand(cluster.id), actor=HUMAN_ACTOR)
+    disabled = harness.samples.list_by_person(person.id)
+    assert len(disabled) == 2
+    assert all(not sample.enabled for sample in disabled)
+
+    result = workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=cluster.id, person_id=person.id),
+        actor=HUMAN_ACTOR,
+    )
+
+    assert result.samples_written == 0  # 无新增沉淀
+    revived = harness.samples.list_by_person(person.id)
+    assert len(revived) == 2  # 零重复：仍只有两行
+    assert {sample.observation_id for sample in revived} == {o1.id, o2.id}
+    assert all(sample.enabled for sample in revived)
+    assert len(harness.samples.list_enabled()) == 2
+
+
+def test_samples_revive_after_reassign_to_same_person():
+    """改派（同一人）路径：旧行退休 + 样本停用 → 新 manual 行确认恢复样本。"""
+    harness, workbench, results, cluster_run, cluster, person, o1, o2 = (
+        _confirmed_samples_world()
+    )
+
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=cluster.id, person_id=person.id),
+        actor=HUMAN_ACTOR,
+    )
+
+    samples = harness.samples.list_by_person(person.id)
+    assert len(samples) == 2
+    assert all(sample.enabled for sample in samples)
+
+
+def test_double_assign_keeps_single_sample_row_per_observation():
+    """重复确认不产生重复样本（UNIQUE(person_id, observation_id) 契约）。"""
+    harness, workbench, results, cluster_run, cluster, person, o1, o2 = (
+        _confirmed_samples_world()
+    )
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=cluster.id, person_id=person.id),
+        actor=HUMAN_ACTOR,
+    )
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=cluster.id, person_id=person.id),
+        actor=HUMAN_ACTOR,
+    )
+    samples = harness.samples.list_by_person(person.id)
+    assert len(samples) == 2
+    assert len({sample.observation_id for sample in samples}) == 2
+
+
+def test_sample_state_tracks_projection_after_unassign_and_reconfirm():
+    """样本启用状态与照片归属投影状态保持同步（停用↔终结 / 启用↔恢复）。"""
+    harness, workbench, results, cluster_run, cluster, person, o1, o2 = (
+        _confirmed_samples_world()
+    )
+
+    workbench.unassign(UnassignClusterCommand(cluster.id), actor=HUMAN_ACTOR)
+    assert all(not s.enabled for s in harness.samples.list_by_person(person.id))
+
+    # 重新确认：样本恢复 + 投影恢复 approved。
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=cluster.id, person_id=person.id),
+        actor=HUMAN_ACTOR,
+    )
+    assert all(s.enabled for s in harness.samples.list_by_person(person.id))
+    active = results.assignments_active(cluster_run.id)
+    assert len(active) == 1 and active[0].status == "confirmed"
+
+
+def test_unrelated_person_samples_unaffected_by_revival():
+    """复活只作用于目标 (person, observation) 对——其他人员停用样本不动。"""
+    harness, workbench, results, cluster_run, cluster, person, o1, o2 = (
+        _confirmed_samples_world()
+    )
+    other = harness.add_person("李四", 2)
+    # 其他人员的一条停用样本（历史遗留，观测 o2 与本簇重叠仅为构造便利）。
+    from photo_archiver.domain import PersonFaceSample
+
+    other_sample = PersonFaceSample(
+        person_id=other.id, observation_id=o2.id,
+        embedding=FaceEmbedding((0.0, 1.0)),
+    )
+    harness.samples.add_samples([other_sample])
+    # 预置：其他人员的该样本已处于停用态（历史改派遗留）。
+    harness.samples.disable_samples(other.id, [o2.id])
+    assert all(not s.enabled for s in harness.samples.list_by_person(other.id))
+
+    workbench.unassign(UnassignClusterCommand(cluster.id), actor=HUMAN_ACTOR)
+    assert all(not s.enabled for s in harness.samples.list_by_person(other.id))
+
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=cluster.id, person_id=person.id),
+        actor=HUMAN_ACTOR,
+    )
+
+    other_samples = harness.samples.list_by_person(other.id)
+    assert len(other_samples) == 1
+    assert other_samples[0].enabled is False  # 其他人员的停用样本不被误恢复

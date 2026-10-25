@@ -200,14 +200,10 @@ def test_results_button_opens_readonly_dialog(qtbot, tmp_path, monkeypatch) -> N
     assert opened == [1]
 
 
-def test_pairing_workbench_button_opens_workbench(qtbot, tmp_path, monkeypatch) -> None:
+def test_pairing_workbench_entry_is_removed(qtbot, tmp_path, monkeypatch) -> None:
+    """界面优化 §5.6：独立配对工作台入口全部移除（含页面按钮与信号）。"""
     window = _make_window(qtbot, tmp_path, monkeypatch)
-    opened: list[int] = []
-    monkeypatch.setattr(
-        module, "PairingWorkbenchDialog",
-        lambda *a, **k: opened.append(1) or Mock(exec=Mock(return_value=0)),
-    )
-
-    window._people_admin_page._pairing_button.click()
-
-    assert opened == [1]
+    page = window._people_admin_page
+    assert not hasattr(page, "_pairing_button")
+    assert not hasattr(page, "pairing_workbench_requested")
+    assert not hasattr(module, "PairingWorkbenchDialog")

@@ -79,5 +79,15 @@ class PersonFaceSampleRepository(Protocol):
         停用样本不参与未来候选建议。Returns 停用行数（已停用的不重复计）。
         """
 
+    def enable_samples(
+        self, person_id: UUID, observation_ids: Sequence[UUID],
+    ) -> int:
+        """界面优化 §7：重新确认后恢复此前停用的样本（enabled 0 → 1）。
+
+        只作用于指定 (person, observation) 对——不触碰其他人员的样本，
+        不产生新行（UNIQUE(person_id, observation_id) 语义保持）。Returns
+        恢复行数（已启用的不重复计）。
+        """
+
     def list_by_person(self, person_id: UUID) -> list[PersonFaceSample]:
         """Return one person's samples（含停用），确定性顺序。"""

@@ -163,3 +163,28 @@ class InMemoryPersonFaceSampleRepository(PersonFaceSampleRepository):
                 self._samples[sample.id] = replacement
                 disabled += 1
         return disabled
+
+    def enable_samples(
+        self, person_id: UUID, observation_ids: Sequence[UUID],
+    ) -> int:
+        """界面优化 §7：恢复此前停用的样本（enabled 0 → 1，不产生新行）。"""
+        targets = set(observation_ids)
+        enabled = 0
+        for sample in self._samples.values():
+            if (
+                sample.person_id == person_id
+                and not sample.enabled
+                and sample.observation_id in targets
+            ):
+                replacement = PersonFaceSample(
+                    person_id=sample.person_id,
+                    observation_id=sample.observation_id,
+                    embedding=sample.embedding,
+                    quality_score=sample.quality_score,
+                    enabled=True,
+                    id=sample.id,
+                    created_at=sample.created_at,
+                )
+                self._samples[sample.id] = replacement
+                enabled += 1
+        return enabled

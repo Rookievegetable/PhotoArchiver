@@ -12,6 +12,7 @@ from photo_archiver.domain import (
     FolderRepository,
     ImportBatchRepository,
     PersonRepository,
+    PhotoIgnoreStateRepository,
     PhotoRepository,
     RecognitionRepository,
     RecognitionRunRepository,
@@ -33,6 +34,7 @@ from photo_archiver.infrastructure import (
     SQLiteImportBatchRepository,
     SQLitePersonFaceSampleRepository,
     SQLitePersonRepository,
+    SQLitePhotoIgnoreStateRepository,
     SQLitePhotoRepository,
     SQLiteRecognitionRepository,
     SQLiteRecognitionRunRepository,
@@ -57,6 +59,7 @@ class ApplicationRepositories:
     cluster_assignments: ClusterPersonAssignmentRepository
     person_face_samples: PersonFaceSampleRepository
     import_batches: ImportBatchRepository
+    photo_ignore_states: PhotoIgnoreStateRepository
     calibration_annotations: CalibrationAnnotationRepository
 
 
@@ -83,6 +86,7 @@ def build_sqlite_repositories(database_path: Path) -> ApplicationRepositories:
         person_face_samples=SQLitePersonFaceSampleRepository(connection_provider),
         face_embeddings=SQLiteFaceEmbeddingRepository(connection_provider),
         import_batches=SQLiteImportBatchRepository(connection_provider),
+        photo_ignore_states=SQLitePhotoIgnoreStateRepository(connection_provider),
         calibration_annotations=SQLiteCalibrationAnnotationRepository(
             connection_provider
         ),

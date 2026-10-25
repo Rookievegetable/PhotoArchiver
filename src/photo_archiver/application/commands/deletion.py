@@ -24,6 +24,27 @@ class DeletePersonCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class DeletePeopleByBatchCommand:
+    """Request removal of one import batch's current members（界面优化 §4.3）.
+
+    batch_id: The import batch whose *current* ``source_batch_id`` members are
+    resolved at execution time (merge may have re-attributed people to other
+    batches — the preview snapshot is never trusted at execute time).
+    delete_batch_record: When True, also delete the ``import_batches`` row and
+    its draft rows (raw_values import trace) in the same transaction. Default
+    False — batch/draft records are kept.
+    """
+
+    batch_id: UUID
+    delete_batch_record: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ClearAllPeopleCommand:
+    """Request removal of every person in the registry（界面优化 §4.3）."""
+
+
+@dataclass(frozen=True, slots=True)
 class PruneMissingCommand:
     """Request pruning of confirmed missing-on-disk registrations (D5).
 

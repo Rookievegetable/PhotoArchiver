@@ -25,6 +25,9 @@ class ClusterMemberDetail:
     confidence: float
     quality_score: float | None = None
     captured_at: datetime | None = None
+    photo_face_count: int = 1
+    # 界面优化 §6.3：照片级处理结果（历史 run 为 None=未知，不伪造 0 脸）。
+    photo_outcome: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +40,9 @@ class ClusterDetailView:
     member_count: int
     first_captured_at: datetime | None
     members: tuple[ClusterMemberDetail, ...]
+    photo_count: int = 0
+    # 界面优化 §5.2/§5.3：照片数 = 簇内不同照片数（按 photo_id 去重）。
+    ignored_photo_ids: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

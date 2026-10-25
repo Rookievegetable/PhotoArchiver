@@ -66,6 +66,7 @@ class SuggestPairingsService:
         sample_repository: PersonFaceSampleRepository,
         similarity_factory: SimilarityKernelFactory,
         transaction_runner=None,
+        photo_ignore_repository=None,
     ) -> None:
         self._cluster_repository = cluster_repository
         self._observation_repository = observation_repository
@@ -75,6 +76,9 @@ class SuggestPairingsService:
         self._similarity_factory = similarity_factory
         # S1-F 同型：注入 run_immediate 时读集合→建议→准入→落库单事务；None 裸跑（测试）。
         self._transaction_runner = transaction_runner
+        # 界面优化 §3.1：注入后，被忽略照片（本代际作用域）的全部观测不进入
+        # 建议输入；None 保持历史行为（测试兼容）。
+        self._ignores = photo_ignore_repository
 
     def execute(self, command: StartSuggestPairingsCommand) -> "SuggestPairingsSummary":
         """生成建议并按准入结果落库；返回结果摘要。
@@ -106,6 +110,12 @@ class SuggestPairingsService:
         members_by_cluster: dict[UUID, list] = {}
         for member in self._cluster_repository.list_members(cluster_run.id):
             members_by_cluster.setdefault(member.cluster_id, []).append(member)
+        # §3.1：本代际被忽略照片的全部观测不参与建议生成（样本匹配向量与
+        # 成员索引一并排除；簇级位置配对资格不受照片级忽略影响）。
+        ignored_photo_ids = (
+            set(self._ignores.list_photo_ids(cluster_run.id))
+            if self._ignores is not None else set()
+        )
 
         # 向量空间：先组成员观测嵌入（簇序×成员序），再样本嵌入。
         cluster_views: list[PairingCluster] = []
@@ -119,6 +129,8 @@ class SuggestPairingsService:
                 observation = observations.get(member.observation_id)
                 if observation is None or not observation.embedding.vector:
                     continue  # 防御：成员观测缺失/嵌入无效不进入建议
+                if observation.photo_id in ignored_photo_ids:
+                    continue  # 被忽略照片：该代际内不参与建议输入
                 member_indices.append(len(vectors))
                 vectors.append(observation.embedding)
                 observation_ids_in_order.append(observation.id)

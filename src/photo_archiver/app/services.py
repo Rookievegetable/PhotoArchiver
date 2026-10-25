@@ -18,6 +18,7 @@ from photo_archiver.application import (
     ClusterFacesService,
     ClusterResultsService,
     DeletePersonService,
+    PhotoIgnoreService,
     BackfillHistoricalPeopleService,
     ListRecognitionRunsService,
     PairingWorkbenchService,
@@ -87,6 +88,7 @@ class ApplicationServices:
     list_recognition_runs: ListRecognitionRunsService
     cluster_results: ClusterResultsService
     suggest_pairings: SuggestPairingsService
+    photo_ignore: PhotoIgnoreService
     pairing_workbench: PairingWorkbenchService
     reference_intake: ReferenceIntakeService
     reference_eligibility: ReferenceEligibilityService
@@ -183,6 +185,15 @@ def build_application_services(
         assignment_repository=repositories.cluster_assignments,
         cluster_repository=repositories.face_clusters,
         observation_repository=repositories.face_observations,
+        photo_ignore_repository=repositories.photo_ignore_states,
+    )
+    photo_ignore_service = PhotoIgnoreService(
+        repositories.photo_ignore_states,
+        repositories.face_clusters,
+        repositories.face_observations,
+        repositories.cluster_assignments,
+        reconciler=projection_reconciler,
+        unit_of_work=unit_of_work,
     )
     pairing_workbench = PairingWorkbenchService(
         repositories.cluster_assignments,
@@ -311,6 +322,7 @@ def build_application_services(
         repositories.recognition,
         repositories.face_embeddings,
         unit_of_work=unit_of_work,
+        import_batch_repository=repositories.import_batches,
     )
     prune_missing_photos_service = PruneMissingPhotosService(
         repositories.photos,
@@ -374,8 +386,10 @@ def build_application_services(
             repositories.person_face_samples,
             NumpyCosineSimilarityFactory(),
             transaction_runner=connection_provider.run_immediate,
+            photo_ignore_repository=repositories.photo_ignore_states,
         ),
         pairing_workbench=pairing_workbench,
+        photo_ignore=photo_ignore_service,
         reference_intake=reference_intake_instance,
         reference_eligibility=reference_eligibility_instance,
         reference_snapshot=reference_snapshot_instance,
@@ -395,6 +409,7 @@ def build_application_services(
             repositories.face_observations,
             repositories.face_clusters,
             repositories.cluster_assignments,
+            photo_ignore_repository=repositories.photo_ignore_states,
         ),
         workspace_readiness=WorkspaceReadinessService(
             repositories.recognition,

@@ -17,6 +17,13 @@ from photo_archiver.domain import (
     RecognitionRepository, RecognitionResult, RecognitionRun,
     RecognitionRunRepository, RecognitionRunStats, RunPhotoSnapshot, classify_scope,
 )
+from photo_archiver.domain.entities.recognition_run import (
+    RUN_PHOTO_OUTCOME_ERROR,
+    RUN_PHOTO_OUTCOME_FACES,
+    RUN_PHOTO_OUTCOME_NO_FACE,
+    RUN_PHOTO_OUTCOME_NOT_PROCESSED,
+    RUN_PHOTO_OUTCOME_UNREADABLE,
+)
 
 _OBSERVATION_FLUSH_SIZE = 50
 
@@ -64,7 +71,8 @@ class RunRecognitionService(RunRecognitionUseCase):
                     captured_by_photo[photo_id] = photo.captured_at
         self._run_repository.add_run_photos(run_id, [
             RunPhotoSnapshot(run_id, photo_id, str(image),
-                             captured_at=captured_by_photo.get(photo_id))
+                             captured_at=captured_by_photo.get(photo_id),
+                             photo_outcome=RUN_PHOTO_OUTCOME_NOT_PROCESSED)
             for photo_id, image in zip(command.photo_ids, command.images)
         ])
         run.start()
@@ -101,10 +109,13 @@ class RunRecognitionService(RunRecognitionUseCase):
                     if self._cancel_event.is_set():
                         break
                     processed += 1
-                    photo_stats, observations, compatibility = self._consume_result(
+                    photo_stats, observations, compatibility, outcome = self._consume_result(
                         run_id, result, candidates, command.selected_ranges)
                     stats = _add_stats(stats, photo_stats)
                     pending.extend(observations)
+                    # 界面优化 §6.2：状态来自实际处理分支，逐照片立即更新。
+                    self._run_repository.update_run_photo_outcome(
+                        run_id, result.photo_id, outcome)
                     if len(pending) >= _OBSERVATION_FLUSH_SIZE:
                         self._observation_repository.add_many(pending)
                         pending.clear()
@@ -130,15 +141,16 @@ class RunRecognitionService(RunRecognitionUseCase):
             raise
 
     def _consume_result(self, run_id, result, candidates, selected_ranges):
-        """Convert one pure result into stats, observations and a legacy row."""
+        """Convert one pure result into stats, observations, a legacy row and
+        the photo's processing outcome (界面优化 §6.2；状态来自实际分支)."""
         if result.unreadable:
-            return RecognitionRunStats(unreadable_count=1), [], None
+            return RecognitionRunStats(unreadable_count=1), [], None, RUN_PHOTO_OUTCOME_UNREADABLE
         if result.error is not None:
             logger.error("Face analysis failed - isolated: {}", result.photo_id, result.error)
-            return RecognitionRunStats(error_count=1), [], None
+            return RecognitionRunStats(error_count=1), [], None, RUN_PHOTO_OUTCOME_ERROR
         count = len(result.faces)
         if count == 0:
-            return RecognitionRunStats(no_face_count=1), [], None
+            return RecognitionRunStats(no_face_count=1), [], None, RUN_PHOTO_OUTCOME_NO_FACE
         ordered = sorted(result.faces, key=lambda pair: (
             -(pair.box.confidence or 0.0), pair.box.x1, pair.box.y1, pair.box.x2, pair.box.y2))
         verdict = classify_scope(count, selected_ranges)
@@ -158,7 +170,7 @@ class RunRecognitionService(RunRecognitionUseCase):
         return RecognitionRunStats(
             face_count=count, in_scope_photo_count=int(in_scope),
             out_of_scope_photo_count=int(not in_scope),
-        ), observations, compatibility
+        ), observations, compatibility, RUN_PHOTO_OUTCOME_FACES
 
     def _report(self, current: int, total: int, message: str) -> None:
         if self._progress_reporter is not None:

@@ -301,6 +301,27 @@ class SQLitePersonFaceSampleRepository(PersonFaceSampleRepository):
             )
             return cursor.rowcount
 
+    def enable_samples(
+        self, person_id: UUID, observation_ids: Sequence[UUID],
+    ) -> int:
+        """界面优化 §7：重新确认后恢复此前停用的样本（enabled 0 → 1）.
+
+        只作用于指定 (person, observation) 对；不产生新行——与
+        UNIQUE(person_id, observation_id) 约束一致。
+        """
+        unique_ids = list(dict.fromkeys(observation_ids))
+        if not unique_ids:
+            return 0
+        placeholders = ", ".join("?" for _ in unique_ids)
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE person_face_embeddings SET enabled = 1 "
+                "WHERE person_id = ? AND enabled = 0 "
+                f"AND observation_id IN ({placeholders})",
+                (str(person_id), *(str(observation_id) for observation_id in unique_ids)),
+            )
+            return cursor.rowcount
+
 
 def _sample_from_row(row) -> PersonFaceSample:
     return PersonFaceSample(

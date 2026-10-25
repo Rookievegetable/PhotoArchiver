@@ -19,6 +19,9 @@ from photo_archiver.infrastructure.repositories.in_memory_recognition_run_reposi
 from photo_archiver.infrastructure.repositories.in_memory_person_repository import (
     InMemoryPersonRepository,
 )
+from photo_archiver.infrastructure.repositories.in_memory_photo_ignore_state_repository import (
+    InMemoryPhotoIgnoreStateRepository,
+)
 from photo_archiver.infrastructure.repositories.in_memory_photo_repository import InMemoryPhotoRepository
 
 __all__ = [
@@ -29,5 +32,6 @@ __all__ = [
     "InMemoryFolderRepository",
     "InMemoryRecognitionRunRepository",
     "InMemoryPersonRepository",
+    "InMemoryPhotoIgnoreStateRepository",
     "InMemoryPhotoRepository",
 ]

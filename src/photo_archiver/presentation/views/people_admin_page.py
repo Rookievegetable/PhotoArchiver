@@ -48,9 +48,15 @@ from photo_archiver.domain import Person
 from photo_archiver.domain.exceptions import ValidationError
 from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.visual_style import ROLE_DANGER, ROLE_PRIMARY, assign_role
+from photo_archiver.presentation.views.batch_person_deletion_dialog import (
+    BatchPersonDeletionDialog,
+    ClearAllPeopleDialog,
+)
 from photo_archiver.presentation.views.person_deletion_dialog import PersonDeletionDialog
 from photo_archiver.presentation.views.person_edit_dialog import PersonEditDialog
 
+# 界面优化 §4.1：取消行内操作列——编辑移至工具栏（选中行生效），
+# 减少操作栏占用；身份/排序/批次归属/删除能力全部保留。
 _COLUMNS = (
     text.PEOPLE_PAGE_COL_ORDER,
     text.PEOPLE_PAGE_COL_NAME,
@@ -58,7 +64,6 @@ _COLUMNS = (
     text.PEOPLE_PAGE_COL_DEPARTMENT,
     text.PEOPLE_PAGE_COL_NOTE,
     text.PEOPLE_PAGE_COL_BATCH,
-    text.PEOPLE_PAGE_COL_ACTIONS,
 )
 
 
@@ -159,7 +164,6 @@ class PeopleAdminPage(QWidget):
     # D-4 聚类入口：页面只发请求信号，运行/对话框由主窗口按既有任务管线处理。
     cluster_run_requested = Signal()
     cluster_results_requested = Signal()
-    pairing_workbench_requested = Signal()
 
     def __init__(
         self,
@@ -221,6 +225,8 @@ class PeopleAdminPage(QWidget):
         self._add_button = QPushButton(text.PEOPLE_PAGE_ADD_BUTTON, self)
         self._add_button.clicked.connect(self._on_add_clicked)
         assign_role(self._add_button, ROLE_PRIMARY)
+        self._edit_button = QPushButton(text.PEOPLE_PAGE_EDIT_BUTTON, self)
+        self._edit_button.clicked.connect(self._on_edit_selected_clicked)
         self._move_up_button = QPushButton(text.PEOPLE_PAGE_MOVE_UP, self)
         self._move_up_button.clicked.connect(lambda: self.move_selected(-1))
         self._move_down_button = QPushButton(text.PEOPLE_PAGE_MOVE_DOWN, self)
@@ -228,8 +234,16 @@ class PeopleAdminPage(QWidget):
         self._delete_button = QPushButton(text.PEOPLE_PAGE_DELETE_BUTTON, self)
         self._delete_button.clicked.connect(self._on_delete_clicked)
         assign_role(self._delete_button, ROLE_DANGER)
+        self._delete_batch_button = QPushButton(text.PEOPLE_PAGE_DELETE_BATCH_BUTTON, self)
+        self._delete_batch_button.clicked.connect(self._on_delete_batch_clicked)
+        assign_role(self._delete_batch_button, ROLE_DANGER)
+        self._clear_all_button = QPushButton(text.PEOPLE_PAGE_CLEAR_ALL_BUTTON, self)
+        self._clear_all_button.clicked.connect(self._on_clear_all_clicked)
+        assign_role(self._clear_all_button, ROLE_DANGER)
         for widget in (
-            self._add_button, self._move_up_button, self._move_down_button, self._delete_button,
+            self._add_button, self._edit_button, self._move_up_button,
+            self._move_down_button, self._delete_button, self._delete_batch_button,
+            self._clear_all_button,
         ):
             toolbar_row.addWidget(widget)
         toolbar_row.addStretch()
@@ -356,11 +370,6 @@ class PeopleAdminPage(QWidget):
                         item = QTableWidgetItem(value)
                         item.setToolTip(value)
                         self._table.setItem(row_index, column, item)
-                    edit_button = QPushButton(text.PEOPLE_PAGE_EDIT_BUTTON, self._table)
-                    edit_button.clicked.connect(
-                        lambda _checked=False, person=person: self._on_edit_clicked(person),
-                    )
-                    self._table.setCellWidget(row_index, len(_COLUMNS) - 1, edit_button)
                 if people:
                     self._empty_label.clear()
                 else:
@@ -384,6 +393,7 @@ class PeopleAdminPage(QWidget):
         last_index = self._table.rowCount() - 1
         self._move_up_button.setEnabled(reorderable and index > 0)
         self._move_down_button.setEnabled(reorderable and 0 <= index < last_index)
+        self._edit_button.setEnabled(self._selected_person() is not None)
         self._delete_button.setEnabled(self._selected_person() is not None)
 
     def _selected_row_index(self) -> int:
@@ -419,6 +429,12 @@ class PeopleAdminPage(QWidget):
             return
         logger.info("People page added person {}", person.id)
         self._after_mutation(text.PEOPLE_PAGE_ADDED.format(name=person.name))
+
+    def _on_edit_selected_clicked(self) -> None:
+        """编辑选中行的人员资料（工具栏入口；§4.1 去行内操作列）。"""
+        person = self._selected_person()
+        if person is not None:
+            self._on_edit_clicked(person)
 
     def _on_edit_clicked(self, person: Person) -> None:
         """Edit one person's fields through the form dialog."""
@@ -467,6 +483,29 @@ class PeopleAdminPage(QWidget):
         )
         self._after_mutation(text.PEOPLE_PAGE_DELETED.format(name=person_name))
 
+    def _on_delete_batch_clicked(self) -> None:
+        """按导入批次删除人员（界面优化 §4.3；预览+二次确认+可选清理）。"""
+        if not self._batches:
+            self._warn(text.PEOPLE_PAGE_EMPTY)
+            return
+        dialog = BatchPersonDeletionDialog(
+            self._manage_people, self._delete_person, parent=self,
+        )
+        if not dialog.exec():
+            return
+        logger.info("People page deleted one import batch's people")
+        self._after_mutation(dialog.last_message())
+
+    def _on_clear_all_clicked(self) -> None:
+        """清空所有人员（界面优化 §4.3；显式知悉勾选 + 单事务执行）。"""
+        dialog = ClearAllPeopleDialog(
+            self._manage_people, self._delete_person, parent=self,
+        )
+        if not dialog.exec():
+            return
+        logger.info("People page cleared all people")
+        self._after_mutation(dialog.last_message())
+
     # ── Reordering ──────────────────────────────────────────────────────
 
     def move_selected(self, offset: int) -> None:
@@ -510,7 +549,9 @@ class PeopleAdminPage(QWidget):
             return
         logger.info("People page reordered {} people", updated)
         self._after_mutation(
-            text.PEOPLE_PAGE_REORDERED.format(count=updated), structure_changed=False,
+            text.PEOPLE_PAGE_REORDERED.format(count=updated)
+            + " " + text.PEOPLE_PAGE_REORDER_HINT,
+            structure_changed=False,
         )
 
     # ── D-4 聚类入口 ───────────────────────────────────────────────────
@@ -535,9 +576,6 @@ class PeopleAdminPage(QWidget):
         self._cluster_results_button = QPushButton(text.CLUSTER_PAGE_RESULTS_BUTTON, group)
         self._cluster_results_button.clicked.connect(self.cluster_results_requested.emit)
         row.addWidget(self._cluster_results_button)
-        self._pairing_button = QPushButton(text.PAIRING_WORKBENCH_ENTRY_BUTTON, group)
-        self._pairing_button.clicked.connect(self.pairing_workbench_requested.emit)
-        row.addWidget(self._pairing_button)
         row.addStretch()
         group_layout.addLayout(row)
         hint = QLabel(text.CLUSTER_PAGE_HINT, group)
@@ -586,7 +624,6 @@ class PeopleAdminPage(QWidget):
             has_results = bool(self._cluster_results.list_cluster_runs(run_id))
         self._cluster_run_button.setEnabled(run_id is not None)
         self._cluster_results_button.setEnabled(has_results)
-        self._pairing_button.setEnabled(run_id is not None)
         self._cluster_hint.setText(
             "" if run_id is not None else text.CLUSTER_PAGE_NO_RUNS
         )

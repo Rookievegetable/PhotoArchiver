@@ -26,6 +26,7 @@ from photo_archiver.application.services.cluster_results_service import ClusterR
 from photo_archiver.application.services.recognition_failure_service import RecognitionFailureService
 from photo_archiver.application.services.list_recognition_runs_service import ListRecognitionRunsService
 from photo_archiver.application.services.pairing_workbench_service import PairingWorkbenchService
+from photo_archiver.application.services.photo_ignore_service import PhotoIgnoreService
 from photo_archiver.application.services.suggest_pairings_service import SuggestPairingsService
 from photo_archiver.application.services.run_recognition_service import RunRecognitionService
 from photo_archiver.application.services.plugin_context_service import PluginContextService
@@ -70,6 +71,7 @@ __all__ = [
     "RecognitionFailureService",
     "ListRecognitionRunsService",
     "PairingWorkbenchService",
+    "PhotoIgnoreService",
     "SuggestPairingsService",
     "RunRecognitionService",
     "FaceAnalysisTask",

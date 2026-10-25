@@ -35,11 +35,60 @@ class ClusterResultsService:
         face_observation_repository: FaceObservationRepository,
         face_cluster_repository: FaceClusterRepository,
         assignment_repository: ClusterPersonAssignmentRepository | None = None,
+        photo_ignore_repository=None,
     ) -> None:
         self._run_repository = recognition_run_repository
         self._observation_repository = face_observation_repository
         self._cluster_repository = face_cluster_repository
         self._assignment_repository = assignment_repository
+        # 界面优化 §3.1：注入后可查询每代际的被忽略照片（展示标记用）。
+        self._ignore_repository = photo_ignore_repository
+
+    def ignored_photo_ids(self, cluster_run_id: UUID) -> set[UUID]:
+        """Return the generation's ignored photo ids (empty when port absent)."""
+        if self._ignore_repository is None:
+            return set()
+        return set(self._ignore_repository.list_photo_ids(cluster_run_id))
+
+    def run_photo_outcome_summary(
+        self, recognition_run_id: UUID,
+    ) -> dict[str, int]:
+        """Per-outcome photo counts of one recognition run（界面优化 §5.3）.
+
+        返回键：total/not_processed/faces/no_face/unreadable/error/unknown；
+        ``unknown`` 是历史 run 的 NULL 状态计数——展示为"未知"，绝不并入
+        no_face。照片是否属于 run 由本计数（输入快照行）判断。
+        """
+        summary = {
+            "total": 0, "not_processed": 0, "faces": 0, "no_face": 0,
+            "unreadable": 0, "error": 0, "unknown": 0,
+        }
+        for snapshot in self._run_repository.list_run_photos(recognition_run_id):
+            summary["total"] += 1
+            if snapshot.photo_outcome is None:
+                summary["unknown"] += 1
+            else:
+                summary[snapshot.photo_outcome] = (
+                    summary.get(snapshot.photo_outcome, 0) + 1
+                )
+        return summary
+
+    def active_person_ids(self, cluster_run_id: UUID) -> set[UUID]:
+        """Distinct persons among the generation's active decisions（§5.3 口径）.
+
+        口径固定为当前有效决策（suggested / auto_confirmed / confirmed）
+        涉及的不同 ``person_id``——是"当前有效决策涉及的人物数"，不是视觉
+        算法识别出的真实人数。
+        """
+        if self._assignment_repository is None:
+            return set()
+        return {
+            assignment.person_id
+            for assignment in self._assignment_repository.list_active_by_cluster_run(
+                cluster_run_id,
+            )
+            if assignment.person_id is not None
+        }
 
     def list_cluster_runs(self, recognition_run_id: UUID) -> list[FaceClusterRun]:
         """Return the recognition run's clustering generations, newest first."""
@@ -71,17 +120,20 @@ class ClusterResultsService:
         members_by_cluster: dict[UUID, list[FaceClusterMember]] = {}
         for member in self._cluster_repository.list_members(cluster_run_id):
             members_by_cluster.setdefault(member.cluster_id, []).append(member)
+        ignored_photo_ids = self.ignored_photo_ids(cluster_run_id)
         clusters: list[ClusterDetailView] = []
         for cluster in self._cluster_repository.list_clusters(cluster_run_id):
             if cluster.id is None:  # pragma: no cover - 实体恒生成 id
                 continue
             clusters.append(self._detail(
                 cluster, members_by_cluster.get(cluster.id, []), observations, photo_meta,
+                ignored_photo_ids,
             ))
         return ClusterRunResults(cluster_run=cluster_run, clusters=tuple(clusters))
 
     @staticmethod
-    def _detail(cluster, members, observations, photo_meta) -> ClusterDetailView:
+    def _detail(cluster, members, observations, photo_meta, ignored_photo_ids=frozenset(),
+    ) -> ClusterDetailView:
         """Build one cluster's read view; members whose observation vanished
         （正常不会发生——FK 级联会同步删除成员行）被防御性跳过。"""
         members_out: list[ClusterMemberDetail] = []
@@ -106,10 +158,17 @@ class ClusterResultsService:
                 confidence=member.confidence,
                 quality_score=observation.quality_score,
                 captured_at=snapshot.captured_at if snapshot is not None else None,
+                photo_face_count=observation.photo_face_count,
+                photo_outcome=(
+                    snapshot.photo_outcome if snapshot is not None else None
+                ),
             ))
         # 展示顺序按（照片路径, 脸序号）确定性排序——仓储按成员 id 排序，
         # 直接透出会让成员行在两次刷新间随机换位。
         members_out.sort(key=lambda member: (member.photo_path, member.face_index))
+        cluster_photo_ids = {
+            member.photo_id for member in members_out if member.photo_id is not None
+        }
         return ClusterDetailView(
             cluster_id=cluster.id,
             ordinal=cluster.ordinal,
@@ -117,4 +176,8 @@ class ClusterResultsService:
             member_count=cluster.member_count,
             first_captured_at=cluster.first_captured_at,
             members=tuple(members_out),
+            photo_count=len(cluster_photo_ids),
+            ignored_photo_ids=tuple(sorted(
+                cluster_photo_ids & set(ignored_photo_ids), key=str,
+            )),
         )

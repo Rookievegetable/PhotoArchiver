@@ -55,6 +55,7 @@ from photo_archiver.domain.entities.import_batch import (
 )
 from photo_archiver.domain.entities.person import Person
 from photo_archiver.domain.entities.photo import Photo
+from photo_archiver.domain.entities.photo_ignore_state import PhotoIgnoreState
 from photo_archiver.domain.entities.recognition import MatchStatus, RecognitionResult
 from photo_archiver.domain.entities.recognition_run import (
     RecognitionRun,
@@ -112,6 +113,7 @@ __all__ = [
     "MatchStatus",
     "Person",
     "Photo",
+    "PhotoIgnoreState",
     "RecognitionResult",
     "RecognitionRun",
     "RecognitionRunStats",

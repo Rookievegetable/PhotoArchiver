@@ -11,10 +11,20 @@ from uuid import UUID
 
 from loguru import logger
 
-from photo_archiver.application.commands.deletion import DeletePersonCommand
-from photo_archiver.application.dtos.deletion import PersonDeletionPreview, PersonDeletionResult
+from photo_archiver.application.commands.deletion import (
+    ClearAllPeopleCommand,
+    DeletePeopleByBatchCommand,
+    DeletePersonCommand,
+)
+from photo_archiver.application.dtos.deletion import (
+    BatchRosterDeletionPreview,
+    BatchRosterDeletionResult,
+    PersonDeletionPreview,
+    PersonDeletionResult,
+)
 from photo_archiver.application.ports import UnitOfWork
 from photo_archiver.application.use_cases.deletion import DeletePersonUseCase
+from photo_archiver.domain.entities.person import Person
 from photo_archiver.domain.repositories import (
     FaceEmbeddingRepository,
     PersonRepository,
@@ -33,6 +43,7 @@ class DeletePersonService(DeletePersonUseCase):
         recognition_repository: RecognitionRepository,
         face_embedding_repository: FaceEmbeddingRepository,
         unit_of_work: UnitOfWork | None = None,
+        import_batch_repository=None,
     ) -> None:
         """Initialize the service with its ports.
 
@@ -46,12 +57,15 @@ class DeletePersonService(DeletePersonUseCase):
             recognition_repository: Orphan-attribution counting for the preview.
             face_embedding_repository: CASCADE counting for the preview.
             unit_of_work: Optional transactional scope; ``None`` persists bare.
+            import_batch_repository: Batch record/draft cleanup port（界面优化
+                §4.3）；``None`` 时批次清理方法不可用（构造期不要求）。
         """
         self._people = person_repository
         self._photos = photo_repository
         self._recognition = recognition_repository
         self._embeddings = face_embedding_repository
         self._unit_of_work = unit_of_work
+        self._import_batches = import_batch_repository
 
     def preview(self, person_ids: Sequence[UUID]) -> PersonDeletionPreview:
         """Return the embedding/orphan-recognition preview; side-effect free."""
@@ -114,3 +128,139 @@ class DeletePersonService(DeletePersonUseCase):
             embedding_cascade=preview.embedding_count,
             recognition_orphaned=preview.recognition_count,
         )
+
+    # ── 界面优化 §4.3：按批次删除 / 清空全部人员 ────────────────────────
+
+    def _batch_members(self, batch_id: UUID) -> tuple[Person, ...]:
+        """Current batch members by execution-time ``source_batch_id`` query.
+
+        人员合并可能改写批次归属（confirm 的 merge/查重降级都会把既有人员
+        的 ``source_batch_id`` 改写为本批次）——删除范围必须基于执行时点的
+        当前归属，不得信任历史导入数量。
+        """
+        return tuple(
+            person for person in self._people.list_all()
+            if person.source_batch_id == batch_id
+        )
+
+    def _batch_preview(
+        self, person_ids: Sequence[UUID], people_names: Sequence[str],
+        batch_id: UUID | None,
+    ) -> BatchRosterDeletionPreview:
+        """Assemble the roster-level preview over the resolved member set."""
+        base = self.preview(person_ids)
+        batch_record_found = False
+        draft_row_count = 0
+        if batch_id is not None and self._import_batches is not None:
+            batch_record_found = self._import_batches.get_batch(batch_id) is not None
+            draft_row_count = len(self._import_batches.list_draft_rows(batch_id))
+        return BatchRosterDeletionPreview(
+            person_ids=tuple(base.person_ids),
+            people_names=tuple(people_names),
+            missing_ids=tuple(base.missing_ids),
+            embedding_count=base.embedding_count,
+            recognition_count=base.recognition_count,
+            batch_record_found=batch_record_found,
+            draft_row_count=draft_row_count,
+        )
+
+    def preview_batch(self, batch_id: UUID) -> BatchRosterDeletionPreview:
+        """Preview deleting one batch's current members（批量删除确认流）."""
+        members = self._batch_members(batch_id)
+        return self._batch_preview(
+            tuple(person.id for person in members if person.id is not None),
+            tuple(person.name for person in members),
+            batch_id,
+        )
+
+    def preview_clear_all(self) -> BatchRosterDeletionPreview:
+        """Preview deleting every person in the registry（清空确认流）."""
+        everyone = tuple(self._people.list_all())
+        return self._batch_preview(
+            tuple(person.id for person in everyone if person.id is not None),
+            tuple(person.name for person in everyone),
+            None,
+        )
+
+    def execute_batch(
+        self, command: DeletePeopleByBatchCommand,
+    ) -> BatchRosterDeletionResult:
+        """Delete the batch's current members; optionally the batch + drafts.
+
+        单事务边界（§8.5）：人员删除与可选的批次记录/草稿清理在同一个
+        unit of work 内——清理失败回滚整个删除，绝不误报全部成功。级联
+        计数取自删除前的同一事务内预览（与 preview() 同口径）。
+        """
+        batch_id = command.batch_id
+
+        def _run() -> BatchRosterDeletionResult:
+            members = self._batch_members(batch_id)
+            member_ids = [person.id for person in members if person.id is not None]
+            base = self.preview(tuple(member_ids))
+            removed = 0
+            for person_id in base.person_ids:
+                assert person_id is not None  # 实体 __post_init__ 保证
+                removed += self._people.remove(person_id)
+            batch_record_deleted = 0
+            draft_rows_deleted = 0
+            if command.delete_batch_record and self._import_batches is not None:
+                draft_rows_deleted = len(self._import_batches.list_draft_rows(batch_id))
+                batch_record_deleted = self._import_batches.remove_batch(batch_id)
+            return BatchRosterDeletionResult(
+                requested=base.person_count + base.missing_count,
+                removed=removed,
+                missing=base.missing_count,
+                embedding_cascade=base.embedding_count,
+                recognition_orphaned=base.recognition_count,
+                batch_record_deleted=batch_record_deleted,
+                draft_rows_deleted=draft_rows_deleted,
+            )
+
+        if self._unit_of_work is not None:
+            with self._unit_of_work:
+                result = _run()
+        else:
+            result = _run()
+        logger.info(
+            "AUDIT delete-people-by-batch actor=local-user batch={} removed={} "
+            "embedding_cascade={} recognition_orphaned={} batch_record_deleted={} "
+            "draft_rows_deleted={}",
+            batch_id, result.removed, result.embedding_cascade,
+            result.recognition_orphaned, result.batch_record_deleted,
+            result.draft_rows_deleted,
+        )
+        return result
+
+    def execute_clear_all(self, command: ClearAllPeopleCommand) -> BatchRosterDeletionResult:
+        """Delete every person in the registry（单事务，全有或全无）。"""
+
+        def _run() -> BatchRosterDeletionResult:
+            everyone = tuple(self._people.list_all())
+            base = self.preview(tuple(
+                person.id for person in everyone if person.id is not None
+            ))
+            removed = 0
+            for person_id in base.person_ids:
+                assert person_id is not None  # 实体 __post_init__ 保证
+                removed += self._people.remove(person_id)
+            return BatchRosterDeletionResult(
+                requested=base.person_count + base.missing_count,
+                removed=removed,
+                missing=base.missing_count,
+                embedding_cascade=base.embedding_count,
+                recognition_orphaned=base.recognition_count,
+                batch_record_deleted=0,
+                draft_rows_deleted=0,
+            )
+
+        if self._unit_of_work is not None:
+            with self._unit_of_work:
+                result = _run()
+        else:
+            result = _run()
+        logger.info(
+            "AUDIT clear-all-people actor=local-user removed={} "
+            "embedding_cascade={} recognition_orphaned={}",
+            result.removed, result.embedding_cascade, result.recognition_orphaned,
+        )
+        return result
