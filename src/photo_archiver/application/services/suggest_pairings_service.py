@@ -35,6 +35,10 @@ from photo_archiver.domain.entities.cluster_assignment import (
 from photo_archiver.domain.services.positional_auto_confirm import (
     evaluate_positional_auto_confirm,
 )
+from photo_archiver.domain.entities.face_cluster import (
+    CLUSTER_STATUS_IGNORED,
+    CLUSTER_STATUS_UNKNOWN,
+)
 from photo_archiver.domain.repositories.cluster_assignment_repository import (
     ClusterPersonAssignmentRepository,
     PersonFaceSampleRepository,
@@ -100,7 +104,14 @@ class SuggestPairingsService:
                 f"FaceClusterRun {command.cluster_run_id} does not exist"
             )
         assert cluster_run.id is not None
-        clusters = self._cluster_repository.list_clusters(cluster_run.id)
+        # LOGIC-04（Owner 决策）：簇级 ignored/unknown 在入口一次性排除——既不进
+        # 规则① sample_match 的相似度建议输入，也不进规则③ 位置自动确认候选
+        # （evaluate_positional_auto_confirm 全仓唯一调用点在本服务内，无绕过
+        # 入口）。照片级忽略（§3.1 观测级排除）是独立语义，不受影响。
+        clusters = [
+            cluster for cluster in self._cluster_repository.list_clusters(cluster_run.id)
+            if cluster.status not in (CLUSTER_STATUS_IGNORED, CLUSTER_STATUS_UNKNOWN)
+        ]
         observations = {
             observation.id: observation
             for observation in self._observation_repository.list_by_run(

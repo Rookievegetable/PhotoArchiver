@@ -39,7 +39,9 @@ def test_terminal_requeries_persisted_rows_without_losing_current_filter(
 
     # A changed filter during execution must win over the initial snapshot.
     window._on_filter_changed(PhotoSearchCriteria(match_status=MatchStatus.APPROVED))
-    current = PhotoSearchCriteria(person_id=person.id, match_status=MatchStatus.PENDING)
+    # UI-01 approved-only：person 轴只认 approved 归属——selected 用 approved
+    # 行的照片；pending 猜测行（partial.jpg）不再命中人员轴，恰好固化新契约。
+    current = PhotoSearchCriteria(person_id=person.id, match_status=MatchStatus.APPROVED)
     window._on_filter_changed(current)
     assert window._photo_list_model.rowCount() == 0
 
@@ -53,7 +55,7 @@ def test_terminal_requeries_persisted_rows_without_losing_current_filter(
             if approved:
                 result.approve()
             repositories.recognition.add(result)
-        if name == "partial.jpg":
+        if name == "excluded.jpg":
             selected = photo.id
     assert window._photo_list_model.rowCount() == 0
     event = {

@@ -338,14 +338,14 @@ def test_person_and_date_filtered_export_csv(qtbot, tmp_path, monkeypatch) -> No
     _run_export(qtbot, window, tmp_path / "person_date.csv", "csv", monkeypatch)
 
     sections = _sections(_read_csv(tmp_path / "person_date.csv"))
-    # Main set: only C (Alice's 2024 photo). A excluded by date, B by person.
-    assert {row[4] for row in sections["photos"]} == {"alice_party.jpg"}
-    assert {row[8] for row in sections["matches"]} == {"rejected", "pending"}
-    assert str(seeded["photo_a_id"]) not in {row[3] for row in sections["matches"]}
-    assert str(seeded["photo_b_id"]) not in {row[3] for row in sections["matches"]}
+    # UI-01 approved-only 口径：Alice 名下 2024 照片（alice_party）只有 pending
+    # 猜测/rejected 行——不再计入人员轴主集；A（approved）是 2023 年被 date
+    # 轴排除 → 主集为空，导出 header-only。
+    assert sections["photos"] == []
+    assert sections["matches"] == []
     flat = {cell for row in _read_csv(tmp_path / "person_date.csv") for cell in row}
+    assert "alice_party.jpg" not in flat
     assert "alice_portrait.jpg" not in flat and "bob_candid.jpg" not in flat
-    assert "0.87" not in flat and "0.92" not in flat and "0.81" not in flat
 
 
 def test_person_date_status_triple_filtered_export_csv(qtbot, tmp_path, monkeypatch) -> None:
@@ -361,10 +361,12 @@ def test_person_date_status_triple_filtered_export_csv(qtbot, tmp_path, monkeypa
     _run_export(qtbot, window, tmp_path / "triple.csv", "csv", monkeypatch)
 
     sections = _sections(_read_csv(tmp_path / "triple.csv"))
-    assert {row[4] for row in sections["photos"]} == {"alice_party.jpg"}
-    # matches stay ALL statuses of the main set (F4): rejected + pending of C.
-    assert {row[8] for row in sections["matches"]} == {"rejected", "pending"}
+    # UI-01 approved-only 口径：alice_party 对 Alice 只有 rejected/pending 行，
+    # 不再计入人员轴主集 → 主集与 matches（F4 跟随主集）均为空。
+    assert sections["photos"] == []
+    assert sections["matches"] == []
     flat = {cell for row in _read_csv(tmp_path / "triple.csv") for cell in row}
+    assert "alice_party.jpg" not in flat
     assert "alice_portrait.jpg" not in flat and "bob_candid.jpg" not in flat
 
 
@@ -396,7 +398,9 @@ def test_export_always_uses_latest_criteria_not_stale(qtbot, tmp_path, monkeypat
     first_sections = _sections(_read_csv(tmp_path / "first.csv"))
     second_sections = _sections(_read_csv(tmp_path / "second.csv"))
     assert {row[4] for row in first_sections["photos"]} == {"bob_candid.jpg"}
-    assert {row[4] for row in second_sections["photos"]} == {"alice_party.jpg"}
-    # criteria leakage across runs would merge the two main sets — forbid it.
+    # UI-01 approved-only 口径：Alice 的 2024 照片只有 pending 猜测/rejected 行
+    # → 第二次导出主集为空；若 criteria 跨轮泄漏，bob_candid 会混入 second
+    # 主集——空集断言同样捕获该泄漏。
+    assert {row[4] for row in second_sections["photos"]} == set()
     flat_first = {cell for row in _read_csv(tmp_path / "first.csv") for cell in row}
     assert "alice_party.jpg" not in flat_first

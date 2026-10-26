@@ -201,14 +201,23 @@ class SQLitePhotoRepository(PhotoRepository):
         传 ``UNMATCHED`` 哨兵时改走 ``LEFT JOIN ... IS NULL``，反向选择完全无
         识别结果的照片（此时行天然唯一，无需去重）；与 person_id 组合在语义上
         矛盾（命中人物要求存在识别行），恒返回空表。
+
+        UI-01（Owner 决策）：person 轴只认**已批准归属**——条件为
+        ``person_id = ? AND status = 'approved'``，与归档口径
+        （``list_approved_by_person``）一致。pending 行携带 matcher 猜测身份，
+        不得作为人员照片墙/导出的归属依据。与 ``match_status`` 组合时同一
+        ``rr`` 行须同时满足两轴条件：approved 行的 status 不再是其他值，故
+        ``person + 非 approved match_status`` 组合恒返回空表（与"命中人物要求
+        存在识别行"的既有组合语义同构）。
         """
         clauses: list[str] = []
         params: list[str] = []
         unmatched = isinstance(criteria.match_status, UnmatchedSentinel)
         join_needed = criteria.person_id is not None or criteria.match_status is not None
         if criteria.person_id is not None:
-            clauses.append("rr.person_id = ?")
+            clauses.append("rr.person_id = ? AND rr.status = ?")
             params.append(str(criteria.person_id))
+            params.append(MatchStatus.APPROVED.value)
         if unmatched:
             clauses.append("rr.photo_id IS NULL")
         elif isinstance(criteria.match_status, MatchStatus):

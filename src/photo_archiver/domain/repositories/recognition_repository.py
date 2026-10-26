@@ -3,10 +3,27 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Final, Protocol
 from uuid import UUID
 
 from photo_archiver.domain.entities import MatchStatus, RecognitionResult
+
+
+class UnsetSentinel:
+    """Marker distinguishing "argument not provided" from an explicit ``None``.
+
+    ``update_status`` 的 ``person_id`` 以 :data:`UNSET` 为默认值：调用方不传 →
+    列不被触碰（reject 路径语义）；显式传 ``None`` → 列清除为 SQL NULL（无身份
+    人工批准的落点是"匿名孤儿"态，matcher 猜测身份不得残留为人工裁决，LOGIC-01）。
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "UNSET"
+
+
+UNSET: Final[UnsetSentinel] = UnsetSentinel()
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,7 +196,7 @@ class RecognitionRepository(Protocol):
         self,
         result_id: UUID,
         status: MatchStatus,
-        person_id: UUID | None = None,
+        person_id: UUID | None | UnsetSentinel = UNSET,
         assignment_id: UUID | None = None,
     ) -> int:
         """Transition a recognition result's review status (and optionally identity).
@@ -193,7 +210,9 @@ class RecognitionRepository(Protocol):
         生产者），若只改 ``status``，批准后仍是 ``person_id IS NULL`` 的
         APPROVED 行——而归档只消费 ``person_id = ? AND status='approved'``，
         该行永远进不了归档计划，"人工批准的最终结果"与归档链路不一致。
-        传 ``None`` 表示不触碰该列（拒绝路径不需要身份）。
+        三态语义（LOGIC-01）：缺省 :data:`UNSET` 表示不触碰该列（拒绝路径
+        不需要身份）；显式传 ``None`` 表示**清除**该列——无身份人工批准不得
+        残留 matcher 猜测身份；传 UUID 写入该身份。
 
         Returns:
             The number of rows affected (1 on hit, 0 when the result id is

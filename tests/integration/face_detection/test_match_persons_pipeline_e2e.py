@@ -233,9 +233,14 @@ def test_review_approve_after_match_clears_pending(tmp_path: Path) -> None:
 
     assert transitioned is not None
     assert transitioned.status is MatchStatus.APPROVED
+    assert transitioned.person_id is None
     assert stack.recognition.list_pending() == []
-    approved = stack.recognition.list_approved_by_person(person.id)
-    assert [r.id for r in approved] == [pending[0].id]
+    # LOGIC-01：无身份批准清除 matcher 猜测身份——行落"匿名孤儿"态
+    # （approved + person_id NULL + assignment_id NULL），不进入归档口径。
+    row = stack.recognition.find_by_id(pending[0].id)
+    assert row is not None
+    assert row.person_id is None and row.assignment_id is None
+    assert stack.recognition.list_approved_by_person(person.id) == []
 
 
 def test_parallel_batch_persists_all_photos_in_order(tmp_path: Path) -> None:

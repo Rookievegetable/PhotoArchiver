@@ -8,6 +8,10 @@ from photo_archiver.domain import (
     RecognitionRepository,
     RecognitionResult,
 )
+from photo_archiver.domain.repositories.recognition_repository import (
+    UNSET,
+    UnsetSentinel,
+)
 
 
 class _RecordingRecognitionRepository(RecognitionRepository):
@@ -33,13 +37,15 @@ class _RecordingRecognitionRepository(RecognitionRepository):
     def list_pending(self) -> list:
         raise NotImplementedError
 
-    def update_status(self, result_id, status, person_id=None) -> int:
+    def update_status(self, result_id, status, person_id=UNSET) -> int:
         result = self._results.get(result_id)
         if result is None:
             return 0
         # Bypass approve()/reject() guards — service already transitioned the entity.
         result.status = status
-        if person_id is not None:
+        if not isinstance(person_id, UnsetSentinel):
+            # Mirror the SQLite semantics: UNSET leaves the column untouched;
+            # an explicit None clears a matcher-guessed identity (LOGIC-01).
             result.person_id = person_id
         self.added.append(result)
         return 1
@@ -113,7 +119,7 @@ def test_approve_returns_none_when_update_affects_zero_rows() -> None:
     """approve must return None when update_status signals concurrent deletion (0 rows)."""
 
     class _VanishingRepo(_RecordingRecognitionRepository):
-        def update_status(self, result_id, status, person_id=None) -> int:
+        def update_status(self, result_id, status, person_id=UNSET) -> int:
             return 0  # simulate concurrent deletion
 
     result = _make_result()
@@ -214,7 +220,7 @@ def test_approve_with_uow_rolls_back_when_update_raises() -> None:
     """
 
     class _RaisingRepo(_RecordingRecognitionRepository):
-        def update_status(self, result_id, status, person_id=None) -> int:
+        def update_status(self, result_id, status, person_id=UNSET) -> int:
             raise RuntimeError("simulated DB outage")
 
     result = _make_result()
@@ -259,3 +265,34 @@ def test_bulk_approve_with_uow_enters_once_per_item() -> None:
     assert uow.enter_calls == 2
     assert uow.commit_calls == 2
     assert uow.rollback_calls == 0
+
+
+def test_approve_without_identity_clears_guessed_person_in_memory() -> None:
+    """LOGIC-01: an approval without identity must clear a matcher-guessed person_id.
+
+    The matcher legitimately writes its guessed identity into pending rows for
+    the review-preview candidate picker; the anonymous-orphan contract demands
+    the approval path clear it so the in-memory aggregate matches the persisted
+    row (both land in the anonymous-orphan state).
+    """
+    guessed = uuid4()
+    result = RecognitionResult(photo_id=uuid4(), confidence=0.8, person_id=guessed)
+    repo = _RecordingRecognitionRepository({result.id: result})
+    service = ReviewRecognitionService(repo)
+    refreshed = service.approve(result.id)
+    assert refreshed is not None
+    assert refreshed.status is MatchStatus.APPROVED
+    assert refreshed.person_id is None
+    assert refreshed.assignment_id is None
+
+
+def test_reject_keeps_guessed_person_untouched() -> None:
+    """reject must keep its leave-identity-untouched semantics (UNSET sentinel)."""
+    guessed = uuid4()
+    result = RecognitionResult(photo_id=uuid4(), confidence=0.8, person_id=guessed)
+    repo = _RecordingRecognitionRepository({result.id: result})
+    service = ReviewRecognitionService(repo)
+    refreshed = service.reject(result.id)
+    assert refreshed is not None
+    assert refreshed.status is MatchStatus.REJECTED
+    assert refreshed.person_id == guessed

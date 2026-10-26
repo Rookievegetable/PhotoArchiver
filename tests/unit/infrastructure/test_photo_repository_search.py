@@ -261,7 +261,7 @@ def test_sqlite_and_in_memory_consistent_for_captured_range() -> None:
 
 
 def test_photo_repository_protocol_accepts_search() -> None:
-    """Protocol �契约：仓储替身可实现 search 而不破依赖。"""
+    """Protocol 契约：仓储替身可实现 search 而不破依赖。"""
 
     class _MinimalRepo:
         """Minimal stub satisfying the extended PhotoRepository protocol."""
@@ -289,3 +289,116 @@ def test_photo_repository_protocol_accepts_search() -> None:
 
     repository: PhotoRepository = _MinimalRepo()  # type: ignore[assignment]
     assert repository.search(PhotoSearchCriteria()) == []
+
+
+# ---- SQLite person 轴：approved-only 归属口径（UI-01，Owner 决策）----
+
+
+def _person_axis_world(tmp_path: Path):
+    """4 照片 × 甲/乙两人识别行：approved、pending 猜测、rejected、他人 approved。
+
+    全部 approved 行 ``assignment_id IS NULL``——即 legacy 人工决策形态
+    （归档口径 ``list_approved_by_person`` 的消费对象），验证同一口径。
+    """
+    from photo_archiver.app.repositories import build_sqlite_repositories
+    from photo_archiver.domain import Person, RecognitionResult
+
+    repos = build_sqlite_repositories(tmp_path / "ui01.sqlite3")
+    person = Person(name="人员甲", roster_order=1)
+    other = Person(name="人员乙", roster_order=2)
+    repos.people.add(person)
+    repos.people.add(other)
+
+    def add_photo(name: str) -> Photo:
+        photo = _make_photo(name, datetime(2026, 7, 1))
+        repos.photos.add(photo)
+        return photo
+
+    approved = add_photo("approved")
+    pending = add_photo("pending_guess")
+    rejected = add_photo("rejected")
+    other_photo = add_photo("other_person")
+
+    approved_row = RecognitionResult(
+        photo_id=approved.id, confidence=0.9, person_id=person.id,
+    )
+    approved_row.approve()  # legacy approved（assignment_id 保持 NULL）
+    repos.recognition.add(approved_row)
+    # matcher 猜测形态：pending 行携带猜测身份（审核预览候选）。
+    repos.recognition.add(RecognitionResult(
+        photo_id=pending.id, confidence=0.42, person_id=person.id,
+    ))
+    rejected_row = RecognitionResult(
+        photo_id=rejected.id, confidence=0.5, person_id=person.id,
+    )
+    rejected_row.reject()
+    repos.recognition.add(rejected_row)
+    other_row = RecognitionResult(
+        photo_id=other_photo.id, confidence=0.8, person_id=other.id,
+    )
+    other_row.approve()
+    repos.recognition.add(other_row)
+    return repos, person, other, approved, pending, rejected, other_photo
+
+
+def test_sqlite_person_axis_returns_only_approved(tmp_path: Path) -> None:
+    """人员轴只返回已批准归属：pending 猜测/rejected/他人照片全部排除。"""
+    repos, person, _other, approved, _pending, _rejected, _other_photo = (
+        _person_axis_world(tmp_path)
+    )
+
+    results = repos.photos.search(PhotoSearchCriteria(person_id=person.id))
+
+    assert [p.original_name for p in results] == ["approved"]
+
+
+def test_sqlite_person_axis_pending_guess_not_shown(tmp_path: Path) -> None:
+    """待审核关联（猜测 person_id 的 pending 行）不进入人员查询结果。"""
+    repos, person, _other, _approved, pending, _rejected, _other_photo = (
+        _person_axis_world(tmp_path)
+    )
+
+    results = repos.photos.search(PhotoSearchCriteria(person_id=person.id))
+
+    assert pending.id not in {p.id for p in results}
+    # 与归档口径互证：pending 猜测行不在 list_approved_by_person，也不在照片轴。
+    assert pending.id not in {
+        r.photo_id for r in repos.recognition.list_approved_by_person(person.id)
+    }
+
+
+def test_sqlite_person_axis_plus_non_approved_status_is_empty(tmp_path: Path) -> None:
+    """person + 非 approved match_status 组合恒空（同一 rr 行不可能双状态）。"""
+    repos, person, _other, *_rest = _person_axis_world(tmp_path)
+
+    assert repos.photos.search(PhotoSearchCriteria(
+        person_id=person.id, match_status=MatchStatus.PENDING,
+    )) == []
+
+
+def test_sqlite_person_axis_ordering_unchanged(tmp_path: Path) -> None:
+    """多张 approved 归属按 created_at, id 稳定排序（排序行为不回归）。"""
+    from photo_archiver.app.repositories import build_sqlite_repositories
+    from photo_archiver.domain import Person, RecognitionResult
+
+    repos = build_sqlite_repositories(tmp_path / "ui01_order.sqlite3")
+    person = Person(name="人员甲", roster_order=1)
+    repos.people.add(person)
+    photos = []
+    for index, captured in enumerate(
+        (datetime(2026, 7, 15), datetime(2026, 7, 1), datetime(2026, 7, 8)),
+    ):
+        photo = _make_photo_with_created(
+            f"p{index}", captured, captured,
+        )
+        repos.photos.add(photo)
+        row = RecognitionResult(
+            photo_id=photo.id, confidence=0.9, person_id=person.id,
+        )
+        row.approve()
+        repos.recognition.add(row)
+        photos.append(photo)
+
+    results = repos.photos.search(PhotoSearchCriteria(person_id=person.id))
+
+    assert [p.original_name for p in results] == ["p1", "p2", "p0"]

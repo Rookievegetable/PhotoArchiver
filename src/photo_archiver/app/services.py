@@ -203,6 +203,8 @@ def build_application_services(
         repositories.recognition,
         repositories.person_face_samples,
         reconciler=projection_reconciler,
+        # LOGIC-03/DATA-01：终审确认链单事务（S1-F9 同型 run_immediate）。
+        transaction_runner=connection_provider.run_immediate,
     )
     reference_intake_instance = ReferenceIntakeService(
         repositories.calibration_annotations,

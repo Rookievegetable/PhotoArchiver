@@ -144,6 +144,7 @@ class PairingWorkbenchService:
         recognition_repository: RecognitionRepository,
         sample_repository: PersonFaceSampleRepository,
         reconciler: ProjectionReconciler | None = None,
+        transaction_runner=None,
     ) -> None:
         self._assignment_repository = assignment_repository
         self._cluster_repository = cluster_repository
@@ -158,6 +159,11 @@ class PairingWorkbenchService:
             cluster_repository=cluster_repository,
             observation_repository=observation_repository,
         )
+        # LOGIC-03/DATA-01：注入 ``run_immediate`` 时 ``confirm`` 的读→校验→
+        # 决策行→样本→投影完整链在单个 BEGIN IMMEDIATE 事务内执行
+        # （identity_decision / suggest 同型）；缺省 ``None`` 保持历史裸跑
+        # （纯服务层测试路径兼容）。
+        self._transaction_runner = transaction_runner
 
     def get_assignment(self, assignment_id: UUID) -> ClusterPersonAssignment | None:
         """Read one decision row（UI 追溯展示用）。"""
@@ -166,7 +172,20 @@ class PairingWorkbenchService:
     # ── 确认建议 ────────────────────────────────────────────────────────
 
     def confirm(self, command: ConfirmAssignmentCommand) -> PairingOperationResult:
-        """Confirm one suggested assignment; sinks samples + compat results."""
+        """Confirm one suggested assignment; sinks samples + compat results.
+
+        LOGIC-03/DATA-01：注入 ``transaction_runner`` 时，整条确认链在单个
+        IMMEDIATE 事务内执行——中途任一写入失败整体回滚，不留下"已 confirmed
+        但样本/投影缺失"的半程状态；busy 冲突按整 attempt 重试，并发双确认由
+        BEGIN IMMEDIATE 串行化（败者在事务内重读状态机被拒，无冗余行）。
+        """
+        if self._transaction_runner is not None:
+            return self._transaction_runner(
+                lambda _connection: self._confirm_in_scope(command))
+        return self._confirm_in_scope(command)
+
+    def _confirm_in_scope(self, command: ConfirmAssignmentCommand) -> PairingOperationResult:
+        """Execute the full confirm chain inside the caller's transaction scope."""
         assignment = self._require_assignment(command.assignment_id)
         if assignment.status != "suggested":
             raise ValidationError(

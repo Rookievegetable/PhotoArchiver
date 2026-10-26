@@ -148,9 +148,11 @@ def test_status_axis_single_combinations(make_sqlite_context, tmp_path) -> None:
 def test_person_axis_single_combination(make_sqlite_context, tmp_path) -> None:
     _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
+    # UI-01 approved-only：alice_party 只有 pending 猜测/rejected 行，不再计入
+    # Alice 的人员轴；alice_portrait 有 approved 行（legacy 形态）。
     assert _paths(
         service.execute(PhotoSearchCriteria(person_id=ids["alice"].id)), ids
-    ) == {"alice_portrait.jpg", "alice_party.jpg"}
+    ) == {"alice_portrait.jpg"}
     assert _paths(
         service.execute(PhotoSearchCriteria(person_id=ids["bob"].id)), ids
     ) == {"bob_candid.jpg"}
@@ -170,12 +172,14 @@ def test_date_axis_single_combinations(make_sqlite_context, tmp_path) -> None:
 def test_person_and_date_double_combination(make_sqlite_context, tmp_path) -> None:
     _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
+    # UI-01 approved-only：Alice 名下 2024 照片只有 pending 猜测/rejected 行 →
+    # 不计入人员轴；approved 归属（portrait）是 2023 年 → 双轴组合为空。
     assert _paths(
         service.execute(
             PhotoSearchCriteria(person_id=ids["alice"].id, captured_from=_FROM_2024, captured_to=_TO_2024)
         ),
         ids,
-    ) == {"alice_party.jpg"}
+    ) == set()
 
 
 def test_person_and_status_double_combination(make_sqlite_context, tmp_path) -> None:
@@ -209,6 +213,8 @@ def test_date_and_status_double_combination(make_sqlite_context, tmp_path) -> No
 def test_person_date_status_triple_combination(make_sqlite_context, tmp_path) -> None:
     _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
+    # UI-01 approved-only：person 轴限定 approved 行，同一 rr 行不可能同时
+    # approved+pending → 三轴组合恒空（与"命中人物要求存在识别行"同构）。
     assert _paths(
         service.execute(
             PhotoSearchCriteria(
@@ -219,7 +225,7 @@ def test_person_date_status_triple_combination(make_sqlite_context, tmp_path) ->
             )
         ),
         ids,
-    ) == {"alice_party.jpg"}
+    ) == set()
     # Same triple with approved → empty (Alice's approved recognition is 2023).
     assert _paths(
         service.execute(
@@ -265,22 +271,27 @@ def test_multi_recognition_rows_yield_photo_exactly_once(make_sqlite_context, tm
     recognition-axis JOIN duplicated each of them per matching row. Set
     comparisons in the matrix above cannot see duplicates, so these list-level
     length assertions lock the dedupe.
+
+    UI-01 approved-only：person 轴只命中 approved 行（Alice 仅 photo_a），
+    DISTINCT 去重改由 status 轴（photo_a 的两行分别命中 PENDING/APPROVED 轴
+    各恰好一次）继续锁定。
     """
     _, ids = _seed(make_sqlite_context, tmp_path)
     service = ids["service"]
-    assert len(service.execute(PhotoSearchCriteria(person_id=ids["alice"].id))) == 2
+    assert len(service.execute(PhotoSearchCriteria(person_id=ids["alice"].id))) == 1
     assert len(service.execute(PhotoSearchCriteria(match_status=MatchStatus.PENDING))) == 2
     assert len(service.execute(PhotoSearchCriteria(match_status=MatchStatus.APPROVED))) == 2
     assert len(service.execute(PhotoSearchCriteria(match_status=MatchStatus.REJECTED))) == 1
     combined = service.execute(
         PhotoSearchCriteria(person_id=ids["alice"].id, match_status=MatchStatus.PENDING)
     )
-    assert len(combined) == 2
-    # Deduped rows keep the stable created_at/id ordering without gaps.
-    # (Sorted comparison: photos created in the same instant tie on
-    # created_at, so UUID tie-break order is not deterministic across runs.)
-    names = [photo.original_name for photo in combined]
-    assert sorted(names) == ["alice_party.jpg", "alice_portrait.jpg"]
+    assert len(combined) == 0
+    # Approved-attributed photo keeps the stable created_at/id ordering.
+    names = [
+        photo.original_name
+        for photo in service.execute(PhotoSearchCriteria(person_id=ids["alice"].id))
+    ]
+    assert names == ["alice_portrait.jpg"]
 
 
 def test_unmatched_sentinel_selects_photos_without_recognition_results(make_sqlite_context, tmp_path) -> None:

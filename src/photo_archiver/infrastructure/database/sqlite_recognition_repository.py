@@ -9,7 +9,11 @@ from photo_archiver.domain import (
     RecognitionResult,
     RecognitionRepository,
 )
-from photo_archiver.domain.repositories.recognition_repository import WorkspaceCounts
+from photo_archiver.domain.repositories.recognition_repository import (
+    UNSET,
+    UnsetSentinel,
+    WorkspaceCounts,
+)
 from photo_archiver.infrastructure.database.sqlite_connection import SQLiteConnectionProvider
 from photo_archiver.infrastructure.database.sqlite_mappers import (
     datetime_to_text,
@@ -450,7 +454,7 @@ class SQLiteRecognitionRepository(RecognitionRepository):
         self,
         result_id: UUID,
         status: MatchStatus,
-        person_id: UUID | None = None,
+        person_id: UUID | None | UnsetSentinel = UNSET,
         assignment_id: UUID | None = None,
     ) -> int:
         """Transition a recognition result's review status (and optionally identity).
@@ -459,7 +463,10 @@ class SQLiteRecognitionRepository(RecognitionRepository):
         supplied, so a manual approval can also record the decided identity —
         otherwise the approved row keeps ``person_id IS NULL`` and the archive
         planner (``WHERE person_id = ? AND status = 'approved'``) can never
-        consume it. ``None`` leaves the column untouched (reject path).
+        consume it. Three-state semantics (LOGIC-01): the ``UNSET`` default
+        leaves the column untouched (reject path); an explicit ``None`` clears
+        the column, so an approval without identity cannot retain a
+        matcher-guessed ``person_id``; a UUID records the decided identity.
 
         ``assignment_id`` (S1) is written only when supplied, and is used by
         :class:`ProjectionReconciler` to restore/retarget a projection. It is
@@ -470,16 +477,15 @@ class SQLiteRecognitionRepository(RecognitionRepository):
             missing). A 0 signals concurrent deletion rather than silent success.
         """
         assignments: list[str] = []
-        person_param: str | None = None
-        if person_id is not None:
-            person_param = str(person_id)
+        extra: tuple[str | None, ...] = ()
+        person_provided = not isinstance(person_id, UnsetSentinel)
+        if person_provided:
+            # Explicit call: ``None`` writes SQL NULL (clears a matcher-guessed
+            # identity), a UUID writes the decided identity.
             assignments.append("person_id = ?")
+            extra += (None if person_id is None else str(person_id),)
         if assignment_id is not None:
             assignments.append("assignment_id = ?")
-        extra: tuple[str | None, ...] = ()
-        if person_param is not None:
-            extra += (person_param,)
-        if assignment_id is not None:
             extra += (str(assignment_id),)
 
         statement = "UPDATE recognition_results SET status = ?"

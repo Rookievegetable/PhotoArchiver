@@ -31,6 +31,10 @@ from photo_archiver.application.services.identity_decision_service import (
 from photo_archiver.application.use_cases import ReviewRecognitionUseCase
 from photo_archiver.domain import MatchStatus, RecognitionRepository, RecognitionResult
 from photo_archiver.domain.exceptions import PhotoNotClusteredError
+from photo_archiver.domain.repositories.recognition_repository import (
+    UNSET,
+    UnsetSentinel,
+)
 
 
 class ReviewRecognitionService(ReviewRecognitionUseCase):
@@ -81,7 +85,9 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
         """
         if person_id is not None:
             return self._approve_with_identity(result_id, person_id, cluster_id)
-        return self._transition(result_id, MatchStatus.APPROVED)
+        # LOGIC-01: explicit ``None`` — the approval must clear a matcher-guessed
+        # ``person_id`` so the row lands in the contract's anonymous-orphan state.
+        return self._transition(result_id, MatchStatus.APPROVED, person_id=None)
 
     def _approve_with_identity(
         self, result_id: UUID, person_id: UUID, cluster_id: UUID | None = None,
@@ -164,15 +170,18 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
         self,
         result_id: UUID,
         target: MatchStatus,
-        person_id: UUID | None = None,
+        person_id: UUID | None | UnsetSentinel = UNSET,
     ) -> RecognitionResult | None:
         """Persist a status transition for a single result.
 
         Args:
             result_id: The recognition result identifier.
             target: The desired final status.
-            person_id: Stage 4 D-1 — the human-decided identity to write with
-                an approval. ``None`` leaves the column untouched.
+            person_id: Stage 4 D-1 with LOGIC-01 three-state semantics —
+                :data:`UNSET` (default) leaves the identity column untouched
+                (reject path); an explicit ``None`` clears it, so an approval
+                without identity cannot retain a matcher-guessed
+                ``person_id``; a UUID records the decided identity.
 
         Returns:
             The refreshed aggregate, or ``None`` when the result is missing or
@@ -191,9 +200,11 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
             return None
         if target is MatchStatus.APPROVED:
             result.approve()
-            if person_id is not None:
+            if not isinstance(person_id, UnsetSentinel):
                 # Keep the in-memory aggregate honest about what the DB will
-                # hold, so the returned entity matches the persisted row.
+                # hold, so the returned entity matches the persisted row. An
+                # explicit ``None`` clears a matcher-guessed identity — the
+                # contract's anonymous-orphan state (LOGIC-01).
                 result.person_id = person_id
         else:
             result.reject()
@@ -226,14 +237,16 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
         self,
         result: RecognitionResult,
         target: MatchStatus,
-        person_id: UUID | None = None,
+        person_id: UUID | None | UnsetSentinel = UNSET,
     ) -> int:
         """Persist the status (and optional identity) for the transitioned row.
 
-        ``update_status`` writes only the status column by default, avoiding the
-        wider upsert that ``add()`` would perform (which could overwrite
-        photo_id/confidence). Stage 4 D-1 passes ``person_id`` so a manual
-        approval can record the decided identity in the same statement.
+        ``update_status`` writes only the status column by default (``UNSET``,
+        reject path), avoiding the wider upsert that ``add()`` would perform
+        (which could overwrite photo_id/confidence). An approval passes the
+        identity explicitly: a UUID records the decided identity in the same
+        statement (Stage 4 D-1); an explicit ``None`` clears a matcher-guessed
+        identity so the row lands in the anonymous-orphan state (LOGIC-01).
         """
         return self._recognition_repository.update_status(
             result.id,  # type: ignore[arg-type]  # RecognitionResult.__post_init__ guarantees id is set
@@ -260,7 +273,13 @@ class ReviewRecognitionService(ReviewRecognitionUseCase):
                 existing = self._recognition_repository.find_by_id(result_id)
                 if existing is not None and existing.person_id is not None:
                     effective = None
-            if self._transition(result_id, target, person_id=effective) is not None:
+            # ``effective is None`` means "no bulk identity for this row" — pass
+            # the ``UNSET`` sentinel so the column is left untouched instead of
+            # being cleared (reject must keep its leave-untouched semantics).
+            persisted = (
+                UNSET if effective is None else effective
+            )
+            if self._transition(result_id, target, person_id=persisted) is not None:
                 transitioned += 1
         logger.info(
             "Bulk {} transitioned {}/{} result(s)",

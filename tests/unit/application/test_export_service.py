@@ -112,10 +112,13 @@ class _FakePhotoRepository(PhotoRepository):
             }
             matched = [p for p in matched if p.id in recognized]
         if criteria.person_id is not None:
+            # UI-01: mirror the SQLite semantics — person axis matches only
+            # approved attribution (matcher-guessed pending rows are excluded).
             linked = {
                 r.photo_id
                 for r in self._recognitions
                 if r.person_id == criteria.person_id
+                and r.status is MatchStatus.APPROVED
             }
             matched = [p for p in matched if p.id in linked]
         if criteria.captured_from is not None:
