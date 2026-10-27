@@ -313,6 +313,45 @@ def test_no_unassign_entry_exists_in_pairing_mode(qtbot):
     assert all("解除映射" not in button.text() for button in buttons)
 
 
+# ── P5：生成建议按钮态与空名单反馈（阶段 1） ──────────────────────────────
+
+
+def test_generate_button_disabled_without_generation(qtbot):
+    """P5：识别运行无任何聚类代际时「生成建议」禁用（无静默无效路径）。"""
+    harness = _Harness()
+    dialog = harness.build_dialog(qtbot)
+
+    assert dialog._generation_combo.count() == 0
+    assert dialog._generate_button.isEnabled() is False
+
+
+def test_generate_button_enabled_with_generation(qtbot):
+    """P5：存在代际时按钮恢复可用。"""
+    harness = _Harness()
+    photo_a = harness.add_photo("photos/a.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    harness.add_generation([("k|a|000000", [o1])])
+    dialog = harness.build_dialog(qtbot)
+
+    assert dialog._generation_combo.count() == 1
+    assert dialog._generate_button.isEnabled() is True
+
+
+def test_generate_with_empty_roster_shows_feedback(qtbot, monkeypatch):
+    """P5：名单为空时点击给出可见反馈（不静默产出零建议）。"""
+    harness = _Harness()
+    photo_a = harness.add_photo("photos/a.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    harness.add_generation([("k|a|000000", [o1])])
+    dialog = harness.build_dialog(qtbot)  # 未 add_person：名单为空
+
+    from photo_archiver.presentation import ui_text as text
+    monkeypatch.setattr(dialog, "refresh", lambda: None)  # 只验证反馈分支
+    dialog._on_generate_clicked()
+
+    assert text.CLUSTER_PAIRING_NO_PERSONS in dialog._feedback_label.text()
+
+
 # ── 批量确认 / 拒绝（逐项提交，部分成功） ────────────────────────────────────
 
 

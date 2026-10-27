@@ -44,6 +44,8 @@ class DeletePersonService(DeletePersonUseCase):
         face_embedding_repository: FaceEmbeddingRepository,
         unit_of_work: UnitOfWork | None = None,
         import_batch_repository=None,
+        assignment_repository=None,
+        sample_repository=None,
     ) -> None:
         """Initialize the service with its ports.
 
@@ -59,6 +61,9 @@ class DeletePersonService(DeletePersonUseCase):
             unit_of_work: Optional transactional scope; ``None`` persists bare.
             import_batch_repository: Batch record/draft cleanup port（界面优化
                 §4.3）；``None`` 时批次清理方法不可用（构造期不要求）。
+            assignment_repository: 身份决策行计数端口（界面优化 P2）；``None``
+                时计数恒 0（旧测试构造兼容，生产装配必须注入）。
+            sample_repository: 多样本库计数端口（界面优化 P2）；同上。
         """
         self._people = person_repository
         self._photos = photo_repository
@@ -66,6 +71,20 @@ class DeletePersonService(DeletePersonUseCase):
         self._embeddings = face_embedding_repository
         self._unit_of_work = unit_of_work
         self._import_batches = import_batch_repository
+        self._assignments = assignment_repository
+        self._samples = sample_repository
+
+    def _assigned_count(self, person_ids: Sequence[UUID]) -> int:
+        """该批人员的身份决策行总数（P2 披露口径之一）。"""
+        if self._assignments is None:
+            return 0
+        return sum(self._assignments.count_by_person(pid) for pid in person_ids)
+
+    def _sample_count(self, person_ids: Sequence[UUID]) -> int:
+        """该批人员的多样本库行总数（含停用样本，P2 披露口径之一）。"""
+        if self._samples is None:
+            return 0
+        return sum(len(self._samples.list_by_person(pid)) for pid in person_ids)
 
     def preview(self, person_ids: Sequence[UUID]) -> PersonDeletionPreview:
         """Return the embedding/orphan-recognition preview; side-effect free."""
@@ -95,6 +114,8 @@ class DeletePersonService(DeletePersonUseCase):
             missing_ids=missing,
             embedding_count=embedding_count,
             recognition_count=recognition_count,
+            assignment_count=self._assigned_count(existing),
+            sample_count=self._sample_count(existing),
         )
 
     def execute(self, command: DeletePersonCommand) -> PersonDeletionResult:
@@ -114,10 +135,13 @@ class DeletePersonService(DeletePersonUseCase):
             removed = _remove_all()
         logger.info(
             "AUDIT delete-person actor=local-user removed={} embedding_cascade={} "
-            "recognition_orphaned={} missing={} person_ids={}",
+            "recognition_orphaned={} assignment_cascade={} sample_cascade={} "
+            "missing={} person_ids={}",
             removed,
             preview.embedding_count,
             preview.recognition_count,
+            preview.assignment_count,
+            preview.sample_count,
             preview.missing_count,
             list(preview.person_ids),
         )
@@ -127,6 +151,8 @@ class DeletePersonService(DeletePersonUseCase):
             missing=preview.missing_count,
             embedding_cascade=preview.embedding_count,
             recognition_orphaned=preview.recognition_count,
+            assignment_cascade=preview.assignment_count,
+            sample_cascade=preview.sample_count,
         )
 
     # ── 界面优化 §4.3：按批次删除 / 清空全部人员 ────────────────────────
@@ -162,6 +188,8 @@ class DeletePersonService(DeletePersonUseCase):
             recognition_count=base.recognition_count,
             batch_record_found=batch_record_found,
             draft_row_count=draft_row_count,
+            assignment_count=base.assignment_count,
+            sample_count=base.sample_count,
         )
 
     def preview_batch(self, batch_id: UUID) -> BatchRosterDeletionPreview:
@@ -214,6 +242,8 @@ class DeletePersonService(DeletePersonUseCase):
                 recognition_orphaned=base.recognition_count,
                 batch_record_deleted=batch_record_deleted,
                 draft_rows_deleted=draft_rows_deleted,
+                assignment_cascade=base.assignment_count,
+                sample_cascade=base.sample_count,
             )
 
         if self._unit_of_work is not None:
@@ -223,10 +253,11 @@ class DeletePersonService(DeletePersonUseCase):
             result = _run()
         logger.info(
             "AUDIT delete-people-by-batch actor=local-user batch={} removed={} "
-            "embedding_cascade={} recognition_orphaned={} batch_record_deleted={} "
-            "draft_rows_deleted={}",
+            "embedding_cascade={} recognition_orphaned={} assignment_cascade={} "
+            "sample_cascade={} batch_record_deleted={} draft_rows_deleted={}",
             batch_id, result.removed, result.embedding_cascade,
-            result.recognition_orphaned, result.batch_record_deleted,
+            result.recognition_orphaned, result.assignment_cascade,
+            result.sample_cascade, result.batch_record_deleted,
             result.draft_rows_deleted,
         )
         return result
@@ -251,6 +282,8 @@ class DeletePersonService(DeletePersonUseCase):
                 recognition_orphaned=base.recognition_count,
                 batch_record_deleted=0,
                 draft_rows_deleted=0,
+                assignment_cascade=base.assignment_count,
+                sample_cascade=base.sample_count,
             )
 
         if self._unit_of_work is not None:
@@ -260,7 +293,9 @@ class DeletePersonService(DeletePersonUseCase):
             result = _run()
         logger.info(
             "AUDIT clear-all-people actor=local-user removed={} "
-            "embedding_cascade={} recognition_orphaned={}",
+            "embedding_cascade={} recognition_orphaned={} assignment_cascade={} "
+            "sample_cascade={}",
             result.removed, result.embedding_cascade, result.recognition_orphaned,
+            result.assignment_cascade, result.sample_cascade,
         )
         return result

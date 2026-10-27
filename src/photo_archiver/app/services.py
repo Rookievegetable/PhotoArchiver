@@ -325,6 +325,8 @@ def build_application_services(
         repositories.face_embeddings,
         unit_of_work=unit_of_work,
         import_batch_repository=repositories.import_batches,
+        assignment_repository=repositories.cluster_assignments,
+        sample_repository=repositories.person_face_samples,
     )
     prune_missing_photos_service = PruneMissingPhotosService(
         repositories.photos,

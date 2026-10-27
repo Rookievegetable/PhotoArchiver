@@ -224,13 +224,20 @@ class SQLiteClusterPersonAssignmentRepository(ClusterPersonAssignmentRepository)
             ).fetchall()
         return [UUID(row["person_id"]) for row in rows]
 
+    def count_by_person(self, person_id: UUID) -> int:
+        """人员决策行总数（P2 删除披露：级联删除数量的只读计数）。"""
+        with self._connection_provider.connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS n FROM cluster_person_assignments WHERE person_id = ?",
+                (str(person_id),),
+            ).fetchone()
+        return int(row["n"])
+
     @staticmethod
     def _require_created_at(assignment: ClusterPersonAssignment) -> datetime:
         if assignment.created_at is None:
             raise ValueError("assignment must have a creation timestamp")
         return assignment.created_at
-
-
 class SQLitePersonFaceSampleRepository(PersonFaceSampleRepository):
     """Persist the person sample library in SQLite."""
 

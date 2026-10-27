@@ -1433,6 +1433,8 @@ class MainWindow(QMainWindow):
             PERSON_DELETE_DIALOG_TITLE,
             PERSON_DELETE_DONE.format(
                 name=person_name,
+                assignment_cascade=result.assignment_cascade,
+                sample_cascade=result.sample_cascade,
                 embedding_cascade=result.embedding_cascade,
                 recognition_orphaned=result.recognition_orphaned,
             ),

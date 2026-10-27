@@ -99,6 +99,12 @@ class InMemoryClusterPersonAssignmentRepository(ClusterPersonAssignmentRepositor
             and assignment.person_id is not None
         })
 
+    def count_by_person(self, person_id: UUID) -> int:
+        return sum(
+            1 for assignment in self._assignments.values()
+            if assignment.person_id == person_id
+        )
+
     def _cluster_ids_of_run(self, cluster_run_id: UUID) -> set[UUID]:
         if self._cluster_scope is None:
             return set()

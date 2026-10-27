@@ -113,6 +113,17 @@ class ParseImportDraftService:
         The other parsed fields are copied to every split row; the multi-name
         advisory is cleared on the resulting rows. Order is resequenced so the
         split rows keep the original position.
+
+        无可拆内容（用户已把姓名改成单名）时返回原草稿、零改动——调用方需
+        用 :meth:`split_draft_row_with_status` 区分 no-op（P9：不得静默）。
+        """
+        return self.split_draft_row_with_status(batch_id, row_id)[0]
+
+    def split_draft_row_with_status(self, batch_id, row_id) -> tuple[ImportDraft, bool]:  # noqa: ANN001
+        """Split one row; return ``(draft, changed)``——``changed=False`` 即 no-op。
+
+        P9（界面优化）：拆分点击后若无任何可拆内容，界面必须给出可见反馈；
+        本方法的布尔结果就是该反馈的判定依据。
         """
         rows = self._import_batches.list_draft_rows(batch_id)
         target = next((row for row in rows if row.id == row_id), None)
@@ -120,7 +131,7 @@ class ParseImportDraftService:
             raise ValueError(f"draft row not found: {row_id}")
         segments = [segment.strip() for segment in _SPLIT_RE.split(target.parsed_name) if segment.strip()]
         if len(segments) <= 1:
-            return self._assemble_current(batch_id, rows)
+            return self._assemble_current(batch_id, rows), False
         rebuilt: list[ImportDraftRow] = []
         for row in rows:
             if row.id != row_id:
@@ -144,7 +155,7 @@ class ParseImportDraftService:
         for index, row in enumerate(rebuilt):
             row.order_index = index
         self._import_batches.replace_draft_rows(batch_id, rebuilt)
-        return self._assemble_current(batch_id, rebuilt)
+        return self._assemble_current(batch_id, rebuilt), True
 
     def save_draft_rows(self, batch_id, rows: list[ImportDraftRow]) -> ImportDraft:  # noqa: ANN001
         """Persist preview edits (field changes, action switches, reorders)."""

@@ -61,6 +61,13 @@ class ClusterPersonAssignmentRepository(Protocol):
         """Return persons whose identity is taken in the generation（confirmed
         或 auto_confirmed 决策——auto_confirmed 人员不得再进入规则①/③ 人员池）。"""
 
+    def count_by_person(self, person_id: UUID) -> int:
+        """Return the person's decision-row total across every generation.
+
+        只读计数（P2 删除披露）：人员删除时该人员的决策行将按外键级联
+        删除，确认流需要如实展示数量。包含全部状态（历史行同样级联）。
+        """
+
 
 class PersonFaceSampleRepository(Protocol):
     """Define persistence operations for the person sample library."""

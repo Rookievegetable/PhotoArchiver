@@ -150,6 +150,8 @@ class PersonDeletionDialog(QDialog):
         name = self._combo.currentText() or str(person_id)
         return PERSON_DELETE_CONFIRM.format(
             name=name,
+            assignment_count=preview.assignment_count,
+            sample_count=preview.sample_count,
             embedding_count=preview.embedding_count,
             recognition_count=preview.recognition_count,
         )

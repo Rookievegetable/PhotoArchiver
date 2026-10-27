@@ -83,12 +83,17 @@ class PersonDeletionPreview:
     preview therefore has no photo count. ``recognition_count`` is the number
     of recognition rows that stay but lose their person attribution (SET NULL
     → "未知人员"), NOT rows being deleted.
+
+    ``assignment_count`` / ``sample_count``（界面优化 P2）：该人员的身份决策行
+    与多样本库行数——两者均按外键 CASCADE 随人员删除，确认流必须如实披露。
     """
 
     person_ids: tuple[UUID, ...]
     missing_ids: tuple[UUID, ...]
     embedding_count: int
     recognition_count: int
+    assignment_count: int = 0
+    sample_count: int = 0
 
     @property
     def person_count(self) -> int:
@@ -115,6 +120,8 @@ class PersonDeletionResult:
     missing: int
     embedding_cascade: int
     recognition_orphaned: int
+    assignment_cascade: int = 0
+    sample_cascade: int = 0
 
     @property
     def succeeded(self) -> bool:
@@ -259,6 +266,8 @@ class BatchRosterDeletionPreview:
     recognition_count: int
     batch_record_found: bool
     draft_row_count: int
+    assignment_count: int = 0
+    sample_count: int = 0
 
     @property
     def person_count(self) -> int:
@@ -282,6 +291,8 @@ class BatchRosterDeletionResult:
     recognition_orphaned: int
     batch_record_deleted: int
     draft_rows_deleted: int
+    assignment_cascade: int = 0
+    sample_cascade: int = 0
 
     @property
     def succeeded(self) -> bool:

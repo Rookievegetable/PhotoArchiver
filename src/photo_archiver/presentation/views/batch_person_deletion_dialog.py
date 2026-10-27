@@ -53,12 +53,16 @@ def _result_message(result: BatchRosterDeletionResult, *, batch_name: str) -> st
     if batch_name:
         message = text.BATCH_DELETE_DONE.format(
             batch=batch_name, removed=result.removed,
+            assignment_cascade=result.assignment_cascade,
+            sample_cascade=result.sample_cascade,
             embedding_cascade=result.embedding_cascade,
             recognition_orphaned=result.recognition_orphaned,
         )
         if result.batch_record_deleted:
             message = text.BATCH_DELETE_DONE_CLEANUP.format(
                 batch=batch_name, removed=result.removed,
+                assignment_cascade=result.assignment_cascade,
+                sample_cascade=result.sample_cascade,
                 embedding_cascade=result.embedding_cascade,
                 recognition_orphaned=result.recognition_orphaned,
                 draft_rows_deleted=result.draft_rows_deleted,
@@ -66,6 +70,8 @@ def _result_message(result: BatchRosterDeletionResult, *, batch_name: str) -> st
         return message
     return text.CLEAR_ALL_DONE.format(
         removed=result.removed,
+        assignment_cascade=result.assignment_cascade,
+        sample_cascade=result.sample_cascade,
         embedding_cascade=result.embedding_cascade,
         recognition_orphaned=result.recognition_orphaned,
     )
@@ -173,6 +179,8 @@ class BatchPersonDeletionDialog(QDialog):
         self._impact_label.setText(text.BATCH_DELETE_IMPACT.format(
             person_count=preview.person_count,
             names="、".join(preview.people_names),
+            assignment_count=preview.assignment_count,
+            sample_count=preview.sample_count,
             embedding_count=preview.embedding_count,
             recognition_count=preview.recognition_count,
         ))
@@ -282,6 +290,8 @@ class ClearAllPeopleDialog(QDialog):
         self._impact_label.setText(text.CLEAR_ALL_IMPACT.format(
             person_count=preview.person_count,
             names="、".join(preview.people_names),
+            assignment_count=preview.assignment_count,
+            sample_count=preview.sample_count,
             embedding_count=preview.embedding_count,
             recognition_count=preview.recognition_count,
         ))

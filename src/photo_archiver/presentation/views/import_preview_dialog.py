@@ -139,6 +139,10 @@ class ImportPreviewDialog(QDialog):
         counts_row.addWidget(self._counts_label)
         counts_row.addStretch()
         layout.addLayout(counts_row)
+        # P9：逐次动作反馈（如拆分 no-op 的可见提示），不随重绘清除。
+        self._feedback_label = QLabel(self)
+        self._feedback_label.setWordWrap(True)
+        layout.addWidget(self._feedback_label)
         if len(self._draft.rows) > CONFIRM_SYNC_LIMIT:
             notice = QLabel(
                 text.IMPORT_PREVIEW_CONFIRM_LARGE.format(limit=CONFIRM_SYNC_LIMIT), self,
@@ -272,10 +276,17 @@ class ImportPreviewDialog(QDialog):
         self._refresh_counts()
 
     def _on_split(self, row) -> None:  # noqa: ANN001
-        """Split one multi-name draft row into one row per name."""
-        self._draft = self._services.parse_import_draft.split_draft_row(
+        """Split one multi-name draft row into one row per name.
+
+        P9：无可拆内容时给出可见反馈（此前为静默 no-op）。
+        """
+        self._draft, changed = self._services.parse_import_draft.split_draft_row_with_status(
             self._draft.batch.id, row.id,
         )
+        if not changed:
+            self._feedback_label.setText(text.IMPORT_PREVIEW_SPLIT_NOOP)
+        else:
+            self._feedback_label.clear()
         self._repopulate()
 
     def _refresh_counts(self) -> None:

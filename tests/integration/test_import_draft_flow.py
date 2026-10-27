@@ -122,6 +122,19 @@ def test_split_draft_row_creates_one_row_per_name(tmp_path: Path) -> None:
     assert not any(w[0] == "multi_name" for row in split.rows[:3] for w in row.warnings)
 
 
+def test_split_draft_row_noop_reports_not_changed(tmp_path: Path) -> None:
+    """P9：无可拆内容时返回 changed=False（界面据此给出可见反馈，不再静默）。"""
+    path = _write_csv(tmp_path / "roster.csv", "姓名\n张三\n")
+    parse, _, _ = _services(tmp_path / "a.db")
+    draft = parse.execute(ParseImportDraftCommand(path))
+    single = draft.rows[0]
+
+    same, changed = parse.split_draft_row_with_status(draft.batch.id, single.id)
+
+    assert changed is False
+    assert [row.parsed_name for row in same.rows] == ["张三"]
+
+
 def test_parse_marks_db_identity_duplicate_as_merge(tmp_path: Path) -> None:
     """与库内已有工号重复 → 强冲突告警 + 默认合并到已有人员。"""
     parse, confirm, people = _services(tmp_path / "a.db")

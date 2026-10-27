@@ -150,6 +150,8 @@ class ClusterResultsDialog(QDialog):
             self._generate_button = QPushButton(
                 text.CLUSTER_PAIRING_GENERATE_BUTTON, self)
             self._generate_button.clicked.connect(self._on_generate_clicked)
+            # P5：无代际时禁用（调用侧不再存在静默 no-op 路径）。
+            self._generate_button.setEnabled(False)
             assign_role(self._generate_button, ROLE_PRIMARY)
             generation_row.addWidget(self._generate_button)
         generation_row.addStretch()
@@ -297,6 +299,7 @@ class ClusterResultsDialog(QDialog):
         if self._generation_combo.currentIndex() < 0 and self._generation_combo.count():
             self._generation_combo.setCurrentIndex(0)
         self._generation_combo.blockSignals(False)
+        self._update_generate_button_state()
         if not runs:
             self._current = None
             self._generation_summary.clear()
@@ -345,6 +348,7 @@ class ClusterResultsDialog(QDialog):
 
     def _on_generation_selected(self, _index: int) -> None:
         """Load the selected generation's clusters and re-render members."""
+        self._update_generate_button_state()
         cluster_run_id = self._generation_combo.currentData()
         if cluster_run_id is None:
             self._current = None
@@ -544,10 +548,23 @@ class ClusterResultsDialog(QDialog):
 
     # ── 生成建议 ─────────────────────────────────────────────────────────
 
+    def _update_generate_button_state(self) -> None:
+        """P5：生成建议按钮仅在存在可操作代际时启用（守卫 getattr 兼容只读模式）。"""
+        button = getattr(self, "_generate_button", None)
+        if button is None:
+            return
+        button.setEnabled(self._generation_combo.currentData() is not None)
+
     def _on_generate_clicked(self) -> None:
         """生成建议（§4.2：采用当前名单顺序；不自动改写既有决策）。"""
         cluster_run_id = self._generation_combo.currentData()
         if cluster_run_id is None:
+            # P5：按钮已禁用，此分支仅为防御；仍给可见反馈而非静默。
+            self._feedback_label.setText(text.CLUSTER_PAIRING_NO_GENERATION)
+            return
+        if not self._persons:
+            # P5：空名单时给出明确反馈，不再静默产出零建议。
+            self._feedback_label.setText(text.CLUSTER_PAIRING_NO_PERSONS)
             return
         summary = self._suggest_service.execute(
             StartSuggestPairingsCommand(cluster_run_id),

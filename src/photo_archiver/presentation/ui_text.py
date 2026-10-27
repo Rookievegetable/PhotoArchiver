@@ -60,6 +60,7 @@ IMPORT_PREVIEW_ACTION_CREATE = "新建人员"
 IMPORT_PREVIEW_ACTION_MERGE = "合并到已有人员"
 IMPORT_PREVIEW_ACTION_SKIP = "跳过"
 IMPORT_PREVIEW_SPLIT_BUTTON = "拆分"
+IMPORT_PREVIEW_SPLIT_NOOP = "未发现多个姓名，无需拆分（如输入了多个姓名，请用、或 , 分隔）。"
 IMPORT_PREVIEW_COUNTS = "将新建 {create} · 合并 {merge} · 跳过 {skip} · 告警 {warnings}"
 IMPORT_PREVIEW_CONFIRM_BUTTON = "确认导入"
 IMPORT_PREVIEW_CANCEL_BUTTON = "取消"
@@ -561,6 +562,8 @@ CLUSTER_PAIRING_IGNORE_BUTTON = "忽略所选照片"
 CLUSTER_PAIRING_RESTORE_BUTTON = "恢复所选照片"
 CLUSTER_PAIRING_NO_TARGET = "请先选择目标人员。"
 CLUSTER_PAIRING_NO_SELECTION = "请先在左侧选择聚类组。"
+CLUSTER_PAIRING_NO_PERSONS = "名单为空，无法生成建议——请先在「人员与分组」页导入人员名单。"
+CLUSTER_PAIRING_NO_GENERATION = "当前识别运行还没有聚类代际，请先运行人脸聚类。"
 CLUSTER_PAIRING_MEMBER_ENTRY = "{photo} · 脸{index}/{faces} · {outcome}{ignored}"
 CLUSTER_PAIRING_IGNORED_MARK = "（已忽略）"
 CLUSTER_PAIRING_DETAIL_BUTTON = "查看大图"
@@ -710,14 +713,18 @@ ACTION_DELETE_PERSON = "删除人员"
 PERSON_DELETE_DIALOG_TITLE = "删除人员"
 PERSON_DELETE_SELECTOR_LABEL = "选择要删除的人员："
 PERSON_DELETE_CONFIRM = (
-    "将从库中移除人员「{name}」：其 {embedding_count} 条人脸嵌入将一并删除；"
-    "{recognition_count} 条识别结果将保留但归属置空（显示为未知人员）。\n\n"
+    "将从库中移除人员「{name}」：\n"
+    "· {assignment_count} 条身份决策历史（含人工终审记录与排序快照）将一并级联删除；\n"
+    "· {sample_count} 条人脸样本（多样本库）将一并级联删除；\n"
+    "· {embedding_count} 条人脸嵌入将一并删除；\n"
+    "· {recognition_count} 条识别结果将保留但归属置空（显示为未知人员）。\n\n"
     "该人员的全部照片与磁盘文件均保留，不会删除任何文件。"
 )
 PERSON_DELETE_BUTTON = "删除该人员"
 PERSON_DELETE_EMPTY = "库中暂无人员——请先通过「导入人员」导入人员名单。"
 PERSON_DELETE_DONE = (
-    "已移除人员「{name}」（删除嵌入 {embedding_cascade} 条、识别归属置空 {recognition_orphaned} 条）。"
+    "已移除人员「{name}」（删除决策历史 {assignment_cascade} 条、样本 {sample_cascade} 条、"
+    "嵌入 {embedding_cascade} 条、识别归属置空 {recognition_orphaned} 条）。"
 )
 
 # ---- 按批次删除人员 / 清空全部人员（界面优化 §4.3） ----
@@ -728,7 +735,8 @@ BATCH_DELETE_SELECTOR_LABEL = "选择要删除的导入批次："
 BATCH_DELETE_MEMBERS_LABEL = "该批次当前归属人员（基于执行时点的批次归属）："
 BATCH_DELETE_IMPACT = (
     "将删除 {person_count} 名人员：{names}\n\n"
-    "· 身份决策历史（含人工终审记录与排序快照）将按外键级联删除；\n"
+    "· {assignment_count} 条身份决策历史（含人工终审记录与排序快照）将按外键级联删除；\n"
+    "· {sample_count} 条人脸样本（多样本库）将按外键级联删除；\n"
     "· {embedding_count} 条人脸嵌入将一并删除；\n"
     "· {recognition_count} 条识别结果将保留但归属置空（不再进入归档）；\n"
     "· 校准标注与 Ground Truth 的人员归属将置空（标注内容保留）；\n"
@@ -743,21 +751,24 @@ BATCH_DELETE_CLEANUP_WARNING = (
     "将一并删除，且不可恢复。"
 )
 BATCH_DELETE_DONE = (
-    "已删除批次「{batch}」人员 {removed} 名（嵌入 {embedding_cascade} 条、"
+    "已删除批次「{batch}」人员 {removed} 名（决策历史 {assignment_cascade} 条、"
+    "样本 {sample_cascade} 条、嵌入 {embedding_cascade} 条、"
     "识别归属置空 {recognition_orphaned} 条）。"
 )
 BATCH_DELETE_DONE_CLEANUP = BATCH_DELETE_DONE + " 批次记录与 {draft_rows_deleted} 条导入草稿已删除。"
 CLEAR_ALL_DIALOG_TITLE = "清空所有人员"
 CLEAR_ALL_IMPACT = (
     "将删除库中全部 {person_count} 名人员：\n{names}\n\n"
-    "· 全部身份决策历史（含人工终审记录）将按外键级联删除；\n"
+    "· 全部 {assignment_count} 条身份决策历史（含人工终审记录）将按外键级联删除；\n"
+    "· 全部 {sample_count} 条人脸样本（多样本库）将按外键级联删除；\n"
     "· {embedding_count} 条人脸嵌入将一并删除；\n"
     "· {recognition_count} 条识别结果将保留但归属置空；\n"
     "· 照片文件、识别运行、聚类结果与成员关系全部保留。"
 )
 CLEAR_ALL_CONFIRM_CHECKBOX = "我已了解将删除全部人员及其身份决策历史，且不可恢复"
 CLEAR_ALL_DONE = (
-    "已清空全部人员（删除 {removed} 名、嵌入 {embedding_cascade} 条、"
+    "已清空全部人员（删除 {removed} 名、决策历史 {assignment_cascade} 条、"
+    "样本 {sample_cascade} 条、嵌入 {embedding_cascade} 条、"
     "识别归属置空 {recognition_orphaned} 条）。"
 )
 

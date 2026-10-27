@@ -79,6 +79,27 @@ def test_split_button_splits_row_and_updates_counts(parsed, qtbot) -> None:
     assert "将新建 5" in counts.text()  # 3 拆分行 + 张三 + 李四；组标题跳过
 
 
+def test_split_noop_shows_visible_feedback(parsed, qtbot) -> None:
+    """P9：拆分无可拆内容时界面给出可见反馈（此前为静默 no-op）。"""
+    dialog, _people = _make_dialog(parsed, qtbot)
+    single = next(row for row in dialog._draft.rows if row.parsed_name == "张三")
+
+    dialog._on_split(single)
+
+    from photo_archiver.presentation import ui_text as text
+    assert dialog._feedback_label.text() == text.IMPORT_PREVIEW_SPLIT_NOOP
+
+
+def test_split_success_clears_feedback(parsed, qtbot) -> None:
+    """P9：成功拆分不残留 no-op 提示。"""
+    dialog, _people = _make_dialog(parsed, qtbot)
+    multi = next(row for row in dialog._draft.rows if any(w[0] == "multi_name" for w in row.warnings))
+
+    dialog._on_split(multi)
+
+    assert dialog._feedback_label.text() == ""
+
+
 def test_action_switch_to_skip_persists(parsed, qtbot) -> None:
     dialog, people = _make_dialog(parsed, qtbot)
     target = next(row for row in dialog._draft.rows if row.parsed_name == "张三")
