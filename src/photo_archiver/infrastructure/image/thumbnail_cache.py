@@ -9,12 +9,19 @@ import hashlib
 # safety guard against mispointed cache roots).
 _CACHE_FILE_PATTERN = re.compile(r"^[0-9a-f]{24}\.[a-z0-9]+$")
 
+# 渲染管线版本（P1）：参与缓存 key 哈希。渲染语义变更（如缩略图开始做
+# EXIF 方向转正）时 +1——旧版本条目的 key 永不命中，按需自动重生成；遗留
+# 文件随即成为孤儿，由既有 cleanup 服务（ThumbnailCache.cleanup）清理。
+RENDER_VERSION = 2
+
 
 class ThumbnailCache:
     """Resolve thumbnail cache paths and detect stale entries.
 
-    Cache key is a hash of the source path + size + mtime + file size so
-    renamed or edited photos invalidate their thumbnails automatically.
+    Cache key is a hash of the source path + size + mtime + file size + the
+    render pipeline version so renamed or edited photos invalidate their
+    thumbnails automatically and rendering-semantics changes (EXIF upright,
+    P1) invalidate every previously rendered entry at once.
     """
 
     def __init__(self, cache_root: Path) -> None:
@@ -33,7 +40,8 @@ class ThumbnailCache:
         Returns ``None`` when the source file does not exist (``stat`` fails)
         so callers can skip rendering instead of crashing. When the source
         exists, the cache path is derived from a hash of source path + size +
-        mtime + file size so renamed or edited photos invalidate automatically.
+        mtime + file size + render version so renamed or edited photos and
+        render-pipeline changes invalidate automatically.
         """
         digest = self.compute_key(source, size)
         if digest is None:
@@ -47,7 +55,10 @@ class ThumbnailCache:
             stat = source.stat()
         except FileNotFoundError:
             return None
-        key = f"{source.resolve(strict=False)}|{size}|{stat.st_mtime_ns}|{stat.st_size}"
+        key = (
+            f"{source.resolve(strict=False)}|{size}|{stat.st_mtime_ns}"
+            f"|{stat.st_size}|{RENDER_VERSION}"
+        )
         return hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
 
     def cleanup(self, keep_keys: set[str], *, dry_run: bool = True) -> tuple[int, int]:

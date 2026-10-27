@@ -222,6 +222,10 @@ class ClusterResultsDialog(QDialog):
         self._detail_prev_button.clicked.connect(lambda: self._on_detail_prev_next(-1))
         self._detail_next_button = QPushButton(text.CLUSTER_PAIRING_DETAIL_NEXT, pane)
         self._detail_next_button.clicked.connect(lambda: self._on_detail_prev_next(1))
+        # P6：详图未打开时导航禁用（消除按钮可点但静默无效的路径）；打开/
+        # 关闭随 _open_detail/_on_detail_dialog_finished 联动启停。
+        self._detail_prev_button.setEnabled(False)
+        self._detail_next_button.setEnabled(False)
         photos_row.addWidget(self._detail_prev_button)
         photos_row.addWidget(self._detail_next_button)
         layout.addLayout(photos_row)
@@ -271,6 +275,9 @@ class ClusterResultsDialog(QDialog):
 
     def refresh(self) -> None:
         """Reload the generation list, keeping the current generation selected."""
+        # P6：代际列表/簇列表即将重载，旧快照（_detail_photos）随之失效——
+        # 先关闭已打开的详图，消除导航打到过期照片的失步路径。
+        self._close_detail()
         self._persons = (
             self._list_persons.execute() if self._list_persons is not None else []
         )
@@ -279,16 +286,18 @@ class ClusterResultsDialog(QDialog):
         runs = self._results_service.list_cluster_runs(self._recognition_run_id)
         self._generation_combo.blockSignals(True)
         self._generation_combo.clear()
-        for run in runs:
-            self._generation_combo.addItem(
-                text.CLUSTER_RESULTS_GENERATION_ENTRY.format(
-                    created_at=_format_moment(run.created_at),
-                    status=text.cluster_run_status_label(run.status),
-                    clusters=run.cluster_count,
-                    members=run.member_count,
-                ),
-                run.id,
+        for index, run in enumerate(runs):
+            label = text.CLUSTER_RESULTS_GENERATION_ENTRY.format(
+                created_at=_format_moment(run.created_at),
+                status=text.cluster_run_status_label(run.status),
+                clusters=run.cluster_count,
+                members=run.member_count,
             )
+            if index == 0:
+                # P7：list_cluster_runs 返回 newest-first，首位即最新代际
+                #（单代际同样标注）；纯显示后缀，零业务语义。
+                label += text.CLUSTER_RESULTS_GENERATION_LATEST_MARK
+            self._generation_combo.addItem(label, run.id)
         if selected is not None:
             # findData 对值相等但非同一实例的 UUID 不可靠（QVariant 比较），
             # 代际保持用值扫描。
@@ -348,6 +357,9 @@ class ClusterResultsDialog(QDialog):
 
     def _on_generation_selected(self, _index: int) -> None:
         """Load the selected generation's clusters and re-render members."""
+        # P6：切换代际 = 照片快照整体失效——先关闭已打开的详图（若在），再
+        # 重载；消除 _detail_photos/_detail_index 与新代际的失步。
+        self._close_detail()
         self._update_generate_button_state()
         cluster_run_id = self._generation_combo.currentData()
         if cluster_run_id is None:
@@ -874,6 +886,8 @@ class ClusterResultsDialog(QDialog):
         photo_id = self._detail_photos[self._detail_index]
         photo = self._build_photo_stub(photo_id)
         if photo is None:
+            # P6：未命中不再静默——给可见反馈，保持当前详图与索引不动。
+            self._show_detail_photo_missing()
             return
         if self._detail_dialog is None:
             self._detail_dialog = PhotoDetailDialog(
@@ -882,12 +896,47 @@ class ClusterResultsDialog(QDialog):
                 parent=self,
                 auto_load_hd=True,
             )
+            # P6：详图生命周期绑定导航可用性——任何关闭路径（accept/
+            # reject/标题栏/close）经 finished 信号统一回到禁用态。
+            self._detail_dialog.finished.connect(self._on_detail_dialog_finished)
         else:
-            # replace_photo 自动重启受控解码（导航模式契约）；缩略图仅在
-            # 首次打开时占位。
-            self._detail_dialog.replace_photo(photo)
+            # replace_photo 自动重启受控解码（导航模式契约）；缩略图已知时
+            # 先占位再解码（P12：导航不再白屏等待高清）。
+            self._detail_dialog.replace_photo(
+                photo, thumbnail_path=self._thumbnail_paths.get(photo_id),
+            )
         self._detail_dialog.show()
         self._detail_dialog.raise_()
+        self._set_detail_nav_enabled(True)
+
+    def _show_detail_photo_missing(self) -> None:
+        """P6：详图目标已不在当前结果快照中——可见反馈，绝不静默。"""
+        self._feedback_label.setText(text.CLUSTER_DETAIL_PHOTO_MISSING)
+
+    def _set_detail_nav_enabled(self, enabled: bool) -> None:
+        """P6：「上一张/下一张」随详图生命周期启停（仅配对模式存在按钮）。"""
+        if not self._pairing_active:
+            return
+        self._detail_prev_button.setEnabled(enabled)
+        self._detail_next_button.setEnabled(enabled)
+
+    def _close_detail(self) -> None:
+        """P6：快照失效路径（refresh/切代际）关闭已打开的详图。
+
+        关闭经 QDialog.close() → finished 信号统一走
+        :meth:`_on_detail_dialog_finished`，导航按钮同步回到禁用态。
+        """
+        if self._detail_dialog is not None:
+            self._detail_dialog.close()
+
+    def _on_detail_dialog_finished(self, _result: int) -> None:
+        """P6：详图任何结束路径——导航回到禁用态并释放对话框引用。"""
+        dialog = self._detail_dialog
+        self._detail_dialog = None
+        self._set_detail_nav_enabled(False)
+        if dialog is not None:
+            # 无 WA_DeleteOnClose：显式排程销毁，避免反复开关累积隐藏子对话框。
+            dialog.deleteLater()
 
     def _build_photo_stub(self, photo_id: UUID):
         """Construct a display Photo from the loaded member data."""
@@ -914,10 +963,16 @@ class ClusterResultsDialog(QDialog):
         )
 
     def _on_detail_prev_next(self, offset: int) -> None:
-        """§5.4 上一张/下一张：在本组照片范围内循环切换。"""
+        """§5.4 上一张/下一张：在本组照片范围内循环切换。
+
+        P6：目标照片构建不出详图（已不在当前结果中）时给可见反馈且不推进
+        索引——连续点击不会越过失效项悄悄跳位，也不会静默无效。
+        """
         if self._detail_dialog is None or not self._detail_photos:
             return
-        self._detail_index = (
-            (self._detail_index + offset) % len(self._detail_photos)
-        )
+        candidate = (self._detail_index + offset) % len(self._detail_photos)
+        if self._build_photo_stub(self._detail_photos[candidate]) is None:
+            self._show_detail_photo_missing()
+            return
+        self._detail_index = candidate
         self._open_detail()

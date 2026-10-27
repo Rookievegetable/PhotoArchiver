@@ -96,11 +96,18 @@ PEOPLE_PAGE_BATCH_ALL = "全部批次"
 PEOPLE_PAGE_BATCH_ENTRY = "{file_name}（{person_count} 人）"
 PEOPLE_PAGE_BATCH_FILTER_HINT = "回看态为只读：调整顺序请先切回「全部批次」。"
 PEOPLE_PAGE_COL_ORDER = "顺序"
+PEOPLE_PAGE_COL_GROUP_ORDINAL = "组/序"
 PEOPLE_PAGE_COL_NAME = "姓名"
 PEOPLE_PAGE_COL_IDENTITY = "工号"
 PEOPLE_PAGE_COL_DEPARTMENT = "部门"
 PEOPLE_PAGE_COL_NOTE = "备注"
 PEOPLE_PAGE_COL_BATCH = "来源批次"
+# 组/序列（阶段 2 方案 a）单元格 tooltip：说明派生依据（纯只读展示值）。
+PEOPLE_PAGE_GROUP_ORDINAL_TOOLTIP = (
+    "派生显示值，不写入数据库：序号 = 姓名开头的数字前缀（无前缀显示"
+    "「—」）；组号 = 沿名单顺序，数字前缀不再接续「前一序号 + 1」的跳变处"
+    " +1（仅派生出一组时组号显示「—」）。拖拽排序后自动重算。"
+)
 PEOPLE_PAGE_MANUAL_SOURCE = "手工新增"
 PEOPLE_PAGE_EMPTY = "名单为空。可用「新增人员」手工录入，或用工具栏「导入人员」批量导入名单。"
 PEOPLE_PAGE_EMPTY_FILTERED = "该批次没有仍在名单中的人员（人员可能在后续导入中被合并或删除）。"
@@ -444,6 +451,9 @@ CLUSTER_PAGE_NO_RUNS = "尚无识别运行；请先运行人脸识别。"
 CLUSTER_RESULTS_TITLE = "人脸聚类结果"
 CLUSTER_RESULTS_GENERATION_LABEL = "聚类代际"
 CLUSTER_RESULTS_GENERATION_ENTRY = "{created_at} · {status} · {clusters} 簇 / {members} 张脸"
+# P7：代际下拉最新项（list_cluster_runs 返回 newest-first 的首位）后缀；
+# 纯显示标注，单代际同样标注，零业务语义。
+CLUSTER_RESULTS_GENERATION_LATEST_MARK = "（最新）"
 CLUSTER_RESULTS_EMPTY = "该识别运行尚无聚类结果；请先运行人脸聚类。"
 CLUSTER_RESULTS_EMPTY_CLUSTERS = "该代聚类没有产生任何簇（范围内无人脸观测）。"
 CLUSTER_RESULTS_CLUSTER_ENTRY = "第 {ordinal} 组 · {count} 张脸 · 首拍 {time}"
@@ -569,6 +579,8 @@ CLUSTER_PAIRING_IGNORED_MARK = "（已忽略）"
 CLUSTER_PAIRING_DETAIL_BUTTON = "查看大图"
 CLUSTER_PAIRING_DETAIL_PREV = "上一张"
 CLUSTER_PAIRING_DETAIL_NEXT = "下一张"
+# P6：详图目标照片在当前结果快照中构建失败时的可见反馈（不静默、不推进索引）。
+CLUSTER_DETAIL_PHOTO_MISSING = "该照片已不在当前结果中，无法查看；请刷新后重试。"
 CLUSTER_PAIRING_PHOTOS_LABEL = "组内照片（可多选后忽略/恢复；双击查看大图）："
 CLUSTER_PAIRING_DECISIONS_LABEL = "当前有效决策涉及人物数：{count}（按决策记录统计，非识别算法人数）"
 CLUSTER_PAIRING_RUN_STATUS = (

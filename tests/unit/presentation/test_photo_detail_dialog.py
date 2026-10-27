@@ -331,3 +331,43 @@ def test_t11_decode_runs_off_gui_thread(qtbot, tmp_path) -> None:
         timeout=5000,
     )
     assert decoder.calls[0] is not QThread.currentThread()  # 非 GUI 线程
+
+
+# ---- P12：导航占位——replace_photo 已知缩略图先上屏，再启动高清解码 ----
+
+
+def test_p12_replace_photo_shows_known_thumbnail_before_hd(qtbot, tmp_path) -> None:
+    """导航宿主传入已知缩略图：先显示缩略图占位（同步），高清到达后覆盖。"""
+    decoder = _fake_decoder([_solid_qimage(300, 200, (10, 200, 30))])
+    dialog = _make_dialog(
+        qtbot, _photo(tmp_path), _write_thumbnail(tmp_path), decoder,
+    )
+    next_thumb = tmp_path / "thumb" / "next.png"
+    next_thumb.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (120, 90), (60, 60, 60)).save(next_thumb)
+
+    dialog.replace_photo(_photo(tmp_path, "NEXT0001.JPG"), thumbnail_path=next_thumb)
+
+    # replace_photo 返回时事件循环尚未运行（解码结果必经队列连接投回），
+    # 此刻预览必然还是缩略图占位——时序断言不依赖 sleep。
+    pixmap = dialog._preview.pixmap()
+    assert pixmap is not None and not pixmap.isNull()
+    assert (pixmap.width(), pixmap.height()) == (120, 90)
+    assert not dialog._preview.text()  # 不再显示"加载中"文本
+    qtbot.waitUntil(lambda: len(decoder.calls) == 1, timeout=5000)
+    _wait_pixmap(qtbot, dialog, 300)  # 高清解码结果覆盖缩略图占位
+
+
+def test_p12_replace_photo_without_thumbnail_keeps_loading_placeholder(
+    qtbot, tmp_path,
+) -> None:
+    """未知缩略图（不传参数）：维持"加载中"占位——既有导航契约不回归。"""
+    decoder = _fake_decoder([_solid_qimage(300, 200, (10, 200, 30))])
+    dialog = _make_dialog(
+        qtbot, _photo(tmp_path), None, decoder,
+    )
+    dialog.replace_photo(_photo(tmp_path, "NEXT0002.JPG"))
+    assert dialog._preview.pixmap() is None or dialog._preview.pixmap().isNull()
+    assert dialog._preview.text() == text.PHOTO_DETAIL_HD_LOADING
+    qtbot.waitUntil(lambda: len(decoder.calls) == 1, timeout=5000)
+    _wait_pixmap(qtbot, dialog, 300)

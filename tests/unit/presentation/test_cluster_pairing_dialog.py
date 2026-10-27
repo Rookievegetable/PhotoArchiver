@@ -54,6 +54,7 @@ from photo_archiver.infrastructure import (
     InMemoryRecognitionRunRepository,
     NumpyCosineSimilarityFactory,
 )
+from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.views.cluster_results_dialog import (
     ClusterResultsDialog,
 )
@@ -532,12 +533,21 @@ def test_photo_detail_stub_and_navigation(tmp_path, qtbot, monkeypatch):
     assert stub is not None and stub.original_name == "a.jpg"
 
     opened: list = []
+
+    class _FakeSignal:
+        def connect(self, *_args, **_kwargs): pass
+        def disconnect(self, *_args, **_kwargs): pass
+
     class _FakeDetail:
         def __init__(self, photo, **kwargs):
             opened.append(photo)
+            self.finished = _FakeSignal()  # P6：详图生命周期信号（真实 QDialog 契约）
         def show(self): pass
         def raise_(self): pass
-        def replace_photo(self, photo, badge=None): opened.append(photo)
+        def close(self): pass
+        def deleteLater(self): pass
+        def replace_photo(self, photo, badge=None, thumbnail_path=None):
+            opened.append(photo)
 
     monkeypatch.setattr(
         "photo_archiver.presentation.views.cluster_results_dialog.PhotoDetailDialog",
@@ -550,3 +560,80 @@ def test_photo_detail_stub_and_navigation(tmp_path, qtbot, monkeypatch):
     dialog._on_detail_prev_next(1)   # 循环回 a
     dialog._on_detail_prev_next(-1)  # → b
     assert [p.original_name for p in opened] == ["a.jpg", "b.jpg", "a.jpg", "b.jpg"]
+
+
+# ── P6：大图导航健壮性（阶段 2） ─────────────────────────────────────────────
+
+
+def _two_photo_dialog(qtbot, tmp_path):
+    """One generation, two photos on absolute paths（stub 可构建，详图可打开）。"""
+    harness = _Harness()
+    photo_a = harness.add_photo(str(tmp_path / "a.jpg"))
+    photo_b = harness.add_photo(str(tmp_path / "b.jpg"))
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    o2 = harness.add_observation(photo_b, 0, 180.0)
+    harness.add_generation([("k|a|000000", [o1]), ("k|b|000001", [o2])])
+    dialog = harness.build_dialog(qtbot)
+    return dialog, photo_a, photo_b
+
+
+def test_detail_nav_buttons_track_detail_dialog_lifecycle(qtbot, tmp_path):
+    """P6：上一张/下一张绑定详图生命周期——未开禁用/打开启用/关闭禁用。"""
+    dialog, _photo_a, _photo_b = _two_photo_dialog(qtbot, tmp_path)
+    assert dialog._detail_prev_button.isEnabled() is False
+    assert dialog._detail_next_button.isEnabled() is False
+
+    dialog._photo_grid.itemDoubleClicked.emit(dialog._photo_grid.item(0))
+    assert dialog._detail_dialog is not None
+    assert dialog._detail_prev_button.isEnabled() is True
+    assert dialog._detail_next_button.isEnabled() is True
+
+    # 任何关闭路径（此处标题栏/程序化 close → finished）都回到禁用态。
+    dialog._detail_dialog.close()
+    assert dialog._detail_dialog is None
+    assert dialog._detail_prev_button.isEnabled() is False
+    assert dialog._detail_next_button.isEnabled() is False
+
+
+def test_generation_switch_closes_open_detail(qtbot, tmp_path):
+    """P6：切换代际 = 快照失效——已打开的详图自动关闭并回到禁用态。"""
+    dialog, _photo_a, _photo_b = _two_photo_dialog(qtbot, tmp_path)
+    other_index = 1 if dialog._generation_combo.currentIndex() == 0 else 0
+    dialog._photo_grid.itemDoubleClicked.emit(dialog._photo_grid.item(0))
+    assert dialog._detail_dialog is not None
+
+    dialog._generation_combo.setCurrentIndex(other_index)
+
+    assert dialog._detail_dialog is None
+    assert dialog._detail_prev_button.isEnabled() is False
+    assert dialog._detail_next_button.isEnabled() is False
+
+
+def test_refresh_closes_open_detail(qtbot, tmp_path):
+    """P6：refresh（簇列表重载入口）同样关闭已打开的详图。"""
+    dialog, _photo_a, _photo_b = _two_photo_dialog(qtbot, tmp_path)
+    dialog._photo_grid.itemDoubleClicked.emit(dialog._photo_grid.item(0))
+    assert dialog._detail_dialog is not None
+
+    dialog.refresh()
+
+    assert dialog._detail_dialog is None
+    assert dialog._detail_next_button.isEnabled() is False
+
+
+def test_detail_nav_missing_photo_reports_and_keeps_index(qtbot, tmp_path):
+    """P6：目标照片构建不出详图 → 可见反馈且不推进索引（不静默、不跳位）。"""
+    dialog, _photo_a, _photo_b = _two_photo_dialog(qtbot, tmp_path)
+    dialog._photo_grid.itemDoubleClicked.emit(dialog._photo_grid.item(0))
+    assert dialog._detail_dialog is not None
+    assert dialog._detail_index == 0
+    feedback_before = dialog._feedback_label.text()
+
+    # 模拟快照失效（正常路径已在切代际/刷新时关闭详图；此处覆盖防御分支）。
+    dialog._current = None
+    dialog._detail_next_button.click()
+
+    assert dialog._feedback_label.text() != feedback_before
+    assert text.CLUSTER_DETAIL_PHOTO_MISSING in dialog._feedback_label.text()
+    assert dialog._detail_index == 0  # 未命中不推进索引
+    assert dialog._detail_dialog is not None  # 现有详图保持原样

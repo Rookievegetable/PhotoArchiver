@@ -50,11 +50,14 @@ class PillowThumbnailGenerator(ThumbnailGenerator):
         if cached.exists() and not self._cache.is_stale(source, cached):
             return cached
 
-        from PIL import Image
+        from PIL import Image, ImageOps
 
         try:
             with Image.open(source) as image:
-                thumbnail = image.copy()
+                # P1：解码后先做 EXIF 方向转正再缩放——Orientation 2-8 的照片
+                # 缩略图直立；exif_transpose 同时移除方向标记，缩略图不会被
+                # 查看器二次旋转。无方向标记时返回副本，行为与旧路径一致。
+                thumbnail = ImageOps.exif_transpose(image)
                 thumbnail.thumbnail((size, size))
                 cached.parent.mkdir(parents=True, exist_ok=True)
                 thumbnail.save(cached)

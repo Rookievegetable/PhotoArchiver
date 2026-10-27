@@ -33,7 +33,11 @@ from photo_archiver.application.services import (
 )
 from photo_archiver.domain import FaceClusterRun
 from photo_archiver.presentation import ui_text as text
-from photo_archiver.presentation.views.people_admin_page import PeopleAdminPage
+from photo_archiver.presentation.views.people_admin_page import (
+    PeopleAdminPage,
+    derive_group_ordinals,
+    format_group_ordinal,
+)
 from photo_archiver.presentation.views.person_deletion_dialog import PersonDeletionDialog
 
 
@@ -90,9 +94,10 @@ def test_page_renders_roster_in_order_with_columns(populated) -> None:
     page, _, _ = populated
     table = page._table
     assert table.rowCount() == 3
-    names = [table.item(row, 1).text() for row in range(table.rowCount())]
+    names = [table.item(row, 2).text() for row in range(table.rowCount())]
     assert names == ["张三", "李四", "王五"]
-    assert [table.item(row, 0).text() for row in range(3)] == ["1", "2", "3"]
+    assert [table.item(row, 0).text() for row in range(3)] == ["1", "2", "3"]  # 顺序列
+    assert [table.item(row, 1).text() for row in range(3)] == ["—", "—", "—"]  # 组/序：单组无前缀
 
 
 def test_move_selected_persists_and_updates_positions(populated) -> None:
@@ -133,8 +138,8 @@ def test_batch_review_filters_and_disables_reorder(populated, tmp_path: Path) ->
     page._batch_combo.setCurrentIndex(index)
     page._on_batch_selected(index)
     assert page._table.rowCount() == 1  # 该批次带入 1 人（名单里的「张三 E001」是新建，不合并无工号的同名人员）
-    assert page._table.item(0, 1).text() == "张三"
-    assert page._table.item(0, 5).text() == "batch.csv"  # 来源批次列可见
+    assert page._table.item(0, 2).text() == "张三"
+    assert page._table.item(0, 6).text() == "batch.csv"  # 来源批次列可见（组/序插入后右移）
     assert page._batch_hint.isVisible()  # 只读提示显示
     assert not page._table.dragEnabled()  # 回看态禁止拖拽
     page._batch_combo.setCurrentIndex(0)
@@ -198,7 +203,7 @@ def _row_payload() -> QMimeData:
 
 def _row_center(table, row: int) -> QPoint:
     """Return a real viewport point inside ``row``'s cells."""
-    return table.visualItemRect(table.item(row, 1)).center()
+    return table.visualItemRect(table.item(row, 2)).center()
 
 
 def test_table_keeps_row_drops_enabled_for_reordering(populated) -> None:
@@ -248,10 +253,10 @@ def test_row_drop_reorders_the_roster_without_a_blank_row(populated) -> None:
     assert [p.name for p in repositories.people.list_all()] == ["王五", "张三", "李四"]
     assert [p.roster_order for p in repositories.people.list_all()] == [1, 2, 3]
     assert table.rowCount() == 3
-    assert [table.item(row, 1).text() for row in range(3)] == ["王五", "张三", "李四"]
+    assert [table.item(row, 2).text() for row in range(3)] == ["王五", "张三", "李四"]
     # 界面优化 §4.1：行内操作列已取消（编辑移至工具栏）。
-    assert table.columnCount() == 6
-    assert all(table.cellWidget(row, 5) is None for row in range(3))
+    assert table.columnCount() == 7
+    assert all(table.cellWidget(row, 6) is None for row in range(3))
     # 落点降级成功：Qt 不会动模型，被拖动的人在自己的新位置保持选中
     assert [index.row() for index in table.selectionModel().selectedRows()] == [0]
 
@@ -368,7 +373,7 @@ def test_move_buttons_keep_the_person_selected_at_the_new_position(populated) ->
     page._move_down_button.click()
 
     assert [p.name for p in repositories.people.list_all()] == ["张三", "王五", "李四"]
-    assert page._table.item(2, 1).text() == "李四"
+    assert page._table.item(2, 2).text() == "李四"
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [2]
     assert page._table.currentRow() == 2
     assert not page._move_down_button.isEnabled()  # 已到末尾：置灰而非静默无效
@@ -381,7 +386,7 @@ def test_move_buttons_keep_the_person_selected_at_the_new_position(populated) ->
     page._move_up_button.click()  # 再退一行：李四 到开头
     assert [p.name for p in repositories.people.list_all()] == ["李四", "张三", "王五"]
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [0]
-    assert page._table.item(0, 1).text() == "李四"
+    assert page._table.item(0, 2).text() == "李四"
     assert not page._move_up_button.isEnabled()  # 已到开头
 
 
@@ -394,7 +399,7 @@ def test_repeated_move_clicks_move_the_same_person(populated) -> None:
 
     assert [p.name for p in repositories.people.list_all()] == ["李四", "王五", "张三"]
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [2]
-    assert page._table.item(2, 1).text() == "张三"
+    assert page._table.item(2, 2).text() == "张三"
 
 
 def test_move_buttons_grey_out_at_the_roster_edges(populated) -> None:
@@ -422,11 +427,11 @@ def test_selection_follows_the_person_across_refreshes(populated) -> None:
     page.refresh()
 
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [2]
-    assert page._table.item(2, 1).text() == "王五"
+    assert page._table.item(2, 2).text() == "王五"
 
     page.move_row(2, 0)  # 王五挪到最前
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [0]
-    assert page._table.item(0, 1).text() == "王五"
+    assert page._table.item(0, 2).text() == "王五"
 
 
 def test_identity_conflict_is_reported_in_chinese(populated, monkeypatch) -> None:
@@ -581,3 +586,90 @@ def test_clustering_buttons_emit_request_signals(tmp_path, qtbot) -> None:
 
     assert runs_requested == [1]
     assert results_requested == [1]
+
+
+# ── 阶段 2 方案 a：「组/序」派生列 ───────────────────────────────────────────
+
+
+def test_derive_group_ordinals_counts_jumps_as_group_boundaries() -> None:
+    """跳变分组：序号链不再接续（前序+1）即开启新组（跳变处组号 +1）。"""
+    names = ["1张三", "2李四", "3王五", "1赵六", "2钱七"]
+    assert derive_group_ordinals(names) == [
+        (1, 1), (1, 2), (1, 3), (2, 1), (2, 2),
+    ]
+
+
+def test_derive_group_ordinals_single_group_has_no_group_number() -> None:
+    """仅一组（整条序号链无跳变）→ 组号全部为 None（显示「—」）。"""
+    assert derive_group_ordinals(["1张三", "2李四", "3王五"]) == [
+        (None, 1), (None, 2), (None, 3),
+    ]
+
+
+def test_derive_group_ordinals_without_prefix_degrades_to_none() -> None:
+    """无数字前缀：序号 None；组链未开启前组号同为 None。"""
+    assert derive_group_ordinals(["张三", "李四"]) == [(None, None), (None, None)]
+    # 前缀非数字同样不匹配（^\d+ 降级为无前缀）。
+    assert derive_group_ordinals(["a1张三", "2李四"]) == [(None, None), (None, 2)]
+
+
+def test_derive_group_ordinals_prefixless_people_inherit_current_group() -> None:
+    """无前缀者不参与链比较，继承当前组号；空名单返回空列表。"""
+    assert derive_group_ordinals(["张三", "1李四", "2王五", "1赵六"]) == [
+        (None, None), (1, 1), (1, 2), (2, 1),
+    ]
+    assert derive_group_ordinals([]) == []
+
+
+def test_format_group_ordinal_renders_placeholder_for_none_parts() -> None:
+    assert format_group_ordinal(2, 3) == "2/3"
+    assert format_group_ordinal(1, None) == "1/—"
+    assert format_group_ordinal(None, 2) == "—/2"
+    assert format_group_ordinal(None, None) == "—"
+
+
+def test_people_table_renders_group_ordinal_column(tmp_path: Path, qtbot) -> None:
+    """页面渲染：新列在「顺序」之后，派生值/表头/派生依据 tooltip 正确。"""
+    manage, list_persons, delete_person, runs, results, _ = _services(tmp_path)
+    for name in ("1张三", "2李四", "1王五", "赵六"):
+        manage.add_person(AddPersonCommand(name=name))
+    page = PeopleAdminPage(manage, list_persons, delete_person, runs, results)
+    qtbot.addWidget(page)
+
+    table = page._table
+    headers = [table.horizontalHeaderItem(c).text() for c in range(table.columnCount())]
+    assert headers == [
+        text.PEOPLE_PAGE_COL_ORDER,
+        text.PEOPLE_PAGE_COL_GROUP_ORDINAL,
+        text.PEOPLE_PAGE_COL_NAME,
+        text.PEOPLE_PAGE_COL_IDENTITY,
+        text.PEOPLE_PAGE_COL_DEPARTMENT,
+        text.PEOPLE_PAGE_COL_NOTE,
+        text.PEOPLE_PAGE_COL_BATCH,
+    ]
+    # 1张三/2李四 → 第 1 组；1王五 → 第 2 组；赵六无前缀 → 序号「—」。
+    assert [table.item(row, 1).text() for row in range(table.rowCount())] == [
+        "1/1", "1/2", "2/1", "2/—",
+    ]
+    # 派生依据说明在该列 tooltip（其余列 tooltip 为单元格值本身）。
+    assert table.item(0, 1).toolTip() == text.PEOPLE_PAGE_GROUP_ORDINAL_TOOLTIP
+    assert table.item(0, 2).toolTip() == "1张三"
+
+
+def test_group_ordinal_column_recomputes_after_reorder(populated) -> None:
+    """拖拽/按钮排序改 roster_order 后，组/序按新顺序自然重算（零持久化）。"""
+    page, manage, _ = populated
+    manage.add_person(AddPersonCommand(name="1王五"))
+    page.refresh()
+    table = page._table
+    # 顺序：张三(无前缀), 李四(无前缀), 王五(无前缀), 1王五 → 首个带序号者开启第 1 组。
+    assert [table.item(row, 1).text() for row in range(table.rowCount())] == [
+        "—", "—", "—", "—/1",
+    ]
+    page.move_row(3, 0)  # 1王五 移到首位
+    assert [table.item(row, 2).text() for row in range(table.rowCount())] == [
+        "1王五", "张三", "李四", "王五",
+    ]
+    assert [table.item(row, 1).text() for row in range(table.rowCount())] == [
+        "—/1", "—", "—", "—",
+    ]

@@ -261,17 +261,32 @@ class PhotoDetailDialog(QDialog):
             badge=badge if badge else text.FILTER_STATUS_UNMATCHED,
         ))
 
-    def replace_photo(self, photo: Photo, badge: str | None = None) -> None:
+    def replace_photo(
+        self,
+        photo: Photo,
+        badge: str | None = None,
+        thumbnail_path: Path | None = None,
+    ) -> None:
         """导航宿主 API（审核预览上一张/下一张）：重绑照片并重启受控解码。
 
-        预览复位为"加载中"占位；在途的旧解码结果由 request_id 机制自动
-        丢弃。【查看大图】按钮隐藏（导航模式下解码自动进行）。
+        ``thumbnail_path``（P12）：导航宿主已知该照片的缓存缩略图时传入——
+        先显示缩略图占位，再启动高清解码（结果到达后自然覆盖）；未知则维持
+        "加载中"占位。在途的旧解码结果由 request_id 机制自动丢弃。
+        【查看大图】按钮隐藏（导航模式下解码自动进行）。
         """
         self._photo = photo
         self._apply_photo_details(photo, badge)
         self._hd_status_label.setVisible(False)
         self._view_full_button.setVisible(False)
-        self._preview.setText(text.PHOTO_DETAIL_HD_LOADING)
+        pixmap = QPixmap()
+        if thumbnail_path is not None:
+            pixmap.load(str(thumbnail_path))
+        if pixmap.isNull():
+            self._preview.setText(text.PHOTO_DETAIL_HD_LOADING)
+        else:
+            # P12：缩略图占位先上屏（顺序在启动解码之前，事件循环内不会被
+            # 竞态覆盖——解码结果经队列连接投回，必然晚于本次同步赋值）。
+            self._preview.setPixmap(pixmap)
         self._on_view_full_size_clicked()
 
     @Slot()

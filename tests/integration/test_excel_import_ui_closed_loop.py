@@ -171,11 +171,11 @@ def test_second_import_refreshes_the_people_page_without_restart(
 
     import_action.trigger()
     qtbot.waitUntil(lambda: page._table.rowCount() == 2, timeout=15000)
-    assert [page._table.item(row, 1).text() for row in range(2)] == ["Alice", "Bob"]
+    assert [page._table.item(row, 2).text() for row in range(2)] == ["Alice", "Bob"]  # 姓名列（组/序插入后右移）
 
     import_action.trigger()  # 第二批：页面必须当场显示 3 人
     qtbot.waitUntil(lambda: page._table.rowCount() == 3, timeout=15000)
-    assert [page._table.item(row, 1).text() for row in range(3)] == [
+    assert [page._table.item(row, 2).text() for row in range(3)] == [
         "Alice", "Bob", "Carol",
     ]
-    assert page._table.item(2, 5).text() == "second.xlsx"  # 来源批次列同步
+    assert page._table.item(2, 6).text() == "second.xlsx"  # 来源批次列同步（组/序插入后右移）

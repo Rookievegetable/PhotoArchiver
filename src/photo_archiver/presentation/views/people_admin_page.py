@@ -12,6 +12,8 @@ repository, no SQL and no business rule — validation errors come back from
 
 from __future__ import annotations
 
+import re
+from collections.abc import Sequence
 from uuid import UUID
 
 from loguru import logger
@@ -57,14 +59,70 @@ from photo_archiver.presentation.views.person_edit_dialog import PersonEditDialo
 
 # 界面优化 §4.1：取消行内操作列——编辑移至工具栏（选中行生效），
 # 减少操作栏占用；身份/排序/批次归属/删除能力全部保留。
+# 阶段 2 方案 a：新增「组/序」合并列（组号与组内序号合一以控制宽度），
+# 插在「顺序」列之后；各列定位常量供渲染与选中逻辑共用。
 _COLUMNS = (
     text.PEOPLE_PAGE_COL_ORDER,
+    text.PEOPLE_PAGE_COL_GROUP_ORDINAL,
     text.PEOPLE_PAGE_COL_NAME,
     text.PEOPLE_PAGE_COL_IDENTITY,
     text.PEOPLE_PAGE_COL_DEPARTMENT,
     text.PEOPLE_PAGE_COL_NOTE,
     text.PEOPLE_PAGE_COL_BATCH,
 )
+_COLUMN_GROUP_ORDINAL = 1
+_COLUMN_NAME = 2
+
+# 组内序号取姓名开头的连续数字前缀（如「3张三」→ 3；无前缀 → None）。
+_NAME_ORDINAL_PATTERN = re.compile(r"^\d+")
+
+
+def derive_group_ordinals(
+    names: Sequence[str],
+) -> list[tuple[int | None, int | None]]:
+    """按名单顺序派生每人的（组号, 组内序号）——阶段 2 方案 a 纯只读规则。
+
+    输入顺序必须是 roster 顺序（``roster_order`` 升序，即页面展示顺序）。
+    派生规则（任务书 §1.5；纯显示值，零 schema、零持久化）：
+
+    - 组内序号 = 姓名开头的数字前缀（``^\\d+``）；无数字前缀为 ``None``
+      （前缀非数字同样不匹配，降级为 ``None``）。
+    - 组号 = 沿名单顺序行走序号链：首个带序号者开启第 1 组；此后凡序号
+      不再接续「前一（带序号）者 + 1」——重新从 1 开始、重复或跳号——即
+      视为一次跳变，跳变处组号 +1。无前缀者不参与链比较，继承当前组号
+      （组链尚未开启时为 ``None``）。
+    - 整份名单只派生出一组（无任何跳变）时组号无意义，全部返回 ``None``
+      （展示层显示「—」）。
+
+    Returns:
+        与 ``names`` 等长的 (组号, 组内序号) 列表，两者均可为 ``None``。
+    """
+    ordinals = [
+        int(match.group()) if (match := _NAME_ORDINAL_PATTERN.match(name)) else None
+        for name in names
+    ]
+    groups: list[int | None] = []
+    group_no: int | None = None
+    previous_ordinal: int | None = None
+    for ordinal in ordinals:
+        if ordinal is None:
+            groups.append(group_no)
+            continue
+        if group_no is None or previous_ordinal is None or ordinal != previous_ordinal + 1:
+            group_no = 1 if group_no is None else group_no + 1
+        groups.append(group_no)
+        previous_ordinal = ordinal
+    if group_no is not None and group_no == 1:
+        # 仅一组：组号无区分意义，按任务书显示「—」。
+        groups = [None] * len(groups)
+    return list(zip(groups, ordinals, strict=True))
+
+
+def format_group_ordinal(group: int | None, ordinal: int | None) -> str:
+    """Render one（组号, 组内序号）pair as the「组/序」cell text."""
+    if group is None and ordinal is None:
+        return "—"
+    return f"{'—' if group is None else group}/{'—' if ordinal is None else ordinal}"
 
 
 _ROW_MIME_TYPE = "application/x-qabstractitemmodeldatalist"
@@ -316,10 +374,10 @@ class PeopleAdminPage(QWidget):
         """
         if not (0 <= index < self._table.rowCount()):
             return
-        item = self._table.item(index, 1)
+        item = self._table.item(index, _COLUMN_NAME)
         if item is None:
             return
-        self._table.setCurrentCell(index, 1)
+        self._table.setCurrentCell(index, _COLUMN_NAME)
         self._table.selectRow(index)
         self._table.scrollToItem(item)
         if self._table.hasFocus() or self._table.viewport().hasFocus():
@@ -352,6 +410,9 @@ class PeopleAdminPage(QWidget):
         batch_names = {summary.batch.id: summary.batch.file_name for summary in self._batches}
         people = self.visible_people()
         positions = {person.id: index + 1 for index, person in enumerate(self._rows)}
+        # 阶段 2 方案 a：组/序为按展示顺序（roster_order）派生的只读显示值，
+        # 拖拽排序/增删后随本次重渲染自然重算，无需持久化。
+        group_ordinals = derive_group_ordinals([person.name for person in people])
         self._table.setUpdatesEnabled(False)
         try:
             with QSignalBlocker(self._table):
@@ -359,6 +420,7 @@ class PeopleAdminPage(QWidget):
                 for row_index, person in enumerate(people):
                     values = (
                         str(positions[person.id]),
+                        format_group_ordinal(*group_ordinals[row_index]),
                         person.name,
                         person.identity.value if person.identity else "",
                         person.department or "",
@@ -368,7 +430,11 @@ class PeopleAdminPage(QWidget):
                     )
                     for column, value in enumerate(values):
                         item = QTableWidgetItem(value)
-                        item.setToolTip(value)
+                        # 组/序列的 tooltip 说明派生依据（其余列沿用值本身）。
+                        item.setToolTip(
+                            text.PEOPLE_PAGE_GROUP_ORDINAL_TOOLTIP
+                            if column == _COLUMN_GROUP_ORDINAL else value
+                        )
                         self._table.setItem(row_index, column, item)
                 if people:
                     self._empty_label.clear()

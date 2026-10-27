@@ -28,6 +28,7 @@ from photo_archiver.domain.entities.calibration_annotation import (
 from photo_archiver.infrastructure.repositories.in_memory_calibration_annotation_repository import (
     InMemoryCalibrationAnnotationRepository,
 )
+from photo_archiver.presentation import ui_text as text
 from photo_archiver.infrastructure import (
     InMemoryFaceClusterRepository,
     InMemoryFaceObservationRepository,
@@ -309,3 +310,45 @@ class TestCalibrationIdentityFailClosed:
         assert own_a.id != own_b.id
         for own in (own_a, own_b):
             assert own.annotator_id != "unknown"
+
+
+# ── P7：代际下拉「（最新）」标记（阶段 2；纯显示，零业务语义） ────────────────
+
+
+def test_generation_combo_marks_newest_entry(qtbot) -> None:
+    """唯一代际同样标注「（最新）」（list_cluster_runs 首位即最新）。"""
+    harness = _Harness()
+    harness.add_generation()
+    dialog = harness.build_dialog(qtbot)
+
+    assert dialog._generation_combo.count() == 1
+    assert dialog._generation_combo.itemText(0).endswith(
+        text.CLUSTER_RESULTS_GENERATION_LATEST_MARK,
+    )
+
+
+def test_latest_mark_migrates_to_new_newest_after_rerun(qtbot) -> None:
+    """重跑产生新代际后：标记迁移到新的最新项，旧代际不再带标记。"""
+    from datetime import datetime, timedelta
+
+    harness = _Harness()
+    older = harness.add_generation(created_at=datetime(2026, 1, 1))
+    dialog = harness.build_dialog(qtbot)
+    assert dialog._generation_combo.itemText(0).endswith(
+        text.CLUSTER_RESULTS_GENERATION_LATEST_MARK,
+    )
+
+    newer = harness.add_generation(
+        created_at=datetime(2026, 1, 1) + timedelta(minutes=5),
+    )
+    dialog.refresh()
+
+    assert dialog._generation_combo.count() == 2
+    assert dialog._generation_combo.itemData(0) == newer.id
+    assert dialog._generation_combo.itemText(0).endswith(
+        text.CLUSTER_RESULTS_GENERATION_LATEST_MARK,
+    )
+    assert dialog._generation_combo.itemData(1) == older.id
+    assert not dialog._generation_combo.itemText(1).endswith(
+        text.CLUSTER_RESULTS_GENERATION_LATEST_MARK,
+    )
