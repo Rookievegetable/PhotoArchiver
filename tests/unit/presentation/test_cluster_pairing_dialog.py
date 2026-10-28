@@ -542,10 +542,12 @@ def test_photo_detail_stub_and_navigation(tmp_path, qtbot, monkeypatch):
         def __init__(self, photo, **kwargs):
             opened.append(photo)
             self.finished = _FakeSignal()  # P6：详图生命周期信号（真实 QDialog 契约）
+            self.navigation_requested = _FakeSignal()  # 阶段 C：内嵌导航信号
         def show(self): pass
         def raise_(self): pass
         def close(self): pass
         def deleteLater(self): pass
+        def set_navigation_position(self, position_text): pass
         def replace_photo(self, photo, badge=None, thumbnail_path=None):
             opened.append(photo)
 
@@ -577,26 +579,26 @@ def _two_photo_dialog(qtbot, tmp_path):
     return dialog, photo_a, photo_b
 
 
-def test_detail_nav_buttons_track_detail_dialog_lifecycle(qtbot, tmp_path):
-    """P6：上一张/下一张绑定详图生命周期——未开禁用/打开启用/关闭禁用。"""
+def test_detail_dialog_carries_embedded_navigation(qtbot, tmp_path):
+    """任务书阶段 C（D4=B1）：导航内嵌详图——面板无常驻按钮，打开即有
+    "第 x/y 张"计数；任何关闭路径（close → finished）回收对话框。"""
     dialog, _photo_a, _photo_b = _two_photo_dialog(qtbot, tmp_path)
-    assert dialog._detail_prev_button.isEnabled() is False
-    assert dialog._detail_next_button.isEnabled() is False
+    assert not hasattr(dialog, "_detail_prev_button")
+    assert not hasattr(dialog, "_detail_next_button")
 
     dialog._photo_grid.itemDoubleClicked.emit(dialog._photo_grid.item(0))
     assert dialog._detail_dialog is not None
-    assert dialog._detail_prev_button.isEnabled() is True
-    assert dialog._detail_next_button.isEnabled() is True
+    # 装置每组一簇一照片：计数如实反映组内照片数。
+    assert "第 1 / 1 张" in dialog._detail_dialog._navigation_position_label.text()
 
-    # 任何关闭路径（此处标题栏/程序化 close → finished）都回到禁用态。
+    # 任何关闭路径（此处标题栏/程序化 close → finished）都回收对话框。
     dialog._detail_dialog.close()
     assert dialog._detail_dialog is None
-    assert dialog._detail_prev_button.isEnabled() is False
-    assert dialog._detail_next_button.isEnabled() is False
+    qtbot.wait(100)  # 同上：解码任务/延迟销毁沉降（PySide6 6.11.1 竞态）
 
 
 def test_generation_switch_closes_open_detail(qtbot, tmp_path):
-    """P6：切换代际 = 快照失效——已打开的详图自动关闭并回到禁用态。"""
+    """P6：切换代际 = 快照失效——已打开的详图自动关闭并回收。"""
     dialog, _photo_a, _photo_b = _two_photo_dialog(qtbot, tmp_path)
     other_index = 1 if dialog._generation_combo.currentIndex() == 0 else 0
     dialog._photo_grid.itemDoubleClicked.emit(dialog._photo_grid.item(0))
@@ -605,8 +607,11 @@ def test_generation_switch_closes_open_detail(qtbot, tmp_path):
     dialog._generation_combo.setCurrentIndex(other_index)
 
     assert dialog._detail_dialog is None
-    assert dialog._detail_prev_button.isEnabled() is False
-    assert dialog._detail_next_button.isEnabled() is False
+    # PySide6 6.11.1 + pytest-qt 拆除时序竞态（任务书阶段 C 记录）：在飞的
+    # 高清解码任务与详图 deleteLater 组合时，测试体结束后的事件处理可能
+    # 触发原生崩溃（独立运行/生产事件循环无此窗口）。在体内让解码任务与
+    # 延迟销毁沉降，保证关闭路径断言之外的可复现性。
+    qtbot.wait(100)
 
 
 def test_refresh_closes_open_detail(qtbot, tmp_path):
@@ -618,7 +623,7 @@ def test_refresh_closes_open_detail(qtbot, tmp_path):
     dialog.refresh()
 
     assert dialog._detail_dialog is None
-    assert dialog._detail_next_button.isEnabled() is False
+    qtbot.wait(100)  # 同上：解码任务/延迟销毁沉降（PySide6 6.11.1 竞态）
 
 
 def test_detail_nav_missing_photo_reports_and_keeps_index(qtbot, tmp_path):
@@ -631,9 +636,10 @@ def test_detail_nav_missing_photo_reports_and_keeps_index(qtbot, tmp_path):
 
     # 模拟快照失效（正常路径已在切代际/刷新时关闭详图；此处覆盖防御分支）。
     dialog._current = None
-    dialog._detail_next_button.click()
+    dialog._on_detail_prev_next(1)  # 详图内嵌 ‹ › / ← → 的宿主端接收槽
 
     assert dialog._feedback_label.text() != feedback_before
     assert text.CLUSTER_DETAIL_PHOTO_MISSING in dialog._feedback_label.text()
     assert dialog._detail_index == 0  # 未命中不推进索引
     assert dialog._detail_dialog is not None  # 现有详图保持原样
+    qtbot.wait(100)  # 同上：解码任务/延迟销毁沉降（PySide6 6.11.1 竞态）

@@ -22,7 +22,8 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import QThread
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtGui import QColor, QImage, QKeySequence, QShortcut
+from PySide6.QtWidgets import QPushButton
 
 from PIL import Image
 
@@ -371,3 +372,68 @@ def test_p12_replace_photo_without_thumbnail_keeps_loading_placeholder(
     assert dialog._preview.text() == text.PHOTO_DETAIL_HD_LOADING
     qtbot.waitUntil(lambda: len(decoder.calls) == 1, timeout=5000)
     _wait_pixmap(qtbot, dialog, 300)
+
+
+# ── 内嵌导航（任务书阶段 C / D4=B1） ────────────────────────────────────────
+
+
+class _NavigatorStub:
+    """宿主占位：对话框不持有照片序列，仅按信号交互。"""
+
+
+def test_navigator_mode_builds_overlay_and_counter(qtbot, tmp_path):
+    """注入 navigator → ‹ › 覆盖按钮与计数标签存在；未注入 → 零变化。"""
+    dialog_with = PhotoDetailDialog(_photo(tmp_path), navigator=_NavigatorStub())
+    qtbot.addWidget(dialog_with)
+    assert dialog_with._navigation_position_label is not None
+    assert dialog_with._navigation_position_label.isVisible() is False
+    nav_buttons = [
+        button for button in dialog_with._preview.findChildren(QPushButton)
+        if button.text() in ("‹", "›")
+    ]
+    assert [b.text() for b in nav_buttons] == ["‹", "›"]
+
+    dialog_without = PhotoDetailDialog(_photo(tmp_path))
+    qtbot.addWidget(dialog_without)
+    assert dialog_without._navigation_position_label is None
+    assert dialog_without._preview.findChildren(QPushButton) == []
+
+
+def test_navigation_counter_written_by_host(qtbot, tmp_path):
+    """宿主回写"第 x/y 张"→ 计数可见且文本如实。"""
+    dialog = PhotoDetailDialog(_photo(tmp_path), navigator=_NavigatorStub())
+    qtbot.addWidget(dialog)
+    dialog.show()
+    dialog.set_navigation_position(text.CLUSTER_DETAIL_NAV_POSITION.format(index=3, total=11))
+    assert dialog._navigation_position_label.isVisible()
+    assert dialog._navigation_position_label.text() == "第 3 / 11 张"
+
+
+def test_navigation_buttons_emit_requests_and_keyboard_registered(qtbot, tmp_path):
+    """按钮点击发 navigation_requested(±1)；←/→ 快捷键已注册（同通道）。
+
+    无头测试环境不保证窗口激活态下的按键投递，键盘路径以"快捷键存在且
+    键值正确"断言；点击路径与快捷键共用同一 navigation_requested 信号。
+    """
+    from PySide6.QtCore import Qt
+
+    dialog = PhotoDetailDialog(_photo(tmp_path), navigator=_NavigatorStub())
+    qtbot.addWidget(dialog)
+    dialog.show()
+    received: list[int] = []
+    dialog.navigation_requested.connect(received.append)
+
+    shortcuts = dialog.findChildren(QShortcut)
+    assert sorted(s.key().toString() for s in shortcuts) == sorted({
+        QKeySequence(Qt.Key.Key_Left).toString(),
+        QKeySequence(Qt.Key.Key_Right).toString(),
+    })
+
+    prev_button, next_button = (
+        button for button in dialog._preview.findChildren(QPushButton)
+        if button.text() in ("‹", "›")
+    )
+    qtbot.mouseClick(prev_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(next_button, Qt.MouseButton.LeftButton)
+
+    assert received == [-1, 1]

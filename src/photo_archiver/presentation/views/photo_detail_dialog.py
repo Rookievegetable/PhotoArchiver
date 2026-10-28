@@ -35,9 +35,10 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QImage, QImageIOHandler, QImageReader, QPixmap
+from PySide6.QtGui import QKeySequence, QImage, QImageIOHandler, QImageReader, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
+    QGridLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
@@ -46,6 +47,10 @@ from PySide6.QtWidgets import (
 
 from photo_archiver.domain import Photo
 from photo_archiver.presentation import ui_text as text
+from photo_archiver.presentation.visual_style import (
+    style_nav_overlay_button,
+    style_nav_position_label,
+)
 
 # 固定预览包围盒（logical px）：aspect-fit 显示，缩略图与高清图同一区域，
 # 对话框尺寸不随照片长宽比跳变；解码目标 = 包围盒 × devicePixelRatio（物理空间）。
@@ -121,10 +126,21 @@ _decode_dispatcher: _DecodeDispatcher | None = None
 
 
 def _dispatcher() -> _DecodeDispatcher:
-    """Lazy singleton——首次解码时 QApplication 已存在。"""
+    """Lazy singleton——首次解码时 QApplication 已存在。
+
+    父对象挂 QCoreApplication：无父的 Python 持有 QObject 在 pytest-qt 的
+    事件处理时序下会被原生层回收（实测：worker 线程 emit 时报
+    "Signal source has been deleted"，真宿主路径演化为 access violation）。
+    挂到 app 上后生命周期与应用一致，跨测试/跨线程稳定。
+    """
     global _decode_dispatcher
     if _decode_dispatcher is None:
+        from PySide6.QtCore import QCoreApplication
+
         _decode_dispatcher = _DecodeDispatcher()
+        app = QCoreApplication.instance()
+        if app is not None:
+            _decode_dispatcher.setParent(app)
     return _decode_dispatcher
 
 
@@ -174,7 +190,15 @@ class _PreviewDecodeJob(QRunnable):
 
 
 class PhotoDetailDialog(QDialog):
-    """Show one photo's read-only details; double-click entry in the library."""
+    """Show one photo's read-only details; double-click entry in the library.
+
+    任务书 §5（阶段 C / D4=B1）：可选 ``navigator`` 注入后，预览框左右中间
+    叠放 ‹ › 导航按钮 + "第 x/y 张"计数 + 键盘 ←/→——对话框不持有照片列表，
+    仅发 :attr:`navigation_requested` 信号并展示宿主回写的位置计数；未注入
+    （照片库/其他只读入口）时零变化。
+    """
+
+    navigation_requested = Signal(int)
 
     def __init__(
         self,
@@ -184,13 +208,15 @@ class PhotoDetailDialog(QDialog):
         parent: QWidget | None = None,
         decoder: Callable[[Path, QSize, float], QImage] | None = None,
         auto_load_hd: bool = False,
+        navigator: object | None = None,
     ) -> None:
         """Compose the preview and metadata rows from already-loaded data.
 
         ``decoder`` 仅测试注入（§8 可替换边界）；生产恒为真实
         :func:`_decode_preview`。``auto_load_hd``：打开即自动启动高清解码
         （审核中心双击场景——审片人需要直出高清，无需再点【查看大图】）；
-        默认 False 保持"打开详情零原图 IO"契约。
+        默认 False 保持"打开详情零原图 IO"契约。``navigator``：宿主持有
+        照片序列（如聚类结果组内照片），注入即启用内嵌导航。
         """
         super().__init__(parent)
         self.setWindowTitle(text.PHOTO_DETAIL_TITLE)
@@ -198,6 +224,7 @@ class PhotoDetailDialog(QDialog):
         self._decoder = decoder or _decode_preview
         self._closed = False
         self._request_id = 0
+        self._navigator = navigator
         # 测试/QA 钩子：过期/关闭后丢弃的结果计数（T9/T10 契约观测点）。
         self._dropped_requests = 0
         # Worker 只触碰分发器（应用级单例，worker 上 emit 永不触碰对话框——
@@ -207,10 +234,16 @@ class PhotoDetailDialog(QDialog):
         _dispatcher().decoded.connect(self._on_dispatcher_decode)
         layout = QVBoxLayout(self)
 
-        preview = QLabel(self)
+        # 固定包围盒容器：预览铺满，导航控件按 D4=B1 覆盖其上（无 navigator
+        # 时容器退化为与旧布局逐像素一致的裸预览）。
+        preview_container = QWidget(self)
+        preview_grid = QGridLayout(preview_container)
+        preview_grid.setContentsMargins(0, 0, 0, 0)
+        preview = QLabel(preview_container)
         preview.setFixedSize(_PREVIEW_BOX)
         preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._preview = preview
+        preview_grid.addWidget(preview, 0, 0, 1, 3)
         pixmap = QPixmap()
         has_thumbnail = False
         if thumbnail_path is not None:
@@ -221,7 +254,13 @@ class PhotoDetailDialog(QDialog):
             has_thumbnail = True
         else:
             preview.setText(text.PHOTO_DETAIL_THUMB_PENDING)
-        layout.addWidget(preview)
+        # D4=B1：导航控件是预览 QLabel 的**子控件**（setGeometry 覆盖定位 +
+        # raise_），不做 QGridLayout 重叠单元——后者在 pytest-qt 的事件循环
+        # 下与对话框销毁时序组合会触发 PySide6 原生崩溃（6.11.1，已实测）。
+        self._navigation_position_label: QLabel | None = None
+        if navigator is not None:
+            self._build_navigation_overlay(preview)
+        layout.addWidget(preview_container)
 
         self._hd_status_label = QLabel(text.PHOTO_DETAIL_HD_FAILED, self)
         self._hd_status_label.setVisible(False)
@@ -244,6 +283,51 @@ class PhotoDetailDialog(QDialog):
         self._apply_photo_details(photo, badge)
         if auto_load_hd:
             self._on_view_full_size_clicked()
+
+    def _build_navigation_overlay(self, preview: QLabel) -> None:
+        """‹ › 覆盖式导航（D4=B1）：按钮/计数作为预览 QLabel 的子控件。
+
+        定位用 setGeometry（固定包围盒内：左右两侧垂直居中、计数贴左下），
+        避免 QGridLayout 重叠单元（见构造函数注释的崩溃教训）；raise_ 保证
+        覆盖在 pixmap 之上。
+        """
+        box_w, box_h = _PREVIEW_BOX.width(), _PREVIEW_BOX.height()
+        for delta, glyph, tip in (
+            (-1, "‹", text.CLUSTER_DETAIL_NAV_PREVIOUS),
+            (1, "›", text.CLUSTER_DETAIL_NAV_NEXT),
+        ):
+            button = QPushButton(glyph, preview)
+            button.setFixedSize(36, 64)
+            style_nav_overlay_button(button)
+            button.setToolTip(tip)
+            button.clicked.connect(
+                lambda _=False, d=delta: self.navigation_requested.emit(d),
+            )
+            x = 8 if delta < 0 else box_w - 36 - 8
+            button.setGeometry(x, (box_h - 64) // 2, 36, 64)
+            button.raise_()
+        self._navigation_position_label = QLabel(preview)
+        style_nav_position_label(self._navigation_position_label)
+        self._navigation_position_label.setVisible(False)
+        self._navigation_position_label.adjustSize()
+        self._navigation_position_label.move(8, box_h - 32)
+        self._navigation_position_label.raise_()
+        self._bind_navigation_shortcuts()
+
+    def _bind_navigation_shortcuts(self) -> None:
+        """←/→ 键触发导航（对话框级快捷键，不依赖焦点部件）。"""
+        for key, delta in ((Qt.Key.Key_Left, -1), (Qt.Key.Key_Right, 1)):
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.activated.connect(
+                lambda d=delta: self.navigation_requested.emit(d),
+            )
+
+    def set_navigation_position(self, position_text: str) -> None:
+        """宿主回写"第 x/y 张"计数（仅注入 navigator 后可见）。"""
+        if self._navigation_position_label is None:
+            return
+        self._navigation_position_label.setText(position_text)
+        self._navigation_position_label.setVisible(True)
 
     def _apply_photo_details(self, photo: Photo, badge: str | None) -> None:
         """(Re)fill the metadata labels for one photo (shared by navigation)."""

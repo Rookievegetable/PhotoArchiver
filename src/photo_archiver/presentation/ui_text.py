@@ -599,6 +599,11 @@ PAIRING_WORKBENCH_AUTO_CONFIRM_DONE = "位置自动确认 {auto_confirmed} 项�
 CLUSTER_AUTO_SUGGEST_DONE = "已按名单顺序自动生成建议"
 CLUSTER_AUTO_SUGGEST_SKIPPED_ROSTER = "名单为空，未生成建议；导入名单后可点击「生成建议」。"
 CLUSTER_AUTO_SUGGEST_FAILED = "自动生成建议失败：{detail}"
+
+# ---- 详图内嵌导航（任务书阶段 C / D4=B1） ----
+CLUSTER_DETAIL_NAV_PREVIOUS = "上一张（←）"
+CLUSTER_DETAIL_NAV_NEXT = "下一张（→）"
+CLUSTER_DETAIL_NAV_POSITION = "第 {index} / {total} 张"
 PAIRING_WORKBENCH_AUTO_CONFIRM_BLOCKED = "位置自动确认未执行（{reason}）"
 PAIRING_WORKBENCH_AUTO_CONFIRM_BLOCKED_REASONS = {
     "COUNT_MISMATCH": "簇与人员数量不一致",

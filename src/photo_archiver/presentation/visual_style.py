@@ -46,6 +46,9 @@ SEARCHABLE_COMBO_MARK = "true"
 
 # objectName hooks for non-button building blocks.
 EMPTY_STATE_CARD_OBJECT_NAME = "EmptyStateCard"
+# 详图内嵌导航覆盖控件（任务书阶段 C / D4=B1）：样式走单源 QSS。
+NAV_OVERLAY_BUTTON_OBJECT_NAME = "NavOverlayButton"
+NAV_POSITION_LABEL_OBJECT_NAME = "NavPositionLabel"
 
 # The only fixed brand color: it must stay recognizable across themes
 # because it marks irreversible actions.
@@ -101,6 +104,23 @@ QWidget#EmptyStateCard {
     border: 1px solid rgba(127, 127, 127, 0.45);
     border-radius: 6px;
 }
+QPushButton#NavOverlayButton {
+    background-color: rgba(0, 0, 0, 120);
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    font-size: 20px;
+    padding: 0px;
+}
+QPushButton#NavOverlayButton:hover {
+    background-color: rgba(0, 0, 0, 190);
+}
+QLabel#NavPositionLabel {
+    background-color: rgba(0, 0, 0, 140);
+    color: #ffffff;
+    border-radius: 4px;
+    padding: 2px 8px;
+}
 """
 
 
@@ -125,6 +145,18 @@ def _repolish(widget: QWidget) -> None:
     style = widget.style()
     style.unpolish(widget)
     style.polish(widget)
+
+
+def style_nav_overlay_button(button: QPushButton) -> None:
+    """Give a detail-dialog overlay navigation button the shared look."""
+    button.setObjectName(NAV_OVERLAY_BUTTON_OBJECT_NAME)
+    _repolish(button)
+
+
+def style_nav_position_label(label) -> None:
+    """Give the detail-dialog navigation position counter the shared look."""
+    label.setObjectName(NAV_POSITION_LABEL_OBJECT_NAME)
+    _repolish(label)
 
 
 def style_empty_state_card(page: QWidget) -> None:

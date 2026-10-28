@@ -218,16 +218,8 @@ class ClusterResultsDialog(QDialog):
         photos_row = QHBoxLayout()
         photos_row.addWidget(QLabel(text.CLUSTER_PAIRING_PHOTOS_LABEL, pane))
         photos_row.addStretch()
-        self._detail_prev_button = QPushButton(text.CLUSTER_PAIRING_DETAIL_PREV, pane)
-        self._detail_prev_button.clicked.connect(lambda: self._on_detail_prev_next(-1))
-        self._detail_next_button = QPushButton(text.CLUSTER_PAIRING_DETAIL_NEXT, pane)
-        self._detail_next_button.clicked.connect(lambda: self._on_detail_prev_next(1))
-        # P6：详图未打开时导航禁用（消除按钮可点但静默无效的路径）；打开/
-        # 关闭随 _open_detail/_on_detail_dialog_finished 联动启停。
-        self._detail_prev_button.setEnabled(False)
-        self._detail_next_button.setEnabled(False)
-        photos_row.addWidget(self._detail_prev_button)
-        photos_row.addWidget(self._detail_next_button)
+        # 任务书阶段 C（D4=B1）：上一张/下一张移入详图对话框（覆盖式 ‹ › +
+        # ←/→ + 计数），面板不再持有常驻导航按钮（P6 生命周期语义随之内化）。
         layout.addLayout(photos_row)
         self._photo_grid = QListWidget(self)
         self._photo_grid.setViewMode(QListWidget.ViewMode.IconMode)
@@ -899,45 +891,41 @@ class ClusterResultsDialog(QDialog):
                 thumbnail_path=self._thumbnail_paths.get(photo_id),
                 parent=self,
                 auto_load_hd=True,
+                navigator=self,
             )
             # P6：详图生命周期绑定导航可用性——任何关闭路径（accept/
-            # reject/标题栏/close）经 finished 信号统一回到禁用态。
+            # reject/标题栏/close）经 finished 信号统一回收。
             self._detail_dialog.finished.connect(self._on_detail_dialog_finished)
+            self._detail_dialog.navigation_requested.connect(self._on_detail_prev_next)
         else:
             # replace_photo 自动重启受控解码（导航模式契约）；缩略图已知时
             # 先占位再解码（P12：导航不再白屏等待高清）。
             self._detail_dialog.replace_photo(
                 photo, thumbnail_path=self._thumbnail_paths.get(photo_id),
             )
+        self._detail_dialog.set_navigation_position(text.CLUSTER_DETAIL_NAV_POSITION.format(
+            index=self._detail_index + 1, total=len(self._detail_photos),
+        ))
         self._detail_dialog.show()
         self._detail_dialog.raise_()
-        self._set_detail_nav_enabled(True)
 
     def _show_detail_photo_missing(self) -> None:
         """P6：详图目标已不在当前结果快照中——可见反馈，绝不静默。"""
         self._feedback_label.setText(text.CLUSTER_DETAIL_PHOTO_MISSING)
 
-    def _set_detail_nav_enabled(self, enabled: bool) -> None:
-        """P6：「上一张/下一张」随详图生命周期启停（仅配对模式存在按钮）。"""
-        if not self._pairing_active:
-            return
-        self._detail_prev_button.setEnabled(enabled)
-        self._detail_next_button.setEnabled(enabled)
-
     def _close_detail(self) -> None:
         """P6：快照失效路径（refresh/切代际）关闭已打开的详图。
 
         关闭经 QDialog.close() → finished 信号统一走
-        :meth:`_on_detail_dialog_finished`，导航按钮同步回到禁用态。
+        :meth:`_on_detail_dialog_finished`，导航随对话框销毁。
         """
         if self._detail_dialog is not None:
             self._detail_dialog.close()
 
     def _on_detail_dialog_finished(self, _result: int) -> None:
-        """P6：详图任何结束路径——导航回到禁用态并释放对话框引用。"""
+        """P6：详图任何结束路径——释放对话框引用（导航随对话框销毁）。"""
         dialog = self._detail_dialog
         self._detail_dialog = None
-        self._set_detail_nav_enabled(False)
         if dialog is not None:
             # 无 WA_DeleteOnClose：显式排程销毁，避免反复开关累积隐藏子对话框。
             dialog.deleteLater()
