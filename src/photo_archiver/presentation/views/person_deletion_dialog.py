@@ -8,16 +8,20 @@
 
 from typing import TYPE_CHECKING
 
+from loguru import logger
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QLabel,
+    QListWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from photo_archiver.application.commands.deletion import DeletePersonCommand
 from photo_archiver.application.services import ListPersonsService
+from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.ui_text import (
     PERSON_DELETE_BUTTON,
     PERSON_DELETE_CONFIRM,
@@ -170,3 +174,115 @@ class PersonDeletionDialog(QDialog):
         if person_id is None:
             return None
         return self._delete_person.preview([person_id])
+
+
+class MultiPersonDeletionDialog(QDialog):
+    """P11（D5-A 最小版）：多选人员的批量删除确认流.
+
+    「预览 → 明确二次确认 → 事务执行」，与 ``PersonDeletionDialog``（单人）
+    同一 ``DeletePersonUseCase``：``preview`` 产级联计数，``execute`` 在确认后
+    单事务删除（ADR-034：删除必经确认流）。照片与磁盘文件全保留（D2）。
+    视图只持 Application 服务（DEP-010）。
+    """
+
+    def __init__(
+        self,
+        people: "list[tuple[UUID | None, str]]",
+        delete_person: "DeletePersonUseCase",
+        parent: QWidget | None = None,
+    ) -> None:
+        """Build the preview over the selected people and wire the confirm flow.
+
+        Args:
+            people: ``(person_id, name)`` pairs behind the page's multi-selection.
+            delete_person: The deletion use case (preview + transactional execute).
+            parent: Optional Qt parent.
+        """
+        super().__init__(parent)
+        self.setWindowTitle(text.PEOPLE_PAGE_MULTI_DELETE_TITLE)
+        self.setMinimumWidth(520)
+        self._delete_person = delete_person
+        self._person_ids = tuple(pid for pid, _name in people if pid is not None)
+        self._result_message = ""
+        self._build_ui()
+        self._reload_preview(people)
+
+    def _build_ui(self) -> None:
+        """Lay out the name list, impact preview and danger confirm buttons."""
+        layout = QVBoxLayout(self)
+
+        self._people_list = QListWidget(self)
+        self._people_list.setMaximumHeight(160)
+        layout.addWidget(self._people_list)
+
+        self._impact_label = QLabel(self)
+        self._impact_label.setWordWrap(True)
+        layout.addWidget(self._impact_label)
+
+        self._buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        ok = self._buttons.button(QDialogButtonBox.StandardButton.Ok)
+        cancel = self._buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        ok.setText(text.PEOPLE_PAGE_MULTI_DELETE_BUTTON)
+        # 破坏性确认：danger 样式 + 取消持有默认焦点（误触 Enter 不得删除）。
+        assign_role(ok, ROLE_DANGER)
+        cancel.setDefault(True)
+        cancel.setFocus()
+        self._buttons.accepted.connect(self._on_confirm)
+        self._buttons.rejected.connect(self.reject)
+        layout.addWidget(self._buttons)
+
+    def _reload_preview(self, people: "list[tuple[UUID | None, str]]") -> None:
+        """Fill the name list and the cascade preview (side-effect free)."""
+        for _pid, name in people:
+            self._people_list.addItem(name)
+        preview = self._delete_person.preview(self._person_ids)
+        message = text.PEOPLE_PAGE_MULTI_DELETE_IMPACT.format(
+            person_count=preview.person_count,
+            names="、".join(name for _pid, name in people),
+            assignment_count=preview.assignment_count,
+            sample_count=preview.sample_count,
+            embedding_count=preview.embedding_count,
+            recognition_count=preview.recognition_count,
+        )
+        if preview.missing_count:
+            message += "\n" + text.PEOPLE_PAGE_MULTI_DELETE_MISSING.format(
+                missing_count=preview.missing_count,
+            )
+        self._impact_label.setText(message)
+
+    def _on_confirm(self) -> None:
+        """Execute inside the service's single transaction; report honestly."""
+        try:
+            result = self._delete_person.execute(
+                DeletePersonCommand(person_ids=self._person_ids),
+            )
+        except Exception as exc:  # noqa: BLE001 - UI boundary: show, log the detail
+            logger.exception("Multi-person deletion failed")
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(
+                self, text.PEOPLE_PAGE_DELETE_FAILED_TITLE,
+                text.PEOPLE_PAGE_DELETE_FAILED.format(detail=exc),
+            )
+            return
+        logger.info(
+            "Multi-person deletion removed {} people (assignment_cascade={} "
+            "sample_cascade={} embedding_cascade={} recognition_orphaned={})",
+            result.removed, result.assignment_cascade, result.sample_cascade,
+            result.embedding_cascade, result.recognition_orphaned,
+        )
+        self._result_message = text.PEOPLE_PAGE_MULTI_DELETE_DONE.format(
+            removed=result.removed,
+            assignment_cascade=result.assignment_cascade,
+            sample_cascade=result.sample_cascade,
+            embedding_cascade=result.embedding_cascade,
+            recognition_orphaned=result.recognition_orphaned,
+        )
+        self.accept()
+
+    def last_message(self) -> str:
+        """Return the outcome message for the caller's status bar."""
+        return self._result_message

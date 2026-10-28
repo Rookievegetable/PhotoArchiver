@@ -77,7 +77,28 @@ IMPORT_WARNING_TEXTS = {
     "name_department_duplicate_db": "姓名+部门与库内已有人员重复（弱冲突），将合并名单顺序",
 }
 IMPORT_PREVIEW_DEFAULT_WARNING = "{code}: {detail}"  # 未知告警兜底
-STATUS_IMPORT_DRAFT_PARSED = "已解析 {rows} 行草稿，请在预览中确认。"
+# P8 告警分级：已知 7 种 code 按现有文案语义归类为三级（与 IMPORT_WARNING_TEXTS
+# 一一对应）；未知 code 一律落入 default（默认样式，不崩溃）。
+IMPORT_WARNING_SEVERITY_STRONG = "strong"  # 强冲突（工号重复）
+IMPORT_WARNING_SEVERITY_WEAK = "weak"  # 弱冲突（姓名+部门重复）
+IMPORT_WARNING_SEVERITY_INFO = "info"  # 提示（空名 / 多名 / 组标题）
+IMPORT_WARNING_SEVERITY_DEFAULT = "default"  # 未知 code 兜底样式
+IMPORT_WARNING_SEVERITIES = {
+    "identity_duplicate_in_file": IMPORT_WARNING_SEVERITY_STRONG,
+    "identity_duplicate_db": IMPORT_WARNING_SEVERITY_STRONG,
+    "name_department_duplicate_in_file": IMPORT_WARNING_SEVERITY_WEAK,
+    "name_department_duplicate_db": IMPORT_WARNING_SEVERITY_WEAK,
+    "empty_name": IMPORT_WARNING_SEVERITY_INFO,
+    "multi_name": IMPORT_WARNING_SEVERITY_INFO,
+    "group_title": IMPORT_WARNING_SEVERITY_INFO,
+}
+IMPORT_WARNING_SEVERITY_LABELS = {
+    IMPORT_WARNING_SEVERITY_STRONG: "强冲突",
+    IMPORT_WARNING_SEVERITY_WEAK: "弱冲突",
+    IMPORT_WARNING_SEVERITY_INFO: "提示",
+}
+# P10（D6-A）：取消后的状态文案不再暗示可回看草稿——不新建回看入口。
+STATUS_IMPORT_DRAFT_PARSED = "取消将丢弃本次草稿；如需导入请重新选择文件"
 STATUS_IMPORT_CONFIRMED = "导入完成：新建 {imported} · 合并 {merged} · 跳过 {skipped}"
 STATUS_IMPORT_CONFIRM_ERRORS = "；{count} 行失败（详情见日志）"
 STATUS_IMPORT_CONFIRM_WORKER = "导入确认已提交后台执行，完成后显示结果。"
@@ -102,6 +123,31 @@ PEOPLE_PAGE_COL_IDENTITY = "工号"
 PEOPLE_PAGE_COL_DEPARTMENT = "部门"
 PEOPLE_PAGE_COL_NOTE = "备注"
 PEOPLE_PAGE_COL_BATCH = "来源批次"
+PEOPLE_PAGE_COL_MATCH_STATUS = "匹配状态"
+# P4（D3-A）：人员行「匹配状态」按统计锚点（最新代际）的当前有效决策判定。
+PEOPLE_PAGE_MATCH_STATUS_MARKED = "已匹配"
+PEOPLE_PAGE_MATCH_STATUS_UNMATCHED = "未匹配"
+PEOPLE_PAGE_MATCH_STATUS_NONE = "—"
+PEOPLE_PAGE_MATCH_STATUS_TOOLTIP = (
+    "按统计锚点（当前识别运行的最新聚类代际）的当前有效决策判定：该代际无"
+    "此人员的有效决策即显示「未匹配」；当前运行尚无聚类代际时无判定数据"
+    "（显示「—」）。"
+)
+# P4：右侧统计面板（锚点 = 当前识别运行的最新聚类代际；批次筛选不联动）。
+PEOPLE_PAGE_STATS_TITLE = "统计"
+PEOPLE_PAGE_STATS_ANCHOR_LABEL = "统计锚点：{anchor}（最新代际）"
+PEOPLE_PAGE_STATS_PHOTO_COUNT = "照片数：{count}"
+PEOPLE_PAGE_STATS_FACE_COUNT = "人脸数：{count}"
+PEOPLE_PAGE_STATS_MATCHED_COUNT = "已匹配人物数：{count}"
+PEOPLE_PAGE_STATS_UNMATCHED_COUNT = "未匹配人物数：{count}"
+PEOPLE_PAGE_STATS_CALIBER_NOTE = (
+    "口径：统计锚点为当前识别运行的最新聚类代际；人员域与聚类域分离，"
+    "「来源批次」筛选不联动本面板。"
+)
+PEOPLE_PAGE_STATS_EMPTY_NO_RUN = "尚无识别运行，暂无统计。"
+PEOPLE_PAGE_STATS_EMPTY_NO_GENERATION = "当前识别运行尚无聚类代际，暂无统计。"
+PEOPLE_PAGE_STATS_EMPTY_NO_ROSTER = "名单为空，暂无统计。"
+PEOPLE_PAGE_STATS_UNAVAILABLE = "统计服务不可用。"
 # 组/序列（阶段 2 方案 a）单元格 tooltip：说明派生依据（纯只读展示值）。
 PEOPLE_PAGE_GROUP_ORDINAL_TOOLTIP = (
     "派生显示值，不写入数据库：序号 = 姓名开头的数字前缀（无前缀显示"
@@ -782,6 +828,23 @@ CLEAR_ALL_DONE = (
     "已清空全部人员（删除 {removed} 名、决策历史 {assignment_cascade} 条、"
     "样本 {sample_cascade} 条、嵌入 {embedding_cascade} 条、"
     "识别归属置空 {recognition_orphaned} 条）。"
+)
+
+# ---- 人员多选删除（界面优化 P11，D5-A 最小版：仅「删除所选」，多选禁拖拽） ----
+PEOPLE_PAGE_MULTI_DELETE_TITLE = "删除所选人员"
+PEOPLE_PAGE_MULTI_DELETE_BUTTON = "删除所选人员"
+PEOPLE_PAGE_MULTI_DELETE_IMPACT = (
+    "将删除 {person_count} 名人员：{names}\n\n"
+    "· {assignment_count} 条身份决策历史（含人工终审记录与排序快照）将按外键级联删除；\n"
+    "· {sample_count} 条人脸样本（多样本库）将按外键级联删除；\n"
+    "· {embedding_count} 条人脸嵌入将一并删除；\n"
+    "· {recognition_count} 条识别结果将保留但归属置空（不再进入归档）。\n\n"
+    "全部照片与磁盘文件均保留，不会删除任何文件。"
+)
+PEOPLE_PAGE_MULTI_DELETE_MISSING = "另有 {missing_count} 个所选人员不在库中，将自动跳过。"
+PEOPLE_PAGE_MULTI_DELETE_DONE = (
+    "已删除 {removed} 名人员（决策历史 {assignment_cascade} 条、样本 {sample_cascade} 条、"
+    "嵌入 {embedding_cascade} 条、识别归属置空 {recognition_orphaned} 条）。"
 )
 
 # ---- 删除失败提示（照片/人员共用） ----

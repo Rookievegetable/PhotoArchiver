@@ -643,6 +643,7 @@ class MainWindow(QMainWindow):
             self._context.services.delete_person,
             self._context.services.list_recognition_runs,
             self._context.services.cluster_results,
+            self._context.services.roster_cluster_stats,
             parent=self,
         )
         page.people_changed.connect(self._on_people_changed)
@@ -1147,7 +1148,7 @@ class MainWindow(QMainWindow):
 
         两段式：解析为草稿（同步，名单文件小且快）→ 预览对话框编辑/拆分/跳过
         → 确认。确认 ≤500 行同步执行；>500 行提交 ConfirmImportTask 走 Worker
-        （D6）。取消（reject）保留草稿，不写正式人员。
+        （D6）。取消（reject）不写正式人员，且不提供草稿回看入口（P10/D6-A）。
         """
         path, _ = QFileDialog.getOpenFileName(
             self, DIALOG_SELECT_PEOPLE_FILE, "", PEOPLE_FILE_FILTER
@@ -1164,8 +1165,9 @@ class MainWindow(QMainWindow):
             return
         dialog = ImportPreviewDialog(draft, self._context.services, Path(path), self)
         if not dialog.exec():
-            # 取消：草稿保留（可回看），正式人员名单不变。
-            self._status_label.setText(STATUS_IMPORT_DRAFT_PARSED.format(rows=len(draft.rows)))
+            # P10/D6-A：取消后不提供草稿回看入口——文案明确「取消将丢弃本次
+            # 草稿；如需导入请重新选择文件」，正式人员名单不变。
+            self._status_label.setText(STATUS_IMPORT_DRAFT_PARSED)
             return
         self._confirm_import(dialog.batch_id, dialog.row_count)
 

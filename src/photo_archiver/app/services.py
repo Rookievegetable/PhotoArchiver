@@ -23,6 +23,7 @@ from photo_archiver.application import (
     ListRecognitionRunsService,
     PairingWorkbenchService,
     RecognitionFailureService,
+    RosterClusterStatsService,
     SuggestPairingsService,
     DeletePhotosService,
     DetectDuplicatesService,
@@ -87,6 +88,7 @@ class ApplicationServices:
     cluster_faces: ClusterFacesService
     list_recognition_runs: ListRecognitionRunsService
     cluster_results: ClusterResultsService
+    roster_cluster_stats: RosterClusterStatsService
     suggest_pairings: SuggestPairingsService
     photo_ignore: PhotoIgnoreService
     pairing_workbench: PairingWorkbenchService
@@ -414,6 +416,13 @@ def build_application_services(
             repositories.face_clusters,
             repositories.cluster_assignments,
             photo_ignore_repository=repositories.photo_ignore_states,
+        ),
+        # P4（人员页统计面板）：锚点代际四数字薄读用例——与 cluster_results
+        # 同端口（assignments 可选，生产装配必须注入以统计已匹配人物数）。
+        roster_cluster_stats=RosterClusterStatsService(
+            repositories.face_clusters,
+            repositories.face_observations,
+            repositories.cluster_assignments,
         ),
         workspace_readiness=WorkspaceReadinessService(
             repositories.recognition,

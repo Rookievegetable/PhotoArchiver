@@ -23,6 +23,9 @@ from photo_archiver.application.services.backfill_historical_people_service impo
     BackfillHistoricalPeopleService,
 )
 from photo_archiver.application.services.cluster_results_service import ClusterResultsService
+from photo_archiver.application.services.roster_cluster_stats_service import (
+    RosterClusterStatsService,
+)
 from photo_archiver.application.services.recognition_failure_service import RecognitionFailureService
 from photo_archiver.application.services.list_recognition_runs_service import ListRecognitionRunsService
 from photo_archiver.application.services.pairing_workbench_service import PairingWorkbenchService
@@ -68,6 +71,7 @@ __all__ = [
     "ClusterFacesService",
     "BackfillHistoricalPeopleService",
     "ClusterResultsService",
+    "RosterClusterStatsService",
     "RecognitionFailureService",
     "ListRecognitionRunsService",
     "PairingWorkbenchService",

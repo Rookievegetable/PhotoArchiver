@@ -51,3 +51,23 @@ class ClusterRunResults:
 
     cluster_run: FaceClusterRun
     clusters: tuple[ClusterDetailView, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RosterClusterStats:
+    """P4 人员页统计面板的只读四数字（锚点 = 最新聚类代际）.
+
+    口径（任务书 §1.1，展示层原样透出）：
+    - ``photo_count``：锚点代际成员覆盖的去重照片数（按 observation.photo_id）；
+    - ``face_count``：锚点代际的观测成员数（成员行总数）；
+    - ``matched_person_count``：该代际 active 决策（suggested / confirmed /
+      auto_confirmed）涉及的不同 person 数；
+    - ``unmatched_person_count``：名单总数 − 已匹配人物数。
+    """
+
+    cluster_run_id: UUID
+    anchor_created_at: datetime | None
+    photo_count: int
+    face_count: int
+    matched_person_count: int
+    unmatched_person_count: int

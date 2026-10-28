@@ -8,11 +8,15 @@ cells, switch actions, edit fields, and re-parse with different options
 The dialog never writes people itself — it persists draft edits through
 ``ParseImportDraftService`` and, on accept, hands the batch back to the
 window, which runs ``ConfirmImportService`` synchronously (≤500 rows) or
-submits ``ConfirmImportTask`` for larger rosters. Cancel keeps the draft.
+submits ``ConfirmImportTask`` for larger rosters. Cancel keeps the formal
+registry untouched and offers no draft-revisit entry (P10/D6-A: the status
+message tells the user the draft is dropped and a re-import re-picks the
+file).
 """
 
 from __future__ import annotations
 
+import html
 from uuid import UUID
 
 from PySide6.QtCore import Qt
@@ -49,6 +53,64 @@ _ACTION_LABELS = (
     (DRAFT_ACTION_SKIP, text.IMPORT_PREVIEW_ACTION_SKIP),
 )
 _FIELDS = ("name", "identity", "department", "note", "group")
+
+# P8 告警分级：每级的（前缀符号, 前景色, 背景色）——三级两两可区分；
+# 未知 code 走 ``_IMPORT_WARNING_DEFAULT_STYLE``（默认样式，不崩溃）。
+# 配色以富文本 span 落在告警行内（不经 widget 级 stylesheet，遵循视觉系统
+# 单一样式表约定）。
+_IMPORT_WARNING_STYLES = {
+    text.IMPORT_WARNING_SEVERITY_STRONG: ("⛔", "#B3261E", "#F9DEDC"),
+    text.IMPORT_WARNING_SEVERITY_WEAK: ("⚠", "#8A5A00", "#FBEEC9"),
+    text.IMPORT_WARNING_SEVERITY_INFO: ("ℹ", "#1F4E79", "#DEEAF6"),
+}
+_IMPORT_WARNING_DEFAULT_STYLE: tuple[str, None, None] = ("•", None, None)
+# 严重级排序（小 = 更严重）：用于多告警行的 tooltip 排序与整体定级。
+_IMPORT_WARNING_SEVERITY_RANK = {
+    text.IMPORT_WARNING_SEVERITY_STRONG: 0,
+    text.IMPORT_WARNING_SEVERITY_WEAK: 1,
+    text.IMPORT_WARNING_SEVERITY_INFO: 2,
+    text.IMPORT_WARNING_SEVERITY_DEFAULT: 3,
+}
+
+
+def classify_import_warning(code: str) -> str:
+    """Return a warning code's severity class（P8）.
+
+    已知 7 种 code 按现有文案语义归入 强冲突/弱冲突/提示 三级；未知 code
+    一律 ``default``（默认样式，绝不因未知值崩溃）。
+    """
+    return text.IMPORT_WARNING_SEVERITIES.get(code, text.IMPORT_WARNING_SEVERITY_DEFAULT)
+
+
+def warning_severity_rank(severity: str) -> int:
+    """Return the severity's rank (smaller = more severe)."""
+    return _IMPORT_WARNING_SEVERITY_RANK.get(severity, len(_IMPORT_WARNING_SEVERITY_RANK))
+
+
+def build_warning_label(warnings, parent=None) -> QLabel:  # noqa: ANN001
+    """Render structured warnings as one graded, color-coded label（P8）.
+
+    每条告警一行：分级前缀符号 + 前景/背景配色（富文本 span，HTML 转义防
+    注入）；未知 code 使用默认样式。返回的 QLabel 由调用方决定挂载位置。
+    """
+    label = QLabel(parent)
+    label.setWordWrap(True)
+    lines = []
+    for code, detail in warnings:
+        severity = classify_import_warning(code)
+        symbol, fg, bg = _IMPORT_WARNING_STYLES.get(severity, _IMPORT_WARNING_DEFAULT_STYLE)
+        template = text.IMPORT_WARNING_TEXTS.get(code, text.IMPORT_PREVIEW_DEFAULT_WARNING)
+        body = html.escape(template.format(code=code, detail=detail))
+        if fg is not None and bg is not None:
+            body = (
+                f'<span style="color:{fg}; background-color:{bg};">'
+                f"{symbol} {body}</span>"
+            )
+        else:
+            body = f"{symbol} {body}"
+        lines.append(body)
+    label.setText("<br>".join(lines))
+    return label
 
 
 class ImportPreviewDialog(QDialog):
@@ -207,7 +269,11 @@ class ImportPreviewDialog(QDialog):
             self._table.setItem(row_index, 2, self._editable_cell(row.parsed_identity))
             self._table.setItem(row_index, 3, self._editable_cell(row.parsed_department))
             self._table.setItem(row_index, 4, self._editable_cell(row.parsed_note))
-            self._table.setItem(row_index, 5, self._readonly_cell(self._warnings_text(row)))
+            # P8：告警列改为分级渲染的 QLabel（前缀符号 + 配色），完整纯文本
+            # 保留在 tooltip；未知 code 降级为默认样式，不崩溃。
+            warnings_label = build_warning_label(row.warnings, self)
+            warnings_label.setToolTip(self._warnings_text(row))
+            self._table.setCellWidget(row_index, 5, warnings_label)
             action = QComboBox(self)
             for value, label in _ACTION_LABELS:
                 action.addItem(label, value)

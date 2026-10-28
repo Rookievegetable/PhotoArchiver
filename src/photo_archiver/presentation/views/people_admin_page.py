@@ -45,6 +45,7 @@ from photo_archiver.application.services import (
     ListPersonsService,
     ListRecognitionRunsService,
     ManagePeopleService,
+    RosterClusterStatsService,
 )
 from photo_archiver.domain import Person
 from photo_archiver.domain.exceptions import ValidationError
@@ -54,13 +55,18 @@ from photo_archiver.presentation.views.batch_person_deletion_dialog import (
     BatchPersonDeletionDialog,
     ClearAllPeopleDialog,
 )
-from photo_archiver.presentation.views.person_deletion_dialog import PersonDeletionDialog
+from photo_archiver.presentation.views.person_deletion_dialog import (
+    MultiPersonDeletionDialog,
+    PersonDeletionDialog,
+)
 from photo_archiver.presentation.views.person_edit_dialog import PersonEditDialog
 
 # 界面优化 §4.1：取消行内操作列——编辑移至工具栏（选中行生效），
 # 减少操作栏占用；身份/排序/批次归属/删除能力全部保留。
 # 阶段 2 方案 a：新增「组/序」合并列（组号与组内序号合一以控制宽度），
 # 插在「顺序」列之后；各列定位常量供渲染与选中逻辑共用。
+# P4：新增「匹配状态」列（末尾）——按统计锚点（最新代际）的当前有效决策
+# 判定该人员是否已被指派（D3-A）。
 _COLUMNS = (
     text.PEOPLE_PAGE_COL_ORDER,
     text.PEOPLE_PAGE_COL_GROUP_ORDINAL,
@@ -69,9 +75,11 @@ _COLUMNS = (
     text.PEOPLE_PAGE_COL_DEPARTMENT,
     text.PEOPLE_PAGE_COL_NOTE,
     text.PEOPLE_PAGE_COL_BATCH,
+    text.PEOPLE_PAGE_COL_MATCH_STATUS,
 )
 _COLUMN_GROUP_ORDINAL = 1
 _COLUMN_NAME = 2
+_COLUMN_MATCH_STATUS = 7
 
 # 组内序号取姓名开头的连续数字前缀（如「3张三」→ 3；无前缀 → None）。
 _NAME_ORDINAL_PATTERN = re.compile(r"^\d+")
@@ -146,15 +154,19 @@ class _ReorderableTable(QTableWidget):
       accepted as ``CopyAction`` instead (a table drag offers ``Copy|Move``, so
       the downgrade always applies), and the stale selection is cleared as a
       second guard for a drag that could not be downgraded.
+
+    P11（D5-A 最小版）：选择模式为 ``ExtendedSelection`` 支持多选删除；但
+    拖拽重排仅属于单选——选中数 > 1 时页面统一关闭 ``dragEnabled``（互斥
+    规则，见 ``PeopleAdminPage._render_action_state``）。
     """
 
     rows_dropped = Signal(int, int)  # (source_row, target_row)
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Configure the table for single-row selection with row dragging."""
+        """Configure the table for extended (multi-row) selection with row dragging."""
         super().__init__(parent)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._drag_source_row: int | None = None
         self.setDragEnabled(True)
@@ -230,6 +242,7 @@ class PeopleAdminPage(QWidget):
         delete_person,
         list_recognition_runs: ListRecognitionRunsService,
         cluster_results: ClusterResultsService,
+        roster_cluster_stats: RosterClusterStatsService,
         parent: QWidget | None = None,
     ) -> None:
         """Initialize the page with its Application services.
@@ -244,6 +257,8 @@ class PeopleAdminPage(QWidget):
                 clustering entry's run selector.
             cluster_results: Read-only cluster generations/results for the
                 clustering section's availability and results dialog.
+            roster_cluster_stats: P4 read-only statistics use case — the
+                anchor-generation four numbers and per-person match marks.
             parent: Optional parent widget.
         """
         super().__init__(parent)
@@ -252,16 +267,19 @@ class PeopleAdminPage(QWidget):
         self._delete_person = delete_person
         self._list_recognition_runs = list_recognition_runs
         self._cluster_results = cluster_results
+        self._roster_stats = roster_cluster_stats
         self._rows: list[Person] = []
         self._batches: tuple[ImportBatchSummary, ...] = ()
         self._batch_filter: UUID | None = None
+        self._matched_ids: set[UUID] = set()
+        self._match_marks_loaded = False
         self._build_ui()
         self.refresh()
 
     # ── UI construction ──────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
-        """Lay out the hint, batch review row, toolbar row and the table."""
+        """Lay out the hint, batch review row, toolbar row, table + stats panel."""
         layout = QVBoxLayout(self)
 
         hint = QLabel(text.PEOPLE_PAGE_HINT, self)
@@ -307,6 +325,7 @@ class PeopleAdminPage(QWidget):
         toolbar_row.addStretch()
         layout.addLayout(toolbar_row)
 
+        body_row = QHBoxLayout()
         self._table = _ReorderableTable(self)
         self._table.setColumnCount(len(_COLUMNS))
         self._table.setHorizontalHeaderLabels(list(_COLUMNS))
@@ -317,13 +336,49 @@ class PeopleAdminPage(QWidget):
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.rows_dropped.connect(self._on_rows_dropped)
         self._table.itemSelectionChanged.connect(self._render_action_state)
-        layout.addWidget(self._table, 1)
+        body_row.addWidget(self._table, 1)
+        body_row.addWidget(self._build_stats_panel(self))
+        layout.addLayout(body_row)
 
         self._empty_label = QLabel(self)
         self._empty_label.setWordWrap(True)
         layout.addWidget(self._empty_label)
 
         self._build_clustering_ui(layout)
+
+    def _build_stats_panel(self, parent: QWidget) -> QGroupBox:
+        """Build the P4 statistics group (anchor, four numbers, caliber note).
+
+        空态（空名单 / 无 run / 无代际 / 读取失败）以 ``_stats_empty_label``
+        呈现并隐藏四数字区；四数字区隐藏时面板本身仍可见（口径说明常驻）。
+        """
+        group = QGroupBox(text.PEOPLE_PAGE_STATS_TITLE, parent)
+        stats_layout = QVBoxLayout(group)
+        self._stats_anchor_label = QLabel("", group)
+        self._stats_anchor_label.setWordWrap(True)
+        stats_layout.addWidget(self._stats_anchor_label)
+        self._stats_values = QWidget(group)
+        values_layout = QVBoxLayout(self._stats_values)
+        values_layout.setContentsMargins(0, 0, 0, 0)
+        self._stats_photo_label = QLabel("", self._stats_values)
+        self._stats_face_label = QLabel("", self._stats_values)
+        self._stats_matched_label = QLabel("", self._stats_values)
+        self._stats_unmatched_label = QLabel("", self._stats_values)
+        for label in (
+            self._stats_photo_label, self._stats_face_label,
+            self._stats_matched_label, self._stats_unmatched_label,
+        ):
+            values_layout.addWidget(label)
+        stats_layout.addWidget(self._stats_values)
+        self._stats_empty_label = QLabel("", group)
+        self._stats_empty_label.setWordWrap(True)
+        stats_layout.addWidget(self._stats_empty_label)
+        note = QLabel(text.PEOPLE_PAGE_STATS_CALIBER_NOTE, group)
+        note.setWordWrap(True)
+        stats_layout.addWidget(note)
+        stats_layout.addStretch()
+        group.setMaximumWidth(280)
+        return group
 
     # ── Data + rendering ────────────────────────────────────────────────
 
@@ -341,10 +396,85 @@ class PeopleAdminPage(QWidget):
         roster = self._manage_people.roster()
         self._rows = list(roster.people)
         self._batches = roster.batches
+        self._load_match_marks()
         self._render_batch_combo()
         self._render_rows()
         self._restore_selection(selected_id)
         self.refresh_clustering()
+        self._refresh_stats()
+
+    def _load_match_marks(self) -> None:
+        """Load the per-person match marks against the anchor generation（P4/D3-A）.
+
+        锚点 = 当前选中识别运行的最新聚类代际；无 run 或无代际时无判定数据
+        （``_match_marks_loaded=False``，行内显示「—」）。只读，零写入。
+        """
+        self._matched_ids = set()
+        self._match_marks_loaded = False
+        run_id = self.selected_recognition_run_id()
+        if run_id is None:
+            return
+        try:
+            self._matched_ids = self._roster_stats.matched_person_ids(run_id)
+            self._match_marks_loaded = (
+                self._roster_stats.anchor_generation(run_id) is not None
+            )
+        except Exception as exc:  # noqa: BLE001  UI boundary: degrade, log, no crash
+            logger.warning("People page match-mark refresh failed: {}", exc)
+
+    def _refresh_stats(self) -> None:
+        """Re-render the statistics panel from the anchor generation（P4）.
+
+        空态优先级（任务书 §1.1 边界）：空名单 → 无识别运行 → 无聚类代际；
+        批次筛选不参与（``roster_total`` 取全名单 ``len(self._rows)``）。
+        """
+        try:
+            if not self._rows:
+                self._render_stats_empty(text.PEOPLE_PAGE_STATS_EMPTY_NO_ROSTER)
+                return
+            run_id = self.selected_recognition_run_id()
+            if run_id is None:
+                self._render_stats_empty(text.PEOPLE_PAGE_STATS_EMPTY_NO_RUN)
+                return
+            stats = self._roster_stats.stats(run_id, roster_total=len(self._rows))
+            if stats is None:
+                self._render_stats_empty(text.PEOPLE_PAGE_STATS_EMPTY_NO_GENERATION)
+                return
+            anchor = (
+                stats.anchor_created_at.strftime("%Y-%m-%d %H:%M")
+                if stats.anchor_created_at is not None else "—"
+            )
+            self._stats_anchor_label.setText(
+                text.PEOPLE_PAGE_STATS_ANCHOR_LABEL.format(anchor=anchor),
+            )
+            self._stats_photo_label.setText(
+                text.PEOPLE_PAGE_STATS_PHOTO_COUNT.format(count=stats.photo_count),
+            )
+            self._stats_face_label.setText(
+                text.PEOPLE_PAGE_STATS_FACE_COUNT.format(count=stats.face_count),
+            )
+            self._stats_matched_label.setText(
+                text.PEOPLE_PAGE_STATS_MATCHED_COUNT.format(
+                    count=stats.matched_person_count,
+                ),
+            )
+            self._stats_unmatched_label.setText(
+                text.PEOPLE_PAGE_STATS_UNMATCHED_COUNT.format(
+                    count=stats.unmatched_person_count,
+                ),
+            )
+            self._stats_values.setVisible(True)
+            self._stats_empty_label.setVisible(False)
+        except Exception as exc:  # noqa: BLE001  UI boundary: degrade, log, no crash
+            logger.warning("People page stats refresh failed: {}", exc)
+            self._render_stats_empty(text.PEOPLE_PAGE_STATS_UNAVAILABLE)
+
+    def _render_stats_empty(self, message: str) -> None:
+        """Show the panel's empty-state text and hide the four-number block."""
+        self._stats_anchor_label.setText("")
+        self._stats_values.setVisible(False)
+        self._stats_empty_label.setText(message)
+        self._stats_empty_label.setVisible(True)
 
     def visible_people(self) -> list[Person]:
         """Return the rows the table currently shows (batch filter applied)."""
@@ -427,14 +557,18 @@ class PeopleAdminPage(QWidget):
                         person.note or "",
                         batch_names.get(person.source_batch_id, text.PEOPLE_PAGE_MANUAL_SOURCE)
                         if person.source_batch_id is not None else text.PEOPLE_PAGE_MANUAL_SOURCE,
+                        self._match_status_text(person),
                     )
                     for column, value in enumerate(values):
                         item = QTableWidgetItem(value)
-                        # 组/序列的 tooltip 说明派生依据（其余列沿用值本身）。
-                        item.setToolTip(
-                            text.PEOPLE_PAGE_GROUP_ORDINAL_TOOLTIP
-                            if column == _COLUMN_GROUP_ORDINAL else value
-                        )
+                        # 组/序列的 tooltip 说明派生依据；匹配状态列说明判定口径
+                        # （其余列沿用值本身）。
+                        if column == _COLUMN_GROUP_ORDINAL:
+                            item.setToolTip(text.PEOPLE_PAGE_GROUP_ORDINAL_TOOLTIP)
+                        elif column == _COLUMN_MATCH_STATUS:
+                            item.setToolTip(text.PEOPLE_PAGE_MATCH_STATUS_TOOLTIP)
+                        else:
+                            item.setToolTip(value)
                         self._table.setItem(row_index, column, item)
                 if people:
                     self._empty_label.clear()
@@ -442,30 +576,59 @@ class PeopleAdminPage(QWidget):
                     self._empty_label.setText(
                         text.PEOPLE_PAGE_EMPTY if not self._rows else text.PEOPLE_PAGE_EMPTY_FILTERED
                     )
-                self._table.setDragEnabled(self._batch_filter is None)
                 self._batch_hint.setVisible(self._batch_filter is not None)
         finally:
             self._table.setUpdatesEnabled(True)
         self._render_action_state()
 
-    def _render_action_state(self) -> None:
-        """Reordering needs a full-roster view and a selected, movable row.
+    def _match_status_text(self, person: Person) -> str:
+        """P4/D3-A：人员行的匹配状态显示值。
 
-        The move buttons grey out at the roster edges instead of silently doing
-        nothing when the selected person is already first/last.
+        无锚点代际（无 run / 无代际）→「—」（无判定数据）；有锚点 → 该人员
+        在锚点代际无 active 决策即「未匹配」（批次筛选不影响本判定）。
         """
-        index = self._selected_row_index()
-        reorderable = self._batch_filter is None and index >= 0
+        if not self._match_marks_loaded:
+            return text.PEOPLE_PAGE_MATCH_STATUS_NONE
+        if person.id is not None and person.id in self._matched_ids:
+            return text.PEOPLE_PAGE_MATCH_STATUS_MARKED
+        return text.PEOPLE_PAGE_MATCH_STATUS_UNMATCHED
+
+    def _render_action_state(self) -> None:
+        """Re-render button/drag availability from the current selection.
+
+        P11（D5-A）：上移/下移/编辑仅在**恰选中 1 行**时可用；「删除所选」
+        对 1..n 行可用；拖拽重排与多选互斥——选中数 > 1（或回看态）时关闭
+        ``dragEnabled``。移动按钮在名单边缘置灰而不是静默无效。
+        """
+        rows = self._selected_row_indices()
+        single = len(rows) == 1
+        index = rows[0] if single else -1
         last_index = self._table.rowCount() - 1
+        reorderable = self._batch_filter is None and single
         self._move_up_button.setEnabled(reorderable and index > 0)
         self._move_down_button.setEnabled(reorderable and 0 <= index < last_index)
-        self._edit_button.setEnabled(self._selected_person() is not None)
-        self._delete_button.setEnabled(self._selected_person() is not None)
+        self._edit_button.setEnabled(single and self._selected_person() is not None)
+        self._delete_button.setEnabled(bool(rows))
+        self._table.setDragEnabled(self._batch_filter is None and len(rows) <= 1)
+
+    def _selected_row_indices(self) -> list[int]:
+        """Return every selected table row (ascending, possibly empty)."""
+        model = self._table.selectionModel()
+        rows = model.selectedRows() if model else []
+        return sorted(index.row() for index in rows)
 
     def _selected_row_index(self) -> int:
-        """Return the selected table row, or -1 when nothing is selected."""
-        rows = self._table.selectionModel().selectedRows() if self._table.selectionModel() else []
-        return rows[0].row() if rows else -1
+        """Return the first selected table row, or -1 when nothing is selected."""
+        rows = self._selected_row_indices()
+        return rows[0] if rows else -1
+
+    def _selected_people(self) -> list[Person]:
+        """Return the people behind every selected row (P11 multi-select)."""
+        people = self.visible_people()
+        return [
+            people[index] for index in self._selected_row_indices()
+            if 0 <= index < len(people)
+        ]
 
     def _selected_person(self) -> Person | None:
         """Return the person behind the selected row, or None."""
@@ -519,10 +682,29 @@ class PeopleAdminPage(QWidget):
         self._after_mutation(text.PEOPLE_PAGE_EDITED.format(name=updated.name))
 
     def _on_delete_clicked(self) -> None:
-        """Delete the selected person through the existing danger-confirm dialog."""
-        person = self._selected_person()
-        if person is None:
+        """Delete the selected people through the danger-confirm dialogs.
+
+        P11（D5-A 最小版）：单选等价既有单人删除流（下拉确认对话框）；
+        多选走批量预览 + 确认对话框 + 事务执行（``MultiPersonDeletionDialog``，
+        复用 ``DeletePersonService.preview/execute`` 的级联语义）。
+        """
+        people = self._selected_people()
+        if not people:
             return
+        if len(people) == 1:
+            self._delete_single_person(people[0])
+            return
+        dialog = MultiPersonDeletionDialog(
+            [(person.id, person.name) for person in people],
+            self._delete_person, parent=self,
+        )
+        if not dialog.exec():
+            return
+        logger.info("People page deleted {} selected people", len(people))
+        self._after_mutation(dialog.last_message())
+
+    def _delete_single_person(self, person: Person) -> None:
+        """既有单人删除流：确认对话框（预选该人员）→ 事务执行。"""
         dialog = PersonDeletionDialog(
             self._list_persons, self._delete_person, parent=self, preselect_id=person.id,
         )
@@ -580,7 +762,10 @@ class PeopleAdminPage(QWidget):
         The person stays selected at their new position (``refresh`` re-anchors
         the selection to the person), so pressing 「上移/下移」 again keeps moving
         the same person instead of whoever the old row index now holds.
+        P11：仅恰选中 1 行时执行（多选禁用移动按钮；此处为第二道门）。
         """
+        if len(self._selected_row_indices()) != 1:
+            return
         index = self._selected_row_index()
         if index < 0 or self._batch_filter is not None:
             return
@@ -634,6 +819,9 @@ class PeopleAdminPage(QWidget):
         row.addWidget(QLabel(text.CLUSTER_PAGE_RUN_LABEL, group))
         self._cluster_run_combo = QComboBox(group)
         self._cluster_run_combo.setMinimumWidth(280)
+        # P4：切换识别运行 → 锚点变化 → 行内匹配标记与统计面板联动重渲染
+        # （刷新期间 refill 用 blockSignals 包裹，不会触发本槽）。
+        self._cluster_run_combo.currentIndexChanged.connect(self._on_cluster_run_changed)
         row.addWidget(self._cluster_run_combo)
         self._cluster_run_button = QPushButton(text.CLUSTER_PAGE_RUN_BUTTON, group)
         self._cluster_run_button.clicked.connect(self.cluster_run_requested.emit)
@@ -698,6 +886,13 @@ class PeopleAdminPage(QWidget):
         """Return the recognition run id behind the selector, or ``None``."""
         data = self._cluster_run_combo.currentData()
         return data if isinstance(data, UUID) else None
+
+    def _on_cluster_run_changed(self, _index: int) -> None:
+        """P4：识别运行选择变化 → 锚点变化 → 标记/统计联动（批次筛选不联动）。"""
+        self._load_match_marks()
+        self._render_rows()
+        self._render_cluster_availability()
+        self._refresh_stats()
 
     # ── Shared helpers ──────────────────────────────────────────────────
 

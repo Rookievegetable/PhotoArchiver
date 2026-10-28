@@ -162,3 +162,154 @@ def test_large_roster_notice_only_over_sync_limit(parsed, qtbot) -> None:
     notices = [w.text() for w in large.findChildren(QLabel) if "超过" in w.text()]
     assert len(notices) == 1
     assert str(CONFIRM_SYNC_LIMIT) in notices[0]
+
+
+# ── P8：告警分级渲染（强冲突 / 弱冲突 / 提示；未知 code 默认样式） ────────────
+
+
+def test_warning_severity_classification_matches_semantics() -> None:
+    """7 种已知 code 按文案语义归类：强/弱/提示三级。"""
+    from photo_archiver.presentation import ui_text as text
+    from photo_archiver.presentation.views.import_preview_dialog import (
+        classify_import_warning,
+    )
+
+    assert classify_import_warning("identity_duplicate_in_file") == (
+        text.IMPORT_WARNING_SEVERITY_STRONG
+    )
+    assert classify_import_warning("identity_duplicate_db") == (
+        text.IMPORT_WARNING_SEVERITY_STRONG
+    )
+    assert classify_import_warning("name_department_duplicate_in_file") == (
+        text.IMPORT_WARNING_SEVERITY_WEAK
+    )
+    assert classify_import_warning("name_department_duplicate_db") == (
+        text.IMPORT_WARNING_SEVERITY_WEAK
+    )
+    for info_code in ("empty_name", "multi_name", "group_title"):
+        assert classify_import_warning(info_code) == text.IMPORT_WARNING_SEVERITY_INFO
+    assert classify_import_warning("mystery_code") == (
+        text.IMPORT_WARNING_SEVERITY_DEFAULT
+    )
+    assert set(text.IMPORT_WARNING_SEVERITIES) == set(text.IMPORT_WARNING_TEXTS)
+
+
+def test_warning_severity_styles_are_pairwise_distinct() -> None:
+    """三级的（符号, 前景, 背景）两两可区分；未知样式不与三级混淆。"""
+    from photo_archiver.presentation import ui_text as text
+    from photo_archiver.presentation.views.import_preview_dialog import (
+        _IMPORT_WARNING_DEFAULT_STYLE,
+        _IMPORT_WARNING_STYLES,
+    )
+
+    styles = [
+        _IMPORT_WARNING_STYLES[sev] for sev in (
+            text.IMPORT_WARNING_SEVERITY_STRONG,
+            text.IMPORT_WARNING_SEVERITY_WEAK,
+            text.IMPORT_WARNING_SEVERITY_INFO,
+        )
+    ]
+    assert len(set(styles)) == 3
+    assert all(fg is not None and bg is not None for _sym, fg, bg in styles)
+    assert _IMPORT_WARNING_DEFAULT_STYLE[1] is None  # 默认样式无配色
+
+
+def test_build_warning_label_renders_each_severity_distinctly() -> None:
+    """每类 code 的图标 + 配色可区分；文本保留完整文案。"""
+    from photo_archiver.presentation import ui_text as text
+    from photo_archiver.presentation.views.import_preview_dialog import (
+        _IMPORT_WARNING_STYLES,
+        build_warning_label,
+        classify_import_warning,
+    )
+
+    for code in text.IMPORT_WARNING_SEVERITIES:
+        symbol, fg, bg = _IMPORT_WARNING_STYLES[classify_import_warning(code)]
+        label = build_warning_label([(code, "明细")])
+        assert symbol in label.text()
+        assert fg in label.text() and bg in label.text()  # 前景/背景配色上墙
+        assert "background-color" in label.text()
+        assert text.IMPORT_WARNING_TEXTS[code].split("（")[0].split("{")[0] in label.text()
+
+
+def test_build_warning_label_unknown_code_falls_back_without_crash() -> None:
+    """未知 code：默认样式（无配色 span、兜底模板），不崩溃。"""
+    from photo_archiver.presentation.views.import_preview_dialog import (
+        build_warning_label,
+    )
+
+    label = build_warning_label([("mystery_code", "x")])
+    assert "mystery_code" in label.text()
+    assert "background-color" not in label.text()  # 无配色 = 默认样式
+    assert label.text().startswith("• ")  # 兜底前缀符号
+
+
+def test_build_warning_label_escapes_html_and_joins_lines() -> None:
+    """多条告警逐行渲染；detail 中的 HTML 元字符被转义（防注入）。"""
+    from photo_archiver.presentation.views.import_preview_dialog import (
+        build_warning_label,
+    )
+
+    label = build_warning_label([
+        ("multi_name", "3"),
+        ("group_title", "<名单>"),
+    ])
+    assert "<br>" in label.text()
+    assert "&" + "lt;" + "名单" + "&" + "gt;" in label.text()  # HTML 元字符已转义
+    assert "<名单>" not in label.text()  # 原始标记不出现（防注入）
+
+
+def test_dialog_renders_graded_warning_cells(tmp_path: Path, qtbot) -> None:
+    """对话框告警列：分级 QLabel 单元格（强/弱/提示三码同屏可区分）。"""
+    from photo_archiver.presentation.views.import_preview_dialog import (
+        _IMPORT_WARNING_STYLES,
+        classify_import_warning,
+    )
+
+    from photo_archiver.domain import Person
+
+    parse, confirm, people = _services(tmp_path / "graded.db")
+    people.add(Person(name="李四", department="市场部"))  # 造库内姓名+部门重复
+    path = _write_csv(tmp_path / "graded.csv", (
+        "姓名,工号,部门\n"
+        "1甲、1乙,,\n"  # multi_name（提示）
+        "张三,E001,工程部\n"
+        "张三,E001,工程部\n"  # identity_duplicate_in_file（强冲突）
+        "李四,E002,市场部\n"  # name_department_duplicate_db（弱冲突）
+    ))
+    draft = parse.execute(ParseImportDraftCommand(path))
+    dialog = ImportPreviewDialog(draft, SimpleNamespaceService(parse, confirm), path)
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    expected_codes = {
+        "multi_name", "identity_duplicate_in_file", "name_department_duplicate_db",
+    }
+    seen = set()
+    for row_index, row in enumerate(dialog._draft.rows):
+        for code in row.warnings and [w[0] for w in row.warnings] or []:
+            if code not in expected_codes:
+                continue
+            seen.add(code)
+            widget = dialog._table.cellWidget(row_index, 5)
+            assert isinstance(widget, QLabel)
+            symbol, fg, _bg = _IMPORT_WARNING_STYLES[classify_import_warning(code)]
+            assert symbol in widget.text()
+            assert fg in widget.text()
+    assert seen == expected_codes
+
+
+# ── P10：草稿取消文案不再暗示可回看 ──────────────────────────────────────────
+
+
+def test_status_import_draft_parsed_has_no_revisit_hint() -> None:
+    """P10/D6-A：取消文案为裁决文本，不含任何「回看」暗示。"""
+    from photo_archiver.presentation import ui_text as text
+
+    assert text.STATUS_IMPORT_DRAFT_PARSED == (
+        "取消将丢弃本次草稿；如需导入请重新选择文件"
+    )
+    assert "回看" not in text.STATUS_IMPORT_DRAFT_PARSED
+    assert "丢弃" in text.STATUS_IMPORT_DRAFT_PARSED
+    assert "重新选择文件" in text.STATUS_IMPORT_DRAFT_PARSED
+    assert "{rows}" not in text.STATUS_IMPORT_DRAFT_PARSED  # 不再需要行数占位
