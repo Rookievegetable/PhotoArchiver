@@ -291,6 +291,23 @@ class SQLitePersonFaceSampleRepository(PersonFaceSampleRepository):
             ).fetchall()
         return [_sample_from_row(row) for row in rows]
 
+    def list_by_observation_ids(
+        self, observation_ids: Sequence[UUID],
+    ) -> list[PersonFaceSample]:
+        """按观测维度取样本（含停用）——照片删除前的样本规模披露。"""
+        unique_ids = list(dict.fromkeys(observation_ids))
+        if not unique_ids:
+            return []
+        placeholders = ", ".join("?" for _ in unique_ids)
+        with self._connection_provider.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM person_face_embeddings "
+                f"WHERE observation_id IN ({placeholders}) "
+                "ORDER BY created_at, id",
+                tuple(str(observation_id) for observation_id in unique_ids),
+            ).fetchall()
+        return [_sample_from_row(row) for row in rows]
+
     def disable_samples(
         self, person_id: UUID, observation_ids: Sequence[UUID],
     ) -> int:

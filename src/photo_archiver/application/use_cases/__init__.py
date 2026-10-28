@@ -4,6 +4,8 @@ from photo_archiver.application.use_cases.archive import ArchivePhotosUseCase
 from photo_archiver.application.use_cases.deletion import (
     DeletePersonUseCase,
     DeletePhotosUseCase,
+    DeleteRunPeopleUseCase,
+    DeleteRunPhotosUseCase,
     DisposeDuplicatesUseCase,
     PruneMissingPhotosUseCase,
 )
@@ -21,6 +23,8 @@ __all__ = [
     "ArchivePhotosUseCase",
     "DeletePersonUseCase",
     "DeletePhotosUseCase",
+    "DeleteRunPeopleUseCase",
+    "DeleteRunPhotosUseCase",
     "DisposeDuplicatesUseCase",
     "ImportPeopleUseCase",
     "MatchPersonsUseCase",

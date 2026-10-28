@@ -58,3 +58,17 @@ class RecognitionRunRepository(Protocol):
 
     def list_run_scopes(self, run_id: UUID) -> list[FaceCountRange]:
         """Return the run's selected face-count ranges ordered by ``ordinal``."""
+
+    def count_other_run_snapshots(
+        self, photo_ids: Sequence[UUID], exclude_run_id: UUID,
+    ) -> int:
+        """Count snapshot rows of **other** runs that reference these photos.
+
+        照片登记被删除时，``recognition_run_photos.photo_id`` 的外键 CASCADE 会
+        连带抹掉其它运行的输入快照行——那是不可重建的历史（重跑会产生新的
+        运行与新的 id）。删除前必须把这个数字披露给用户。
+
+        Returns:
+            The number of matching snapshot rows in runs other than
+            ``exclude_run_id``; 0 when no photo ids are supplied.
+        """

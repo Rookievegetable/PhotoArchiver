@@ -17,6 +17,10 @@ from photo_archiver.application.dtos.deletion import (
     PhotoDeletionResult,
     PruneMissingPreview,
     PruneMissingResult,
+    RunPeopleDeletionPreview,
+    RunPeopleDeletionResult,
+    RunPhotosDeletionPreview,
+    RunPhotosDeletionResult,
 )
 from photo_archiver.application.dtos.duplicates import DuplicateGroup, DuplicateReport
 from photo_archiver.application.dtos.export import ExportData, ExportScope
@@ -117,6 +121,10 @@ __all__ = [
     "OUTCOME_SKIPPED",
     "BatchRosterDeletionPreview",
     "BatchRosterDeletionResult",
+    "RunPeopleDeletionPreview",
+    "RunPeopleDeletionResult",
+    "RunPhotosDeletionPreview",
+    "RunPhotosDeletionResult",
     "PersonDeletionPreview",
     "PersonDeletionResult",
     "PhotoIgnoreOutcome",

@@ -83,3 +83,16 @@ class InMemoryRecognitionRunRepository(RecognitionRunRepository):
     def list_run_scopes(self, run_id: UUID) -> list[FaceCountRange]:
         """Return the run's selected ranges in write (ordinal) order."""
         return list(self._scopes.get(run_id, []))
+
+    def count_other_run_snapshots(
+        self, photo_ids: Sequence[UUID], exclude_run_id: UUID,
+    ) -> int:
+        """统计其它运行引用这些照片的快照行数（删除披露用）。"""
+        targets = set(photo_ids)
+        return sum(
+            1
+            for run_id, snapshots in self._photos.items()
+            if run_id != exclude_run_id
+            for snapshot in snapshots
+            if snapshot.photo_id in targets
+        )

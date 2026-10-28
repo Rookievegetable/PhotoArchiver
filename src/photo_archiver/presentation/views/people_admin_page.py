@@ -60,6 +60,10 @@ from photo_archiver.presentation.views.person_deletion_dialog import (
     PersonDeletionDialog,
 )
 from photo_archiver.presentation.views.person_edit_dialog import PersonEditDialog
+from photo_archiver.presentation.views.run_deletion_dialog import (
+    RunPeopleDeletionDialog,
+    RunPhotosDeletionDialog,
+)
 
 # 界面优化 §4.1：取消行内操作列——编辑移至工具栏（选中行生效），
 # 减少操作栏占用；身份/排序/批次归属/删除能力全部保留。
@@ -243,6 +247,8 @@ class PeopleAdminPage(QWidget):
         list_recognition_runs: ListRecognitionRunsService,
         cluster_results: ClusterResultsService,
         roster_cluster_stats: RosterClusterStatsService,
+        delete_run_people=None,
+        delete_run_photos=None,
         parent: QWidget | None = None,
     ) -> None:
         """Initialize the page with its Application services.
@@ -259,6 +265,8 @@ class PeopleAdminPage(QWidget):
                 clustering section's availability and results dialog.
             roster_cluster_stats: P4 read-only statistics use case — the
                 anchor-generation four numbers and per-person match marks.
+            delete_run_people: 运行级名单删除服务（批次删除功能 A）。
+            delete_run_photos: 运行级照片删除服务（批次删除功能 B）。
             parent: Optional parent widget.
         """
         super().__init__(parent)
@@ -268,6 +276,8 @@ class PeopleAdminPage(QWidget):
         self._list_recognition_runs = list_recognition_runs
         self._cluster_results = cluster_results
         self._roster_stats = roster_cluster_stats
+        self._delete_run_people = delete_run_people
+        self._delete_run_photos = delete_run_photos
         self._rows: list[Person] = []
         self._batches: tuple[ImportBatchSummary, ...] = ()
         self._batch_filter: UUID | None = None
@@ -514,17 +524,31 @@ class PeopleAdminPage(QWidget):
             self._table.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _render_batch_combo(self) -> None:
-        """Refill the batch selector, preserving the active filter."""
+        """Refill the batch selector, preserving the active filter.
+
+        恢复用**值扫描**而非 findData——QVariant 对值相等但非同一实例的
+        UUID 匹配不可靠（本文件 _select_person 与 refresh_clustering 同教
+        训）；匹配失败（批次已消失）才回落「全部批次」。
+        """
         self._batch_combo.blockSignals(True)
         self._batch_combo.clear()
         self._batch_combo.addItem(text.PEOPLE_PAGE_BATCH_ALL, None)
         for summary in self._batches:
-            label = text.PEOPLE_PAGE_BATCH_ENTRY.format(
-                file_name=summary.batch.file_name, person_count=summary.person_count,
+            # D10：同名批次无法区分——标签必须带创建时间与状态，否则删除入口
+            # 会出现误删风险。
+            label = text.import_batch_entry_label(
+                summary.batch.file_name,
+                summary.batch.created_at,
+                summary.batch.status,
+                summary.person_count,
             )
             self._batch_combo.addItem(label, summary.batch.id)
-        index = self._batch_combo.findData(self._batch_filter)
-        self._batch_combo.setCurrentIndex(index if index >= 0 else 0)
+        restore = 0
+        for index in range(self._batch_combo.count()):
+            if self._batch_combo.itemData(index) == self._batch_filter:
+                restore = index
+                break
+        self._batch_combo.setCurrentIndex(restore)
         self._batch_filter = self._batch_combo.currentData()
         self._batch_combo.blockSignals(False)
 
@@ -576,7 +600,13 @@ class PeopleAdminPage(QWidget):
                     self._empty_label.setText(
                         text.PEOPLE_PAGE_EMPTY if not self._rows else text.PEOPLE_PAGE_EMPTY_FILTERED
                     )
-                self._batch_hint.setVisible(self._batch_filter is not None)
+                # Owner 裁决（2026-10-28）：批次视图可调序、全部批次只读——
+                # 提示常驻并按视图状态切换文案。
+                if self._batch_filter is not None:
+                    self._batch_hint.setText(text.PEOPLE_PAGE_BATCH_FILTER_HINT)
+                else:
+                    self._batch_hint.setText(text.PEOPLE_PAGE_BATCH_READONLY_HINT)
+                self._batch_hint.setVisible(True)
         finally:
             self._table.setUpdatesEnabled(True)
         self._render_action_state()
@@ -597,19 +627,20 @@ class PeopleAdminPage(QWidget):
         """Re-render button/drag availability from the current selection.
 
         P11（D5-A）：上移/下移/编辑仅在**恰选中 1 行**时可用；「删除所选」
-        对 1..n 行可用；拖拽重排与多选互斥——选中数 > 1（或回看态）时关闭
-        ``dragEnabled``。移动按钮在名单边缘置灰而不是静默无效。
+        对 1..n 行可用；拖拽重排与多选互斥——选中数 > 1 时关闭。
+        Owner 裁决（2026-10-28）：调序**仅限批次筛选视图**——「全部批次」
+        为只读（拖拽与移动按钮关闭）。
         """
         rows = self._selected_row_indices()
         single = len(rows) == 1
         index = rows[0] if single else -1
         last_index = self._table.rowCount() - 1
-        reorderable = self._batch_filter is None and single
+        reorderable = self._batch_filter is not None and single
         self._move_up_button.setEnabled(reorderable and index > 0)
         self._move_down_button.setEnabled(reorderable and 0 <= index < last_index)
         self._edit_button.setEnabled(single and self._selected_person() is not None)
         self._delete_button.setEnabled(bool(rows))
-        self._table.setDragEnabled(self._batch_filter is None and len(rows) <= 1)
+        self._table.setDragEnabled(self._batch_filter is not None and len(rows) <= 1)
 
     def _selected_row_indices(self) -> list[int]:
         """Return every selected table row (ascending, possibly empty)."""
@@ -639,7 +670,7 @@ class PeopleAdminPage(QWidget):
     # ── Batch review ────────────────────────────────────────────────────
 
     def _on_batch_selected(self, _index: int) -> None:
-        """Switch the read-only batch view and re-render."""
+        """Switch the batch view and re-render（批次视图可调序；全部批次只读）."""
         self._batch_filter = self._batch_combo.currentData()
         self._render_rows()
 
@@ -763,16 +794,25 @@ class PeopleAdminPage(QWidget):
         the selection to the person), so pressing 「上移/下移」 again keeps moving
         the same person instead of whoever the old row index now holds.
         P11：仅恰选中 1 行时执行（多选禁用移动按钮；此处为第二道门）。
+        Owner 裁决（2026-10-28）：调序仅限批次筛选视图——全部批次为只读
+        （此处为第二道门）。
         """
         if len(self._selected_row_indices()) != 1:
             return
         index = self._selected_row_index()
-        if index < 0 or self._batch_filter is not None:
+        if index < 0 or self._batch_filter is None:
             return
         self.move_row(index, index + offset)
 
     def move_row(self, source_index: int, target_index: int) -> None:
-        """Reorder the roster rows, persist the sequence and keep the row selected."""
+        """Reorder the batch view rows and persist via slot permutation.
+
+        Owner 裁决（2026-10-28）：调序仅发生在批次筛选视图——本批次成员按
+        新序填回它们占有的全局名次槽位（置换语义），其他批次人员的名次与
+        相对位置完全不变。
+        """
+        if self._batch_filter is None:
+            return
         people = self.visible_people()
         if not (0 <= source_index < len(people)) or not (0 <= target_index < len(people)):
             return
@@ -780,11 +820,29 @@ class PeopleAdminPage(QWidget):
             return
         person = people.pop(source_index)
         people.insert(target_index, person)
-        self._persist_order(people)
+        self._persist_batch_order(people)
 
     def _on_rows_dropped(self, source_row: int, target_row: int) -> None:
         """Handle a table drag: same semantics as the move buttons."""
         self.move_row(source_row, target_row)
+
+    def _persist_batch_order(self, ordered_subset: list[Person]) -> None:
+        """Batch-view slot permutation → full roster order → existing transaction.
+
+        取全名单中本批次成员当前占有的名次槽位，把重排后的成员按序填回；
+        其余人员原位保留。构造出的全量 ``ordered_ids`` 交给既有
+        ``reorder_people`` 单事务写入（服务层零改动）。
+        """
+        subset_ids = {person.id for person in ordered_subset}
+        merged: list[Person] = []
+        cursor = 0
+        for person in self._rows:
+            if person.id is not None and person.id in subset_ids:
+                merged.append(ordered_subset[cursor])
+                cursor += 1
+            else:
+                merged.append(person)
+        self._persist_order(merged)
 
     def _persist_order(self, ordered_people: list[Person]) -> None:
         """Write the full roster order and refresh dependent views."""
@@ -830,6 +888,25 @@ class PeopleAdminPage(QWidget):
         self._cluster_results_button = QPushButton(text.CLUSTER_PAGE_RESULTS_BUTTON, group)
         self._cluster_results_button.clicked.connect(self.cluster_results_requested.emit)
         row.addWidget(self._cluster_results_button)
+        # 批次级删除（识别运行锚点）：两个入口与运行选择器同区——"批次"在这里
+        # 指**识别运行**（照片只挂在运行下），与顶部「来源批次」（名单导入）
+        # 是两套不同实体。
+        self._delete_run_people_button = QPushButton(
+            text.PEOPLE_PAGE_DELETE_RUN_PEOPLE_BUTTON, group,
+        )
+        self._delete_run_people_button.clicked.connect(
+            self._on_delete_run_people_clicked,
+        )
+        assign_role(self._delete_run_people_button, ROLE_DANGER)
+        row.addWidget(self._delete_run_people_button)
+        self._delete_run_photos_button = QPushButton(
+            text.PEOPLE_PAGE_DELETE_RUN_PHOTOS_BUTTON, group,
+        )
+        self._delete_run_photos_button.clicked.connect(
+            self._on_delete_run_photos_clicked,
+        )
+        assign_role(self._delete_run_photos_button, ROLE_DANGER)
+        row.addWidget(self._delete_run_photos_button)
         row.addStretch()
         group_layout.addLayout(row)
         hint = QLabel(text.CLUSTER_PAGE_HINT, group)
@@ -878,6 +955,13 @@ class PeopleAdminPage(QWidget):
             has_results = bool(self._cluster_results.list_cluster_runs(run_id))
         self._cluster_run_button.setEnabled(run_id is not None)
         self._cluster_results_button.setEnabled(has_results)
+        # 批次级删除入口：无选中运行 / 服务未注入时禁用（不静默无响应）。
+        self._delete_run_people_button.setEnabled(
+            run_id is not None and self._delete_run_people is not None
+        )
+        self._delete_run_photos_button.setEnabled(
+            run_id is not None and self._delete_run_photos is not None
+        )
         self._cluster_hint.setText(
             "" if run_id is not None else text.CLUSTER_PAGE_NO_RUNS
         )
@@ -886,6 +970,39 @@ class PeopleAdminPage(QWidget):
         """Return the recognition run id behind the selector, or ``None``."""
         data = self._cluster_run_combo.currentData()
         return data if isinstance(data, UUID) else None
+
+    def _selected_run_label(self) -> str:
+        """Return the selected run's readable label（对话框标题与披露用）."""
+        index = self._cluster_run_combo.currentIndex()
+        if index < 0:
+            return "—"
+        return self._cluster_run_combo.itemText(index)
+
+    def _on_delete_run_people_clicked(self) -> None:
+        """删除该识别运行的名单及记录（批次删除功能 A）。"""
+        run_id = self.selected_recognition_run_id()
+        if run_id is None or self._delete_run_people is None:
+            return
+        dialog = RunPeopleDeletionDialog(
+            self._delete_run_people, run_id, self._selected_run_label(), parent=self,
+        )
+        if not dialog.exec():
+            return
+        logger.info("People page deleted one recognition run's people")
+        self._after_mutation(dialog.last_message())
+
+    def _on_delete_run_photos_clicked(self) -> None:
+        """删除该识别运行的照片及记录（批次删除功能 B）。"""
+        run_id = self.selected_recognition_run_id()
+        if run_id is None or self._delete_run_photos is None:
+            return
+        dialog = RunPhotosDeletionDialog(
+            self._delete_run_photos, run_id, self._selected_run_label(), parent=self,
+        )
+        if not dialog.exec():
+            return
+        logger.info("People page deleted one recognition run's photos")
+        self._after_mutation(dialog.last_message())
 
     def _on_cluster_run_changed(self, _index: int) -> None:
         """P4：识别运行选择变化 → 锚点变化 → 标记/统计联动（批次筛选不联动）。"""

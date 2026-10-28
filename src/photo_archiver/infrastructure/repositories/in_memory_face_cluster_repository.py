@@ -109,6 +109,45 @@ class InMemoryFaceClusterRepository(FaceClusterRepository):
         )
         return 1
 
+    def update_cluster_member_count(self, cluster_id: UUID, member_count: int) -> int:
+        """回写簇的实际成员数（成员关系级联消失后的计数修正）。"""
+        cluster = self._clusters.get(cluster_id)
+        if cluster is None:
+            return 0
+        cluster.member_count = member_count
+        return 1
+
+    def update_cluster_run_member_count(
+        self, cluster_run_id: UUID, member_count: int,
+    ) -> int:
+        """回写聚类代际的成员总数（各簇成员数之和）。"""
+        cluster_run = self._cluster_runs.get(cluster_run_id)
+        if cluster_run is None:
+            return 0
+        cluster_run.member_count = member_count
+        return 1
+
+    def remove_cluster_run(self, cluster_run_id: UUID) -> int:
+        """删除一个聚类代际——簇/成员/决策行随之消失。
+
+        InMemory 替身**不模拟** FK 级联到决策行（级联语义的唯一裁判是真实
+        SQLite 集成测试）；这里只移除本仓储持有的簇与成员关系。
+        """
+        if cluster_run_id not in self._cluster_runs:
+            return 0
+        del self._cluster_runs[cluster_run_id]
+        cluster_ids = {
+            cluster.id
+            for cluster in self._clusters.values()
+            if cluster.cluster_run_id == cluster_run_id and cluster.id is not None
+        }
+        for cluster_id in cluster_ids:
+            self._clusters.pop(cluster_id, None)
+        for member_id, member in list(self._members.items()):
+            if member.cluster_id in cluster_ids:
+                del self._members[member_id]
+        return 1
+
     def list_all_cluster_runs(self) -> list[FaceClusterRun]:
         """S1：全部聚类代际，按创建序（与 SQLite 的 ORDER BY created_at, id 对齐）。"""
         return sorted(

@@ -6,7 +6,7 @@
 >
 > 每次开发结束后刷新；不保留历史状态。
 >
-> Version: 1.52.2 · Last Updated: 2026-10-15 · Status: Live
+> Version: 1.52.2 · Last Updated: 2026-10-25 · Status: Live
 
 ---
 
@@ -24,7 +24,23 @@ M1–M7 及 Step 0.5–15 全部完成；阶段 B 业务增强 B1–B5 与收官
 
 ## 2. Current Step（当前开发阶段）
 
-**C 链整组提交与 C-1..C-5 验收收口（2026-10-15，本段为当前状态摘要）**——冷启动位置
+**冷启动 FaceCluster 拍摄时间排序修复链收口（2026-10-25，本段为当前状态摘要）**——主线：FaceCluster
+按拍摄时间正确排序并正确参与 Roster 位置匹配。三代同源缺陷修复完毕：① ISO 文本比较 → datetime
+值比较（P3）；② 定宽六位微秒序列化，消除同秒混精度文本序颠倒（P4，方案 A）；③ aware 排序文本
+统一 UTC 绝对表示、同瞬间异偏移恢复路径决胜（A-min，Owner 批准；naive 逐字节不变）。已验收入库：
+**`bbdfc38`**（fix(pairing): order face clusters by capture time value with normalized sort keys，
+5 路径 +341/−26，父 `9fe7a0e`），**已推送 origin/main 并同步**；远端 CI 通过（Owner 2026-10-25
+确认，无 run 编号，未独立核验具体运行记录）。验收链：P1 基线核实→独立审核 PASS→P2 设计→P3
+实施+审核 PASS→P4 验证（补测暴露同秒混精度缺陷→方案 A 修复）→`A_MIN_FINAL_ACCEPTANCE_PASS`。
+测试 T1–T11（新增 7 个排序/准入判别测试函数，并改造 T5a 既有用例），全量最近记录 **1885 passed / 8 skipped / 0 failed**
+（A-min 实施轮实测，既有执行记录未由仓库独立复核）；ruff/mypy 绿。既有边界（Owner 批准时已知）：
+同簇 naive/aware 混型 fail-closed；簇间各自同型异型极端输入不设防。**明确未授权/未包含**：存量
+数据库 aware 文本核查（Owner 决策暂缓）、naive/aware 簇间混排治理、P5（未定义）、AUD-034 未
+登记（Owner 裁决仅以收口文档记载）。**仍然有效的既有 Owner-Gate**：生产 Migration 013 执行
+（生产最近已知 = 012）；F-C3-2 事务内 kernel 构建性能观察。**主线最终关闭（2026-10-25，Owner 裁决）：A-min 技术修复链及其对应原始业务任务按既定验收范围关闭；FaceCluster 排序与 Roster 位置匹配仅在既有测试覆盖范围内获得验证，真实数据端到端流程未验证（不等于发现缺陷，也不等于全场景已验证；未来出现具体错配案例时定向排查，不自动重开已关闭的排序修复链）。**收口记录：
+`docs/development/capture-time-cluster-ordering-closeout.md`。
+
+**C 链整组提交与 C-1..C-5 验收收口（2026-10-15，历史摘要；当时为当前状态）**——冷启动位置
 自动确认链完成五个独立提交落库：AUD-030 `d43ecca`（fix(cli): recognize --all PENDING
 防重，6 路径 +421/−6）→ AUD-026/033 `1fde8b5`（test: S1 身份/投影夹具稳定化，2 路径
 +170/−10）→ **C 链整组 `d3f90e9`**（feat(pairing): 位置自动确认，26 路径 +2820/−107：

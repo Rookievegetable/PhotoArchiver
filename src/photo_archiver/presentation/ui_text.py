@@ -13,6 +13,8 @@ Presentation 层所有面向用户的文本统一在此定义为常量——单�
 
 from __future__ import annotations
 
+from datetime import datetime
+
 # ---- 主窗口 · 工具栏 ----
 MAIN_WINDOW_TITLE = "PhotoArchiver"
 ACTION_IMPORT_PEOPLE = "导入人员"
@@ -104,8 +106,8 @@ STATUS_IMPORT_CONFIRM_ERRORS = "；{count} 行失败（详情见日志）"
 STATUS_IMPORT_CONFIRM_WORKER = "导入确认已提交后台执行，完成后显示结果。"
 # ---- 人员与分组页（人员导入重设计 阶段 B） ----
 PEOPLE_PAGE_HINT = (
-    "名单顺序即「照片库」人员筛选下拉的展示顺序：拖动行或使用「上移 / 下移」调整，改动立即保存。"
-    "「来源批次」可回看某次导入带入的人员（回看态为只读）。"
+    "名单顺序即「照片库」人员筛选下拉的展示顺序。选择某个「来源批次」后，"
+    "可拖动行或使用「上移 / 下移」调整该批次成员的名次（改动立即保存）；「全部批次」为只读总览。"
 )
 PEOPLE_PAGE_ADD_BUTTON = "新增人员"
 PEOPLE_PAGE_EDIT_BUTTON = "编辑"
@@ -114,8 +116,11 @@ PEOPLE_PAGE_MOVE_UP = "上移"
 PEOPLE_PAGE_MOVE_DOWN = "下移"
 PEOPLE_PAGE_BATCH_FILTER_LABEL = "来源批次："
 PEOPLE_PAGE_BATCH_ALL = "全部批次"
-PEOPLE_PAGE_BATCH_ENTRY = "{file_name}（{person_count} 人）"
-PEOPLE_PAGE_BATCH_FILTER_HINT = "回看态为只读：调整顺序请先切回「全部批次」。"
+# 批次条目标签经 import_batch_entry_label() 组装（D10：文件名 · 创建时间 ·
+# 状态（N 人）——库中存在同名批次，纯"文件名（人数）"无法区分且删除入口
+# 有误删风险）。
+PEOPLE_PAGE_BATCH_FILTER_HINT = "单批次视图可调序：拖动行或「上移 / 下移」仅调整本批次成员的名次（其他批次名次不变）。"
+PEOPLE_PAGE_BATCH_READONLY_HINT = "全部批次为只读：调整顺序请先选择某个「来源批次」。"
 PEOPLE_PAGE_COL_ORDER = "顺序"
 PEOPLE_PAGE_COL_GROUP_ORDINAL = "组/序"
 PEOPLE_PAGE_COL_NAME = "姓名"
@@ -681,6 +686,39 @@ def cluster_run_status_label(status: str) -> str:
     return CLUSTER_RUN_STATUS_LABELS.get(status, status)
 
 
+IMPORT_BATCH_STATUS_LABELS = {
+    "draft": "草稿",
+    "confirmed": "已确认",
+    "cancelled": "已取消",
+}
+
+
+def import_batch_status_label(status: str) -> str:
+    """Map an import batch status to its user-visible label (fallback: raw)."""
+    return IMPORT_BATCH_STATUS_LABELS.get(status, status)
+
+
+def import_batch_entry_label(
+    file_name: str,
+    created_at: datetime | None,
+    status: str,
+    person_count: int,
+) -> str:
+    """Build the source-batch selector label（批次级删除 D10）.
+
+    库中可能存在**同名**的多个导入批次（如反复导入同一份名单），只显示
+    "文件名（人数）"无法区分——标签必须带上创建时间与状态，否则删除入口
+    会出现误删风险。
+    """
+    created = (
+        created_at.strftime("%Y-%m-%d %H:%M") if created_at is not None else "—"
+    )
+    return (
+        f"{file_name} · {created} · {import_batch_status_label(status)}"
+        f"（{person_count} 人）"
+    )
+
+
 # ---- 识别范围选择对话框（阶段 C Commit 3） ----
 RECOGNITION_SCOPE_DIALOG_TITLE = "识别范围选择"
 RECOGNITION_SCOPE_OK_BUTTON = "确定"
@@ -850,6 +888,87 @@ PEOPLE_PAGE_MULTI_DELETE_DONE = (
 # ---- 删除失败提示（照片/人员共用） ----
 DELETE_FAILED_TITLE = "删除失败"
 DELETE_FAILED_MESSAGE = "删除操作时发生意外错误：\n\n{detail}"
+
+# ---- 按识别运行删除（批次删除功能 D1~D7） ----
+# "批次"锚点 = 识别运行（recognition_runs）——与名单导入批次（import_batches）
+# 是两套互不相连的实体，文案必须让用户分清。
+PEOPLE_PAGE_DELETE_RUN_PEOPLE_BUTTON = "删除该运行名单…"
+PEOPLE_PAGE_DELETE_RUN_PHOTOS_BUTTON = "删除该运行照片…"
+RUN_DELETE_PEOPLE_DIALOG_TITLE = "删除该识别运行的名单及记录"
+RUN_DELETE_PHOTOS_DIALOG_TITLE = "删除该识别运行的照片及记录"
+RUN_DELETE_RUN_LABEL = "识别运行：{run}"
+RUN_DELETE_EMPTY = "该识别运行没有任何可删除的对象。"
+RUN_DELETE_NO_SNAPSHOT = (
+    "该识别运行没有照片快照记录（输入快照自阶段 C 起才写入），"
+    "无法按批次删除照片。"
+)
+RUN_DELETE_PEOPLE_MODE_GROUP = "处理方式"
+RUN_DELETE_PEOPLE_MODE_DELETE = "删除该运行指向的人员及其记录（默认）"
+RUN_DELETE_PEOPLE_MODE_UNASSIGN = "仅解除该运行的匹配关系，保留人员"
+RUN_DELETE_PEOPLE_IMPACT_DELETE = (
+    "该运行涉及 {person_count} 名人员：{names}\n\n"
+    "· {assignment_count} 条身份决策历史（含人工终审记录与排序快照，跨所有代际）"
+    "将按外键级联删除；\n"
+    "· {sample_count} 条人脸样本（多样本库）将按外键级联删除；\n"
+    "· {embedding_count} 条人脸嵌入将一并删除；\n"
+    "· {recognition_count} 条识别结果将保留但归属置空；\n"
+    "· {archive_count} 条归档记录将保留但归属置空（归档文件仍在磁盘上）；\n"
+    "· {ground_truth_count} 条 Ground Truth 裁定将保留但人员指向置空。\n\n"
+    "照片、识别运行与聚类结果全部保留，磁盘文件一律不动。"
+)
+RUN_DELETE_PEOPLE_IMPACT_UNASSIGN = (
+    "将解除该运行 {cluster_count} 个簇上的有效匹配（决策行状态迁移为「未指派」，"
+    "历史行保留，不物理删除）：\n\n"
+    "· 相关人员的兼容归档投影将被回收；\n"
+    "· 对应的人脸样本将被停用（历史保留）。\n\n"
+    "人员、照片与识别记录全部保留，磁盘文件一律不动。"
+)
+RUN_DELETE_PHOTOS_IMPACT = (
+    "将移除该运行快照内 {photo_count} 张照片的库内登记：\n\n"
+    "· {recognition_count} 条识别结果将按外键级联删除；\n"
+    "· {archive_count} 条归档记录将按外键级联删除（归档目录里的实体文件仍在）；\n"
+    "· {observation_count} 条人脸观测与 {member_count} 条簇成员关系将级联消失；\n"
+    "· {sample_count} 条人脸样本（多样本库）将级联删除；\n"
+    "· 其它运行引用这些照片的 {other_run_snapshot_count} 条快照行将一并消失"
+    "（不可重建——重跑会产生新的运行）。\n\n"
+    "仅移除库内登记，不会删除磁盘上的任何照片文件；目录照片统计在下次扫描前"
+    "可能仍显示旧数量。"
+)
+RUN_DELETE_PURGE_CHECKBOX = "同时清理该运行的聚类代际"
+RUN_DELETE_PURGE_WARNING = (
+    "勾选后：该运行的聚类代际、{cluster_count} 个簇及其 {decision_count} 条身份"
+    "决策行将一并删除（决策行为级联删除，不可恢复），Ground Truth 裁定也会"
+    "随簇消失。"
+)
+RUN_DELETE_BLOCKED_TITLE = "存在不可恢复的证据，已阻止执行"
+RUN_DELETE_BLOCKED = (
+    "以下内容会随本次删除而永久消失，且无法靠重新识别还原：\n\n{reasons}\n\n"
+    "请先处理这些内容，或改用其它处理方式。"
+)
+RUN_DELETE_AWARE_CHECKBOX = "我已知悉：以上记录将从库中永久移除，界面内没有撤销操作"
+RUN_DELETE_PEOPLE_BUTTON = "删除该运行名单"
+RUN_DELETE_PEOPLE_UNASSIGN_BUTTON = "解除该运行匹配"
+RUN_DELETE_PHOTOS_BUTTON = "移除该运行照片登记"
+RUN_DELETE_PEOPLE_DONE = (
+    "已删除该运行名单 {removed} 名人员（决策历史 {assignment_cascade} 条、"
+    "样本 {sample_cascade} 条、嵌入 {embedding_cascade} 条、"
+    "识别归属置空 {recognition_orphaned} 条、归档归属置空 {archive_orphaned} 条）。"
+)
+RUN_DELETE_PEOPLE_UNASSIGN_DONE = (
+    "已解除该运行 {unassigned} 个簇的匹配关系（人员与记录全部保留）。"
+)
+RUN_DELETE_PHOTOS_DONE = (
+    "已移除该运行 {removed} 张照片登记（级联移除识别 {recognition_cascade} 条、"
+    "归档 {archive_cascade} 条、观测 {observation_cascade} 条、"
+    "成员关系 {member_cascade} 条、样本 {sample_cascade} 条、"
+    "其它运行快照 {other_run_snapshot_cascade} 条）。"
+)
+RUN_DELETE_PHOTOS_DONE_EXTRA = (
+    " 空簇决策迁为未指派 {unassigned_decisions} 条，修正簇计数 {clusters_recounted} 个代际。"
+)
+RUN_DELETE_PHOTOS_DONE_PURGED = (
+    " 已清理 {generations_purged} 个聚类代际（其中的身份决策行随之级联删除）。"
+)
 
 # ---- 重复报告处置（Phase E E-4，ADR-034 D6） ----
 DUPLICATE_DISPOSE_BUTTON = "按建议处置（每组保留最早一张）"

@@ -145,8 +145,14 @@ class BatchPersonDeletionDialog(QDialog):
         self._batch_combo.blockSignals(True)
         self._batch_combo.clear()
         for summary in roster.batches:
+            # D10：同名批次无法区分——标签必须带创建时间与状态。
             self._batch_combo.addItem(
-                f"{summary.batch.file_name}（{summary.person_count} 人）",
+                text.import_batch_entry_label(
+                    summary.batch.file_name,
+                    summary.batch.created_at,
+                    summary.batch.status,
+                    summary.person_count,
+                ),
                 summary.batch.id,
             )
         self._batch_combo.blockSignals(False)

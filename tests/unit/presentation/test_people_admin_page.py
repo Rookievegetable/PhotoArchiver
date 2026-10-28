@@ -119,6 +119,40 @@ def populated(tmp_path: Path, qtbot):
     return page, manage, repositories
 
 
+def _import_batch_and_select(
+    page, repositories, tmp_path: Path,
+    rows: list[tuple[str, str | None]], tag: str = "a",
+) -> str:
+    """Import one batch roster (rows of ``(name, identity|None)``) and switch
+    the page to its batch view.
+
+    identity 冲突 → 合并（既有人员批次归属被改写为新批次）——用于构造跨批
+    非连续成员。返回批次文件名。
+    """
+    from photo_archiver.application.commands import ConfirmImportCommand, ParseImportDraftCommand
+    from photo_archiver.application.services import ConfirmImportService, ParseImportDraftService
+    from photo_archiver.infrastructure.importers import FileRosterTableReader
+
+    csv = tmp_path / f"batch_{tag}.csv"
+    lines = ["姓名,工号"] + [
+        name if identity is None else f"{name},{identity}"
+        for name, identity in rows
+    ]
+    csv.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    parse = ParseImportDraftService(
+        FileRosterTableReader(), repositories.import_batches, repositories.people,
+    )
+    confirm = ConfirmImportService(repositories.import_batches, repositories.people)
+    draft = parse.execute(ParseImportDraftCommand(csv))
+    confirm.execute(ConfirmImportCommand(draft.batch.id))
+    page.refresh()
+    index = page._batch_combo.findText(csv.name, flags=Qt.MatchFlag.MatchContains)
+    assert index > 0
+    page._batch_combo.setCurrentIndex(index)
+    page._on_batch_selected(index)
+    return csv.name
+
+
 def test_page_renders_roster_in_order_with_columns(populated) -> None:
     page, _, _ = populated
     table = page._table
@@ -129,25 +163,35 @@ def test_page_renders_roster_in_order_with_columns(populated) -> None:
     assert [table.item(row, 1).text() for row in range(3)] == ["—", "—", "—"]  # 组/序：单组无前缀
 
 
-def test_move_selected_persists_and_updates_positions(populated) -> None:
+def test_move_selected_persists_and_updates_positions(populated, tmp_path: Path) -> None:
+    """批次视图调序（Owner 2026-10-28）：批次成员按新序置换其全局名次槽位。"""
     page, _, repositories = populated
-    page._table.selectRow(0)
-    page.move_selected(1)  # 张三下移
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
+    ], tag="mv")
+    page._table.selectRow(0)  # 批张（批次视图首位）
+    page.move_selected(1)  # 批张下移
     names = [p.name for p in repositories.people.list_all()]
-    assert names == ["李四", "张三", "王五"]
-    assert [p.roster_order for p in repositories.people.list_all()] == [1, 2, 3]
+    assert names == ["张三", "李四", "王五", "批李", "批张", "批王"]
+    assert [p.roster_order for p in repositories.people.list_all()] == [1, 2, 3, 4, 5, 6]
 
 
-def test_drop_rows_reorders(populated) -> None:
+def test_drop_rows_reorders(populated, tmp_path: Path) -> None:
+    """批次视图拖拽：_on_rows_dropped 与按钮同语义（置换）。"""
     page, _, repositories = populated
-    page._on_rows_dropped(2, 0)  # 王五拖到最前
-    assert [p.name for p in repositories.people.list_all()] == ["王五", "张三", "李四"]
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
+    ], tag="drop")
+    page._on_rows_dropped(2, 0)  # 批王拖到批次视图最前
+    names = [p.name for p in repositories.people.list_all()]
+    assert names == ["张三", "李四", "王五", "批王", "批张", "批李"]
 
 
-def test_batch_review_filters_and_disables_reorder(populated, tmp_path: Path) -> None:
+def test_batch_review_switches_hint_and_gates(tmp_path: Path, populated, qtbot) -> None:
+    """Owner 裁决（2026-10-28）：批次视图可调序（拖拽启用+调序提示）、
+    全部批次只读（拖拽关闭+只读提示、移动按钮禁用）。"""
     page, manage, repositories = populated
     page.show()
-    # 给 张三 造一个批次来源：先导入一个批次再合并
     from photo_archiver.application.commands import ConfirmImportCommand, ParseImportDraftCommand
     from photo_archiver.application.services import ConfirmImportService, ParseImportDraftService
     from photo_archiver.infrastructure.importers import FileRosterTableReader
@@ -163,17 +207,24 @@ def test_batch_review_filters_and_disables_reorder(populated, tmp_path: Path) ->
     page.refresh()
 
     index = page._batch_combo.findText("batch.csv", flags=Qt.MatchFlag.MatchContains)
-    assert index > 0  # 批次条目出现（含人数）
+    assert index > 0
     page._batch_combo.setCurrentIndex(index)
     page._on_batch_selected(index)
     assert page._table.rowCount() == 1  # 该批次带入 1 人（名单里的「张三 E001」是新建，不合并无工号的同名人员）
     assert page._table.item(0, 2).text() == "张三"
     assert page._table.item(0, 6).text() == "batch.csv"  # 来源批次列可见（组/序插入后右移）
-    assert page._batch_hint.isVisible()  # 只读提示显示
-    assert not page._table.dragEnabled()  # 回看态禁止拖拽
+    assert page._batch_hint.isVisible()
+    assert page._batch_hint.text() == text.PEOPLE_PAGE_BATCH_FILTER_HINT  # 调序提示
+    assert page._table.dragEnabled()  # 批次视图允许拖拽调序
+
     page._batch_combo.setCurrentIndex(0)
     page._on_batch_selected(0)
     assert page._table.rowCount() == 4
+    assert page._batch_hint.text() == text.PEOPLE_PAGE_BATCH_READONLY_HINT  # 只读提示
+    assert not page._table.dragEnabled()  # 全部批次禁止拖拽
+    page._table.selectRow(0)
+    assert not page._move_up_button.isEnabled()  # 全部批次：移动按钮禁用
+    assert not page._move_down_button.isEnabled()
 
 
 def test_add_button_opens_dialog_and_appends(populated, monkeypatch) -> None:
@@ -235,22 +286,31 @@ def _row_center(table, row: int) -> QPoint:
     return table.visualItemRect(table.item(row, 2)).center()
 
 
-def test_table_keeps_row_drops_enabled_for_reordering(populated) -> None:
-    """验收 #2：拖拽模式必须真的接收落点（``DragOnly`` 会关掉 acceptDrops）。"""
-    table = populated[0]._table
+def test_table_keeps_row_drops_enabled_for_reordering(populated, tmp_path: Path) -> None:
+    """验收 #2：批次视图拖拽模式必须真的接收落点（``DragOnly`` 会关掉 acceptDrops）。"""
+    page, _, repositories = populated
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
+    ], tag="drops")
+    table = page._table
     assert table.dragEnabled()
     assert table.acceptDrops()
     assert table.viewport().acceptDrops()
 
 
-def test_row_drop_reorders_the_roster_without_a_blank_row(populated) -> None:
-    """验收 #2：拖拽重排后目标行仍在——Qt 内部行移动曾把它删成空白行。"""
+def test_row_drop_reorders_the_roster_without_a_blank_row(
+    populated, tmp_path: Path, qtbot,
+) -> None:
+    """验收 #2：批次视图拖拽重排后目标行仍在——Qt 内部行移动曾把它删成空白行。"""
     page, _, repositories = populated
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
+    ], tag="drag")
     page.resize(900, 620)  # D-4 聚类区加入后页面更高：给表格稳定几何，避免拖拽落点漂移
     page.show()
     table = page._table
-    source_point = _row_center(table, 2)  # 王五
-    target_point = _row_center(table, 0)  # 拖到最前
+    source_point = _row_center(table, 2)  # 批王
+    target_point = _row_center(table, 0)  # 拖到批次视图最前
     assert table.indexAt(source_point).row() == 2
     assert table.indexAt(target_point).row() == 0
 
@@ -279,10 +339,13 @@ def test_row_drop_reorders_the_roster_without_a_blank_row(populated) -> None:
 
     assert drop.isAccepted()
     assert drop.dropAction() == Qt.DropAction.CopyAction  # Qt 不得再自行改模型
-    assert [p.name for p in repositories.people.list_all()] == ["王五", "张三", "李四"]
-    assert [p.roster_order for p in repositories.people.list_all()] == [1, 2, 3]
+    # 置换语义：批次成员填回其占有的名次槽位（4..6），其余批次人员不变
+    assert [p.name for p in repositories.people.list_all()] == [
+        "张三", "李四", "王五", "批王", "批张", "批李",
+    ]
+    assert [p.roster_order for p in repositories.people.list_all()] == [1, 2, 3, 4, 5, 6]
     assert table.rowCount() == 3
-    assert [table.item(row, 2).text() for row in range(3)] == ["王五", "张三", "李四"]
+    assert [table.item(row, 2).text() for row in range(3)] == ["批王", "批张", "批李"]
     # 界面优化 §4.1：行内操作列已取消（编辑移至工具栏）。
     assert table.columnCount() == 8  # P4：末尾新增「匹配状态」列
     assert all(table.cellWidget(row, 6) is None for row in range(3))
@@ -290,9 +353,12 @@ def test_row_drop_reorders_the_roster_without_a_blank_row(populated) -> None:
     assert [index.row() for index in table.selectionModel().selectedRows()] == [0]
 
 
-def test_move_only_drop_leaves_no_stale_selection(populated) -> None:
+def test_move_only_drop_leaves_no_stale_selection(populated, tmp_path: Path) -> None:
     """落点无法降级为复制时，选区必须清空（内部移动就删不到任何行）。"""
     page, _, repositories = populated
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
+    ], tag="stale")
     page.resize(900, 620)  # D-4 聚类区加入后页面更高：给表格稳定几何，避免拖拽落点漂移
     page.show()
     table = page._table
@@ -315,7 +381,9 @@ def test_move_only_drop_leaves_no_stale_selection(populated) -> None:
     QApplication.sendEvent(table.viewport(), drop)
 
     assert drop.isAccepted()
-    assert [p.name for p in repositories.people.list_all()] == ["王五", "张三", "李四"]
+    assert [p.name for p in repositories.people.list_all()] == [
+        "张三", "李四", "王五", "批王", "批张", "批李",
+    ]
     assert table.rowCount() == 3
     assert not table.selectionModel().selectedRows()
 
@@ -338,13 +406,61 @@ def test_foreign_drag_payload_never_reorders_the_roster(populated) -> None:
     assert [p.name for p in repositories.people.list_all()] == ["张三", "李四", "王五"]
 
 
+def test_all_batches_view_is_readonly(populated) -> None:
+    """Owner 裁决（2026-10-28）：全部批次视图只读——拖拽关闭、移动按钮禁用、
+    move_selected 第二道门 no-op、提示为只读文案。"""
+    page, _, _ = populated
+    page.show()
+    assert page._batch_filter is None
+    assert page._batch_hint.text() == text.PEOPLE_PAGE_BATCH_READONLY_HINT
+
+    assert not page._table.dragEnabled()
+    page._table.selectRow(0)
+    assert page._edit_button.isEnabled()  # 编辑与顺序无关，仍可用
+    assert not page._move_up_button.isEnabled()
+    assert not page._move_down_button.isEnabled()
+
+    page.move_selected(1)  # 第二道门：全部批次必须 no-op
+    assert [p.name for p in page.visible_people()] == ["张三", "李四", "王五"]
+
+
+def test_batch_view_permutation_keeps_other_batches_positions(
+    populated, tmp_path: Path,
+) -> None:
+    """置换语义：批次成员只在本批次名次块内重排，其他批次人员的名次与
+    相对位置完全不变（合并会把成员重排进批次块，块内置换即全部语义）。"""
+    page, _, repositories = populated
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("赵六", "EC1"),
+    ], tag="p1")
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("钱七", "EC2"), ("孙八", "EC3"),
+    ], tag="p2")
+    page._batch_combo.setCurrentIndex(page._batch_combo.findText(
+        "batch_p1.csv", flags=Qt.MatchFlag.MatchContains))
+    page._on_batch_selected(page._batch_combo.currentIndex())
+    assert [p.name for p in page.visible_people()] == ["赵六"]
+
+    # 切到批次2（末位两人）并交换
+    page._batch_combo.setCurrentIndex(page._batch_combo.findText(
+        "batch_p2.csv", flags=Qt.MatchFlag.MatchContains))
+    page._on_batch_selected(page._batch_combo.currentIndex())
+    page._table.selectRow(0)  # 钱七
+    page.move_selected(1)  # 钱七 与 孙八 交换
+
+    names = [p.name for p in repositories.people.list_all()]
+    assert names == ["张三", "李四", "王五", "赵六", "孙八", "钱七"]
+    # 前四名（批次1 与无批次人员）名次完全不变
+    assert [p.roster_order for p in repositories.people.list_all()][:4] == [1, 2, 3, 4]
+
+
 def test_batch_review_disables_row_drops(populated) -> None:
-    """回看态只读：拖拽载荷在禁用拖拽时一律不接受。"""
+    """全部批次只读：页面渲染即关闭拖拽，拖拽载荷一律不接受。"""
     page, _, _ = populated
     page.resize(900, 360)
     page.show()
     table = page._table
-    table.setDragEnabled(False)  # _render_rows 在批次回看态设置
+    assert not table.dragEnabled()  # 全部批次：_render_action_state 关闭拖拽
     enter = QDragEnterEvent(
         _row_center(table, 1), Qt.DropAction.MoveAction, _row_payload(),
         Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
@@ -395,45 +511,72 @@ def test_deletion_dialog_selects_and_focuses_the_requested_person(tmp_path, qtbo
     assert dialog.focusWidget() is dialog._combo  # 选择项开局即聚焦
 
 
-def test_move_buttons_keep_the_person_selected_at_the_new_position(populated) -> None:
+def test_move_buttons_keep_the_person_selected_at_the_new_position(
+    populated, tmp_path: Path,
+) -> None:
     """复审追问：上移/下移后高亮必须跟着人走，不能留在原行号。"""
     page, _, repositories = populated
-    page._table.selectRow(1)  # 李四
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
+    ], tag="sel")
+    page._table.selectRow(0)  # 批张（批次视图首位）
     page._move_down_button.click()
 
-    assert [p.name for p in repositories.people.list_all()] == ["张三", "王五", "李四"]
-    assert page._table.item(2, 2).text() == "李四"
+    assert [p.name for p in repositories.people.list_all()] == [
+        "张三", "李四", "王五", "批李", "批张", "批王",
+    ]
+    assert page._table.item(1, 2).text() == "批张"
+    assert [index.row() for index in page._table.selectionModel().selectedRows()] == [1]
+    assert page._table.currentRow() == 1
+    assert page._move_down_button.isEnabled()  # 行 1/3：仍可下移
+
+    page._move_down_button.click()  # 批张 到批次视图末尾
+    assert [p.name for p in repositories.people.list_all()] == [
+        "张三", "李四", "王五", "批李", "批王", "批张",
+    ]
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [2]
-    assert page._table.currentRow() == 2
     assert not page._move_down_button.isEnabled()  # 已到末尾：置灰而非静默无效
 
-    page._move_up_button.click()  # 李四 回退一行
-    assert [p.name for p in repositories.people.list_all()] == ["张三", "李四", "王五"]
+    page._move_up_button.click()  # 批张 回退一行
+    assert [p.name for p in repositories.people.list_all()] == [
+        "张三", "李四", "王五", "批李", "批张", "批王",
+    ]
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [1]
     assert page._move_up_button.isEnabled()
 
-    page._move_up_button.click()  # 再退一行：李四 到开头
-    assert [p.name for p in repositories.people.list_all()] == ["李四", "张三", "王五"]
+    page._move_up_button.click()  # 再退一行：批张 到批次视图开头
+    assert [p.name for p in repositories.people.list_all()] == [
+        "张三", "李四", "王五", "批张", "批李", "批王",
+    ]
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [0]
-    assert page._table.item(0, 2).text() == "李四"
+    assert page._table.item(0, 2).text() == "批张"
     assert not page._move_up_button.isEnabled()  # 已到开头
 
 
-def test_repeated_move_clicks_move_the_same_person(populated) -> None:
+def test_repeated_move_clicks_move_the_same_person(populated, tmp_path: Path) -> None:
     """连续两次下移必须移动同一个人（旧行为第二次移动的是取而代之的那位）。"""
     page, _, repositories = populated
-    page._table.selectRow(0)  # 张三
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
+    ], tag="rep")
+    page._table.selectRow(0)  # 批张
     page._move_down_button.click()
     page._move_down_button.click()
 
-    assert [p.name for p in repositories.people.list_all()] == ["李四", "王五", "张三"]
+    assert [p.name for p in repositories.people.list_all()] == [
+        "张三", "李四", "王五", "批李", "批王", "批张",
+    ]
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [2]
-    assert page._table.item(2, 2).text() == "张三"
+    assert page._table.item(2, 2).text() == "批张"
 
 
-def test_move_buttons_grey_out_at_the_roster_edges(populated) -> None:
-    """边界态：首行不能上移、末行不能下移、无选区两个都禁用。"""
-    page, _, _ = populated
+def test_move_buttons_grey_out_at_the_roster_edges(populated, tmp_path: Path) -> None:
+    """边界态（批次视图）：首行不能上移、末行不能下移、无选区两个都禁用；
+    全部批次视图：即使有选区，移动按钮也一律禁用（只读）。"""
+    page, _, repositories = populated
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
+    ], tag="edge")
     page._table.selectRow(0)
     assert not page._move_up_button.isEnabled()
     assert page._move_down_button.isEnabled()
@@ -447,20 +590,35 @@ def test_move_buttons_grey_out_at_the_roster_edges(populated) -> None:
     assert not page._move_down_button.isEnabled()
     assert not page._delete_button.isEnabled()
 
+    # 全部批次视图：只读——有选区也不启用移动
+    page._batch_combo.setCurrentIndex(0)
+    page._on_batch_selected(0)
+    page._table.selectRow(1)
+    assert not page._move_up_button.isEnabled()
+    assert not page._move_down_button.isEnabled()
 
-def test_selection_follows_the_person_across_refreshes(populated) -> None:
-    """任何重载（导入/删除/排序）后仍锁定同一个人，而不是同一个行号。"""
-    page, manage, _ = populated
-    page._table.selectRow(2)  # 王五
+
+def test_selection_follows_the_person_across_refreshes(
+    populated, tmp_path: Path,
+) -> None:
+    """任何重载（导入/删除/排序）后仍锁定同一个人，而不是同一个行号；
+    批次筛选在刷新后保持，批次视图调序后选区跟随。"""
+    page, manage, repositories = populated
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批王", "EA1"), ("批孙", "EA2"),
+    ], tag="follow")
+    page._table.selectRow(0)  # 批王（批次视图）
     manage.add_person(AddPersonCommand(name="赵六"))  # 名单变化（窗口会重载本页）
     page.refresh()
 
-    assert [index.row() for index in page._table.selectionModel().selectedRows()] == [2]
-    assert page._table.item(2, 2).text() == "王五"
-
-    page.move_row(2, 0)  # 王五挪到最前
+    # 批次筛选在刷新后保持：视图仍是本批次两人，选区跟随 批王
+    assert [p.name for p in page.visible_people()] == ["批王", "批孙"]
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [0]
-    assert page._table.item(0, 2).text() == "王五"
+    assert page._table.item(0, 2).text() == "批王"
+
+    page.move_row(0, 1)  # 批次视图调序：批王 移到末位，选区跟随
+    assert [index.row() for index in page._table.selectionModel().selectedRows()] == [1]
+    assert page._table.item(1, 2).text() == "批王"
 
 
 def test_identity_conflict_is_reported_in_chinese(populated, monkeypatch) -> None:
@@ -492,9 +650,12 @@ def test_identity_conflict_is_reported_in_chinese(populated, monkeypatch) -> Non
 # ── Performance regressions (P0: 拖拽/上移下移延迟优化) ─────────────────────
 
 
-def test_move_renders_the_table_exactly_once(populated, monkeypatch) -> None:
+def test_move_renders_the_table_exactly_once(populated, tmp_path: Path, monkeypatch) -> None:
     """一次移动只整表重建一次，且重排发出的是「纯顺序变化」信号（窗口不再级联重建）。"""
-    page, _, _ = populated
+    page, _, repositories = populated
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"),
+    ], tag="render")
     renders = 0
     original_render = page._render_rows
 
@@ -686,22 +847,24 @@ def test_people_table_renders_group_ordinal_column(tmp_path: Path, qtbot) -> Non
     assert table.item(0, 2).toolTip() == "1张三"
 
 
-def test_group_ordinal_column_recomputes_after_reorder(populated) -> None:
-    """拖拽/按钮排序改 roster_order 后，组/序按新顺序自然重算（零持久化）。"""
-    page, manage, _ = populated
-    manage.add_person(AddPersonCommand(name="1王五"))
-    page.refresh()
+def test_group_ordinal_column_recomputes_after_reorder(populated, tmp_path: Path) -> None:
+    """批次视图排序改 roster_order 后，组/序按新顺序自然重算（零持久化）；
+    连续序号链收敛为单组时组号显示「—」。"""
+    page, _, repositories = populated
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("2批乙", "EB1"), ("1批甲", "EB2"),
+    ], tag="grp")
     table = page._table
-    # 顺序：张三(无前缀), 李四(无前缀), 王五(无前缀), 1王五 → 首个带序号者开启第 1 组。
+    # 批次视图（按导入序）：序号链 2→1 不接续 → 两个组
     assert [table.item(row, 1).text() for row in range(table.rowCount())] == [
-        "—", "—", "—", "—/1",
+        "1/2", "2/1",
     ]
-    page.move_row(3, 0)  # 1王五 移到首位
+    page.move_row(0, 1)  # 批次视图内交换：1批甲 移后 → 序号链 1→2 连续 → 单组
     assert [table.item(row, 2).text() for row in range(table.rowCount())] == [
-        "1王五", "张三", "李四", "王五",
+        "1批甲", "2批乙",
     ]
     assert [table.item(row, 1).text() for row in range(table.rowCount())] == [
-        "—/1", "—", "—", "—",
+        "—/1", "—/2",
     ]
 
 
@@ -1044,12 +1207,17 @@ def _select_extra_row(page, row: int) -> None:
     )
 
 
-def test_multi_selection_disables_drag_and_gates_buttons(populated) -> None:
+def test_multi_selection_disables_drag_and_gates_buttons(
+    populated, tmp_path: Path,
+) -> None:
     """验收⑤：多选（>1）拖拽关闭；上移/下移/编辑仅恰选中 1 行可用。"""
-    page, _, _ = populated
+    page, _, repositories = populated
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
+    ], tag="multi")
     page._table.selectRow(0)
-    assert page._table.dragEnabled()  # 单选：拖拽可用
-    assert page._move_up_button.isEnabled() is False  # 首行不能上移（原有规则）
+    assert page._table.dragEnabled()  # 批次视图单选：拖拽可用
+    assert page._move_up_button.isEnabled() is False  # 批次视图首行不能上移（原有规则）
     assert page._move_down_button.isEnabled()
     assert page._edit_button.isEnabled()
 
@@ -1063,22 +1231,29 @@ def test_multi_selection_disables_drag_and_gates_buttons(populated) -> None:
 
     page._table.clearSelection()
     assert page._delete_button.isEnabled() is False
-    assert page._table.dragEnabled() is True  # 回到无选区：拖拽恢复
+    assert page._table.dragEnabled() is True  # 回到无选区（仍批次视图）：拖拽恢复
 
 
-def test_move_selected_is_gated_to_single_selection(populated) -> None:
+def test_move_selected_is_gated_to_single_selection(populated, tmp_path: Path) -> None:
     """P11：move_selected 仅在恰选中 1 行时执行（按钮禁用之外的第二道门）。"""
     page, _, repositories = populated
+    _import_batch_and_select(page, repositories, tmp_path, [
+        ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
+    ], tag="gate")
     page._table.selectRow(0)
     _select_extra_row(page, 2)
     page.move_selected(-1)  # 多选：必须 no-op
 
-    assert [p.name for p in repositories.people.list_all()] == ["张三", "李四", "王五"]
+    assert [p.name for p in repositories.people.list_all()] == [
+        "张三", "李四", "王五", "批张", "批李", "批王",
+    ]
 
     page._table.clearSelection()
     page._table.selectRow(1)
     page.move_selected(-1)
-    assert [p.name for p in repositories.people.list_all()] == ["李四", "张三", "王五"]
+    assert [p.name for p in repositories.people.list_all()] == [
+        "张三", "李四", "王五", "批李", "批张", "批王",
+    ]
 
 
 def test_multi_select_delete_opens_preview_dialog_for_selected_people(

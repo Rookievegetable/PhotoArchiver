@@ -65,6 +65,40 @@ class FaceClusterRepository(Protocol):
         持有支撑当前身份的有效 Assignment）。
         """
 
+    def update_cluster_member_count(self, cluster_id: UUID, member_count: int) -> int:
+        """Persist a recomputed cluster member count（批次删除后的计数修正）.
+
+        ``member_count`` 是**派生统计**：成员关系行被外键级联抹掉后该列会
+        失真，删除服务必须按实际成员数回写，否则簇规模显示撒谎。
+
+        Returns:
+            1 on hit, 0 when the cluster id does not exist.
+        """
+
+    def update_cluster_run_member_count(
+        self, cluster_run_id: UUID, member_count: int,
+    ) -> int:
+        """Persist a recomputed cluster run member count（代际级计数修正）.
+
+        与 :meth:`update_cluster_member_count` 同源：代际的成员总数是各簇
+        成员数之和，照片删除后必须同步回写。
+
+        Returns:
+            1 on hit, 0 when the cluster run id does not exist.
+        """
+
+    def remove_cluster_run(self, cluster_run_id: UUID) -> int:
+        """Delete one clustering generation and its cascaded rows.
+
+        外键语义：``face_clusters`` → ``face_cluster_members`` →
+        ``cluster_person_assignments`` 逐级 CASCADE——删除代际会**连带删除**
+        该代际的身份决策行（"决策行只增改不删"不变量在此路径上的显式例外，
+        调用方必须先向用户披露该影响）。
+
+        Returns:
+            1 when the generation row was deleted, 0 when it does not exist.
+        """
+
     def list_clusters_of_observation(
         self, observation_id: UUID,
     ) -> list[FaceCluster]:

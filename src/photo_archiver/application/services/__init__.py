@@ -9,6 +9,12 @@ from photo_archiver.application.services.backfill_content_hash_service import Ba
 from photo_archiver.application.services.confirm_import_service import ConfirmImportService
 from photo_archiver.application.services.delete_person_service import DeletePersonService
 from photo_archiver.application.services.delete_photos_service import DeletePhotosService
+from photo_archiver.application.services.delete_run_people_service import (
+    DeleteRunPeopleService,
+)
+from photo_archiver.application.services.delete_run_photos_service import (
+    DeleteRunPhotosService,
+)
 from photo_archiver.application.services.detect_duplicates_service import DetectDuplicatesService
 from photo_archiver.application.services.parse_import_draft_service import ParseImportDraftService
 from photo_archiver.application.services.dispose_duplicates_service import DisposeDuplicatesService
@@ -60,6 +66,8 @@ __all__ = [
     "BackfillContentHashService",
     "DeletePersonService",
     "DeletePhotosService",
+    "DeleteRunPeopleService",
+    "DeleteRunPhotosService",
     "DetectDuplicatesService",
     "DisposeDuplicatesService",
     "ConfirmImportService",

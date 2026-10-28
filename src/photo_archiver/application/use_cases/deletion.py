@@ -17,6 +17,8 @@ from uuid import UUID
 from photo_archiver.application.commands.deletion import (
     DeletePersonCommand,
     DeletePhotosCommand,
+    DeleteRunPeopleCommand,
+    DeleteRunPhotosCommand,
     DisposeDuplicatesCommand,
     PruneMissingCommand,
 )
@@ -29,6 +31,10 @@ from photo_archiver.application.dtos.deletion import (
     PhotoDeletionResult,
     PruneMissingPreview,
     PruneMissingResult,
+    RunPeopleDeletionPreview,
+    RunPeopleDeletionResult,
+    RunPhotosDeletionPreview,
+    RunPhotosDeletionResult,
 )
 
 
@@ -77,4 +83,28 @@ class DisposeDuplicatesUseCase:
 
     def execute(self, command: DisposeDuplicatesCommand) -> DuplicateDisposalResult:  # type: ignore[empty-body]
         """Remove the confirmed duplicate registrations, guarding mis-picks."""
+        raise NotImplementedError
+
+
+class DeleteRunPeopleUseCase:
+    """Contract for removing one recognition run's people and their records（D2）."""
+
+    def preview(self, run_id: UUID) -> RunPeopleDeletionPreview:  # type: ignore[empty-body]
+        """Return the cascade/orphan preview for the run's people."""
+        raise NotImplementedError
+
+    def execute(self, command: DeleteRunPeopleCommand) -> RunPeopleDeletionResult:  # type: ignore[empty-body]
+        """Delete the run's people (or unassign them) inside one transaction."""
+        raise NotImplementedError
+
+
+class DeleteRunPhotosUseCase:
+    """Contract for removing one recognition run's photos and their records（D4）."""
+
+    def preview(self, run_id: UUID) -> RunPhotosDeletionPreview:  # type: ignore[empty-body]
+        """Return the cascade preview for the run's photo snapshot."""
+        raise NotImplementedError
+
+    def execute(self, command: DeleteRunPhotosCommand) -> RunPhotosDeletionResult:  # type: ignore[empty-body]
+        """Delete the run's photos inside one transaction."""
         raise NotImplementedError

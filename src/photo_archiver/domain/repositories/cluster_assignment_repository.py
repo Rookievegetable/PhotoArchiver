@@ -98,3 +98,16 @@ class PersonFaceSampleRepository(Protocol):
 
     def list_by_person(self, person_id: UUID) -> list[PersonFaceSample]:
         """Return one person's samples（含停用），确定性顺序。"""
+
+    def list_by_observation_ids(
+        self, observation_ids: Sequence[UUID],
+    ) -> list[PersonFaceSample]:
+        """Return the samples sunk from the given observations（含停用）。
+
+        照片登记删除会经 ``face_observations`` 级联抹掉这些样本行——样本是
+        多样本匹配库的实际内容，删除前必须按观测维度披露其规模。
+
+        Returns:
+            Matching samples ordered deterministically; empty when no
+            observation ids are supplied.
+        """

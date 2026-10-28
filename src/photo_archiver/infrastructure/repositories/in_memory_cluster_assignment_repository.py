@@ -149,6 +149,19 @@ class InMemoryPersonFaceSampleRepository(PersonFaceSampleRepository):
             key=lambda sample: (sample.created_at or sample.id, str(sample.id)),
         )
 
+    def list_by_observation_ids(
+        self, observation_ids: Sequence[UUID],
+    ) -> list[PersonFaceSample]:
+        """按观测维度取样本（含停用）——照片删除前的样本规模披露。"""
+        targets = set(observation_ids)
+        return sorted(
+            (
+                sample for sample in self._samples.values()
+                if sample.observation_id in targets
+            ),
+            key=lambda sample: (sample.created_at or sample.id, str(sample.id)),
+        )
+
     def disable_samples(
         self, person_id: UUID, observation_ids: Sequence[UUID],
     ) -> int:

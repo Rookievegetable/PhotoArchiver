@@ -6,7 +6,7 @@
 >
 > 任何 AI 在 30 秒内读完本文即可理解整个文档体系结构。
 >
-> Version: 1.7.3 ｜ Status: Stable ｜ Last Updated: 2026-10-14
+> Version: 1.7.3 ｜ Status: Stable ｜ Last Updated: 2026-10-25
 
 ---
 
@@ -78,6 +78,7 @@ flowchart TD
 | `docs/decisions/S4B2-*.md`（治理链 7 份：scoring-architecture / sb-reference-design / sb-reference-scope-amendment / sb-stage-gates / eval-unit-v2 / v2-architecture-final / sb6-f1-closure） | **S4B2 校准评估治理决策链**（D0–D7 / D-SB-1..12 / Scope Amendment / K-2-3-4 四门 / Evaluation Unit + v2 架构 / v2 Final Architecture + Token / S-B-6 F-1 关闭收口）——治理登记文件，**已提交（G3 commit `ebfa1759`，2026-10-14，docs(governance)）** | 决策记录（治理链，2026-10-06 ~ 10-09） |
 | `docs/development/S4B2-S-B-6-Mechanical-Scoring-Task-Specification.md` | S-B-6 机械评分任务书（修订版）——八项强制携带项（各含验收标准）+ 统一验收矩阵 + 能力清单（已有/计划新增/未证实）；**READY-FOR-OWNER-REVIEW，实施未授权** | 任务书（待 Owner 审查，2026-10-09） |
 | `docs/development/S4-cold-start-position-autoconfirm-pre-implementation-review.md` | S4 冷启动位置自动确认 实施前只读审查与开发任务书（审核 AI，2026-10-10）——§0 已批准业务决策 BD-1..7、§7 决策表 D1-D6、§8 分阶段任务书草案、§10 Owner 裁决登记（D1-D6=A + Migration 013 有损降级）与 C-1 验收/F-1 闭环登记；C-2..C-5 的计划来源与决策追溯材料。**正式架构决策以 `ARCHITECTURE_DECISIONS.md` ADR-054 为准**；已随 G-D/R2 治理文档组入库（2026-10-15，commit 待 Owner 批准） | 决策记录（已裁决；已随治理组入库） |
+| `docs/development/capture-time-cluster-ordering-closeout.md` | 冷启动 FaceCluster 拍摄时间排序修复链收口记录（P3/P4/A-min，2026-10-25）——三代同源缺陷（ISO 文本比较→同秒混精度→跨偏移）、已批准修复范围与边界（同簇混型 fail-closed；簇间异型不设防）、验收链摘要（`A_MIN_FINAL_ACCEPTANCE_PASS`）、提交 `bbdfc38` 已推送、证据两级口径（仓库可核 vs 会话执行记录/Owner 确认）；CI 通过为 Owner 确认（无 run 编号）。**状态 CLOSED；AUD-034 未登记，本文档为唯一治理登记载体** | 收口记录（正式关闭） |
 | `docs/development/people-import-face-clustering-development-plan.md` | 人员导入与人脸分组匹配重设计——业务方案（阶段 A–F 目标/规则/裁决引用） | 计划文档（实施已完成，保留为需求出处） |
 | `docs/development/people-import-face-clustering-execution-plan.md` | 同上——工程执行计划（阶段拆分/交付物/验收标准） | 计划文档（同上） |
 | `docs/development/stage-f-calibration-report.md` | Stage F 真实数据校准报告（473 照片分布证据；match_threshold 证据缺口 = 体检 F1-2——**AUD-017 已于 2026-09-28 裁决 Option C + K-3=suggested 层并登记 ADR-047（非等待裁决）；尚待完成的是阈值边界证据补入校准报告，属 ADR-047 尾随项**） | 证据文档 |

@@ -207,6 +207,22 @@ class SQLiteRecognitionRunRepository(RecognitionRunRepository):
             ).fetchall()
         return [FaceCountRange(row["min_count"], row["max_count"]) for row in rows]
 
+    def count_other_run_snapshots(
+        self, photo_ids: Sequence[UUID], exclude_run_id: UUID,
+    ) -> int:
+        """统计其它运行引用这些照片的快照行数（删除披露用）。"""
+        unique_ids = list(dict.fromkeys(photo_ids))
+        if not unique_ids:
+            return 0
+        placeholders = ", ".join("?" for _ in unique_ids)
+        with self._connection_provider.connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS n FROM recognition_run_photos "
+                f"WHERE run_id != ? AND photo_id IN ({placeholders})",
+                (str(exclude_run_id), *(str(photo_id) for photo_id in unique_ids)),
+            ).fetchone()
+        return int(row["n"])
+
     @staticmethod
     def _require_created_at(run: RecognitionRun) -> datetime:
         """Return the generated creation timestamp with a narrow type guard."""

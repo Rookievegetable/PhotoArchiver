@@ -14,6 +14,7 @@ DTO。ADR-034 通用裁决：**删除必经确认流**——``preview()`` 产级
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -297,4 +298,139 @@ class BatchRosterDeletionResult:
     @property
     def succeeded(self) -> bool:
         """Return whether every requested id was removed or absent."""
+        return self.removed + self.missing == self.requested
+
+
+# ── 识别运行级删除（批次删除功能 D1~D5） ─────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class RunPeopleDeletionPreview:
+    """删除某识别运行"名单及记录"的确认预览（D2）。
+
+    该运行的"名单"= 其各聚类代际的决策行中出现过的**人员**（执行时点重算）。
+    计数口径：
+
+    - ``assignment_count`` / ``sample_count`` / ``embedding_count``：**随人员
+      删除被外键 CASCADE 清除**的行数（决策行跨所有代际计数）；
+    - ``recognition_count`` / ``archive_count`` / ``ground_truth_count``：
+      **行保留但失去人员指向**的行数（SET NULL）；
+    - ``blocked_reasons`` 非空时该操作**硬阻断**（D5：归档记录 / GT 裁定 /
+      样本库任一非空即拒绝执行——这些证据删掉后无法靠重新识别还原）。
+    """
+
+    run_found: bool
+    run_created_at: datetime | None
+    run_status: str
+    cluster_count: int
+    decision_count: int
+    person_ids: tuple[UUID, ...]
+    people_names: tuple[str, ...]
+    embedding_count: int
+    recognition_count: int
+    assignment_count: int
+    sample_count: int
+    archive_count: int
+    ground_truth_count: int
+    blocked_reasons: tuple[str, ...] = ()
+
+    @property
+    def person_count(self) -> int:
+        """Return how many people the run points at."""
+        return len(self.person_ids)
+
+    @property
+    def is_empty(self) -> bool:
+        """Return whether the run points at nobody."""
+        return not self.person_ids
+
+    @property
+    def is_blocked(self) -> bool:
+        """Return whether irrecoverable evidence blocks the deletion."""
+        return bool(self.blocked_reasons)
+
+
+@dataclass(frozen=True, slots=True)
+class RunPeopleDeletionResult:
+    """确认后的运行级名单删除结果（A3 删人员 / A1 仅解除匹配）。"""
+
+    requested: int
+    removed: int
+    missing: int
+    unassigned: int
+    embedding_cascade: int
+    recognition_orphaned: int
+    assignment_cascade: int
+    sample_cascade: int
+    archive_orphaned: int
+    ground_truth_orphaned: int
+
+    @property
+    def succeeded(self) -> bool:
+        """Return whether the requested scope was fully processed."""
+        return self.removed + self.missing + self.unassigned >= self.requested
+
+
+@dataclass(frozen=True, slots=True)
+class RunPhotosDeletionPreview:
+    """删除某识别运行"照片及记录"的确认预览（D4）。
+
+    照片范围 = 该运行的输入快照（``recognition_run_photos``）。计数口径：
+
+    - ``recognition_count`` / ``archive_count`` / ``observation_count`` /
+      ``sample_count`` / ``member_count``：**随照片删除被外键 CASCADE 清除**；
+    - ``other_run_snapshot_count``：**其它运行**引用同一批照片的快照行数——
+      同样会被级联抹掉，且不可重建（重跑会产生新的运行与 id）；
+    - ``ground_truth_count``：该运行簇上的 GT 裁定行数——B1 模式下裁定行保留
+      但簇已无照片支撑；若同时清理聚类代际（B2）则随簇级联删除；
+    - ``blocked_reasons`` 非空即**硬阻断**（D5）。
+    """
+
+    run_found: bool
+    run_created_at: datetime | None
+    run_status: str
+    photo_count: int
+    recognition_count: int
+    archive_count: int
+    observation_count: int
+    sample_count: int
+    member_count: int
+    other_run_snapshot_count: int
+    cluster_count: int
+    decision_count: int
+    ground_truth_count: int
+    blocked_reasons: tuple[str, ...] = ()
+
+    @property
+    def is_empty(self) -> bool:
+        """Return whether the run has no photo snapshot to delete."""
+        return self.photo_count == 0
+
+    @property
+    def is_blocked(self) -> bool:
+        """Return whether irrecoverable evidence blocks the deletion."""
+        return bool(self.blocked_reasons)
+
+
+@dataclass(frozen=True, slots=True)
+class RunPhotosDeletionResult:
+    """确认后的运行级照片删除结果。"""
+
+    requested: int
+    removed: int
+    missing: int
+    recognition_cascade: int
+    archive_cascade: int
+    observation_cascade: int
+    sample_cascade: int
+    member_cascade: int
+    other_run_snapshot_cascade: int
+    unassigned_decisions: int
+    clusters_recounted: int
+    generations_purged: int
+    ground_truth_orphaned: int
+
+    @property
+    def succeeded(self) -> bool:
+        """Return whether every requested photo was removed or absent."""
         return self.removed + self.missing == self.requested

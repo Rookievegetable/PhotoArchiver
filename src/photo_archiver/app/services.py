@@ -18,6 +18,8 @@ from photo_archiver.application import (
     ClusterFacesService,
     ClusterResultsService,
     DeletePersonService,
+    DeleteRunPeopleService,
+    DeleteRunPhotosService,
     PhotoIgnoreService,
     BackfillHistoricalPeopleService,
     ListRecognitionRunsService,
@@ -109,6 +111,8 @@ class ApplicationServices:
     list_persons: ListPersonsService
     delete_photos: DeletePhotosService
     delete_person: DeletePersonService
+    delete_run_people: DeleteRunPeopleService
+    delete_run_photos: DeleteRunPhotosService
     prune_missing_photos: PruneMissingPhotosService
     dispose_duplicates: DisposeDuplicatesService
     cleanup_thumbnails: CleanupThumbnailCacheService
@@ -341,6 +345,32 @@ def build_application_services(
         repositories.archive_records,
         unit_of_work=unit_of_work,
     )
+    # 批次级删除（识别运行锚点）：名单侧与照片侧各自持有**唯一** UnitOfWork——
+    # SQLite 不支持嵌套事务，两服务都自己开事务，不复用 delete_* 服务的
+    # execute（那会开第二个事务）。
+    delete_run_people_service = DeleteRunPeopleService(
+        repositories.recognition_runs,
+        repositories.face_clusters,
+        repositories.cluster_assignments,
+        repositories.people,
+        delete_person_service,
+        repositories.archive_records,
+        repositories.calibration_annotations,
+        pairing_service=pairing_workbench,
+        unit_of_work=unit_of_work,
+    )
+    delete_run_photos_service = DeleteRunPhotosService(
+        repositories.recognition_runs,
+        repositories.photos,
+        repositories.recognition,
+        repositories.archive_records,
+        repositories.face_observations,
+        repositories.person_face_samples,
+        repositories.face_clusters,
+        repositories.cluster_assignments,
+        repositories.calibration_annotations,
+        unit_of_work=unit_of_work,
+    )
 
     return ApplicationServices(
         # P0-3: extension dispatch routes .xlsx/.xlsm to the openpyxl reader —
@@ -444,6 +474,8 @@ def build_application_services(
         list_persons=list_persons_service,
         delete_photos=delete_photos_service,
         delete_person=delete_person_service,
+        delete_run_people=delete_run_people_service,
+        delete_run_photos=delete_run_photos_service,
         prune_missing_photos=prune_missing_photos_service,
         dispose_duplicates=dispose_duplicates_service,
         cleanup_thumbnails=CleanupThumbnailCacheService(

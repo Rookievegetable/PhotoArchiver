@@ -174,8 +174,11 @@ class FaceCluster:
             raise ValidationError(f"Unknown FaceCluster status: {self.status}")
         if self.ordinal < 0:
             raise ValidationError("FaceCluster ordinal must be >= 0")
-        if self.member_count < 1:
-            raise ValidationError("FaceCluster member_count must be >= 1")
+        # >= 0（016 迁移同步放宽）：成员行可随照片删除经外键级联消失——
+        # **空簇是删除后的合法状态**，计数必须能表达真实值（006 建表时的
+        # >= 1 只表达"创建时至少一个成员"的创建期事实）。
+        if self.member_count < 0:
+            raise ValidationError("FaceCluster member_count must be >= 0")
         if not self.sort_key:
             raise ValidationError("FaceCluster sort_key must not be empty")
 

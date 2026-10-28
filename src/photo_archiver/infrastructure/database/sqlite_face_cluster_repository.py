@@ -220,6 +220,35 @@ class SQLiteFaceClusterRepository(FaceClusterRepository):
             )
             return cursor.rowcount
 
+    def update_cluster_member_count(self, cluster_id: UUID, member_count: int) -> int:
+        """回写簇的实际成员数（成员关系级联消失后的计数修正）。"""
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE face_clusters SET member_count = ? WHERE id = ?",
+                (member_count, str(cluster_id)),
+            )
+            return cursor.rowcount
+
+    def update_cluster_run_member_count(
+        self, cluster_run_id: UUID, member_count: int,
+    ) -> int:
+        """回写聚类代际的成员总数（各簇成员数之和）。"""
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE face_cluster_runs SET member_count = ? WHERE id = ?",
+                (member_count, str(cluster_run_id)),
+            )
+            return cursor.rowcount
+
+    def remove_cluster_run(self, cluster_run_id: UUID) -> int:
+        """删除一个聚类代际——簇/成员/决策行按外键逐级 CASCADE。"""
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM face_cluster_runs WHERE id = ?",
+                (str(cluster_run_id),),
+            )
+            return cursor.rowcount
+
     def list_all_cluster_runs(self) -> list[FaceClusterRun]:
         """S1：返回全部聚类代际（按创建序），供 projection 全量重建遍历。"""
         with self._connection_provider.connect() as connection:

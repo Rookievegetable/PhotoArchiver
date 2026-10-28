@@ -5,8 +5,12 @@ from photo_archiver.application.commands.backfill_capture_time import BackfillCa
 from photo_archiver.application.commands.deletion import (
     DeletePersonCommand,
     DeletePhotosCommand,
+    DeleteRunPeopleCommand,
+    DeleteRunPhotosCommand,
     DisposeDuplicatesCommand,
     PruneMissingCommand,
+    RUN_PEOPLE_MODE_DELETE,
+    RUN_PEOPLE_MODE_UNASSIGN,
 )
 from photo_archiver.application.commands.import_draft import (
     ConfirmImportCommand,
@@ -46,6 +50,10 @@ __all__ = [
     "DeletePeopleByBatchCommand",
     "DeletePersonCommand",
     "DeletePhotosCommand",
+    "DeleteRunPeopleCommand",
+    "DeleteRunPhotosCommand",
+    "RUN_PEOPLE_MODE_DELETE",
+    "RUN_PEOPLE_MODE_UNASSIGN",
     "DisposeDuplicatesCommand",
     "EditPersonCommand",
     "ConfirmImportCommand",
