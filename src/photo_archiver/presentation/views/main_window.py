@@ -140,6 +140,7 @@ from photo_archiver.application.commands import (
     DeletePersonCommand,
     DeletePhotosCommand,
     ParseImportDraftCommand,
+    StartSuggestPairingsCommand,
 )
 from photo_archiver.presentation.views.export_dialog import ExportDialog
 from photo_archiver.presentation.views.filter_bar import FilterBar
@@ -1036,7 +1037,59 @@ class MainWindow(QMainWindow):
         self._progress.setValue(_PROGRESS_RESOLUTION)
         self._status_label.setText(STATUS_TASK_COMPLETED.format(label=task_label(event.task_name)))
         self._append_match_summary(event)
+        if event.task_name == "face_clustering" and isinstance(event.result, FaceClusterRun):
+            # 任务书阶段 B（D3=A3）：建议生成在页面刷新前完成——刷新即含建议。
+            self._auto_suggest_after_clustering(event.result)
         self._refresh_task_results(event.task_name)
+
+    def _auto_suggest_after_clustering(self, cluster_run: FaceClusterRun) -> None:
+        """聚类完成后按名单顺序自动生成建议（D3=A3）。
+
+        与「生成建议」按钮同一服务、同一规则（样本匹配 → 位置配对 → C-2
+        准入）；空代际/空名单跳过并明示；失败不吞（日志 + 状态栏），不影响
+        聚类完成状态。
+        """
+        if cluster_run.cluster_count == 0:
+            return
+        if not self._context.services.list_persons.execute():
+            self._status_label.setText(
+                self._status_label.text() + " · " + text.CLUSTER_AUTO_SUGGEST_SKIPPED_ROSTER,
+            )
+            return
+        if cluster_run.id is None:  # pragma: no cover - 实体恒生成 id
+            return
+        try:
+            summary = self._context.services.suggest_pairings.execute(
+                StartSuggestPairingsCommand(cluster_run.id),
+            )
+        except Exception as exc:  # noqa: BLE001 - GUI boundary（不吞、不改聚类终态）
+            logger.exception("Auto-suggest after clustering failed")
+            self._status_label.setText(
+                self._status_label.text()
+                + " · "
+                + text.CLUSTER_AUTO_SUGGEST_FAILED.format(detail=exc),
+            )
+            return
+        feedback = (
+            text.CLUSTER_AUTO_SUGGEST_DONE
+            + "——"
+            + text.PAIRING_WORKBENCH_SUGGESTED_DONE.format(
+                suggestions=summary.suggestions,
+                sample_matched=summary.sample_matched,
+                ordered=summary.ordered,
+            )
+        )
+        if summary.auto_confirmed:
+            feedback += "；" + text.PAIRING_WORKBENCH_AUTO_CONFIRM_DONE.format(
+                auto_confirmed=summary.auto_confirmed,
+            )
+        elif summary.auto_confirm_blocked_reason:
+            reason = text.PAIRING_WORKBENCH_AUTO_CONFIRM_BLOCKED_REASONS.get(
+                summary.auto_confirm_blocked_reason,
+                summary.auto_confirm_blocked_reason,
+            )
+            feedback += "；" + text.PAIRING_WORKBENCH_AUTO_CONFIRM_BLOCKED.format(reason=reason)
+        self._status_label.setText(self._status_label.text() + " · " + feedback)
 
     def _append_match_summary(self, event: TaskCompleted) -> None:
         """Append run statistics after a recognition task finishes.

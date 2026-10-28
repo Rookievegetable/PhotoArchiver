@@ -594,6 +594,11 @@ PAIRING_WORKBENCH_SUGGESTED_DONE = (
 PAIRING_WORKBENCH_FINAL_CONFIRMED = "已人工终审确认：{person}"
 PAIRING_WORKBENCH_CONFIRMED = "已确认归属：{person}"
 PAIRING_WORKBENCH_AUTO_CONFIRM_DONE = "位置自动确认 {auto_confirmed} 项（待人工终审）"
+
+# ---- 聚类完成后自动生成建议（任务书阶段 B / D3=A3） ----
+CLUSTER_AUTO_SUGGEST_DONE = "已按名单顺序自动生成建议"
+CLUSTER_AUTO_SUGGEST_SKIPPED_ROSTER = "名单为空，未生成建议；导入名单后可点击「生成建议」。"
+CLUSTER_AUTO_SUGGEST_FAILED = "自动生成建议失败：{detail}"
 PAIRING_WORKBENCH_AUTO_CONFIRM_BLOCKED = "位置自动确认未执行（{reason}）"
 PAIRING_WORKBENCH_AUTO_CONFIRM_BLOCKED_REASONS = {
     "COUNT_MISMATCH": "簇与人员数量不一致",

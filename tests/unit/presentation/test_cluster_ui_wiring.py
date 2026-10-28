@@ -152,6 +152,89 @@ def test_cluster_completed_refreshes_page_and_carries_summary(qtbot, tmp_path, m
     assert "检出人脸" not in status
 
 
+def _stub_suggest(window, monkeypatch, *, suggestions=2, auto_confirmed=0, error=None):
+    """自动建议服务替身：记录调用并返回摘要（或抛错）。"""
+    from types import SimpleNamespace as _NS
+
+    calls: list[object] = []
+    summary = _NS(
+        cluster_run_id=None, suggestions=suggestions, sample_matched=1,
+        ordered=suggestions - 1, unmatched_clusters=0, persons_without_cluster=0,
+        auto_confirmed=auto_confirmed, auto_confirm_blocked_reason=None,
+    )
+
+    def _execute(command):
+        calls.append(command.cluster_run_id)
+        if error is not None:
+            raise error
+        return summary
+
+    # ApplicationServices 是 frozen dataclass——在真实服务实例上替换 execute。
+    monkeypatch.setattr(window._context.services.suggest_pairings, "execute", _execute)
+    return calls
+
+
+def test_cluster_completed_auto_generates_suggestions_with_roster(
+    qtbot, tmp_path, monkeypatch,
+) -> None:
+    """任务书阶段 B（D3=A3）：聚类完成后自动按名单顺序生成建议。"""
+    from photo_archiver.domain.entities import Person
+
+    window = _make_window(qtbot, tmp_path, monkeypatch)
+    window._context.repositories.people.add(Person(name="曹裔文"))
+    calls, runnable = _stub_start(window, monkeypatch)
+    _stub_range_dialog(window, monkeypatch)
+    window._people_admin_page._cluster_run_button.click()
+    suggest_calls = _stub_suggest(window, monkeypatch)
+    cluster_run = _completed_run()
+
+    runnable.signals.completed.emit(TaskCompleted(TASK, "task_1", cluster_run))
+
+    assert suggest_calls == [cluster_run.id]
+    status = window._status_label.text()
+    assert "已按名单顺序自动生成建议" in status
+    assert "已生成 2 条建议" in status
+
+
+def test_cluster_completed_skips_suggestions_with_empty_roster(
+    qtbot, tmp_path, monkeypatch,
+) -> None:
+    window = _make_window(qtbot, tmp_path, monkeypatch)
+    calls, runnable = _stub_start(window, monkeypatch)
+    _stub_range_dialog(window, monkeypatch)
+    window._people_admin_page._cluster_run_button.click()
+    suggest_calls = _stub_suggest(window, monkeypatch)
+
+    runnable.signals.completed.emit(TaskCompleted(TASK, "task_1", _completed_run()))
+
+    assert suggest_calls == []
+    assert "名单为空，未生成建议" in window._status_label.text()
+
+
+def test_cluster_completed_suggest_failure_does_not_break_terminal(
+    qtbot, tmp_path, monkeypatch,
+) -> None:
+    window = _make_window(qtbot, tmp_path, monkeypatch)
+    from photo_archiver.domain.entities import Person
+
+    window._context.repositories.people.add(Person(name="某人"))
+    calls, runnable = _stub_start(window, monkeypatch)
+    _stub_range_dialog(window, monkeypatch)
+    window._people_admin_page._cluster_run_button.click()
+    _stub_suggest(window, monkeypatch, error=RuntimeError("建议链路炸了"))
+    refreshed: list[int] = []
+    monkeypatch.setattr(
+        window._people_admin_page, "refresh_clustering",
+        lambda: refreshed.append(1),
+    )
+
+    runnable.signals.completed.emit(TaskCompleted(TASK, "task_1", _completed_run()))
+
+    assert "自动生成建议失败" in window._status_label.text()
+    assert "建议链路炸了" in window._status_label.text()
+    assert refreshed == [1]  # 终态刷新不受建议失败影响
+
+
 def test_cluster_failed_and_cancelled_refresh_page(qtbot, tmp_path, monkeypatch) -> None:
     from PySide6.QtWidgets import QMessageBox
 
