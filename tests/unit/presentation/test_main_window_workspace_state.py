@@ -60,8 +60,9 @@ def workspace(qtbot, make_sqlite_context, monkeypatch, tmp_path):
 def test_initial_snapshot_queries_effective_root_and_explains_empty_actions(workspace):
     window = workspace.window
     workspace.query.assert_called_once_with(workspace.root)
-    assert not window._match_action.isEnabled()
-    assert window._match_action.toolTip() == text.REFUSAL_NO_PERSONS
+    # 任务书 §3：识别入口并入扫描——主工具栏无 match 动作；特征引导经
+    # _match_next_button 呈现（EMPTY → 扫描，名单不再设门槛）。
+    assert not hasattr(window, "_match_action")
     assert not window._archive_action.isEnabled()
     assert window._archive_action.toolTip() == text.WORKSPACE_ROOT_UNAVAILABLE
     assert window._review_action.isEnabled()
@@ -69,7 +70,7 @@ def test_initial_snapshot_queries_effective_root_and_explains_empty_actions(work
     assert not window._delete_photos_action.isEnabled()
     assert window._delete_photos_action.toolTip() == text.DELETE_PHOTOS_NO_SELECTION
     window._nav_list.setCurrentRow(1)  # 照片库页：next 引导按钮的宿主页（Batch 3 IA）
-    for button, action in ((window._match_next_button, "import"),
+    for button, action in ((window._match_next_button, "scan"),
                            (window._archive_next_button, "settings")):
         assert isinstance(button, QPushButton)
         assert button.isVisible()
@@ -78,22 +79,25 @@ def test_initial_snapshot_queries_effective_root_and_explains_empty_actions(work
     assert not window._cancel_action.isEnabled()
 
 
-@pytest.mark.parametrize("status, match_tooltip, next_action, match_enabled", [
-    (replace(READY, has_photos=False, pending_match_count=0), text.REFUSAL_NO_PHOTOS, "scan", False),
-    # 阶段 C Commit 3：全部已识别 → 识别入口保持可用（可重跑），下一步指向审核。
-    (replace(READY, pending_match_count=0), text.WORKSPACE_REANALYSIS_READY, "review", True),
-    (replace(READY, model_availability=ModelAvailability.MISSING), text.WORKSPACE_MODEL_MISSING, "model", False),
-    (replace(READY, model_availability=ModelAvailability.UNKNOWN), text.WORKSPACE_MODEL_UNKNOWN, "model", False),
+@pytest.mark.parametrize("status, feature_tooltip, next_action", [
+    (replace(READY, has_photos=False, pending_match_count=0),
+     text.REFUSAL_NO_PHOTOS, "scan"),
+    # 任务书 §3：缺特征照片由下一次扫描按增量规则补齐——引导指向扫描；
+    # 特征齐备时引导指向审核（按钮不再有隐藏态，任何状态都有下一步）。
+    (replace(READY, pending_match_count=0), text.WORKSPACE_FEATURES_READY, "review"),
+    (replace(READY, model_availability=ModelAvailability.MISSING),
+     text.WORKSPACE_MODEL_MISSING, "model"),
+    (replace(READY, model_availability=ModelAvailability.UNKNOWN),
+     text.WORKSPACE_MODEL_UNKNOWN, "model"),
 ])
-def test_refresh_replaces_tooltips_and_next_step_then_hides_ready_buttons(
-    workspace, status, match_tooltip, next_action, match_enabled,
+def test_refresh_replaces_feature_guidance_and_next_step(
+    workspace, status, feature_tooltip, next_action,
 ):
     window = workspace.window
     window._nav_list.setCurrentRow(1)  # next 引导按钮的宿主页（Batch 3 IA）
     workspace.state.value = replace(status, archivable_count=0)
     window._refresh_workspace_state()
-    assert window._match_action.isEnabled() is match_enabled
-    assert window._match_action.toolTip() == match_tooltip
+    assert window._match_next_button.toolTip() == feature_tooltip
     assert window._match_next_button.isVisible()
     assert window._match_next_button.property("next_action") == next_action
     assert not window._archive_action.isEnabled()
@@ -102,13 +106,11 @@ def test_refresh_replaces_tooltips_and_next_step_then_hides_ready_buttons(
     assert window._archive_next_button.property("next_action") == "review"
     workspace.state.value = READY
     window._refresh_workspace_state()
-    assert window._match_action.isEnabled()
-    assert window._match_action.toolTip() == text.WORKSPACE_MATCH_READY.format(count=3)
+    assert window._match_next_button.toolTip() == text.WORKSPACE_MATCH_READY.format(count=3)
+    assert window._match_next_button.property("next_action") == "scan"
     assert window._archive_action.isEnabled()
     assert window._archive_action.toolTip() == text.WORKSPACE_ARCHIVE_READY.format(count=1)
     assert window._review_action.toolTip() == text.STATUS_PENDING_REVIEW_COUNT.format(count=2)
-    assert not window._match_next_button.isVisible()
-    assert not window._archive_next_button.isVisible()
 
 
 def test_selection_clear_and_model_reset_only_render_cached_snapshot(workspace):
@@ -129,7 +131,7 @@ def test_selection_clear_and_model_reset_only_render_cached_snapshot(workspace):
     window._photo_list_model.load_photos([])
     assert not window._delete_photos_action.isEnabled()
     assert window._delete_photos_action.toolTip() == text.DELETE_PHOTOS_NO_SELECTION
-    assert window._match_action.isEnabled()
+    assert window._scan_action.isEnabled()
     assert window._archive_action.isEnabled()
     workspace.query.assert_not_called()
 
@@ -165,7 +167,7 @@ def test_refresh_while_reserved_keeps_actions_locked_then_uses_cached_latest(wor
     workspace.query.reset_mock()
     window._task_coordinator.release(reservation)
     workspace.query.assert_not_called()
-    assert window._match_action.isEnabled()
+    assert window._scan_action.isEnabled()
     assert window._archive_action.isEnabled()
     assert window._review_action.isEnabled()
     assert not window._delete_photos_action.isEnabled()
@@ -236,25 +238,25 @@ def test_terminal_refresh_restores_latest_not_pre_task_action_state(
     getattr(runnable.signals, kind).emit(event)
     workspace.query.assert_called_once_with(workspace.root)
     assert not window._task_coordinator.is_busy
-    assert window._match_action.isEnabled() == (latest is READY)
+    assert window._scan_action.isEnabled()
     assert window._archive_action.isEnabled() == (latest is READY)
     assert window._review_action.isEnabled()
     assert not window._delete_photos_action.isEnabled()
     assert not window._cancel_action.isEnabled()
     if latest is EMPTY:
-        assert window._match_action.toolTip() == text.REFUSAL_NO_PERSONS
+        assert window._match_next_button.property("next_action") == "scan"
         assert window._archive_action.toolTip() == text.WORKSPACE_ROOT_UNAVAILABLE
         assert window._match_next_button.isVisible() and window._match_next_button.isEnabled()
         assert window._archive_next_button.isVisible() and window._archive_next_button.isEnabled()
 
 
-@pytest.mark.parametrize("route", ["import", "scan"])
-def test_next_button_routes_to_existing_picker(workspace, monkeypatch, qtbot, route):
+def test_feature_next_button_routes_to_folder_picker(workspace, monkeypatch, qtbot):
+    # 任务书 §3：缺特征/空库引导均指向扫描——文件夹选择器入口。
     window = workspace.window
-    workspace.state.value = EMPTY if route == "import" else replace(READY, has_photos=False)
+    workspace.state.value = EMPTY
     window._refresh_workspace_state()
-    picker = Mock(return_value=("", "") if route == "import" else "")
-    monkeypatch.setattr(QFileDialog, "getOpenFileName" if route == "import" else "getExistingDirectory", picker)
+    picker = Mock(return_value="")
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", picker)
     qtbot.mouseClick(window._match_next_button, Qt.MouseButton.LeftButton)
     picker.assert_called_once()
     assert not window._task_coordinator.is_busy
@@ -310,7 +312,7 @@ def test_next_button_invokes_decorated_dialog_handler_after_idle_and_refreshes(
         # 使随后的动作恢复断言与 settings 路由保持同一基线。
         workspace.state.value = READY
         window._refresh_workspace_state()
-    assert window._match_action.isEnabled()
+    assert window._scan_action.isEnabled()
     assert window._archive_action.isEnabled()
 
 
@@ -324,7 +326,8 @@ def test_model_next_button_shows_help_without_starting_recognition(workspace, mo
     QMessageBox.information.assert_called_once_with(
         window, text.WORKSPACE_MODEL_HELP_TITLE, text.WORKSPACE_MODEL_HELP,
     )
-    window._on_match_clicked()  # Disabled QAction must not be the only model gate.
+    # 维护入口（任务书 D1）：空库直接拒绝，不触达识别控制器。
+    window._on_reanalyze_all_clicked()
     start.assert_not_called()
     assert not window._task_coordinator.is_busy
 

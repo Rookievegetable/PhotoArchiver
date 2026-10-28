@@ -33,6 +33,7 @@ TASK_LABELS = {
     "import_people": "人员导入",
     "import_confirm": "导入确认",
     "scan_and_register_photos": "扫描",
+    "scan_photos": "扫描并识别特征",
     "match_persons": "人脸识别",
     "run_recognition": "人脸识别",
     "face_clustering": "人脸聚类",
@@ -479,33 +480,33 @@ WORKSPACE_MODEL_HELP = (
     "此检查仅表示模型文件已发现，不保证推理运行成功；运行时仍会校验模型。"
 )
 WORKSPACE_MODEL_HELP_TITLE = "模型配置说明"
-WORKSPACE_MATCH_READY = "有 {count} 张照片待识别。"
-# 阶段 C Commit 3：重跑是一等公民——已全部识别的照片不再拒绝识别入口。
-WORKSPACE_REANALYSIS_READY = (
-    "所有照片均已有识别结果；再次运行将创建新的识别运行（可重新分析）。"
+WORKSPACE_MATCH_READY = "有 {count} 张照片待提取特征；再次扫描对应文件夹即可自动补齐。"
+# 任务书 §3（扫描即识别）：特征随扫描自动提取；全库重分析入口移至数据工具。
+WORKSPACE_FEATURES_READY = (
+    "特征数据完整；如需重新识别请使用「数据工具 · 重新分析全部照片」。"
 )
 
 # ---- 人脸聚类入口与结果（D-4） ----
 REFUSAL_CLUSTER_IN_FLIGHT = "已有人脸聚类任务正在进行。"
 CLUSTER_UNAVAILABLE = "人脸聚类不可用。"
 CLUSTER_PAGE_GROUP = "人脸聚类"
-CLUSTER_PAGE_RUN_LABEL = "识别运行"
+CLUSTER_PAGE_RUN_LABEL = "特征数据"
 CLUSTER_PAGE_RUN_BUTTON = "运行人脸聚类"
 CLUSTER_PAGE_RESULTS_BUTTON = "查看聚类结果"
 CLUSTER_PAGE_HINT = (
-    "对选定识别运行的人脸观测执行聚类；聚类只读已有检测数据，不重新识别，"
-    "也不会产生人员归属（人员配对属后续阶段）。重新运行会生成新的聚类代际，"
-    "历史结果保留。"
+    "聚类使用全库最新特征数据集（历次扫描按照片取最新，latest wins），只读已有"
+    "检测数据，不重新识别，也不会产生人员归属（人员配对属后续阶段）。重新运行"
+    "会生成新的聚类代际，历史结果保留。"
 )
 CLUSTER_PAGE_RUN_ENTRY = "{created_at} · {status} · {faces} 张脸"
-CLUSTER_PAGE_NO_RUNS = "尚无识别运行；请先运行人脸识别。"
+CLUSTER_PAGE_NO_RUNS = "尚无特征数据；请先扫描文件夹（扫描时自动提取特征）。"
 CLUSTER_RESULTS_TITLE = "人脸聚类结果"
 CLUSTER_RESULTS_GENERATION_LABEL = "聚类代际"
 CLUSTER_RESULTS_GENERATION_ENTRY = "{created_at} · {status} · {clusters} 簇 / {members} 张脸"
 # P7：代际下拉最新项（list_cluster_runs 返回 newest-first 的首位）后缀；
 # 纯显示标注，单代际同样标注，零业务语义。
 CLUSTER_RESULTS_GENERATION_LATEST_MARK = "（最新）"
-CLUSTER_RESULTS_EMPTY = "该识别运行尚无聚类结果；请先运行人脸聚类。"
+CLUSTER_RESULTS_EMPTY = "尚无聚类代际；请先运行人脸聚类。"
 CLUSTER_RESULTS_EMPTY_CLUSTERS = "该代聚类没有产生任何簇（范围内无人脸观测）。"
 CLUSTER_RESULTS_CLUSTER_ENTRY = "第 {ordinal} 组 · {count} 张脸 · 首拍 {time}"
 CLUSTER_RESULTS_NO_CAPTURED = "时间缺失"
@@ -719,7 +720,7 @@ def import_batch_entry_label(
     )
 
 
-# ---- 识别范围选择对话框（阶段 C Commit 3） ----
+# ---- 识别范围选择对话框（阶段 C Commit 3；主链已退役，仅维护路径留存） ----
 RECOGNITION_SCOPE_DIALOG_TITLE = "识别范围选择"
 RECOGNITION_SCOPE_OK_BUTTON = "确定"
 RECOGNITION_SCOPE_PHOTO_GROUP = "照片选择范围"
@@ -735,15 +736,40 @@ RECOGNITION_SCOPE_RANGE_HINT = (
     "只对检出人脸数落在选中范围的照片给出识别归属；范围外照片仍会保存全部人脸检测记录。"
 )
 RECOGNITION_SCOPE_AT_LEAST_ONE = "请至少选择一个人脸数量范围。"
+
+# ---- 聚类范围选择对话框（任务书 §3 A3/D2） ----
+CLUSTER_RANGE_DIALOG_TITLE = "聚类范围选择"
+CLUSTER_RANGE_OK_BUTTON = "开始聚类"
+CLUSTER_RANGE_GROUP = "人脸数量范围"
+CLUSTER_RANGE_HINT = (
+    "只有检出人脸数落在选中范围的照片参与聚类；范围外人脸仍保留检测记录。"
+    "默认 [1]（单脸照片），与名单顺序配对口径一致。"
+)
+CLUSTER_RANGE_AT_LEAST_ONE = "请至少选择一个人脸数量范围。"
+
+# ---- 数据工具 · 重新分析全部照片（任务书 D1 维护入口） ----
+ACTION_REANALYZE_ALL = "重新分析全部照片"
+REANALYZE_ALL_CONFIRM = (
+    "将对库内全部照片重新执行人脸检测与特征提取，生成新的识别运行"
+    "（历史运行与聚类结果保留）。耗时随照片数线性增长，继续？"
+)
+REANALYZE_ALL_NONE = "照片库为空，无需重新分析。"
+
+# ---- 扫描即识别组合任务反馈（任务书 §3 A1） ----
+SCAN_ANALYZE_SUMMARY = "登记 {registered} · 更新 {updated} · 跳过 {skipped} · 提取特征 {analyzed} 张"
+SCAN_ANALYZE_MODEL_SKIPPED = "模型未就绪，本次仅登记未提取特征；安装模型后再次扫描将自动补齐。"
+SCAN_ANALYZE_NOTHING_PENDING = "无待提取特征的照片（增量集为空）。"
+SCAN_ANALYZE_CANCELLED_NOTE = "特征提取已在取消请求后跳过。"
+
 WORKSPACE_ROOT_UNAVAILABLE = "归档根目录未配置或不可用；请前往「设置」选择可写目录。"
 WORKSPACE_ARCHIVE_EMPTY = "暂无可归档照片；请前往「审核待处理」批准识别结果。已归档照片不会重复归档。"
 WORKSPACE_ARCHIVE_READY = "有 {count} 张照片可归档；选中照片时仅归档选区。"
-WORKSPACE_NEXT_IMPORT = "识别下一步：导入人员"
-WORKSPACE_NEXT_SCAN = "识别下一步：扫描文件夹"
+WORKSPACE_NEXT_IMPORT = "下一步：导入人员"
+WORKSPACE_NEXT_SCAN = "扫描文件夹（登记并提取特征）"
 WORKSPACE_NEXT_REVIEW = "前往审核待处理"
 WORKSPACE_NEXT_SETTINGS = "前往归档设置"
 WORKSPACE_NEXT_MODEL = "查看模型配置说明"
-REVIEW_EMPTY = "暂无待审核结果。可先扫描照片并运行人脸识别；已完成审核的结果不会在此重复显示。"
+REVIEW_EMPTY = "暂无待审核结果。扫描照片时会对单脸照片自动生成识别记录；已完成审核的结果不会在此重复显示。"
 WORKSPACE_CANCEL_IDLE = "当前没有可取消的活动任务。"
 WORKSPACE_CANCEL_READY = "请求取消当前任务；已完成的结果会保留。"
 
@@ -760,21 +786,21 @@ NAV_DATA_TOOLS_HINT = "维护操作：导出数据、检测重复照片、删除
 OVERVIEW_TITLE = "归档工作台"
 OVERVIEW_STEP_IMPORT = "导入人员"
 OVERVIEW_STEP_SCAN = "扫描照片"
-OVERVIEW_STEP_MATCH = "运行人脸识别"
+# 任务书 §3：识别并入扫描（特征提取），步骤名如实反映。
+OVERVIEW_STEP_FEATURES = "人脸识别（扫描时自动）"
 OVERVIEW_STEP_REVIEW = "人工审核"
 OVERVIEW_STEP_ARCHIVE = "安全归档"
 OVERVIEW_STEP_DONE_MARK = "✓"
 OVERVIEW_STEP_TODO_MARK = "○"
 OVERVIEW_STEP_DONE = "已完成"
 OVERVIEW_STEP_IMPORT_TODO = "先导入人员名单，识别结果才能归属到人。"
-OVERVIEW_STEP_SCAN_TODO = "扫描照片目录，把照片登记进库。"
+OVERVIEW_STEP_SCAN_TODO = "扫描照片目录：登记入库并自动提取人脸特征。"
 OVERVIEW_STEP_REVIEW_TODO = "人工确认识别结果；批准后才可归档。"
 OVERVIEW_STEP_ARCHIVE_NOTE = "批准的识别结果将按拍摄时间归档到本地归档根目录。"
 OVERVIEW_STEP_FORMAT = "{mark} {label}　·　{detail}"
 OVERVIEW_PRIVACY_NOTE = (
     "所有照片与识别数据均保存在本机：处理全程离线完成，无需账号，不会自动上传任何文件。"
 )
-OVERVIEW_PRIMARY_RUN_MATCH = "运行人脸识别"
 OVERVIEW_PRIMARY_ARCHIVE = "开始归档"
 OVERVIEW_PRIMARY_REVIEW = "前往审核"
 OVERVIEW_PRIMARY_IMPORT = "导入人员"

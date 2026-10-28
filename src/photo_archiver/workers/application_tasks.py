@@ -14,6 +14,7 @@ from photo_archiver.application.dtos import (
     ImportPeopleResult,
     MatchResult,
     ScanAndRegisterPhotosResult,
+    ScanRegisterAnalyzeResult,
 )
 from photo_archiver.application.use_cases import (
     ArchivePhotosUseCase,
@@ -85,6 +86,45 @@ class ScanAndRegisterPhotosTask(WorkerTask[ScanAndRegisterPhotosResult]):
             total=result.discovered_count,
         )
         return result
+
+
+class ScanRegisterAnalyzeTask(WorkerTask[ScanRegisterAnalyzeResult]):
+    """扫描即识别组合任务（任务书 §3 A1）：登记段 + 特征提取段。
+
+    两段服务经 :meth:`bind_progress_reporter` 共享本任务作为 reporter——
+    进度随阶段切换（登记 x/y → 特征 x/y），状态栏消息如实反映当前段。
+    取消经任务基线 ``cancel`` 转发组合服务（拦分析段启动 + 转发识别用例）。
+    """
+
+    def __init__(self, use_case, command: ScanAndRegisterPhotosCommand) -> None:
+        """Initialize with the combined use case and scan command."""
+        super().__init__("scan_photos")
+        self._use_case = use_case
+        self._command = command
+
+    def execute(self) -> ScanRegisterAnalyzeResult:
+        """Execute the combined use case with per-item progress streaming."""
+        self.raise_if_cancelled()
+        self.report_progress("Scanning photos")
+        binder = getattr(self._use_case, "bind_progress_reporter", None)
+        if binder is not None:
+            with binder(self):
+                result = self._use_case.execute(self._command)
+        else:
+            result = self._use_case.execute(self._command)
+        self.raise_if_cancelled()
+        self.report_progress(
+            "Scan and analyze finished",
+            current=result.scan.registered_count + result.scan.skipped_count,
+            total=max(1, result.scan.discovered_count),
+        )
+        return result
+
+    def cancel(self, reason: str = "") -> None:
+        super().cancel(reason)
+        cancel = getattr(self._use_case, "cancel", None)
+        if cancel is not None:
+            cancel()
 
 
 class ConfirmImportTask(WorkerTask[ImportConfirmResult]):

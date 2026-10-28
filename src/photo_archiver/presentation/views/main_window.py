@@ -48,6 +48,9 @@ if TYPE_CHECKING:
     from photo_archiver.app.context import ApplicationContext
 from photo_archiver.application.dtos.export import ExportScope
 from photo_archiver.application.dtos.plugin_action_result import ActionResult
+from photo_archiver.application.dtos.scan_and_register_photos import (
+    ScanRegisterAnalyzeResult,
+)
 from photo_archiver.domain import FaceClusterRun, Photo, PhotoSearchCriteria, RecognitionRun
 from photo_archiver.presentation.controllers import (
     ArchiveController,
@@ -80,8 +83,8 @@ from photo_archiver.presentation.ui_text import (
     ACTION_DETECT_DUPLICATES,
     ACTION_EXPORT_DATA,
     ACTION_IMPORT_PEOPLE,
+    ACTION_REANALYZE_ALL,
     ACTION_REVIEW_PENDING,
-    ACTION_RUN_FACE_RECOGNITION,
     ACTION_SCAN_FOLDER,
     ACTION_SETTINGS,
     ARCHIVE_DIALOG_TITLE,
@@ -159,7 +162,7 @@ from photo_archiver.presentation.visual_style import (
 )
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
 from photo_archiver.presentation.views.cluster_results_dialog import ClusterResultsDialog
-from photo_archiver.presentation.views.recognition_scope_dialog import RecognitionScopeDialog
+from photo_archiver.presentation.views.cluster_range_dialog import ClusterRangeDialog
 from photo_archiver.presentation.views.photo_list_model import (
     PHOTO_ID_ROLE, PhotoListModel, STATUS_BADGE_ROLE, THUMBNAIL_ROLE,
 )
@@ -254,8 +257,9 @@ class MainWindow(QMainWindow):
 
     def _build_controllers(self) -> None:
         """Assemble the four controllers from context services + worker executor."""
+        # 任务书 §3 A1：扫描入口提交组合任务（登记 + 增量特征提取）。
         self._scan_controller = ScanController(
-            self._context.services.scan_and_register_photos,
+            self._context.services.scan_register_analyze,
             self._context.worker_executor,
             parent=self,
         )
@@ -303,13 +307,13 @@ class MainWindow(QMainWindow):
         on the photo-library page, settings on the navigation, and cancel in
         the status bar (Batch 3 information architecture).
         """
-        # 流程序主操作：导入 → 扫描 → 识别 → 审核 → 归档。
+        # 流程序主操作：导入 → 扫描（登记+特征） → 审核 → 归档。
+        # 任务书 D1：识别并入扫描，「运行人脸识别」主入口移除；全库重分析
+        # 降级为数据工具维护入口（_reanalyze_all_action）。
         self._import_action = QAction(ACTION_IMPORT_PEOPLE, self)
         self._import_action.triggered.connect(self._on_import_clicked)
         self._scan_action = QAction(ACTION_SCAN_FOLDER, self)
         self._scan_action.triggered.connect(self._on_scan_clicked)
-        self._match_action = QAction(ACTION_RUN_FACE_RECOGNITION, self)
-        self._match_action.triggered.connect(self._on_match_clicked)
         self._review_action = QAction(ACTION_REVIEW_PENDING, self)
         self._review_action.triggered.connect(self._on_review_clicked)
         self._archive_action = QAction(ACTION_ARCHIVE, self)
@@ -321,6 +325,8 @@ class MainWindow(QMainWindow):
         self._detect_duplicates_action.triggered.connect(
             self._on_detect_duplicates_clicked,
         )
+        self._reanalyze_all_action = QAction(ACTION_REANALYZE_ALL, self)
+        self._reanalyze_all_action.triggered.connect(self._on_reanalyze_all_clicked)
         self._delete_person_action = QAction(ACTION_DELETE_PERSON, self)
         self._delete_person_action.triggered.connect(self._on_delete_person_clicked)
         # 照片库选择态操作（照片库页）。
@@ -339,9 +345,10 @@ class MainWindow(QMainWindow):
         self._plugin_actions: list[QAction] = []
         self._conflicting_actions = [
             self._import_action, self._scan_action, self._review_action,
-            self._archive_action, self._match_action, self._export_action,
+            self._archive_action, self._export_action,
             self._detect_duplicates_action, self._delete_photos_action,
             self._delete_person_action, self._settings_action,
+            self._reanalyze_all_action,
         ]
 
     def _build_toolbar(self) -> None:
@@ -360,7 +367,7 @@ class MainWindow(QMainWindow):
         toolbar.setObjectName("Main")
         self.addToolBar(toolbar)
         for action in (
-            self._import_action, self._scan_action, self._match_action,
+            self._import_action, self._scan_action,
             self._review_action, self._archive_action,
         ):
             toolbar.addAction(action)
@@ -644,6 +651,8 @@ class MainWindow(QMainWindow):
             self._context.services.list_recognition_runs,
             self._context.services.cluster_results,
             self._context.services.roster_cluster_stats,
+            delete_run_people=self._context.services.delete_run_people,
+            delete_run_photos=self._context.services.delete_run_photos,
             parent=self,
         )
         page.people_changed.connect(self._on_people_changed)
@@ -683,7 +692,7 @@ class MainWindow(QMainWindow):
         bar.setObjectName("DataTools")
         for action in (
             self._export_action, self._detect_duplicates_action,
-            self._delete_person_action,
+            self._reanalyze_all_action, self._delete_person_action,
         ):
             bar.addAction(action)
         layout.addWidget(bar)
@@ -728,7 +737,7 @@ class MainWindow(QMainWindow):
         handlers = {
             "import": self._on_import_clicked, "scan": self._on_scan_clicked,
             "review": self._on_review_clicked, "settings": self._on_settings_clicked,
-            "model": self._on_model_help_clicked, "match": self._on_match_clicked,
+            "model": self._on_model_help_clicked,
             "archive": self._on_archive_clicked,
         }
         handler = handlers.get(action_id)
@@ -748,7 +757,6 @@ class MainWindow(QMainWindow):
         """Selection changes consume cached facts, never re-query the library."""
         controller = self._workspace_controller
         pairs = (
-            (self._match_action, controller.match_guidance()),
             (self._archive_action, controller.archive_guidance()),
             (self._review_action, controller.review_guidance()),
             (self._delete_photos_action, ActionGuidance(
@@ -773,7 +781,7 @@ class MainWindow(QMainWindow):
             "model": text.WORKSPACE_NEXT_MODEL,
         }
         for button, guidance in (
-            (self._match_next_button, controller.match_guidance()),
+            (self._match_next_button, controller.feature_guidance()),
             (self._archive_next_button, controller.archive_guidance()),
         ):
             button.setProperty("next_action", guidance.next_action)
@@ -1041,6 +1049,10 @@ class MainWindow(QMainWindow):
         compatibility with the retired task shape.
         """
         results = event.result
+        if event.task_name == "scan_photos":
+            if isinstance(results, ScanRegisterAnalyzeResult):
+                self._append_scan_analyze_summary(results)
+            return
         if event.task_name == "run_recognition":
             if isinstance(results, RecognitionRun):
                 self._append_run_summary(results)
@@ -1063,6 +1075,29 @@ class MainWindow(QMainWindow):
         summary = STATUS_MATCH_SUMMARY.format(processed=processed, faces=faces)
         if unreadable:
             summary += " · " + STATUS_MATCH_UNREADABLE.format(unreadable=unreadable)
+        self._status_label.setText(self._status_label.text() + " · " + summary)
+
+    def _append_scan_analyze_summary(self, result: ScanRegisterAnalyzeResult) -> None:
+        """扫描即识别完成摘要（任务书 §3 A1）：登记/更新/跳过/特征计数。
+
+        降级与跳过原因如实上屏：模型缺失 ≠ 失败（下次扫描自动补齐）；
+        取消请求后跳过分析同理。
+        """
+        scan = result.scan
+        summary = text.SCAN_ANALYZE_SUMMARY.format(
+            registered=scan.registered_count,
+            updated=scan.updated_count,
+            skipped=scan.skipped_count,
+            analyzed=result.analyzed_photo_count,
+        )
+        if result.analysis_skipped_reason == "model_unavailable":
+            summary += " · " + text.SCAN_ANALYZE_MODEL_SKIPPED
+        elif result.analysis_skipped_reason == "no_pending_photos":
+            summary += " · " + text.SCAN_ANALYZE_NOTHING_PENDING
+        elif result.analysis_skipped_reason == "cancelled":
+            summary += " · " + text.SCAN_ANALYZE_CANCELLED_NOTE
+        if scan.errors:
+            summary += " · " + STATUS_IMPORT_CONFIRM_ERRORS.format(count=len(scan.errors))
         self._status_label.setText(self._status_label.text() + " · " + summary)
 
     def _append_run_summary(self, run: RecognitionRun) -> None:
@@ -1116,13 +1151,13 @@ class MainWindow(QMainWindow):
 
     # ---- Toolbar actions ----
 
-    @_exclusive(task_label("scan_and_register_photos"))
+    @_exclusive(task_label("scan_photos"))
     def _on_scan_clicked(self) -> None:
-        """Open a folder picker and start the scan workflow.
+        """Open a folder picker and start the scan-and-analyze workflow.
 
-        P0-4 single-flight: the controller refuses a second submission while
-        a scan is in flight (``runnable is None``) — the refusal reason is
-        surfaced in the status bar and the running scan is left untouched.
+        任务书 §3 A1：扫描 = 登记 + 增量特征提取（一个组合任务，两段进度）。
+        单飞：控制器拒绝第二次提交（``runnable is None``）——拒因上状态栏，
+        在飞任务不受影响。
         """
         folder = QFileDialog.getExistingDirectory(self, DIALOG_SELECT_PHOTO_FOLDER)
         if not folder:
@@ -1139,7 +1174,7 @@ class MainWindow(QMainWindow):
     def _connect_scan_signals(self, runnable: QtWorkerRunnable) -> None:
         """Attach a scan while retaining its controller-local single-flight guard."""
         if not self._task_coordinator.is_busy:
-            self._task_coordinator.reserve(task_label("scan_and_register_photos"))
+            self._task_coordinator.reserve(task_label("scan_photos"))
         self._connect_task_signals(runnable, self._scan_controller.connect_signals)
 
     @_exclusive(task_label("import_people"))
@@ -1442,57 +1477,34 @@ class MainWindow(QMainWindow):
             ),
         )
 
-    # ---- Face recognition (traceable recognition runs) ----
+    # ---- 全库重新分析（维护入口，任务书 D1） ----
 
     @_exclusive(task_label("run_recognition"))
-    def _on_match_clicked(self) -> None:
-        """Start one recognition run through the RecognitionRun flow (阶段 C).
+    def _on_reanalyze_all_clicked(self) -> None:
+        """数据工具维护入口：对库内全部照片重新执行检测与特征提取。
 
-        Flow: cached readiness gate → RecognitionScopeDialog (photo scope +
-        face-count ranges) → RecognitionRunController.start_run(). Every
-        accepted submission creates a fresh RecognitionRun — existing
-        recognition results never block or trim the run (the compatibility
-        dedup lives inside the service). The controller owns the single-flight
-        guard; a refusal (already running / model pack missing / empty
-        snapshot) returns ``None`` with ``last_refusal_reason`` surfaced in
-        the status bar. A submitted runnable disables this action until a
-        terminal signal (completed / failed / cancelled) re-enables it.
+        走既有 RecognitionRunController 全库路径（photo_ids=None，全档范围
+        FaceCountRange(1, None)）——与退役的「运行人脸识别」主链同管道，仅
+        入口降级为低频维护操作。模型缺失/空库由控制器拒因并上状态栏。
         """
-        guidance = self._workspace_controller.match_guidance()
-        if not guidance.enabled:
-            # Cached read-side guidance; the controller's own refusals remain
-            # the authoritative second line (TOCTOU).
-            self._status_label.setText(guidance.tooltip)
+        photos = self._context.repositories.photos.list_all()
+        if not photos:
+            self._status_label.setText(text.REANALYZE_ALL_NONE)
             return
-        failure_service = self._context.services.recognition_failures
-        latest_run_id = failure_service.latest_resumable_run_id()
-        retryable_count = (
-            failure_service.report(latest_run_id).retryable_count
-            if latest_run_id is not None else 0
+        box = QMessageBox(self)
+        box.setWindowTitle(text.ACTION_REANALYZE_ALL)
+        box.setText(text.REANALYZE_ALL_CONFIRM)
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
         )
-        dialog = RecognitionScopeDialog(
-            selected_count=len(self._collect_selected_photo_ids()),
-            parent=self,
-            retryable_count=retryable_count,
-            failure_service=failure_service,
-            latest_run_id=latest_run_id,
-        )
-        if not dialog.exec():
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        if box.exec() != QMessageBox.StandardButton.Ok:
             return
-        photo_ids: tuple[UUID, ...] | None = None
-        if dialog.photo_scope == "retry":
-            photo_ids = (
-                failure_service.report(latest_run_id).retryable_photo_ids
-                if latest_run_id is not None else ()
-            )
-            if not photo_ids:
-                self._status_label.setText(text.RECOGNITION_SCOPE_NO_FAILURES)
-                return
-        elif dialog.photo_scope == "selected":
-            photo_ids = self._collect_selected_photo_ids()
+        from photo_archiver.domain import FaceCountRange
+
         runnable = self._recognition_run_controller.start_run(
-            dialog.selected_ranges,
-            photo_ids=photo_ids,
+            (FaceCountRange(1, None),),
+            photo_ids=None,
         )
         if runnable is None:
             reason = self._recognition_run_controller.last_refusal_reason
@@ -1505,18 +1517,22 @@ class MainWindow(QMainWindow):
 
     @_exclusive(task_label("face_clustering"))
     def _on_cluster_run_clicked(self) -> None:
-        """Start one clustering execution over the page-selected recognition run.
+        """Start one clustering execution over the whole-library feature dataset.
 
-        Follows the shared task pipeline (mutex admission, cancel, status
-        bar); the people page owns the run selector and re-renders its
-        availability on every terminal. Reruns always create a new
-        ClusterRun generation — existing generations stay.
+        任务书 §3/D2：点击先弹聚类范围选择（五档脸数预设，默认 [1]），随后
+        以全库最新特征数据集发起聚类（锚点 = 页面所选识别运行，代际挂靠与
+        历史查看不变）。
         """
         run_id = self._people_admin_page.selected_recognition_run_id()
         if run_id is None:
             self._status_label.setText(text.CLUSTER_PAGE_NO_RUNS)
             return
-        runnable = self._cluster_controller.start_cluster(run_id)
+        dialog = ClusterRangeDialog(self)
+        if not dialog.exec():
+            return
+        runnable = self._cluster_controller.start_cluster(
+            run_id, selected_ranges=dialog.selected_ranges,
+        )
         if runnable is None:
             reason = self._cluster_controller.last_refusal_reason
             self._status_label.setText(reason or text.CLUSTER_UNAVAILABLE)

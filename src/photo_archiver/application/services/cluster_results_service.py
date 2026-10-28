@@ -15,6 +15,11 @@ from photo_archiver.application.dtos.cluster_results import (
     ClusterMemberDetail,
     ClusterRunResults,
 )
+from photo_archiver.application.services.cluster_dataset import (
+    observations_for,
+    outcome_summary_for,
+    snapshots_for,
+)
 from photo_archiver.domain import (
     ClusterPersonAssignmentRepository,
     FaceClusterMember,
@@ -51,27 +56,16 @@ class ClusterResultsService:
         return set(self._ignore_repository.list_photo_ids(cluster_run_id))
 
     def run_photo_outcome_summary(
-        self, recognition_run_id: UUID,
+        self, cluster_run: FaceClusterRun,
     ) -> dict[str, int]:
-        """Per-outcome photo counts of one recognition run（界面优化 §5.3）.
+        """Per-outcome photo counts of one generation's dataset（界面优化 §5.3）.
 
         返回键：total/not_processed/faces/no_face/unreadable/error/unknown；
         ``unknown`` 是历史 run 的 NULL 状态计数——展示为"未知"，绝不并入
-        no_face。照片是否属于 run 由本计数（输入快照行）判断。
+        no_face。口径随代际数据集（``cluster_dataset``）：single_run=锚点
+        运行逐行；library=各照片最新一次尝试。
         """
-        summary = {
-            "total": 0, "not_processed": 0, "faces": 0, "no_face": 0,
-            "unreadable": 0, "error": 0, "unknown": 0,
-        }
-        for snapshot in self._run_repository.list_run_photos(recognition_run_id):
-            summary["total"] += 1
-            if snapshot.photo_outcome is None:
-                summary["unknown"] += 1
-            else:
-                summary[snapshot.photo_outcome] = (
-                    summary.get(snapshot.photo_outcome, 0) + 1
-                )
-        return summary
+        return outcome_summary_for(cluster_run, self._run_repository)
 
     def active_person_ids(self, cluster_run_id: UUID) -> set[UUID]:
         """Distinct persons among the generation's active decisions（§5.3 口径）.
@@ -105,18 +99,12 @@ class ClusterResultsService:
         cluster_run = self._cluster_repository.get_cluster_run(cluster_run_id)
         if cluster_run is None:
             return None
-        observations = {
-            observation.id: observation
-            for observation in self._observation_repository.list_by_run(
-                cluster_run.recognition_run_id,
-            )
-        }
-        photo_meta: dict[UUID, RunPhotoSnapshot] = {
-            snapshot.photo_id: snapshot
-            for snapshot in self._run_repository.list_run_photos(
-                cluster_run.recognition_run_id,
-            )
-        }
+        observations = observations_for(
+            cluster_run, self._run_repository, self._observation_repository,
+        )
+        photo_meta: dict[UUID, RunPhotoSnapshot] = snapshots_for(
+            cluster_run, self._run_repository, self._observation_repository,
+        )
         members_by_cluster: dict[UUID, list[FaceClusterMember]] = {}
         for member in self._cluster_repository.list_members(cluster_run_id):
             members_by_cluster.setdefault(member.cluster_id, []).append(member)

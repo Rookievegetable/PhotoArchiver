@@ -24,9 +24,11 @@ READY = WorkspaceStatus(
 
 
 @pytest.mark.parametrize("changes, expected", [
+    # 任务书 §3：特征提取随扫描自动进行——名单不设门槛（has_persons 不再
+    # 拦截），无照片仍指扫描；模型缺失在无照片之后判定。
     ({"has_persons": False, "has_photos": False, "pending_match_count": 0,
       "model_availability": ModelAvailability.MISSING},
-     ActionGuidance(False, text.REFUSAL_NO_PERSONS, "import")),
+     ActionGuidance(False, text.REFUSAL_NO_PHOTOS, "scan")),
     ({"has_photos": False, "pending_match_count": 0,
       "model_availability": ModelAvailability.MISSING},
      ActionGuidance(False, text.REFUSAL_NO_PHOTOS, "scan")),
@@ -36,17 +38,18 @@ READY = WorkspaceStatus(
      ActionGuidance(False, text.WORKSPACE_MODEL_MISSING, "model")),
     ({"model_availability": ModelAvailability.UNKNOWN},
      ActionGuidance(False, text.WORKSPACE_MODEL_UNKNOWN, "model")),
-    ({}, ActionGuidance(True, text.WORKSPACE_MATCH_READY.format(count=3))),
-    # 阶段 C Commit 3：全部已识别不再拒绝——识别可重跑，审核是下一步指引。
+    ({}, ActionGuidance(
+        True, text.WORKSPACE_MATCH_READY.format(count=3), "scan")),
+    # 任务书 §3：缺特征照片由下一次扫描按增量规则补齐——下一步指向扫描。
     ({"pending_match_count": 0},
-     ActionGuidance(True, text.WORKSPACE_REANALYSIS_READY, "review")),
+     ActionGuidance(True, text.WORKSPACE_FEATURES_READY, "review")),
 ])
-def test_match_prerequisite_matrix(changes, expected):
+def test_feature_prerequisite_matrix(changes, expected):
     query = Mock()
     query.execute.return_value = replace(READY, **changes)
     controller = WorkspaceController(query)
     controller.refresh(None)
-    assert controller.match_guidance() == expected
+    assert controller.feature_guidance() == expected
     query.execute.assert_called_once_with(None)
 
 
@@ -79,7 +82,7 @@ def test_unloaded_snapshot_does_not_query_implicitly():
     query = Mock()
     controller = WorkspaceController(query)
     assert controller.status is None
-    assert controller.match_guidance() == ActionGuidance(False, text.WORKSPACE_UNKNOWN)
+    assert controller.feature_guidance() == ActionGuidance(False, text.WORKSPACE_UNKNOWN)
     assert controller.archive_guidance() == ActionGuidance(False, text.WORKSPACE_UNKNOWN)
     assert controller.review_guidance() == ActionGuidance(True, text.REVIEW_EMPTY)
     query.execute.assert_not_called()
@@ -95,12 +98,12 @@ def test_refresh_forwards_root_and_replaces_snapshot_only_on_explicit_refresh():
     next_status = replace(READY, pending_match_count=0, archivable_count=0)
     query.execute.return_value = next_status
     for _ in range(3):
-        assert controller.match_guidance().enabled
+        assert controller.feature_guidance().enabled
         assert controller.archive_guidance().enabled
         controller.review_guidance()
     assert query.execute.call_count == 1
     assert controller.refresh(None) is next_status
     assert controller.status is next_status
     query.execute.assert_called_with(None)
-    assert controller.match_guidance().next_action == "review"
+    assert controller.feature_guidance().next_action == "review"
     assert controller.archive_guidance().next_action == "review"

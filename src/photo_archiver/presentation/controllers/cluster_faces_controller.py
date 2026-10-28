@@ -13,6 +13,8 @@ from PySide6.QtCore import QObject, Slot
 
 from photo_archiver.application import ClusterFacesUseCase
 from photo_archiver.application.commands import StartClusteringRunCommand
+from photo_archiver.application.commands.cluster_faces import DATASET_LIBRARY
+from photo_archiver.domain import FaceCountRange
 from photo_archiver.workers import ClusterFacesTask, QtWorkerExecutor, QtWorkerRunnable
 from photo_archiver.presentation.ui_text import CLUSTER_UNAVAILABLE, REFUSAL_CLUSTER_IN_FLIGHT
 
@@ -38,8 +40,17 @@ class ClusterFacesController(QObject):
         """Whether a clustering run is currently in flight."""
         return self._active_runnable is not None
 
-    def start_cluster(self, recognition_run_id: UUID) -> QtWorkerRunnable | None:
+    def start_cluster(
+        self,
+        recognition_run_id: UUID,
+        selected_ranges=None,
+    ) -> QtWorkerRunnable | None:
         """Start one clustering execution and return its runnable handle.
+
+        任务书 §3/D5：聚类使用**全库最新特征数据集**（``dataset="library"``，
+        跨运行按照片 latest wins），锚点为传入运行（代际挂靠与历史查看不变）；
+        ``selected_ranges``（D2）为脸数档位，缺省 [1]（单脸照片，与名单顺序
+        配对口径一致）。
 
         Returns ``None`` — with :attr:`last_refusal_reason` recording why —
         when a clustering task is already in flight or the use case is absent.
@@ -52,7 +63,13 @@ class ClusterFacesController(QObject):
         if self._use_case is None:
             self.last_refusal_reason = CLUSTER_UNAVAILABLE
             return None
-        task = ClusterFacesTask(self._use_case, StartClusteringRunCommand(recognition_run_id))
+        if selected_ranges is None:
+            selected_ranges = (FaceCountRange(1, 1),)
+        task = ClusterFacesTask(self._use_case, StartClusteringRunCommand(
+            recognition_run_id,
+            dataset=DATASET_LIBRARY,
+            selected_ranges=tuple(selected_ranges),
+        ))
         runnable = self._executor.submit(task)  # type: ignore[arg-type]  # generics variance
         self._active_runnable = runnable
         return runnable

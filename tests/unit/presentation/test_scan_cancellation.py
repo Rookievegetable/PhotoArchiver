@@ -21,6 +21,8 @@ the use case finishes its current batch, then the task reports cancelled.
 
 import os
 import sys
+from unittest.mock import Mock
+
 import pytest
 
 pytest.importorskip("pytestqt")
@@ -30,6 +32,7 @@ pytest.importorskip("PIL")
 from pathlib import Path
 
 from PIL import Image
+from PySide6.QtWidgets import QMessageBox
 
 from photo_archiver.app import bootstrap_application
 from photo_archiver.infrastructure.config import AppSettings
@@ -48,11 +51,20 @@ def _make_photo_dir(tmp_path: Path) -> Path:
 
 
 def _build_window(qtbot, tmp_path: Path) -> MainWindow:
-    settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'cancel.db'}")
+    # 任务书 §3 A1：扫描已并入特征提取——本文件验证的是扫描工作流的取消/
+    # 单飞语义，显式指向缺失模型目录使组合服务降级为纯登记（不触达真实
+    # 推理，保持用例确定性）。
+    settings = AppSettings(
+        database_url=f"sqlite:///{tmp_path / 'cancel.db'}",
+        model_path=tmp_path / "missing-models",
+    )
     settings.ensure_runtime_directories()
     context = bootstrap_application(settings)
     window = MainWindow(context)
     qtbot.addWidget(window)
+    # 与其他窗口测试同口径：模态告警桩化（任务失败时状态可见、不阻塞）。
+    window._diagnostic_warnings = Mock()
+    QMessageBox.warning = Mock(return_value=0)
     window.show()
     return window
 

@@ -15,7 +15,7 @@ from typing import Literal, Protocol
 from photo_archiver.presentation import ui_text as text
 
 PrimaryActionId = Literal[
-    "import", "scan", "match", "review", "archive", "settings", "model",
+    "import", "scan", "review", "archive", "settings", "model",
 ]
 
 
@@ -27,8 +27,8 @@ class _WorkspaceSnapshot(Protocol):
         """Return the cached workspace snapshot (or None before first refresh)."""
         ...
 
-    def match_guidance(self):  # noqa: ANN202
-        """Return recognition availability + first unmet prerequisite."""
+    def feature_guidance(self):  # noqa: ANN202
+        """Return feature-extraction availability + first unmet prerequisite."""
         ...
 
     def archive_guidance(self):  # noqa: ANN202
@@ -62,7 +62,6 @@ class OverviewModel:
 _PRIMARY_LABELS = {
     "import": text.OVERVIEW_PRIMARY_IMPORT,
     "scan": text.OVERVIEW_PRIMARY_SCAN,
-    "match": text.OVERVIEW_PRIMARY_RUN_MATCH,
     "review": text.OVERVIEW_PRIMARY_REVIEW,
     "archive": text.OVERVIEW_PRIMARY_ARCHIVE,
     "settings": text.OVERVIEW_PRIMARY_SETTINGS,
@@ -80,17 +79,18 @@ class OverviewPresenter:
     def build(self) -> OverviewModel:
         """Compose the checklist and pick the single most reasonable next step.
 
-        The primary CTA follows the archival flow (import → scan → recognize
-        → review → archive): the first unmet prerequisite wins; when the
-        library is fully processed, scanning more photos becomes the next
-        step. ``None`` (with empty steps) means the snapshot is not loaded.
+        任务书 §3：特征提取随扫描自动进行——第 3 步按"缺特征照片数"判定，
+        缺特征时的主 CTA 指向扫描（增量补齐）；流程主链为
+        导入 → 扫描（登记+特征）→ 审核 → 归档。``None``（空步骤）表示快照
+        尚未加载。
         """
         status = self._workspace.status
         if status is None:
             return OverviewModel((), None, "", text.OVERVIEW_STATUS_NONE)
-        match_guidance = self._workspace.match_guidance()
+        feature_guidance = self._workspace.feature_guidance()
         archive_guidance = self._workspace.archive_guidance()
         review_guidance = self._workspace.review_guidance()
+        features_done = status.has_photos and status.pending_match_count == 0
         steps = (
             OverviewStep(
                 text.OVERVIEW_STEP_IMPORT, status.has_persons,
@@ -103,9 +103,8 @@ class OverviewPresenter:
                 else text.OVERVIEW_STEP_SCAN_TODO,
             ),
             OverviewStep(
-                text.OVERVIEW_STEP_MATCH,
-                status.has_photos and status.pending_match_count == 0,
-                match_guidance.tooltip,
+                text.OVERVIEW_STEP_FEATURES, features_done,
+                feature_guidance.tooltip,
             ),
             OverviewStep(
                 text.OVERVIEW_STEP_REVIEW, status.pending_review_count == 0,
@@ -117,14 +116,14 @@ class OverviewPresenter:
                 else text.OVERVIEW_STEP_ARCHIVE_NOTE,
             ),
         )
-        if match_guidance.enabled and status.pending_match_count:
-            # 阶段 C：识别可重跑后，全部已识别不再把识别当主 CTA——流程的
-            # 下一个未完成步骤（审核/归档）优先，重跑仍可从工具栏发起。
-            primary: PrimaryActionId = "match"
-        elif match_guidance.next_action == "model":
+        if not status.has_photos:
+            # 扫描（登记+特征）在无模型时也可登记——先扫后装模型可增量补齐。
+            primary: PrimaryActionId = "scan"
+        elif feature_guidance.next_action == "model":
             primary = "model"
-        elif match_guidance.next_action in ("import", "scan"):
-            primary = match_guidance.next_action
+        elif status.pending_match_count:
+            # 缺特征照片由下一次扫描按增量规则补齐——CTA 指向扫描。
+            primary = "scan"
         elif status.pending_review_count:
             primary = "review"
         elif archive_guidance.enabled:
@@ -134,11 +133,10 @@ class OverviewPresenter:
         else:
             primary = "scan"
         tooltip = {
-            "match": match_guidance.tooltip,
-            "model": match_guidance.tooltip,
-            "import": match_guidance.tooltip,
-            "scan": match_guidance.tooltip if not status.has_photos
-            else text.OVERVIEW_STEP_SCAN_TODO,
+            "model": feature_guidance.tooltip,
+            "scan": feature_guidance.tooltip if (
+                status.pending_match_count or not status.has_photos
+            ) else text.OVERVIEW_STEP_SCAN_TODO,
             "archive": archive_guidance.tooltip,
             "settings": archive_guidance.tooltip,
             "review": review_guidance.tooltip,

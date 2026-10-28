@@ -1,11 +1,15 @@
-"""Controller coordinating the scan-and-register photos workflow with the UI."""
+"""Controller coordinating the scan-and-analyze photos workflow with the UI.
+
+任务书 §3 A1（扫描即识别）：控制器提交 :class:`ScanRegisterAnalyzeTask`
+（登记 + 增量特征提取组合用例），其余单飞/信号接线与原扫描控制器一致。
+"""
 
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Slot
 
-from photo_archiver.application import ScanAndRegisterPhotosCommand, ScanAndRegisterPhotosUseCase
-from photo_archiver.workers import QtWorkerExecutor, QtWorkerRunnable, ScanAndRegisterPhotosTask
+from photo_archiver.application import ScanAndRegisterPhotosCommand
+from photo_archiver.workers import QtWorkerExecutor, QtWorkerRunnable, ScanRegisterAnalyzeTask
 from photo_archiver.presentation.ui_text import (
     REFUSAL_SCAN_IN_FLIGHT,
     STATUS_SCAN_ENUMERATION_FAILED,
@@ -30,11 +34,11 @@ class ScanController(QObject):
 
     def __init__(
         self,
-        use_case: ScanAndRegisterPhotosUseCase,
+        use_case,  # ScanRegisterAnalyzeService（组合用例；鸭子类型便于测试替身）
         executor: QtWorkerExecutor,
         parent: QObject | None = None,
     ) -> None:
-        """Initialize the controller with its use case and worker executor."""
+        """Initialize the controller with its combined use case and worker executor."""
         super().__init__(parent)
         self._use_case = use_case
         self._executor = executor
@@ -79,7 +83,7 @@ class ScanController(QObject):
             folder_display_name=display_name,
             pre_enumerated_items=enumerated,
         )
-        task = ScanAndRegisterPhotosTask(self._use_case, command)
+        task = ScanRegisterAnalyzeTask(self._use_case, command)
         runnable = self._executor.submit(task)  # type: ignore[arg-type]  # generics variance
         self._active_runnable = runnable
         return runnable

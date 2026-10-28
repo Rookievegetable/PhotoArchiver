@@ -375,11 +375,15 @@ class ClusterResultsDialog(QDialog):
         self._render_clusters()
 
     def _render_run_status(self, cluster_run_id: UUID) -> None:
-        """§5.3 run 级人脸数与可确定的处理状态（未知不并入 0 脸）。"""
+        """§5.3 数据集级人脸数与可确定的处理状态（未知不并入 0 脸）。
+
+        任务书 §3 A2：口径随代际数据集（single_run=锚点运行；library=各照片
+        最新一次尝试），由结果服务按 cluster_run 参数分派。
+        """
         if not self._pairing_active or self._current is None:
             return
         summary = self._results_service.run_photo_outcome_summary(
-            self._current.cluster_run.recognition_run_id,
+            self._current.cluster_run,
         )
         self._run_status_label.setText(text.CLUSTER_PAIRING_RUN_STATUS.format(**summary))
 

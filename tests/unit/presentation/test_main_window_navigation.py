@@ -62,10 +62,10 @@ def test_main_toolbar_holds_primary_flow_in_order(nav) -> None:
     window = nav.window
     toolbar = window.findChild(QToolBar, "Main")
     assert toolbar is not None
+    # 任务书 D1：识别并入扫描——主工具栏不再有「运行人脸识别」。
     assert [action.text() for action in toolbar.actions()] == [
         text.ACTION_IMPORT_PEOPLE, text.ACTION_SCAN_FOLDER,
-        text.ACTION_RUN_FACE_RECOGNITION, text.ACTION_REVIEW_PENDING,
-        text.ACTION_ARCHIVE,
+        text.ACTION_REVIEW_PENDING, text.ACTION_ARCHIVE,
     ]
 
 
@@ -76,17 +76,19 @@ def test_data_tools_page_holds_maintenance_actions(nav) -> None:
     labels = {action.text() for action in tools.actions()}
     assert labels == {
         text.ACTION_EXPORT_DATA, text.ACTION_DETECT_DUPLICATES,
-        text.ACTION_DELETE_PERSON,
+        text.ACTION_REANALYZE_ALL, text.ACTION_DELETE_PERSON,
     }
     main = window.findChild(QToolBar, "Main")
     assert main is not None
     assert not labels & {action.text() for action in main.actions()}
 
 
+# 任务书 §3：扫描（登记+特征）不再要求名单——空库主 CTA 指向扫描；
+# 无缺特征、无待审、无归档根时走归档链（设置）。
 @pytest.mark.parametrize("status, expected_label, expected_primary", [
-    (EMPTY, text.OVERVIEW_PRIMARY_IMPORT, "import"),
+    (EMPTY, text.OVERVIEW_PRIMARY_SCAN, "scan"),
     (replace(EMPTY, has_persons=True), text.OVERVIEW_PRIMARY_SCAN, "scan"),
-    (replace(EMPTY, has_photos=True), text.OVERVIEW_PRIMARY_IMPORT, "import"),
+    (replace(EMPTY, has_photos=True), text.OVERVIEW_PRIMARY_SETTINGS, "settings"),
     (replace(READY, pending_match_count=0), text.OVERVIEW_PRIMARY_REVIEW, "review"),
     (replace(READY, pending_match_count=0, pending_review_count=0),
      text.OVERVIEW_PRIMARY_ARCHIVE, "archive"),
@@ -103,9 +105,10 @@ def test_overview_primary_cta_tracks_the_five_states(
     assert button.isEnabled()
 
 
-def test_overview_cta_routes_through_the_real_import_picker(nav, monkeypatch) -> None:
-    picker = Mock(return_value=("", ""))
-    monkeypatch.setattr(module.QFileDialog, "getOpenFileName", picker)
+def test_overview_cta_routes_through_the_real_scan_picker(nav, monkeypatch) -> None:
+    # 空库主 CTA = 扫描（任务书 §3）——文件夹选择器入口。
+    picker = Mock(return_value="")
+    monkeypatch.setattr(module.QFileDialog, "getExistingDirectory", picker)
     nav.window._overview_page._primary_button.click()
     picker.assert_called_once()
     assert not nav.window._task_coordinator.is_busy

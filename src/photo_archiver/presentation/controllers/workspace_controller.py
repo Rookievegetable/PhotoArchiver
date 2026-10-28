@@ -39,19 +39,15 @@ class WorkspaceController:
         self.status = self._query.execute(archive_root)
         return self.status
 
-    def match_guidance(self) -> ActionGuidance:
-        """Explain the first unmet recognition prerequisite.
+    def feature_guidance(self) -> ActionGuidance:
+        """Explain the feature-extraction (scan-integrated) state.
 
-        阶段 C Commit 3: recognition is rerunnable — photos that already carry
-        recognition results no longer block the entry; running again creates a
-        fresh ``RecognitionRun``. The all-matched state stays enabled with a
-        re-analysis hint and keeps ``review`` as the next-step pointer.
+        任务书 §3：特征提取随扫描自动进行，**不再要求已导入名单**；门槛只
+        剩模型可用与照片存在。缺特征的照片由下一次扫描按增量规则自动补齐。
         """
         status = self.status
         if status is None:
             return ActionGuidance(False, text.WORKSPACE_UNKNOWN)
-        if not status.has_persons:
-            return ActionGuidance(False, text.REFUSAL_NO_PERSONS, "import")
         if not status.has_photos:
             return ActionGuidance(False, text.REFUSAL_NO_PHOTOS, "scan")
         if status.model_availability is not ModelAvailability.AVAILABLE:
@@ -59,9 +55,12 @@ class WorkspaceController:
                       if status.model_availability is ModelAvailability.MISSING
                       else text.WORKSPACE_MODEL_UNKNOWN)
             return ActionGuidance(False, reason, "model")
-        if not status.pending_match_count:
-            return ActionGuidance(True, text.WORKSPACE_REANALYSIS_READY, "review")
-        return ActionGuidance(True, text.WORKSPACE_MATCH_READY.format(count=status.pending_match_count))
+        if status.pending_match_count:
+            return ActionGuidance(
+                True, text.WORKSPACE_MATCH_READY.format(count=status.pending_match_count),
+                "scan",
+            )
+        return ActionGuidance(True, text.WORKSPACE_FEATURES_READY, "review")
 
     def archive_guidance(self) -> ActionGuidance:
         """Keep root setup reachable even before there are approved photos."""

@@ -51,7 +51,7 @@ def test_ready_state_lists_five_steps_with_flow_semantics() -> None:
     model = _presenter(READY).build()
     assert [step.label for step in model.steps] == [
         text.OVERVIEW_STEP_IMPORT, text.OVERVIEW_STEP_SCAN,
-        text.OVERVIEW_STEP_MATCH, text.OVERVIEW_STEP_REVIEW,
+        text.OVERVIEW_STEP_FEATURES, text.OVERVIEW_STEP_REVIEW,
         text.OVERVIEW_STEP_ARCHIVE,
     ]
     done = [step.done for step in model.steps]
@@ -59,11 +59,12 @@ def test_ready_state_lists_five_steps_with_flow_semantics() -> None:
     assert model.steps[2].detail == text.WORKSPACE_MATCH_READY.format(count=3)
 
 
-def test_empty_library_primary_is_import() -> None:
+def test_empty_library_primary_is_scan() -> None:
+    # 任务书 §3：扫描（登记+特征）不再要求名单——空库主 CTA 指向扫描。
     model = _presenter(EMPTY).build()
-    assert model.primary == "import"
-    assert model.primary_label == text.OVERVIEW_PRIMARY_IMPORT
-    assert model.primary_tooltip == text.REFUSAL_NO_PERSONS
+    assert model.primary == "scan"
+    assert model.primary_label == text.OVERVIEW_PRIMARY_SCAN
+    assert model.primary_tooltip == text.REFUSAL_NO_PHOTOS
     assert [step.done for step in model.steps] == [False, False, False, True, True]
 
 
@@ -73,17 +74,20 @@ def test_persons_without_photos_primary_is_scan() -> None:
     assert model.primary_label == text.OVERVIEW_PRIMARY_SCAN
 
 
-def test_photos_without_persons_still_route_to_import() -> None:
-    # 识别同时需要人员和照片：先扫描再导入是允许的，主 CTA 指向缺失的人员轴。
+def test_photos_without_persons_feature_complete_follows_archive_chain() -> None:
+    # 任务书 §3：特征提取不依赖名单；无缺特征、无待审时走归档链——此处
+    # 归档根未配置，主 CTA 指向设置（与全处理库路由一致）。
     model = _presenter(replace(EMPTY, has_photos=True)).build()
-    assert model.primary == "import"
-    assert model.primary_label == text.OVERVIEW_PRIMARY_IMPORT
+    assert model.primary == "settings"
+    assert model.primary_label == text.OVERVIEW_PRIMARY_SETTINGS
 
 
-def test_pending_match_with_available_model_primary_is_match() -> None:
+def test_pending_match_routes_to_scan_for_delta_extraction() -> None:
+    # 任务书 §3：缺特征照片由下一次扫描按增量规则补齐——CTA 指向扫描。
     model = _presenter(READY).build()
-    assert model.primary == "match"
-    assert model.primary_label == text.OVERVIEW_PRIMARY_RUN_MATCH
+    assert model.primary == "scan"
+    assert model.primary_label == text.OVERVIEW_PRIMARY_SCAN
+    assert model.primary_tooltip == text.WORKSPACE_MATCH_READY.format(count=3)
 
 
 @pytest.mark.parametrize("availability", [

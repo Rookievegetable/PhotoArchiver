@@ -14,6 +14,7 @@ from loguru import logger
 
 from photo_archiver.application.commands.pairing import StartSuggestPairingsCommand
 from photo_archiver.application.ports.similarity_kernel import SimilarityKernelFactory
+from photo_archiver.application.services.cluster_dataset import observations_for
 from photo_archiver.domain import (
     ClusterPersonAssignment,
     FaceClusterRepository,
@@ -22,6 +23,7 @@ from photo_archiver.domain import (
     PairingCluster,
     PairingPerson,
     PersonRepository,
+    RecognitionRunRepository,
     SuggestionOutcome,
     ValidationError,
     suggest_pairings,
@@ -71,6 +73,7 @@ class SuggestPairingsService:
         similarity_factory: SimilarityKernelFactory,
         transaction_runner=None,
         photo_ignore_repository=None,
+        recognition_run_repository: RecognitionRunRepository | None = None,
     ) -> None:
         self._cluster_repository = cluster_repository
         self._observation_repository = observation_repository
@@ -83,6 +86,9 @@ class SuggestPairingsService:
         # 界面优化 §3.1：注入后，被忽略照片（本代际作用域）的全部观测不进入
         # 建议输入；None 保持历史行为（测试兼容）。
         self._ignores = photo_ignore_repository
+        # 任务书 §3 A2：注入 run 仓储后代际观测按数据集口径读取（library=
+        # 全库最新特征）；None 回退锚点运行直读（历史行为，测试兼容）。
+        self._run_repository = recognition_run_repository
 
     def execute(self, command: StartSuggestPairingsCommand) -> "SuggestPairingsSummary":
         """生成建议并按准入结果落库；返回结果摘要。
@@ -96,6 +102,21 @@ class SuggestPairingsService:
             return self._transaction_runner(
                 lambda _connection: self._execute_in_scope(command))
         return self._execute_in_scope(command)
+
+    def _load_observations(self, cluster_run) -> dict:
+        """代际观测映射：注入 run 仓储时按数据集口径（library=全库最新特征）；
+        未注入时回退锚点运行直读（历史行为，测试兼容）。"""
+        if self._run_repository is None:
+            return {
+                observation.id: observation
+                for observation in self._observation_repository.list_by_run(
+                    cluster_run.recognition_run_id,
+                )
+                if observation.id is not None
+            }
+        return observations_for(
+            cluster_run, self._run_repository, self._observation_repository,
+        )
 
     def _execute_in_scope(self, command: StartSuggestPairingsCommand) -> "SuggestPairingsSummary":
         cluster_run = self._cluster_repository.get_cluster_run(command.cluster_run_id)
@@ -112,12 +133,7 @@ class SuggestPairingsService:
             cluster for cluster in self._cluster_repository.list_clusters(cluster_run.id)
             if cluster.status not in (CLUSTER_STATUS_IGNORED, CLUSTER_STATUS_UNKNOWN)
         ]
-        observations = {
-            observation.id: observation
-            for observation in self._observation_repository.list_by_run(
-                cluster_run.recognition_run_id,
-            )
-        }
+        observations = self._load_observations(cluster_run)
         members_by_cluster: dict[UUID, list] = {}
         for member in self._cluster_repository.list_members(cluster_run.id):
             members_by_cluster.setdefault(member.cluster_id, []).append(member)

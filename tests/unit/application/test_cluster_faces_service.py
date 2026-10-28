@@ -16,6 +16,7 @@ from photo_archiver.application import StartClusteringRunCommand
 from photo_archiver.application.services import ClusterFacesService
 from photo_archiver.domain import (
     FaceBox,
+    FaceCountRange,
     FaceEmbedding,
     FaceObservation,
     RecognitionRun,
@@ -125,18 +126,30 @@ def test_full_flow_clusters_similar_and_dissimilar_faces():
     assert {member.observation_id for member in members} == observation_ids
 
 
-def test_out_of_scope_observations_excluded_and_counted():
+def test_participation_by_face_count_ranges_not_stored_verdict():
+    """任务书 D2：参与过滤按脸数档位现算，存储 scope_verdict 不再读取。
+
+    单脸观测即使存储判定为范围外也参与（[1] 档）；双脸观测在 [1] 档被
+    排除并计入 excluded_count；缺省档位 (1, None) 全部有脸观测参与。
+    """
     harness = _Harness()
     run = harness.add_run()
     harness.add_photo("a", "photos/a.jpg")
-    harness.add_observation("a", 0, 0.0)
-    harness.add_observation("a", 1, 10.0, scope="out_of_selected_scope")
+    harness.add_observation("a", 0, 0.0, scope="out_of_selected_scope")
+    harness.add_observation("a", 1, 10.0)  # photo_face_count = 2
 
-    cluster_run = harness.service.execute(StartClusteringRunCommand(run.id))
+    cluster_run = harness.service.execute(
+        StartClusteringRunCommand(run.id, selected_ranges=(FaceCountRange(1, 1),)),
+    )
 
     assert cluster_run.excluded_count == 1
     assert cluster_run.member_count == 1
     assert len(harness.clusters.list_members(cluster_run.id)) == 1
+
+    cluster_run_all = harness.service.execute(StartClusteringRunCommand(run.id))
+
+    assert cluster_run_all.excluded_count == 0
+    assert cluster_run_all.member_count == 2
 
 
 def test_no_observations_completes_with_zero_clusters():
@@ -247,7 +260,9 @@ def test_parameters_snapshot_records_algorithm_and_thresholds():
     assert cluster_run.parameters["cluster_sim_threshold"] == 0.6
     assert cluster_run.parameters["consistency_threshold"] == 0.4
     assert cluster_run.parameters["low_quality_threshold"] == 0.0
-    assert cluster_run.parameters["scope_filter"] == "in_selected_scope"
+    assert cluster_run.parameters["scope_filter"] == "face_count_ranges"
+    assert cluster_run.parameters["dataset"] == "single_run"
+    assert cluster_run.parameters["face_count_ranges"] == [str(FaceCountRange(1, None))]
 
 
 def test_sort_key_orders_by_captured_at_with_missing_times_last():
@@ -476,7 +491,8 @@ def test_every_participating_observation_assigned_exactly_once():
     harness.add_observation("a", 1, 90.0)
     harness.add_observation("b", 1, 96.0)
     harness.add_observation("c", 1, 180.0)
-    harness.add_observation("a", 2, 270.0, scope="out_of_selected_scope")  # 不参与
+    # 存储 scope_verdict 已不参与过滤（任务书 D2）：缺省档位下全部参与。
+    harness.add_observation("a", 2, 270.0, scope="out_of_selected_scope")
 
     cluster_run = harness.service.execute(StartClusteringRunCommand(run.id))
 
@@ -487,7 +503,6 @@ def test_every_participating_observation_assigned_exactly_once():
     )
     participating_ids = {
         observation.id for observation in harness.observations.list_by_run(run.id)
-        if observation.scope_verdict == "in_selected_scope"
     }
     assert set(member_observation_ids) == participating_ids  # 不重不漏
     # 每条成员的 cluster 都属于本 cluster run（追溯闭合）。

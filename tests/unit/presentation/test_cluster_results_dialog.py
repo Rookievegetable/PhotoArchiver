@@ -188,7 +188,7 @@ def test_no_generations_shows_empty_state(qtbot) -> None:
     dialog = harness.build_dialog(qtbot)
 
     assert dialog._generation_combo.count() == 0
-    assert "尚无聚类结果" in dialog._empty_label.text()
+    assert "尚无聚类代际" in dialog._empty_label.text()
     assert dialog._cluster_list.count() == 0
 
 

@@ -113,20 +113,16 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
         # submits ConfirmImportTask through the shared worker executor.
         _stage_a_parse_and_dialog_doubles(window, monkeypatch)
         controller, method, entry = window._context.worker_executor, "submit", "import"
-    elif name == "scan_and_register_photos":
+    elif name == "scan_photos":
+        # 任务书 §3 A1：扫描入口提交组合任务（登记+特征），控制器接口不变。
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a: str(tmp_path))
         controller, method, entry = window._scan_controller, "scan_folder", "scan"
-    elif name == "run_recognition":
-        # 阶段 C Commit 3: the entry opens the scope dialog, then submits via
-        # RecognitionRunController.start_run — both are doubled here.
-        monkeypatch.setattr(module, "RecognitionScopeDialog", lambda *a, **k: SimpleNamespace(
-            exec=lambda: 1, selected_ranges=(), photo_scope_selected_only=False,
-            photo_scope="all",
-        ))
-        controller, method, entry = window._recognition_run_controller, "start_run", "match"
     elif name == "face_clustering":
-        # D-4：入口在「人员与分组」页聚类区——种一个识别运行供选择器，提交经
-        # ClusterFacesController.start_cluster。
+        # D-4 + 任务书 D2：入口先弹聚类范围对话框（桩为默认选择），随后提交经
+        # ClusterFacesController.start_cluster（library 数据集）。
+        monkeypatch.setattr(module, "ClusterRangeDialog", lambda *a, **k: SimpleNamespace(
+            exec=lambda: 1, selected_ranges=(),
+        ))
         run = RecognitionRun(parameters={})
         window._context.repositories.recognition_runs.add_run(run)
         window._people_admin_page.refresh_clustering()
@@ -145,8 +141,13 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
     return getattr(window, f"_on_{entry}_clicked"), submit
 
 
-# match_persons：旧识别任务已退出 UI（阶段 C Commit 3），窗口入口为 run_recognition。
-_WINDOW_TASK_NAMES = [n for n in TASK_LABELS if n not in ("import_confirm", "match_persons")]
+# 任务书 D1/§3：match_persons 早已退役；run_recognition 降级为数据工具维护
+# 入口（不在主链参数化内）；scan_and_register_photos 更名为 scan_photos。
+_WINDOW_TASK_NAMES = [
+    n for n in TASK_LABELS
+    if n not in ("import_confirm", "match_persons", "run_recognition",
+                 "scan_and_register_photos")
+]
 
 
 @pytest.mark.parametrize("name", _WINDOW_TASK_NAMES)
@@ -161,7 +162,7 @@ def test_five_tasks_block_every_conflicting_entry_and_cancel_correctly(
     for action in window._conflicting_actions:
         assert not action.isEnabled()
         assert TASK_LABELS[name] in action.toolTip()
-    for other in ("import", "scan", "match", "archive", "export", "review", "settings",
+    for other in ("import", "scan", "archive", "export", "review", "settings",
                   "detect_duplicates", "delete_photos", "delete_person"):
         getattr(window, f"_on_{other}_clicked")()  # bypass disabled QAction
     window._on_plugin_action("anything")
@@ -216,7 +217,7 @@ def test_double_import_during_picker_and_submission_is_reserved(window, monkeypa
 
     def submission(*args):
         entry()
-        window._on_match_clicked()
+        window._on_scan_clicked()  # 忙态下被准入拦截（任务书 D1：match 入口已退役）
         return runnable
 
     submit.side_effect = submission
@@ -229,8 +230,8 @@ def test_double_import_during_picker_and_submission_is_reserved(window, monkeypa
                                   "delete_person", "plugin"])
 def test_sync_modal_path_blocks_reentrant_task(window, monkeypatch, path):
     start = Mock()
-    # 阶段 C：识别入口先开范围对话框；忙态下 @_exclusive 在对话框之前拦截，
-    # 因此这里只桩提交入口验证「忙时不重入」。
+    # 忙态下 @_exclusive 在对话框之前拦截；start_run 桩仅用于断言维护入口
+    # （任务书 D1）忙时不触达识别控制器。
     # 2026-10-01 页面化：review 不再是同步模态路径（改为常驻页 + set_busy
     # 置灰，准入覆盖见 test_main_window_workspace_state 路由测试），从本
     # 参数化中移除。
@@ -238,7 +239,7 @@ def test_sync_modal_path_blocks_reentrant_task(window, monkeypatch, path):
 
     def nested(*args, **kwargs):
         loop = QEventLoop()
-        QTimer.singleShot(0, lambda: (window._on_match_clicked(), loop.quit()))
+        QTimer.singleShot(0, lambda: (window._on_scan_clicked(), loop.quit()))
         loop.exec()
         assert window._task_coordinator.is_busy
         return 0

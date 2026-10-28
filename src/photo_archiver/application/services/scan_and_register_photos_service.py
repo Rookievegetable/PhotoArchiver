@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from uuid import UUID
 
 from loguru import logger
 
@@ -124,6 +125,8 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
         registered_count = 0
         updated_count = 0
         skipped_count = 0
+        registered_photo_ids: list[UUID] = []
+        updated_photo_ids: list[UUID] = []
         errors: list[str] = []
 
         for index, item in enumerate(scan_items, start=1):
@@ -138,6 +141,8 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
                 # 或 reader 未绑定时保守视为未变化，不误更新登记。
                 if self._update_if_changed(existing, photo_path):
                     updated_count += 1
+                    if existing.id is not None:
+                        updated_photo_ids.append(existing.id)
                     self._report(index, total, "Updated changed photo metadata")
                 else:
                     skipped_count += 1
@@ -163,6 +168,8 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
             self._photo_repository.add(photo)
             existing_photos[path_value] = photo
             registered_count += 1
+            if photo.id is not None:
+                registered_photo_ids.append(photo.id)
             self._report(index, total, "Registered photo")
 
         folder.total_photos = total
@@ -177,6 +184,8 @@ class ScanAndRegisterPhotosService(ScanAndRegisterPhotosUseCase):
             skipped_count=skipped_count,
             failed_count=len(errors),
             errors=tuple(errors),
+            registered_photo_ids=tuple(registered_photo_ids),
+            updated_photo_ids=tuple(updated_photo_ids),
         )
 
     def _update_if_changed(self, photo: Photo, photo_path: Path) -> bool:

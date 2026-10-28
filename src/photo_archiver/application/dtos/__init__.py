@@ -59,7 +59,10 @@ from photo_archiver.application.dtos.photo_ignore import (
     PhotoIgnoreResult,
 )
 from photo_archiver.application.dtos.register_photo import RegisterPhotoResult
-from photo_archiver.application.dtos.scan_and_register_photos import ScanAndRegisterPhotosResult
+from photo_archiver.application.dtos.scan_and_register_photos import (
+    ScanAndRegisterPhotosResult,
+    ScanRegisterAnalyzeResult,
+)
 from photo_archiver.application.dtos.settings import (
     DEFAULT_LANGUAGE,
     DEFAULT_MATCH_THRESHOLD,
@@ -145,6 +148,7 @@ __all__ = [
     "PruneMissingResult",
     "RegisterPhotoResult",
     "ScanAndRegisterPhotosResult",
+    "ScanRegisterAnalyzeResult",
     "ScanPhotoFolderResult",
     "UserPreferences",
     "VALID_LANGUAGES",

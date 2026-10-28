@@ -8,6 +8,7 @@ from photo_archiver.workers.application_tasks import (
     MatchPersonsTask,
     RunRecognitionTask,
     ScanAndRegisterPhotosTask,
+    ScanRegisterAnalyzeTask,
 )
 from photo_archiver.workers.export_task import ExportTask
 from photo_archiver.workers.events import (
@@ -34,6 +35,7 @@ __all__ = [
     "QtWorkerRunnable",
     "QtWorkerSignals",
     "ScanAndRegisterPhotosTask",
+    "ScanRegisterAnalyzeTask",
     "TaskCancelled",
     "TaskCompleted",
     "TaskEvent",

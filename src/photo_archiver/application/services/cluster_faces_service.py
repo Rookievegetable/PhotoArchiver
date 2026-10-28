@@ -6,9 +6,10 @@ owner 裁决）→ 以方案 §D-3 排序键落库 Cluster/Member → 记录统�
 
 硬约束落点：
 
-- 输入只来自已有 Observation（不重新扫描/检测）；默认只取
-  ``in_selected_scope`` 且嵌入有效的观测（任务书默认，规格 §5.2“全部”
-  未明确范围裁定，``scope_filter`` 记入参数快照可追溯）。
+- 输入只来自已有 Observation（不重新扫描/检测）；数据集口径由参数快照
+  ``dataset`` 驱动（``library``=全库最新特征 latest wins / ``single_run``
+  =锚点运行，见 ``cluster_dataset``）；参与过滤按 ``classify_scope`` 对
+  脸数档位现算（任务书 D2），嵌入无效观测恒排除。
 - 重跑 = 新 ``FaceClusterRun`` 新组，旧组不动；绝不因已有 Cluster 跳过。
 - 取消协作式：算法在候选/合并轮询间检查；取消前已落库的 cluster 保留。
 - 失败隔离：算法纯函数不落库；持久化异常将 cluster run 置 failed 后抛出。
@@ -21,6 +22,10 @@ from uuid import UUID
 from loguru import logger
 
 from photo_archiver.application.commands.cluster_faces import StartClusteringRunCommand
+from photo_archiver.application.services.cluster_dataset import (
+    observations_for,
+    snapshots_for,
+)
 from photo_archiver.application.ports.similarity_kernel import SimilarityKernelFactory
 from photo_archiver.application.use_cases.cluster_faces import ClusterFacesUseCase
 from photo_archiver.domain import (
@@ -36,6 +41,7 @@ from photo_archiver.domain import (
     RunPhotoSnapshot,
     ValidationError,
     build_sort_key,
+    classify_scope,
     cluster_items,
     order_cluster_keys,
 )
@@ -85,7 +91,7 @@ class ClusterFacesService(ClusterFacesUseCase):
         cluster_run.start()
         self._cluster_repository.update_cluster_run(cluster_run)
         try:
-            counts = self._cluster_all(cluster_run.id, command)
+            counts = self._cluster_all(cluster_run, command)
             if self._cancel_event.is_set():
                 cluster_run.cancel(*counts)
             else:
@@ -103,11 +109,15 @@ class ClusterFacesService(ClusterFacesUseCase):
             raise
 
     def _cluster_all(
-        self, cluster_run_id: UUID, command: StartClusteringRunCommand,
+        self, cluster_run: FaceClusterRun, command: StartClusteringRunCommand,
     ) -> tuple[int, int, int]:
         """Cluster, persist and report; returns (cluster, member, excluded) counts."""
-        observations = self._observation_repository.list_by_run(command.recognition_run_id)
-        participating = _select_participating(observations)
+        observations = observations_for(
+            cluster_run, self._run_repository, self._observation_repository,
+        )
+        participating = _select_participating(
+            observations.values(), command.selected_ranges,
+        )
         excluded_count = len(observations) - len(participating)
         if not participating:
             self._report(0, 0, "No observations to cluster")
@@ -133,7 +143,7 @@ class ClusterFacesService(ClusterFacesUseCase):
             should_cancel=self._cancel_event.is_set,
         )
         self._report(len(items), len(items), "Persisting clusters")
-        self._persist(cluster_run_id, command.recognition_run_id, participating, assignments)
+        self._persist(cluster_run, participating, assignments)
         logger.info(
             "ClusterFacesService: run {} clustered {} observation(s) into {} cluster(s) "
             "({} excluded)",
@@ -143,16 +153,18 @@ class ClusterFacesService(ClusterFacesUseCase):
 
     def _persist(
         self,
-        cluster_run_id: UUID,
-        recognition_run_id: UUID,
+        cluster_run: FaceClusterRun,
         participating,
         assignments,
     ) -> None:
         """Persist clusters in §D-3 sort order with their membership evidence."""
-        photo_meta: dict[UUID, RunPhotoSnapshot] = {
-            snapshot.photo_id: snapshot
-            for snapshot in self._run_repository.list_run_photos(recognition_run_id)
-        }
+        if cluster_run.id is None:  # pragma: no cover - 实体恒生成 id
+            raise RuntimeError("FaceClusterRun did not generate an id")
+        cluster_run_id = cluster_run.id
+        recognition_run_id = cluster_run.recognition_run_id
+        photo_meta: dict[UUID, RunPhotoSnapshot] = snapshots_for(
+            cluster_run, self._run_repository, self._observation_repository,
+        )
         # 每簇一次扫描同时得到排序键部件与 first_captured_at（datetime 值比较；
         # 同簇内混入 aware 等异型时间时比较抛 TypeError → run=failed、零簇落库）。
         decorated: list[tuple[str | None, str, int, datetime | None]] = []
@@ -242,11 +254,17 @@ class ClusterFacesService(ClusterFacesUseCase):
             self._progress_reporter.report(current, total, message)
 
 
-def _select_participating(observations) -> list:
-    """范围内且嵌入有效的观测（任务书默认；scope_filter 记入参数快照）。"""
+def _select_participating(observations, selected_ranges) -> list:
+    """脸数档位现算范围内且嵌入有效的观测（任务书 D2）。
+
+    参与判定按 ``classify_scope(photo_face_count, selected_ranges)`` 现算，
+    不再读取存储的 ``scope_verdict``（该列保留为检测期审计快照）；嵌入
+    无效的观测恒不参与。
+    """
     return [
         observation for observation in observations
-        if observation.scope_verdict == SCOPE_VERDICT_IN_SELECTED_SCOPE
+        if classify_scope(observation.photo_face_count, selected_ranges)
+        == SCOPE_VERDICT_IN_SELECTED_SCOPE
         and observation.embedding.vector
     ]
 

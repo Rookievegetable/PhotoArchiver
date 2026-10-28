@@ -13,6 +13,7 @@ import pytest
 pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
+from types import SimpleNamespace
 from unittest.mock import Mock
 from uuid import uuid4
 
@@ -84,9 +85,17 @@ def _stub_start(window, monkeypatch):
     runnable = FakeRunnable()
     monkeypatch.setattr(
         window._cluster_controller, "start_cluster",
-        lambda run_id: (calls.append(run_id) or runnable),
+        lambda run_id, selected_ranges=None: (calls.append(run_id) or runnable),
     )
     return calls, runnable
+
+
+def _stub_range_dialog(window, monkeypatch):
+    """任务书 D2：聚类入口先弹范围对话框——桩为默认选择直接确认。"""
+    monkeypatch.setattr(
+        module, "ClusterRangeDialog",
+        lambda *a, **k: SimpleNamespace(exec=lambda: 1, selected_ranges=()),
+    )
 
 
 def _completed_run() -> FaceClusterRun:
@@ -100,6 +109,7 @@ def test_cluster_button_submits_selected_run_and_locks_entry(qtbot, tmp_path, mo
     window = _make_window(qtbot, tmp_path, monkeypatch)
     run_id = window._people_admin_page.selected_recognition_run_id()
     calls, runnable = _stub_start(window, monkeypatch)
+    _stub_range_dialog(window, monkeypatch)
 
     window._people_admin_page._cluster_run_button.click()
 
@@ -117,12 +127,13 @@ def test_cluster_button_without_run_shows_hint_and_does_not_submit(qtbot, tmp_pa
     window._people_admin_page._cluster_run_button.click()
 
     assert calls == []
-    assert "尚无识别运行" in window._status_label.text()
+    assert "尚无特征数据" in window._status_label.text()
 
 
 def test_cluster_completed_refreshes_page_and_carries_summary(qtbot, tmp_path, monkeypatch) -> None:
     window = _make_window(qtbot, tmp_path, monkeypatch)
     calls, runnable = _stub_start(window, monkeypatch)
+    _stub_range_dialog(window, monkeypatch)
     window._people_admin_page._cluster_run_button.click()
     refreshed: list[int] = []
     monkeypatch.setattr(
@@ -146,6 +157,7 @@ def test_cluster_failed_and_cancelled_refresh_page(qtbot, tmp_path, monkeypatch)
 
     window = _make_window(qtbot, tmp_path, monkeypatch)
     calls, runnable = _stub_start(window, monkeypatch)
+    _stub_range_dialog(window, monkeypatch)
     window._people_admin_page._cluster_run_button.click()
     refreshed: list[int] = []
     monkeypatch.setattr(
@@ -167,6 +179,7 @@ def test_cluster_failed_and_cancelled_refresh_page(qtbot, tmp_path, monkeypatch)
 def test_cluster_progress_streams_and_cancel_forwards(qtbot, tmp_path, monkeypatch) -> None:
     window = _make_window(qtbot, tmp_path, monkeypatch)
     calls, runnable = _stub_start(window, monkeypatch)
+    _stub_range_dialog(window, monkeypatch)
     window._people_admin_page._cluster_run_button.click()
 
     runnable.signals.progress.emit(TaskProgress(TASK, "task_1", message="m", current=3, total=9))

@@ -45,6 +45,7 @@ from photo_archiver.application import (
     ReviewRecognitionService,
     ScanAndRegisterPhotosService,
     ScanPhotoFolderService,
+    ScanRegisterAnalyzeService,
     SearchPhotosService,
     SettingsService,
 )
@@ -85,6 +86,7 @@ class ApplicationServices:
     register_photo: RegisterPhotoService
     scan_photo_folder: ScanPhotoFolderService
     scan_and_register_photos: ScanAndRegisterPhotosService
+    scan_register_analyze: ScanRegisterAnalyzeService
     match_persons: MatchPersonsService
     run_recognition: RunRecognitionService | None
     cluster_faces: ClusterFacesService
@@ -282,6 +284,13 @@ def build_application_services(
         system_settings=None,
     )
     match_service, run_recognition_service = _build_recognition_services(repositories, settings)
+    scan_and_register_service = ScanAndRegisterPhotosService(
+        scanner,
+        repositories.folders,
+        repositories.photos,
+        metadata_reader,
+        unit_of_work=unit_of_work,
+    )
     export_service = ExportService(
         person_repository=repositories.people,
         photo_repository=repositories.photos,
@@ -397,12 +406,14 @@ def build_application_services(
         manage_people=manage_people_service,
         register_photo=RegisterPhotoService(repositories.photos, metadata_reader),
         scan_photo_folder=ScanPhotoFolderService(scanner),
-        scan_and_register_photos=ScanAndRegisterPhotosService(
-            scanner,
-            repositories.folders,
-            repositories.photos,
-            metadata_reader,
-            unit_of_work=unit_of_work,
+        scan_and_register_photos=scan_and_register_service,
+        # 扫描即识别（任务书 §3 A1）：组合登记 + 增量特征提取；模型缺失时
+        # 组合服务降级为仅登记（run_recognition 为 None）。
+        scan_register_analyze=ScanRegisterAnalyzeService(
+            scan_service=scan_and_register_service,
+            recognition_use_case=run_recognition_service,
+            photo_repository=repositories.photos,
+            recognition_run_repository=repositories.recognition_runs,
         ),
         match_persons=match_service,
         run_recognition=run_recognition_service,
@@ -423,6 +434,7 @@ def build_application_services(
             NumpyCosineSimilarityFactory(),
             transaction_runner=connection_provider.run_immediate,
             photo_ignore_repository=repositories.photo_ignore_states,
+            recognition_run_repository=repositories.recognition_runs,
         ),
         pairing_workbench=pairing_workbench,
         photo_ignore=photo_ignore_service,

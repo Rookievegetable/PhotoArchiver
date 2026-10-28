@@ -151,10 +151,15 @@ def test_real_executor_refuses_second_scan_mid_flight_and_recovers(qtbot, tmp_pa
     for i in range(FILE_COUNT):
         Image.new("RGB", (16, 16), (i % 255, 40, 90)).save(folder / f"p{i:04d}.png")
 
-    settings = AppSettings(database_url=f"sqlite:///{tmp_path / 'sf.db'}")
+    # 任务书 §3 A1：控制器提交组合任务——显式缺失模型路径使其降级为纯
+    # 登记（不触达真实推理），本文件只验证单飞语义。
+    settings = AppSettings(
+        database_url=f"sqlite:///{tmp_path / 'sf.db'}",
+        model_path=tmp_path / "missing-models",
+    )
     settings.ensure_runtime_directories()
     context = bootstrap_application(settings)
-    controller = ScanController(context.services.scan_and_register_photos, context.worker_executor)
+    controller = ScanController(context.services.scan_register_analyze, context.worker_executor)
 
     runnable1 = controller.scan_folder(folder)
     assert runnable1 is not None

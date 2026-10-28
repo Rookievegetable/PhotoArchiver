@@ -716,7 +716,7 @@ def test_clustering_section_disabled_without_recognition_runs(tmp_path, qtbot) -
     qtbot.addWidget(page)
 
     assert page._cluster_run_button.isEnabled() is False
-    assert "尚无识别运行" in page._cluster_hint.text()
+    assert "尚无特征数据" in page._cluster_hint.text()
     assert page.selected_recognition_run_id() is None
 
 
