@@ -803,6 +803,11 @@ OVERVIEW_STEP_ARCHIVE = "安全归档"
 OVERVIEW_STEP_DONE_MARK = "✓"
 OVERVIEW_STEP_TODO_MARK = "○"
 OVERVIEW_STEP_DONE = "已完成"
+# 阶段 2 概览重组（§4-B 五步卡＋欢迎横幅）：步骤卡状态行的未完成态文字，
+# 与既有 OVERVIEW_STEP_DONE 配对（状态＝符号＋文字，非仅色，§10-7）。
+OVERVIEW_STEP_TODO = "待办"
+# 欢迎横幅文案（severity=info Banner；措辞待 Owner 对照设计板校准，UNVERIFIED）。
+OVERVIEW_WELCOME = "欢迎使用 PhotoArchiver：按下方五个步骤完成首次归档。"
 OVERVIEW_STEP_IMPORT_TODO = "先导入人员名单，识别结果才能归属到人。"
 OVERVIEW_STEP_SCAN_TODO = "扫描照片目录：登记入库并自动提取人脸特征。"
 OVERVIEW_STEP_REVIEW_TODO = "人工确认识别结果；批准后才可归档。"

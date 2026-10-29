@@ -156,6 +156,7 @@ from photo_archiver.presentation.views.photo_deletion_confirm_dialog import (
 from photo_archiver.presentation.views.photo_list_delegate import PhotoThumbnailDelegate
 from photo_archiver.presentation.views.photo_detail_dialog import PhotoDetailDialog
 from photo_archiver.presentation.visual_style import (
+    NAV_RAIL_OBJECT_NAME,
     ROLE_DANGER,
     ROLE_PRIMARY,
     assign_role,
@@ -467,6 +468,9 @@ class MainWindow(QMainWindow):
     def _build_central(self) -> None:
         """Assemble the left navigation and the four stacked pages."""
         self._nav_list = QListWidget(self)
+        # 阶段 2 chrome：导航 rail 的 objectName 挂点（QSS 单源选择器
+        # QListWidget#NavRail 用）。仅加 objectName，导航映射/回弹行为不变。
+        self._nav_list.setObjectName(NAV_RAIL_OBJECT_NAME)
         for label in _NAV_LABELS:
             self._nav_list.addItem(label)
         self._nav_list.setFixedWidth(150)

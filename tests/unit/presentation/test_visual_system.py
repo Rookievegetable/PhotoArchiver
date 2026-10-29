@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListWidget,
     QPushButton,
     QToolButton,
     QVBoxLayout,
@@ -64,6 +65,7 @@ from photo_archiver.presentation.visual_style import (
     BADGE_OBJECT_NAME,
     BANNER_OBJECT_NAME,
     CARD_OBJECT_NAME,
+    NAV_RAIL_OBJECT_NAME,
     ROLE_DANGER,
     ROLE_NEUTRAL,
     ROLE_PRIMARY,
@@ -731,3 +733,153 @@ def test_theme_tokens_are_frozen_shapes() -> None:
     # R6/B-3 校准基线：C2 目标 pa-text-secondary 浅色 #5c5c5c。
     assert light["pa-text-secondary"] == "#5c5c5c"
     assert dark["pa-text-secondary"] == "#c8c8c8"
+
+
+# ── 阶段 2：主窗口 chrome（导航 rail / 工具栏 / 状态栏）＋概览页五步卡 ────────
+
+
+def test_chrome_rules_declared_in_stylesheet() -> None:
+    """Chrome 组选择器在单源 QSS 双主题中声明（阶段 2 落位）。"""
+    for theme in (THEME_LIGHT, THEME_DARK):
+        qss = build_stylesheet(theme)
+        assert "QToolBar#Main {" in qss
+        assert "QToolBar#Main::separator" in qss
+        assert "QListWidget#NavRail {" in qss
+        assert "QListWidget#NavRail::item:selected" in qss
+        # 聚焦态焦点环恢复（ID＋伪类特异性高于基行 border:none；1px＝P0-1 §1.4 列表冻结值）。
+        assert "QListWidget#NavRail:focus {" in qss
+        assert "QStatusBar {" in qss
+        assert "QStatusBar QProgressBar::chunk" in qss
+        # 横幅内文字着色（QSS color 不自 QFrame 级联到子 QLabel，需显式规则）。
+        for severity in ("info", "warning", "danger"):
+            assert f'QFrame#Banner[severity="{severity}"] QLabel' in qss
+
+
+@pytest.mark.parametrize("theme", [THEME_LIGHT, THEME_DARK])
+def test_render_nav_rail_selected_item_paints_highlight(qapp, theme: str) -> None:
+    """导航 rail 选中项真实涂出高亮（选中≠未选中，双主题像素探针）。"""
+    apply_visual_system(qapp, theme=theme)
+    try:
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        rail = QListWidget(host)
+        rail.setObjectName(NAV_RAIL_OBJECT_NAME)
+        rail.setFixedWidth(150)
+        for label in ("AA", "BB", "CC"):
+            rail.addItem(label)
+        rail.setCurrentRow(0)
+        layout.addWidget(rail)
+        host.show()
+        host.grab()
+
+        def interior(item_index: int) -> str:
+            rect = rail.visualItemRect(rail.item(item_index))
+            origin = rail.viewport().mapTo(host, rect.topLeft())
+            image = host.grab().toImage()
+            # 采样点避开左侧文字与边框/圆角（条目右段中部）。
+            return image.pixelColor(
+                int(origin.x() + rect.width() * 0.7),
+                int(origin.y() + rect.height() * 0.5),
+            ).name().lower()
+
+        selected = interior(0)
+        unselected = interior(2)
+        assert selected != unselected, (
+            f"nav rail selected item {selected} must differ from unselected "
+            f"{unselected}: chrome rule likely dropped or stylesheet rejected"
+        )
+    finally:
+        _restore_default_look(qapp)
+
+
+@pytest.mark.parametrize("theme", [THEME_LIGHT, THEME_DARK])
+def test_render_overview_banner_paints_info_background(qapp, theme: str) -> None:
+    """概览欢迎横幅真实涂底（横幅底色≠窗口底色，双主题像素探针）。"""
+    apply_visual_system(qapp, theme=theme)
+    try:
+        host = QWidget()
+        host.resize(320, 200)
+        layout = QVBoxLayout(host)
+        banner = QFrame(host)
+        style_banner(banner, "info")
+        banner_layout = QVBoxLayout(banner)
+        banner_layout.setContentsMargins(0, 0, 0, 0)
+        banner_layout.addWidget(QLabel(text.OVERVIEW_WELCOME, banner))
+        layout.addWidget(banner)
+        layout.addStretch()
+        host.show()
+        image = host.grab().toImage()
+        banner_rect = banner.geometry()
+        banner_bg = image.pixelColor(
+            int(banner_rect.x() + banner_rect.width() * 0.85),
+            int(banner_rect.y() + banner_rect.height() * 0.5),
+        ).name().lower()
+        window_bg = image.pixelColor(280, 180).name().lower()
+        assert banner_bg != window_bg, (
+            f"overview banner {banner_bg} must not paint the window background "
+            f"{window_bg}: banner rule likely dropped or stylesheet rejected"
+        )
+    finally:
+        _restore_default_look(qapp)
+
+
+def test_overview_page_renders_banner_and_five_step_cards(qtbot) -> None:
+    """概览页结构：info 横幅＋五张步骤卡；render_model/set_busy 契约不变。"""
+    from photo_archiver.presentation.controllers.overview_presenter import (
+        OverviewModel, OverviewStep,
+    )
+
+    page = OverviewPage()
+    qtbot.addWidget(page)
+
+    banners = page.findChildren(QFrame, BANNER_OBJECT_NAME)
+    assert len(banners) == 1
+    assert banners[0].property(SEVERITY_PROPERTY) == "info"
+    assert banners[0].testAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+
+    cards = page.findChildren(QFrame, CARD_OBJECT_NAME)
+    assert len(cards) == 5
+    assert all(card.testAttribute(Qt.WidgetAttribute.WA_StyledBackground) for card in cards)
+
+    # CTA 契约（test_overview_primary_cta_is_primary 之外的结构级回归）。
+    assert button_role(page._primary_button) == ROLE_PRIMARY
+
+    steps = tuple(
+        OverviewStep(label=f"步骤{i}", done=i % 2 == 0, detail=f"说明{i}")
+        for i in range(5)
+    )
+    page.render_model(OverviewModel(steps, "scan", text.OVERVIEW_PRIMARY_SCAN, "tip"))
+    assert not page._primary_button.isHidden()
+    assert page._primary_button.text() == text.OVERVIEW_PRIMARY_SCAN
+    assert page._primary_button.toolTip() == "tip"
+    assert page._primary_button.isEnabled()
+    assert not any(card.isHidden() for card in cards)
+    # 状态＝符号＋文字（非仅色，§10-7）；正文＝模型 detail。
+    first_labels = {label.text() for label in cards[0].findChildren(QLabel)}
+    assert first_labels == {
+        "步骤0", f"{text.OVERVIEW_STEP_DONE_MARK} {text.OVERVIEW_STEP_DONE}", "说明0",
+    }
+    assert text.OVERVIEW_STEP_TODO_MARK in cards[1].findChildren(QLabel)[1].text()
+    assert (
+        f"{text.OVERVIEW_STEP_TODO_MARK} {text.OVERVIEW_STEP_TODO}"
+        in {label.text() for label in cards[1].findChildren(QLabel)}
+    )
+
+    page.set_busy(True, "扫描")
+    assert not page._primary_button.isEnabled()
+    assert page._primary_button.toolTip() == text.OVERVIEW_PRIMARY_BUSY.format(label="扫描")
+    page.set_busy(False, "扫描")
+    assert page._primary_button.isEnabled()
+    assert page._primary_button.toolTip() == "tip"
+
+    # 空快照（启动未加载）：五卡全隐、无 CTA——只渲染模型内容。
+    page.render_model(OverviewModel((), None, "", ""))
+    assert all(card.isHidden() for card in cards)
+    assert page._primary_button.isHidden()
+
+
+def test_nav_rail_object_name_hook(library) -> None:
+    """主窗口导航 rail 挂有 NavRail objectName（chrome QSS 的落点）。"""
+    rail = library.window.findChild(QListWidget, NAV_RAIL_OBJECT_NAME)
+    assert rail is library.window._nav_list
+    assert rail.objectName() == NAV_RAIL_OBJECT_NAME

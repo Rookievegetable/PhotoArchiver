@@ -3,10 +3,12 @@
 Single source for the cross-widget look: button hierarchy (primary /
 secondary / danger / success / warning / neutral), focus ring, spacing and
 the empty-state card, plus the Badge / Card / Banner building blocks
-（阶段 1，P0-4）. Styles are applied as ONE application-level stylesheet built
-here — individual widgets never call ``setStyleSheet`` themselves; they opt
-into a hierarchy role via :func:`assign_role` (a dynamic property) or an
-objectName.
+（阶段 1，P0-4）and the main-window chrome（阶段 2：导航 rail NavRail、
+objectName="Main" 工具栏、状态栏；只加样式，不动导航映射/工具栏
+objectName/CancelTask 契约）. Styles are applied as ONE application-level
+stylesheet built here — individual widgets never call ``setStyleSheet``
+themselves; they opt into a hierarchy role via :func:`assign_role` (a
+dynamic property) or an objectName.
 
 Theme support（阶段 1，P0-1/P0-2/P0-3）: the stylesheet is parameterized by a
 theme name (``light`` / ``dark``) resolved from the persisted preference at
@@ -70,6 +72,8 @@ EMPTY_STATE_CARD_OBJECT_NAME = "EmptyStateCard"
 # 详图内嵌导航覆盖控件（任务书阶段 C / D4=B1）：样式走单源 QSS。
 NAV_OVERLAY_BUTTON_OBJECT_NAME = "NavOverlayButton"
 NAV_POSITION_LABEL_OBJECT_NAME = "NavPositionLabel"
+# 主窗口导航 rail 挂点（阶段 2 chrome：QListWidget#NavRail 选择器）。
+NAV_RAIL_OBJECT_NAME = "NavRail"
 # ── 阶段 1 构建块（P0-4 §1/§2 冻结值）──
 BADGE_OBJECT_NAME = "Badge"
 CARD_OBJECT_NAME = "Card"
@@ -385,6 +389,59 @@ QFrame#Banner[severity="danger"] {
     color: ${pa-alert-fg};
     background-color: ${pa-alert-bg};
     border: 1px solid ${pa-danger-border};
+}
+QFrame#Banner[severity="info"] QLabel {
+    color: ${pa-info-fg};
+}
+QFrame#Banner[severity="warning"] QLabel {
+    color: ${pa-warning-fg};
+}
+QFrame#Banner[severity="danger"] QLabel {
+    color: ${pa-alert-fg};
+}
+QToolBar#Main {
+    background-color: ${pa-bg-surface};
+    border-bottom: 1px solid ${pa-border};
+    padding: 4px 8px;
+    spacing: 6px;
+}
+QToolBar#Main::separator {
+    background-color: ${pa-border};
+    width: 1px;
+    margin: 6px 4px;
+}
+QListWidget#NavRail {
+    background-color: ${pa-bg-surface};
+    border: none;
+    border-right: 1px solid ${pa-border};
+}
+QListWidget#NavRail:focus {
+    border: 1px solid palette(Highlight);
+}
+QListWidget#NavRail::item {
+    padding: 8px 12px;
+    margin: 2px 8px;
+    border-radius: 6px;
+}
+QListWidget#NavRail::item:hover {
+    background-color: rgba(127, 127, 127, 0.18);
+}
+QListWidget#NavRail::item:selected {
+    background-color: palette(Highlight);
+    color: palette(HighlightedText);
+}
+QStatusBar {
+    background-color: ${pa-bg-surface};
+    border-top: 1px solid ${pa-border};
+}
+QStatusBar QProgressBar {
+    border: 1px solid ${pa-border};
+    border-radius: 3px;
+    background-color: ${pa-card-fill-empty};
+    text-align: center;
+}
+QStatusBar QProgressBar::chunk {
+    background-color: palette(Highlight);
 }
 """
 
