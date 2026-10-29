@@ -352,3 +352,38 @@ def test_latest_mark_migrates_to_new_newest_after_rerun(qtbot) -> None:
     assert not dialog._generation_combo.itemText(1).endswith(
         text.CLUSTER_RESULTS_GENERATION_LATEST_MARK,
     )
+
+
+# ── 视觉对齐定向断言（参考图基线 2026-10-30；M20 徽章化/M9 卡片化）──────────
+
+
+def test_run_status_rendered_as_badge_with_severity_mapping(qtbot) -> None:
+    """M20：run 状态从摘要后缀改为独立徽章（文字承载；severity 确定性映射）。"""
+    harness = _Harness()
+    harness.add_generation()  # status=completed
+    dialog = harness.build_dialog(qtbot)
+
+    assert dialog._run_status_badge.isVisibleTo(dialog)
+    assert dialog._run_status_badge.text() == "已完成"
+    assert dialog._run_status_badge.property("severity") == "success"
+    # 摘要行保留计数语义（状态不再作为后缀重复出现）。
+    summary = dialog._generation_summary.text()
+    assert summary.startswith("1 簇 · 2 张脸 · 排除 1 张观测")
+
+
+def test_run_status_badge_hidden_without_generations(qtbot) -> None:
+    """空态/无代际路径徽章隐藏（不残留陈旧状态）。"""
+    harness = _Harness()
+    dialog = harness.build_dialog(qtbot)
+    assert not dialog._run_status_badge.isVisibleTo(dialog)
+
+
+def test_cluster_lists_are_card_lists(qtbot) -> None:
+    """M9：簇列表/成员列表卡片化（QListWidget#CardList 容器样式化）。"""
+    from photo_archiver.presentation.visual_style import CARD_LIST_OBJECT_NAME
+
+    harness = _Harness()
+    harness.add_generation()
+    dialog = harness.build_dialog(qtbot)
+    assert dialog._cluster_list.objectName() == CARD_LIST_OBJECT_NAME
+    assert dialog._member_list.objectName() == CARD_LIST_OBJECT_NAME

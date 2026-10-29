@@ -61,12 +61,29 @@ from photo_archiver.presentation.views.calibration_annotation_panel import (
     CalibrationAnnotationPanel,
 )
 from photo_archiver.presentation.views.photo_detail_dialog import PhotoDetailDialog
-from photo_archiver.presentation.visual_style import ROLE_DANGER, ROLE_PRIMARY, assign_role
+from photo_archiver.presentation.visual_style import (
+    ROLE_DANGER,
+    ROLE_PRIMARY,
+    assign_role,
+    set_badge_severity,
+    style_card_list,
+)
 
 
 def _format_moment(moment) -> str:
     """Render a persisted datetime for the UI（无时区转换，原样展示）。"""
     return moment.strftime("%Y-%m-%d %H:%M") if moment is not None else text.CLUSTER_RESULTS_NO_CAPTURED
+
+
+# M20 run 状态徽章 severity 映射（taskbook-4 v2 §3；文字承载状态 §10-7，
+# 不可点击 DEC-08=A）。未知状态回退 neutral（不崩溃）。
+_RUN_STATUS_SEVERITY = {
+    "created": "neutral",
+    "running": "info",
+    "completed": "success",
+    "failed": "danger",
+    "cancelled": "warning",
+}
 
 
 class ClusterResultsDialog(QDialog):
@@ -157,9 +174,18 @@ class ClusterResultsDialog(QDialog):
         generation_row.addStretch()
         layout.addLayout(generation_row)
 
+        # M2/M20（参考图基线）：摘要行（计数）＋run 状态徽章（severity 映射
+        # 见 _RUN_STATUS_SEVERITY；文字承载状态，不可点击 DEC-08=A）。
+        summary_row = QHBoxLayout()
         self._generation_summary = QLabel(self)
         self._generation_summary.setWordWrap(True)
-        layout.addWidget(self._generation_summary)
+        summary_row.addWidget(self._generation_summary)
+        summary_row.addStretch()
+        self._run_status_badge = QLabel(self)
+        set_badge_severity(self._run_status_badge, "neutral")
+        self._run_status_badge.setVisible(False)
+        summary_row.addWidget(self._run_status_badge)
+        layout.addLayout(summary_row)
         self._run_status_label = QLabel(self)
         self._run_status_label.setWordWrap(True)
         self._run_status_label.setVisible(self._pairing_active)
@@ -173,6 +199,8 @@ class ClusterResultsDialog(QDialog):
         body = QHBoxLayout()
         self._cluster_list = QListWidget(self)
         self._cluster_list.setMinimumWidth(300)
+        # M9（布局重组解释内的容器样式化）：簇列表卡片化（QSS #CardList）。
+        style_card_list(self._cluster_list)
         self._cluster_list.currentItemChanged.connect(self._on_cluster_selected)
         if self._pairing_active:
             # 批量确认/拒绝：簇列表支持多选（ExtendedSelection）。
@@ -185,6 +213,7 @@ class ClusterResultsDialog(QDialog):
             body.addWidget(self._build_pairing_pane(), 3)
         else:
             self._member_list = QListWidget(self)
+            style_card_list(self._member_list)
             body.addWidget(self._member_list, 3)
         layout.addLayout(body, 1)
 
@@ -304,6 +333,7 @@ class ClusterResultsDialog(QDialog):
         if not runs:
             self._current = None
             self._generation_summary.clear()
+            self._run_status_badge.setVisible(False)
             self._cluster_list.clear()
             if self._pairing_active:
                 self._photo_grid.clear()
@@ -356,6 +386,7 @@ class ClusterResultsDialog(QDialog):
         cluster_run_id = self._generation_combo.currentData()
         if cluster_run_id is None:
             self._current = None
+            self._run_status_badge.setVisible(False)
             self._cluster_list.clear()
             if self._pairing_active:
                 self._photo_grid.clear()
@@ -399,14 +430,18 @@ class ClusterResultsDialog(QDialog):
             return
         self._empty_label.clear()
         run = results.cluster_run
-        self._generation_summary.setText(
-            text.STATUS_CLUSTER_SUMMARY.format(
-                clusters=run.cluster_count,
-                members=run.member_count,
-                excluded=run.excluded_count,
-            )
-            + f" · {text.cluster_run_status_label(run.status)}"
+        self._generation_summary.setText(text.STATUS_CLUSTER_SUMMARY.format(
+            clusters=run.cluster_count,
+            members=run.member_count,
+            excluded=run.excluded_count,
+        ))
+        # M20：run 状态从摘要后缀改为独立徽章（文字承载，severity 映射确定性）。
+        self._run_status_badge.setText(text.cluster_run_status_label(run.status))
+        set_badge_severity(
+            self._run_status_badge,
+            _RUN_STATUS_SEVERITY.get(run.status, "neutral"),
         )
+        self._run_status_badge.setVisible(True)
         assignments = self._assignments_by_cluster() if self._pairing_active else {}
         for detail in results.clusters:
             if self._pairing_active:
