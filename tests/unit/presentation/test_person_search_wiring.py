@@ -58,7 +58,8 @@ def test_completion_activation_selects_person_and_emits_criteria(qtbot) -> None:
     bar._on_person_completion_activated("Alice")
 
     assert bar._person_combo.currentData() == str(alice.id)
-    assert emissions[-1] is not None and emissions[-1].person_id == alice.id
+    last = emissions[-1]
+    assert isinstance(last, tuple) and last[0].person_id == alice.id
 
 
 def test_clear_resets_search_text_and_selection(qtbot) -> None:

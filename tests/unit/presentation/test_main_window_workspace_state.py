@@ -70,12 +70,12 @@ def test_initial_snapshot_queries_effective_root_and_explains_empty_actions(work
     assert not window._delete_photos_action.isEnabled()
     assert window._delete_photos_action.toolTip() == text.DELETE_PHOTOS_NO_SELECTION
     window._nav_list.setCurrentRow(1)  # 照片库页：next 引导按钮的宿主页（Batch 3 IA）
-    for button, action in ((window._match_next_button, "scan"),
-                           (window._archive_next_button, "settings")):
-        assert isinstance(button, QPushButton)
-        assert button.isVisible()
-        assert button.isEnabled()
-        assert button.property("next_action") == action
+    # DEC-07 按图推翻（2026-10-30）：引导行合并为单一主按钮；feature 轴优先
+    # （EMPTY → 扫描），archive 轴动作仍可经工具栏/导航触达。
+    assert isinstance(window._next_step_button, QPushButton)
+    assert window._next_step_button.isVisible()
+    assert window._next_step_button.isEnabled()
+    assert window._next_step_button.property("next_action") == "scan"
     assert not window._cancel_action.isEnabled()
 
 
@@ -97,13 +97,11 @@ def test_refresh_replaces_feature_guidance_and_next_step(
     window._nav_list.setCurrentRow(1)  # next 引导按钮的宿主页（Batch 3 IA）
     workspace.state.value = replace(status, archivable_count=0)
     window._refresh_workspace_state()
-    assert window._match_next_button.toolTip() == feature_tooltip
-    assert window._match_next_button.isVisible()
-    assert window._match_next_button.property("next_action") == next_action
+    assert window._next_step_button.toolTip() == feature_tooltip
+    assert window._next_step_button.isVisible()
+    assert window._next_step_button.property("next_action") == next_action
     assert not window._archive_action.isEnabled()
     assert window._archive_action.toolTip() == text.WORKSPACE_ARCHIVE_EMPTY
-    assert window._archive_next_button.isVisible()
-    assert window._archive_next_button.property("next_action") == "review"
     workspace.state.value = READY
     window._refresh_workspace_state()
     assert window._match_next_button.toolTip() == text.WORKSPACE_MATCH_READY.format(count=3)
@@ -262,18 +260,19 @@ def test_feature_next_button_routes_to_folder_picker(workspace, monkeypatch, qtb
     assert not window._task_coordinator.is_busy
 
 
-@pytest.mark.parametrize("route, button_name", [
-    ("settings", "_archive_next_button"),
-    ("review", "_archive_next_button"),
-    ("review", "_match_next_button"),
+@pytest.mark.parametrize("route, state_value", [
+    # DEC-07 按图推翻（单按钮）：按钮路由由 feature 轴引导驱动——特征齐备 →
+    # 审核；settings 路由归导航「设置」行、scan 路由见
+    # test_feature_next_button_routes_to_folder_picker（模态文件夹选择器须注入）。
+    ("review", replace(READY, archivable_count=0, pending_match_count=0)),
 ])
 def test_next_button_invokes_decorated_dialog_handler_after_idle_and_refreshes(
-    workspace, monkeypatch, qtbot, route, button_name,
+    workspace, monkeypatch, qtbot, route, state_value,
 ):
     window = workspace.window
-    workspace.state.value = EMPTY if route == "settings" else replace(READY, archivable_count=0, pending_match_count=0)
+    workspace.state.value = state_value
     window._refresh_workspace_state()
-    button = getattr(window, button_name)
+    button = window._next_step_button
     assert button.property("next_action") == route
     calls = []
 
@@ -287,11 +286,7 @@ def test_next_button_invokes_decorated_dialog_handler_after_idle_and_refreshes(
     # 2026-10-01 页面化：review 路由不再开模态——改为断言"忙时被准入拦截、
     # 空闲后进入审核页且队列即席刷新"。
     page_refresh = Mock()
-    if route == "settings":
-        monkeypatch.setattr(module, "SettingsDialog",
-                            lambda *args, **kwargs: SimpleNamespace(exec=execute))
-    else:
-        monkeypatch.setattr(window._review_center_page, "refresh", page_refresh)
+    monkeypatch.setattr(window._review_center_page, "refresh", page_refresh)
     reservation = window._task_coordinator.reserve("busy")
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     assert calls == []
@@ -300,16 +295,12 @@ def test_next_button_invokes_decorated_dialog_handler_after_idle_and_refreshes(
     assert button.isEnabled()
     workspace.query.reset_mock()
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
-    if route == "settings":
-        assert calls == [route]
-        assert not window._task_coordinator.is_busy
-        workspace.query.assert_called_once_with(workspace.root)
-    else:
+    if route == "review":
         assert window._pages.currentIndex() == 3  # 审核中心页（页面化）
         assert window._nav_list.currentRow() == 3
         page_refresh.assert_called_once()  # 进入页面即刷新队列
         # 原模态 execute() 内的状态翻转（PENDING→READY）由这里等价复现，
-        # 使随后的动作恢复断言与 settings 路由保持同一基线。
+        # 使随后的动作恢复断言与既有基线保持同一。
         workspace.state.value = READY
         window._refresh_workspace_state()
     assert window._scan_action.isEnabled()

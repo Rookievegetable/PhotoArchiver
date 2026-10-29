@@ -88,7 +88,9 @@ def test_filtered_empty_shows_clear_cta_not_library_cta(library) -> None:
 
 def test_clear_filters_cta_resets_summary(library) -> None:
     window = library.window
-    window._filter_bar._status_combo.setCurrentIndex(0)
+    # M8 面板化（DEC-06 按图推翻）：状态轴改为复选框；单选待审核。
+    for key, check in window._filter_bar._status_checks.items():
+        check.setChecked(key == "pending")
     window._empty_clear_button.click()
     assert window._filter_bar._summary_label.text() == text.FILTER_SUMMARY_NONE
 
@@ -489,3 +491,74 @@ def test_marquee_band_paints_and_sweeps_offscreen(tmp_path) -> None:
     swept = result.stdout.split("SWEPT_ROWS=")[1].splitlines()[0]
     assert pixels >= 8, f"rubber band not painted: {pixels} changed pixels"
     assert swept == "[0]", f"marquee sweep selected {swept}, expected [0]"
+
+# ── 参考图 M2/M8/DEC-06/DEC-07 视觉对齐（2026-10-30 基线裁决）───────────────
+
+
+def test_library_page_header_shows_title_and_stats(library) -> None:
+    """参考图 M2：页头「照片库」标题＋全库统计副标题。"""
+    from photo_archiver.presentation import ui_text as text
+
+    window = library.window
+    assert window._library_stats_label.text() == text.LIBRARY_PAGE_STATS.format(
+        photos=0, persons=0,
+    )
+
+
+def test_multi_status_filter_merges_union_results(library, monkeypatch) -> None:
+    """DEC-06 按图推翻：状态多选 = 各状态查询并集（按首发状态序去重）。"""
+    from photo_archiver.domain import MatchStatus, PhotoSearchCriteria
+
+    window = library.window
+    pending = PhotoSearchCriteria(match_status=MatchStatus.PENDING)
+    approved = PhotoSearchCriteria(match_status=MatchStatus.APPROVED)
+    photo_a = Photo(path=PhotoPath("photos/a.jpg"), folder_id=None, original_name="a.jpg")
+    photo_b = Photo(path=PhotoPath("photos/b.jpg"), folder_id=None, original_name="b.jpg")
+
+    def search(criteria):
+        return [photo_a] if criteria.match_status is MatchStatus.PENDING else [photo_b]
+
+    monkeypatch.setattr(window._photo_list_controller, "search_photos", search)
+    window._on_filter_changed((pending, approved))
+
+    assert window._photo_list_model.rowCount() == 2
+    assert window._current_criteria is None  # 多选不落入单条镜像（导出语义诚实）
+
+
+def test_single_criteria_call_keeps_legacy_mirror(library, monkeypatch) -> None:
+    """单条 criteria 协议兼容：_current_criteria 保持既有单条语义（导出复用）。"""
+    from photo_archiver.domain import MatchStatus, PhotoSearchCriteria
+
+    window = library.window
+    criteria = PhotoSearchCriteria(match_status=MatchStatus.PENDING)
+    monkeypatch.setattr(window._photo_list_controller, "search_photos", Mock(return_value=[]))
+    monkeypatch.setattr(window._photo_list_controller, "list_photos", Mock(return_value=[]))
+    window._on_filter_changed(criteria)
+    assert window._current_criteria is criteria
+
+
+def test_status_counts_backfilled_from_shared_axes(library, monkeypatch) -> None:
+    """参考图 M8：状态复选框计数按当前人员/时间轴逐状态回填。"""
+    from photo_archiver.domain import MatchStatus, PhotoSearchCriteria
+
+    window = library.window
+    seen: list[PhotoSearchCriteria] = []
+
+    def search(criteria):
+        seen.append(criteria)
+        return [Photo(path=PhotoPath("photos/a.jpg"), folder_id=None, original_name="a.jpg")]
+
+    monkeypatch.setattr(window._photo_list_controller, "search_photos", search)
+    window._update_status_counts()
+    assert len(seen) == 4  # 四状态各一次 push-down 查询
+    assert len(window._filter_bar._status_counts) == 4
+
+
+def test_single_next_step_button_merges_dual_guidance(library) -> None:
+    """DEC-07 按图推翻：引导行单按钮，feature 轴优先（属性机制零变化）。"""
+    window = library.window
+    assert window._next_step_button is window._match_next_button
+    assert window._next_step_button is window._archive_next_button
+    assert window._next_step_button.property("next_action") in (
+        "scan", "review", "settings", "model",
+    )

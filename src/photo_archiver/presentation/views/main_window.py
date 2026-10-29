@@ -26,9 +26,11 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
+    QFrame,
     QLabel,
     QHBoxLayout,
     QListWidget,
+    QListWidgetItem,
     QPushButton,
     QMainWindow,
     QMessageBox,
@@ -66,6 +68,7 @@ from photo_archiver.presentation.controllers.workspace_controller import (
     ActionGuidance, WorkspaceController,
 )
 from photo_archiver.presentation import ui_text as text
+from photo_archiver.presentation import visual_style
 from photo_archiver.presentation.task_coordinator import TaskCoordinator
 from photo_archiver.presentation.views.overview_page import OverviewPage
 from photo_archiver.presentation.ui_text import (
@@ -118,6 +121,8 @@ from photo_archiver.presentation.ui_text import (
     STATUS_IMPORT_DRAFT_PARSED,
     IMPORT_PREVIEW_TITLE,
     IMPORT_PREVIEW_EMPTY_FILE,
+    LIBRARY_PAGE_TITLE,
+    LIBRARY_PAGE_STATS,
     STATUS_MATCH_SUMMARY,
     STATUS_MATCH_UNAVAILABLE,
     STATUS_MATCH_UNREADABLE,
@@ -160,7 +165,10 @@ from photo_archiver.presentation.visual_style import (
     ROLE_DANGER,
     ROLE_PRIMARY,
     assign_role,
+    style_card,
     style_empty_state_card,
+    style_page_subtitle,
+    style_page_title,
 )
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
 from photo_archiver.presentation.views.cluster_results_dialog import ClusterResultsDialog
@@ -193,6 +201,9 @@ _NAV_LABELS = (
     text.NAV_OVERVIEW, text.NAV_PHOTO_LIBRARY, text.NAV_PEOPLE,
     text.NAV_REVIEW_CENTER, text.NAV_DATA_TOOLS, text.NAV_SETTINGS,
 )
+# 参考图导航 rail 图标（Owner 2026-10-30 裁决：DEC-10=A 按图推翻）；
+# Fluent 系统图标字体离线渲染，缺失时优雅降级为纯文字（visual_style）。
+_NAV_ICON_NAMES = ("home", "photo", "people", "review", "data", "settings")
 
 
 def _exclusive(label: str) -> Callable:
@@ -240,6 +251,9 @@ class MainWindow(QMainWindow):
         self._context = context
         self._task_coordinator = TaskCoordinator(self)
         self._current_criteria: PhotoSearchCriteria | None = None
+        # DEC-06 按图推翻：状态多选时 FilterBar 发多条 criteria 的元组；
+        # 单条时 _current_criteria 镜像既有单条语义（导出/刷新复用）。
+        self._current_criteria_list: tuple[PhotoSearchCriteria, ...] = ()
         self._photos_by_id: dict[UUID, Photo] = {}
         self._action_states: dict[QAction, tuple[bool, str]] = {}
         self._workspace_controller = WorkspaceController(context.services.workspace_readiness)
@@ -471,8 +485,12 @@ class MainWindow(QMainWindow):
         # 阶段 2 chrome：导航 rail 的 objectName 挂点（QSS 单源选择器
         # QListWidget#NavRail 用）。仅加 objectName，导航映射/回弹行为不变。
         self._nav_list.setObjectName(NAV_RAIL_OBJECT_NAME)
-        for label in _NAV_LABELS:
-            self._nav_list.addItem(label)
+        for label, icon_name in zip(_NAV_LABELS, _NAV_ICON_NAMES, strict=True):
+            item = QListWidgetItem(
+                visual_style.fluent_icon(icon_name, visual_style.token("pa-text-secondary")),
+                label,
+            )
+            self._nav_list.addItem(item)
         self._nav_list.setFixedWidth(150)
         self._nav_list.currentRowChanged.connect(self._on_nav_changed)
 
@@ -511,22 +529,47 @@ class MainWindow(QMainWindow):
         selection-scoped delete action (Batch 2 semantics preserved).
         """
         page = QWidget(self)
-        layout = QVBoxLayout(page)
+        page_layout = QHBoxLayout(page)
+        content = QWidget(page)
+        layout = QVBoxLayout(content)
 
-        # B2 搜索/筛选：FilterBar 在列表上方，发 criteria_changed → 刷新列表。
-        # criteria None 时回退 list_all；否则走 PhotoListController.search_photos。
-        self._filter_bar = FilterBar(self)
-        self._filter_bar.criteria_changed.connect(self._on_filter_changed)
-        layout.addWidget(self._filter_bar)
+        # 参考图 M2：页头「照片库」标题＋全库统计副标题（统计数据经
+        # _update_library_stats 回填；M3 全局搜索框＝图有码无的新增交互，
+        # 未在 Owner 五项按图推翻清单内——保守值不实施）。
+        header = QWidget(content)
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(2)
+        library_title = QLabel(LIBRARY_PAGE_TITLE, header)
+        style_page_title(library_title)
+        self._library_stats_label = QLabel("", header)
+        style_page_subtitle(self._library_stats_label)
+        header_layout.addWidget(library_title)
+        header_layout.addWidget(self._library_stats_label)
+        layout.addWidget(header)
+
+        # DEC-07 按图推翻：引导行由双按钮合并为单一「下一步」主按钮——
+        # 语义仍由 workspace guidance 驱动（feature 轴优先、archive 轴兜底），
+        # 标签/tooltip/next_action 属性机制零变化；被合并的第二引导动作仍可
+        # 经窗口工具栏（导入/扫描/审核/归档）触达。
         guidance_row = QHBoxLayout()
-        self._match_next_button = QPushButton(self)
-        self._archive_next_button = QPushButton(self)
-        for button in (self._match_next_button, self._archive_next_button):
-            button.setVisible(False)
-            button.clicked.connect(lambda checked=False, button=button: self._on_workspace_next(button))
-            guidance_row.addWidget(button)
+        self._next_step_button = QPushButton(self)
+        self._next_step_button.setVisible(False)
+        self._next_step_button.clicked.connect(
+            lambda checked=False: self._on_workspace_next(self._next_step_button),
+        )
+        assign_role(self._next_step_button, ROLE_PRIMARY)
+        guidance_row.addWidget(self._next_step_button)
         guidance_row.addStretch()
         layout.addLayout(guidance_row)
+        # 兼容别名：双按钮时代的测试与调用点迁移至单按钮（DEC-07 按图推翻）。
+        self._match_next_button = self._next_step_button
+        self._archive_next_button = self._next_step_button
+
+        # B2 搜索/筛选：FilterBar（右侧面板形态），发 criteria_changed → 刷新
+        # 列表；criteria 空元组/None 时回退 list_all。
+        self._filter_bar = FilterBar(self)
+        self._filter_bar.criteria_changed.connect(self._on_filter_changed)
 
         # 选择态操作栏（Batch 4 语义保持 + 2026-09-30 选中态优化）：选择操作
         # 簇靠左、业务批量动作右对齐。「全选」常驻可见——0 选区时也能建立第一
@@ -616,7 +659,7 @@ class MainWindow(QMainWindow):
         busy_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         busy_label.setWordWrap(True)
         self._photo_list_stack.addWidget(busy_label)  # index 3: 任务中
-        layout.addWidget(self._photo_list_stack)
+        layout.addWidget(self._photo_list_stack, 1)
 
         # Batch 4：双击照片打开只读详情（大预览 + 元数据，无同步原图 IO）。
         self._photo_list.doubleClicked.connect(self._on_photo_double_clicked)
@@ -638,6 +681,16 @@ class MainWindow(QMainWindow):
         # refresh it triggers requires _photo_list_model to exist. Re-populated
         # after each people import completes (see _on_completed).
         self._refresh_filter_persons()
+        # 参考图 M4/M8：FilterBar 移位为右侧竖排筛选面板（Card 化容器），
+        # 人员/状态（复选框多选＋计数）/时间三轴与重置语义保持。
+        self._filter_bar.setMaximumWidth(260)
+        panel_card = QFrame(page)
+        style_card(panel_card)
+        panel_layout = QVBoxLayout(panel_card)
+        panel_layout.setContentsMargins(8, 8, 8, 8)
+        panel_layout.addWidget(self._filter_bar)
+        page_layout.addWidget(content, 1)
+        page_layout.addWidget(panel_card)
         return page
 
     def _build_people_page(self) -> QWidget:
@@ -785,15 +838,20 @@ class MainWindow(QMainWindow):
             "review": text.WORKSPACE_NEXT_REVIEW, "settings": text.WORKSPACE_NEXT_SETTINGS,
             "model": text.WORKSPACE_NEXT_MODEL,
         }
-        for button, guidance in (
-            (self._match_next_button, controller.feature_guidance()),
-            (self._archive_next_button, controller.archive_guidance()),
-        ):
-            button.setProperty("next_action", guidance.next_action)
-            button.setVisible(guidance.next_action is not None)
-            button.setText(labels.get(guidance.next_action or "", ""))
-            button.setToolTip(guidance.tooltip)
-            button.setEnabled(not busy and guidance.next_action is not None)
+        # DEC-07 按图推翻（单按钮）：feature 轴引导优先、archive 轴兜底——
+        # 两轴 next_action 合流到一个主按钮；标签/属性/置灰机制零变化。
+        feature_guidance = controller.feature_guidance()
+        archive_guidance = controller.archive_guidance()
+        guidance = (
+            feature_guidance
+            if feature_guidance.next_action is not None else archive_guidance
+        )
+        button = self._next_step_button
+        button.setProperty("next_action", guidance.next_action)
+        button.setVisible(guidance.next_action is not None)
+        button.setText(labels.get(guidance.next_action or "", ""))
+        button.setToolTip(guidance.tooltip)
+        button.setEnabled(not busy and guidance.next_action is not None)
 
     def _on_workspace_next(self, button: QPushButton) -> None:
         """Dispatch a visible next step through the ordinary guarded entry."""
@@ -890,13 +948,28 @@ class MainWindow(QMainWindow):
         Synchronous on the UI thread: ``search_photos`` is fast SQL push-down
         (<50ms typical), no Worker submission per the dual-strategy decision.
         ``criteria`` is typed ``object`` because Qt Signal carries it opaquely;
-        the FilterBar only ever emits ``PhotoSearchCriteria | None``.
+        the FilterBar emits ``tuple[PhotoSearchCriteria, ...] | None``（DEC-06
+        按图推翻＝状态多选：多选时窗口做各状态查询结果的并集，顺序按首发
+        状态出现序去重保持）。单条 criteria 时 ``_current_criteria`` 保持既有
+        单条语义（导出 FILTERED 范围/刷新复用零变化）；多条时置 ``None``——
+        导出 FILTERED 范围需要单一 criteria 表达，多选状态下该范围按既有
+        "未启用筛选"提示处理（导出为只读操作，无破坏性）。
         """
+        if isinstance(criteria, PhotoSearchCriteria):
+            # 兼容单条 criteria 直接调用（历史调用点/测试协议）。
+            criteria_list: tuple[PhotoSearchCriteria, ...] = (criteria,)
+        elif isinstance(criteria, (list, tuple)):
+            criteria_list = tuple(
+                c for c in criteria if isinstance(c, PhotoSearchCriteria)
+            )
+        else:
+            criteria_list = ()
         # F2: mirror the criteria into the sole UI holding point (a conditions
         # snapshot, not a result-set copy — the export re-queries via
         # PhotoRepository.search at execution time).
+        self._current_criteria_list = criteria_list
         self._current_criteria = (
-            criteria if isinstance(criteria, PhotoSearchCriteria) else None
+            criteria_list[0] if len(criteria_list) == 1 else None
         )
         self._refresh_photo_list()
 
@@ -1392,11 +1465,23 @@ class MainWindow(QMainWindow):
         surface without a manual refresh. Thumbnails load lazily via the
         PhotoListController when the list view asks for them.
         """
-        photos = (
-            self._photo_list_controller.search_photos(self._current_criteria)
-            if self._current_criteria is not None
-            else self._photo_list_controller.list_photos()
-        )
+        criteria_list = getattr(self, "_current_criteria_list", ())
+        if len(criteria_list) > 1:
+            # DEC-06 按图推翻：状态多选 = 各状态查询并集（按首发状态出现序
+            # 去重保持；push-down 查询 <50ms/条，本地库可接受）。
+            photos = []
+            seen: set[UUID] = set()
+            for criteria_item in criteria_list:
+                for photo in self._photo_list_controller.search_photos(criteria_item):
+                    if photo.id is not None and photo.id not in seen:
+                        seen.add(photo.id)
+                        photos.append(photo)
+        else:
+            photos = (
+                self._photo_list_controller.search_photos(self._current_criteria)
+                if self._current_criteria is not None
+                else self._photo_list_controller.list_photos()
+            )
         # Batch 4: identity map for the detail dialog + live result count.
         self._photos_by_id = {
             photo.id: photo for photo in photos if photo.id is not None
@@ -1408,8 +1493,52 @@ class MainWindow(QMainWindow):
             )
         )
         self._filter_bar.set_result_count(len(photos))
+        self._update_status_counts()
+        self._update_library_stats()
         for photo in photos:
             self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__
+
+    def _update_status_counts(self) -> None:
+        """回填状态复选框计数（参考图 M8；按当前人员/时间轴逐状态查询）.
+
+        四次 push-down 查询（每状态一次，共享人员/时间轴）；查询失败降级为
+        清空计数（仅状态文案），绝不阻塞照片墙刷新。
+        """
+        counts: dict[str, int] = {}
+        try:
+            from photo_archiver.domain import MatchStatus, UNMATCHED
+
+            criteria_list = getattr(self, "_current_criteria_list", ())
+            axes = criteria_list[0] if criteria_list else None
+            person_id = axes.person_id if axes is not None else None
+            captured_from = axes.captured_from if axes is not None else None
+            captured_to = axes.captured_to if axes is not None else None
+            for key in ("pending", "approved", "rejected", "unmatched"):
+                if key == "unmatched":
+                    criteria = PhotoSearchCriteria(
+                        person_id=person_id, match_status=UNMATCHED,
+                        captured_from=captured_from, captured_to=captured_to,
+                    )
+                else:
+                    criteria = PhotoSearchCriteria(
+                        person_id=person_id, match_status=MatchStatus(key),
+                        captured_from=captured_from, captured_to=captured_to,
+                    )
+                counts[key] = len(self._photo_list_controller.search_photos(criteria))
+        except Exception:  # noqa: BLE001 - UI boundary: counts degrade, never block
+            counts = {}
+        self._filter_bar.set_status_counts(counts or None)
+
+    def _update_library_stats(self) -> None:
+        """回填页头全库统计（参考图 M2：共 N 张照片 · M 人；只读统计）."""
+        try:
+            total_photos = len(self._photo_list_controller.list_photos())
+            total_persons = len(self._context.services.list_persons.execute())
+        except Exception:  # noqa: BLE001 - UI boundary: stats degrade, never block
+            return
+        self._library_stats_label.setText(
+            LIBRARY_PAGE_STATS.format(photos=total_photos, persons=total_persons),
+        )
 
     @_exclusive(ACTION_SETTINGS)
     def _on_settings_clicked(self) -> None:

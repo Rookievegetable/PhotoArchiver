@@ -249,6 +249,12 @@ FILTER_STATUS_PENDING = "待审核"
 FILTER_STATUS_APPROVED = "已通过"
 FILTER_STATUS_REJECTED = "已拒绝"
 FILTER_STATUS_UNMATCHED = "未匹配"
+# 参考图 M8 右侧筛选面板（2026-10-30 视觉对齐；DEC-06 按图推翻＝状态复选框
+# 多选＋计数）。非破坏性新增键。
+FILTER_PANEL_TITLE = "筛选条件"
+FILTER_PANEL_STATUS_TITLE = "状态"
+FILTER_PANEL_TIME_TITLE = "拍摄时间"
+FILTER_STATUS_COUNT_FORMAT = "{label}（{count}）"
 FILTER_FROM_TOOLTIP = "筛选捕获时间晚于此时刻（含）的照片。"
 FILTER_TO_TOOLTIP = "筛选捕获时间早于此时刻（含）的照片。"
 FILTER_CLEAR_BUTTON = "清除"
@@ -266,6 +272,13 @@ FILTER_SUMMARY_TIME_TO = "拍摄至 {date}"
 FILTER_SUMMARY_SEPARATOR = " · "
 FILTER_RESULT_COUNT = "{count} 张照片"
 FILTER_DATE_FORMAT = "%Y-%m-%d"
+
+# ---- 照片库 · 页头（参考图 M2 视觉对齐；非破坏性新增键） ----
+LIBRARY_PAGE_TITLE = "照片库"
+LIBRARY_PAGE_STATS = "共 {photos} 张照片 · {persons} 人"
+# DEC-07 按图推翻（单按钮）：引导行单一主按钮的通用标签基准；实际标签仍由
+# workspace guidance 的 next_action 标签表驱动（WORKSPACE_NEXT_*）。
+WORKSPACE_NEXT_STEP_BUTTON = "下一步"
 
 # ---- 照片库 · 空态三态（Batch 4） ----
 PHOTO_EMPTY_LIBRARY_TITLE = "库中还没有照片——扫描照片目录后，照片会出现在这里。"

@@ -1,11 +1,10 @@
-"""FilterBar unit tests — date-range axis enablement (Phase 9, FEAT-P9-1).
+"""FilterBar unit tests — date-range / person / status axes (Batch 4 + M8).
 
-Covers the gated date-range semantics: an unchecked "From"/"To" checkbox is
-the explicit "unset" representation (QDateTimeEdit always holds a value), a
-checked box contributes its edit's datetime to the emitted
-``PhotoSearchCriteria``, ``from > to`` is passed through verbatim (the
-repository range semantics simply match nothing), combinations with the
-status axis keep AND semantics, and ``clear()`` returns every axis to unset.
+Covers the gated date-range semantics, the person axis placeholder semantics,
+the status checkbox multi-select axis（DEC-06 按图推翻：右侧筛选面板状态复选
+框多选＋计数；``criteria_changed`` 发 ``tuple[PhotoSearchCriteria, ...]`` 或
+``None``），combinations keep AND semantics per emitted criteria, and
+``clear()`` returns every axis to unset.
 
 Pure widget-level tests over the real ``FilterBar``; no repository is
 involved (criteria emission is the contract under test).
@@ -42,15 +41,40 @@ def _set(edit, year: int, month: int, day: int) -> None:
     edit.setDateTime(QDateTime(year, month, day, 12, 0, 0))
 
 
-def test_all_time_mode_starts_with_no_date_constraint(qtbot) -> None:
-    """Default ("全部时间") mode carries no date constraint at all."""
+def _check(bar: FilterBar, key: str, checked: bool = True) -> None:
+    """Toggle one status checkbox（状态轴复选框 API 的测试入口）."""
+    bar._status_checks[key].setChecked(checked)
+
+
+def _uncheck_all(bar: FilterBar) -> None:
+    for check in bar._status_checks.values():
+        check.setChecked(False)
+
+
+def test_default_state_is_no_constraint(qtbot) -> None:
+    """默认全选状态 = 状态轴不设约束（参考图 M8 默认勾选全部）。"""
     bar = FilterBar()
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    bar._status_combo.setCurrentIndex(0)  # activate another axis first
-    criteria = recorder.last
-    assert criteria is not None
+    assert all(check.isChecked() for check in bar._status_checks.values())
+    assert recorder.emissions == []  # 构造期零发射（勾选先于信号连接）
+    _check(bar, "pending", False)
+    _check(bar, "pending", True)  # 恢复全选 = 不筛状态（等价 list_all）
+    assert recorder.last is None
+
+
+def test_single_status_emits_single_criteria(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+
+    _uncheck_all(bar)
+    _check(bar, "pending")
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple) and len(criteria_tuple) == 1
+    criteria = criteria_tuple[0]
+    assert criteria.match_status is MatchStatus.PENDING
     assert criteria.captured_from is None and criteria.captured_to is None
 
 
@@ -60,12 +84,14 @@ def test_custom_time_mode_emits_both_bounds(qtbot) -> None:
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
+    _uncheck_all(bar)  # 仅时间轴约束
     bar._time_mode_combo.setCurrentIndex(1)
     _set(bar._from_edit, 2023, 1, 1)
     _set(bar._to_edit, 2023, 12, 31)
 
-    criteria = recorder.last
-    assert criteria is not None
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple) and len(criteria_tuple) == 1
+    criteria = criteria_tuple[0]
     assert criteria.captured_from == datetime(2023, 1, 1, 12, 0, 0)
     assert criteria.captured_to == datetime(2023, 12, 31, 12, 0, 0)
 
@@ -91,6 +117,7 @@ def test_from_after_to_blocks_query_and_shows_hint(qtbot) -> None:
     bar = FilterBar()
     qtbot.addWidget(bar)
     bar.show()  # 内联提示的 isVisible() 断言需要窗口实际显示
+    _uncheck_all(bar)
     recorder = _CriteriaRecorder(bar)
 
     bar._time_mode_combo.setCurrentIndex(1)  # valid default range emits once
@@ -104,8 +131,11 @@ def test_from_after_to_blocks_query_and_shows_hint(qtbot) -> None:
 
     _set(bar._to_edit, 2024, 12, 31)  # corrected
     assert not bar._date_warning_label.isVisible()
-    assert recorder.last.captured_from == datetime(2024, 6, 30, 12, 0, 0)
-    assert recorder.last.captured_to == datetime(2024, 12, 31, 12, 0, 0)
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple)
+    criteria = criteria_tuple[0]
+    assert criteria.captured_from == datetime(2024, 6, 30, 12, 0, 0)
+    assert criteria.captured_to == datetime(2024, 12, 31, 12, 0, 0)
 
 
 def test_date_axis_combines_with_status_axis(qtbot) -> None:
@@ -113,14 +143,36 @@ def test_date_axis_combines_with_status_axis(qtbot) -> None:
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    bar._status_combo.setCurrentIndex(0)  # Pending
+    _uncheck_all(bar)
+    _check(bar, "pending")
     bar._time_mode_combo.setCurrentIndex(1)
     recorder.emissions.clear()
     _set(bar._from_edit, 2023, 5, 1)
 
-    criteria = recorder.last
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple)
+    criteria = criteria_tuple[0]
     assert criteria.match_status is MatchStatus.PENDING
     assert criteria.captured_from == datetime(2023, 5, 1, 12, 0, 0)
+
+
+def test_multi_status_emits_one_criteria_per_checked_state(qtbot) -> None:
+    """DEC-06 按图推翻：多选状态发多条 criteria（并集语义由窗口合并）。"""
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+
+    _uncheck_all(bar)
+    _check(bar, "approved")
+    _check(bar, "unmatched")
+
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple) and len(criteria_tuple) == 2
+    assert criteria_tuple[0].match_status is MatchStatus.APPROVED
+    from photo_archiver.domain import UNMATCHED
+
+    assert criteria_tuple[1].match_status == UNMATCHED
+    assert not isinstance(criteria_tuple[1].match_status, MatchStatus)
 
 
 def test_clear_resets_every_axis_to_unset(qtbot) -> None:
@@ -128,13 +180,14 @@ def test_clear_resets_every_axis_to_unset(qtbot) -> None:
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    bar._status_combo.setCurrentIndex(0)
+    _uncheck_all(bar)
+    _check(bar, "pending")
     bar._time_mode_combo.setCurrentIndex(1)
     _set(bar._from_edit, 2023, 1, 1)
     bar.clear()
 
     assert recorder.last is None
-    assert bar._status_combo.currentIndex() == -1  # back to the placeholder state
+    assert all(not check.isChecked() for check in bar._status_checks.values())
     assert bar._time_mode_combo.currentIndex() == 0  # back to "全部时间"
     assert not bar._from_edit.isVisible() and not bar._to_edit.isVisible()
 
@@ -144,13 +197,16 @@ def test_changing_date_value_while_custom_reemits(qtbot) -> None:
     bar = FilterBar()
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
+    _uncheck_all(bar)
 
     bar._time_mode_combo.setCurrentIndex(1)
     recorder.emissions.clear()
     _set(bar._from_edit, 2023, 5, 1)
     _set(bar._from_edit, 2023, 6, 1)
 
-    assert recorder.last.captured_from == datetime(2023, 6, 1, 12, 0, 0)
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple)
+    assert criteria_tuple[0].captured_from == datetime(2023, 6, 1, 12, 0, 0)
 
 
 # ── Person axis (Phase 9, FEAT-P9-2) ─────────────────────────────────────────
@@ -173,9 +229,12 @@ def test_person_axis_starts_on_placeholder_no_constraint(qtbot) -> None:
     assert bar._person_combo.placeholderText() == "全部人员"
     assert bar._person_combo.currentData() is None
     # Emitting through another axis must still carry person_id=None.
-    bar._status_combo.setCurrentIndex(0)
-    assert recorder.last.person_id is None
-    assert recorder.last is not None and recorder.last.match_status is MatchStatus.PENDING
+    _uncheck_all(bar)
+    _check(bar, "pending")
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple)
+    assert criteria_tuple[0].person_id is None
+    assert criteria_tuple[0].match_status is MatchStatus.PENDING
 
 
 def test_set_persons_populates_combo_and_selection_filters(qtbot) -> None:
@@ -194,8 +253,10 @@ def test_set_persons_populates_combo_and_selection_filters(qtbot) -> None:
 
     assert UUID(str(bar._person_combo.itemData(0))) == alice.id
     bar._person_combo.setCurrentIndex(0)
-    assert recorder.last.person_id == alice.id
-    assert recorder.last.match_status is None  # other axes unaffected
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple)
+    assert criteria_tuple[0].person_id == alice.id
+    assert criteria_tuple[0].match_status is None  # other axes unaffected
 
 
 def test_set_persons_empty_keeps_placeholder_no_constraint(qtbot) -> None:
@@ -238,7 +299,9 @@ def test_set_persons_preserves_current_selection(qtbot) -> None:
 
     assert bar._person_combo.currentData() == str(bob.id)
     # findData-set triggers currentIndexChanged → one re-emit, still Bob.
-    assert recorder.last.person_id == bob.id
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple)
+    assert criteria_tuple[0].person_id == bob.id
 
 
 def test_set_persons_resets_selection_when_person_gone(qtbot) -> None:
@@ -265,13 +328,16 @@ def test_person_axis_combines_with_status_and_date(qtbot) -> None:
 
     bar.set_persons([alice])
     bar._person_combo.setCurrentIndex(0)
-    bar._status_combo.setCurrentIndex(1)  # Approved
+    _uncheck_all(bar)
+    _check(bar, "approved")
     bar._time_mode_combo.setCurrentIndex(1)
     recorder.emissions.clear()
     _set(bar._from_edit, 2024, 1, 1)  # 默认 from=一年前，晚于 to 会触发非法区间拦截
     _set(bar._to_edit, 2024, 12, 31)
 
-    criteria = recorder.last
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple)
+    criteria = criteria_tuple[0]
     assert criteria.person_id == alice.id
     assert criteria.match_status is MatchStatus.APPROVED
     assert criteria.captured_to == datetime(2024, 12, 31, 12, 0, 0)
@@ -285,12 +351,13 @@ def test_clear_resets_person_axis_too(qtbot) -> None:
 
     bar.set_persons([alice])
     bar._person_combo.setCurrentIndex(0)
-    bar._status_combo.setCurrentIndex(0)
+    _uncheck_all(bar)
+    _check(bar, "pending")
     bar.clear()
 
     assert recorder.last is None
     assert bar._person_combo.currentIndex() == -1
-    assert bar._status_combo.currentIndex() == -1
+    assert all(not check.isChecked() for check in bar._status_checks.values())
 
 
 def test_unmatched_option_emits_sentinel_criteria(qtbot) -> None:
@@ -301,13 +368,14 @@ def test_unmatched_option_emits_sentinel_criteria(qtbot) -> None:
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    index = bar._status_combo.findData("unmatched")
-    assert index >= 0, "未匹配项必须在状态下拉中"
-    bar._status_combo.setCurrentIndex(index)
+    assert "unmatched" in bar._status_checks  # 未匹配复选框必须在面板中
+    _uncheck_all(bar)
+    _check(bar, "unmatched")
 
-    assert recorder.last is not None
-    assert recorder.last.match_status == UNMATCHED
-    assert not isinstance(recorder.last.match_status, MatchStatus)
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple)
+    assert criteria_tuple[0].match_status == UNMATCHED
+    assert not isinstance(criteria_tuple[0].match_status, MatchStatus)
 
 
 def test_unmatched_combines_with_person_axis(qtbot) -> None:
@@ -324,12 +392,13 @@ def test_unmatched_combines_with_person_axis(qtbot) -> None:
     bar.set_persons([])
     bar._person_combo.addItem("Alice", str(person_id))
     bar._person_combo.setCurrentIndex(0)
-    index = bar._status_combo.findData("unmatched")
-    bar._status_combo.setCurrentIndex(index)
+    _uncheck_all(bar)
+    _check(bar, "unmatched")
 
-    assert recorder.last is not None
-    assert recorder.last.person_id == person_id
-    assert recorder.last.match_status == UNMATCHED
+    criteria_tuple = recorder.last
+    assert isinstance(criteria_tuple, tuple)
+    assert criteria_tuple[0].person_id == person_id
+    assert criteria_tuple[0].match_status == UNMATCHED
 
 
 def test_clear_resets_unmatched_back_to_unset(qtbot) -> None:
@@ -337,11 +406,37 @@ def test_clear_resets_unmatched_back_to_unset(qtbot) -> None:
     qtbot.addWidget(bar)
     recorder = _CriteriaRecorder(bar)
 
-    index = bar._status_combo.findData("unmatched")
-    bar._status_combo.setCurrentIndex(index)
+    _uncheck_all(bar)
+    _check(bar, "unmatched")
     assert recorder.last is not None
     bar.clear()
     assert recorder.last is None
+
+
+# ── Status counts（参考图 M8：复选框带计数）─────────────────────────────────
+
+
+def test_set_status_counts_renders_counts_beside_labels(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+
+    bar.set_status_counts({"pending": 812, "approved": 226, "rejected": 5, "unmatched": 210})
+
+    assert text.FILTER_STATUS_COUNT_FORMAT.format(label="待审核", count=812) \
+        == bar._status_checks["pending"].text()
+    assert "（226）" in bar._status_checks["approved"].text()
+    bar.set_status_counts(None)
+    assert bar._status_checks["pending"].text() == "待审核"  # 计数清除
+
+
+def test_set_status_counts_partial_keys_keep_other_labels(qtbot) -> None:
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+
+    bar.set_status_counts({"approved": 3})
+
+    assert bar._status_checks["pending"].text() == "待审核"  # 缺键状态保持文案
+    assert "（3）" in bar._status_checks["approved"].text()
 
 
 # ── Summary row + result count (Batch 4) ─────────────────────────────────────
@@ -370,7 +465,8 @@ def test_summary_lists_all_active_conditions(qtbot) -> None:
 
     bar.set_persons([alice])
     bar._person_combo.setCurrentIndex(0)
-    bar._status_combo.setCurrentIndex(0)  # 待审核
+    _uncheck_all(bar)
+    _check(bar, "pending")  # 待审核
     bar._time_mode_combo.setCurrentIndex(1)
     _set(bar._from_edit, 2023, 1, 1)
     _set(bar._to_edit, 2023, 12, 31)
@@ -383,13 +479,29 @@ def test_summary_lists_all_active_conditions(qtbot) -> None:
     assert recorder.last is not None  # 摘要与实际发出的 criteria 同源
 
 
+def test_summary_lists_multi_status_selection(qtbot) -> None:
+    """多选状态时摘要列出全部勾选状态（与发射的 criteria 元组同源）。"""
+    bar = FilterBar()
+    qtbot.addWidget(bar)
+    recorder = _CriteriaRecorder(bar)
+
+    _uncheck_all(bar)
+    _check(bar, "approved")
+    _check(bar, "rejected")
+
+    summary = bar._summary_label.text()
+    assert "已通过" in summary and "已拒绝" in summary
+    assert isinstance(recorder.last, tuple) and len(recorder.last) == 2
+
+
 def test_invalid_range_keeps_previous_summary_and_count(qtbot) -> None:
     """A blocked range never rewrites the summary to a condition it didn't apply."""
     bar = FilterBar()
     qtbot.addWidget(bar)
     bar.show()  # 内联提示的 isVisible() 断言需要窗口实际显示
     bar.set_result_count(3)
-    bar._status_combo.setCurrentIndex(0)  # 有效：待审核
+    _uncheck_all(bar)
+    _check(bar, "pending")  # 有效：待审核
 
     bar._time_mode_combo.setCurrentIndex(1)
     _set(bar._from_edit, 2024, 6, 30)

@@ -1,7 +1,7 @@
 """Batch1 cross-task and synchronous-entry guards through the actual window."""
 
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -311,9 +311,14 @@ def test_terminal_refresh_keeps_latest_criteria_and_partial_results(
              "failed": TaskFailed("import_people", ValueError("partial")),
              "cancelled": TaskCancelled("import_people")}[kind]
     getattr(runnable.signals, kind).emit(event)
-    search.assert_called_once_with(criteria)
-    all_photos.assert_not_called()
-    catalog.assert_called_once()
+    # 首次调用 = 列表刷新（criteria 快照）；其后 4 次 = 状态计数回填
+    # （参考图 M8：状态复选框带计数，DEC-06 按图推翻——逐状态 push-down 查询）。
+    assert search.call_args_list[0] == call(criteria)
+    assert search.call_count == 5
+    # 1 次 = 页头全库统计回填（参考图 M2：共 N 张照片 · M 人；只读 list_all）。
+    all_photos.assert_called_once()
+    # 2 次 = 筛选人员轴刷新 + 页头人员统计（均为只读 list_persons）。
+    assert catalog.call_count == 2
     assert window._current_criteria is criteria
 
 

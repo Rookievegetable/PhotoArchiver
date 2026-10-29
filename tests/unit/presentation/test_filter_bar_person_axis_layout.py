@@ -38,8 +38,9 @@ def test_person_label_and_combo_do_not_overlap_after_repopulation(qtbot) -> None
     assert not label.geometry().intersects(combo.geometry()), (
         f"label {label.geometry()} overlaps combo {combo.geometry()}"
     )
-    assert combo.geometry().left() >= label.geometry().right(), (
-        f"combo {combo.geometry()} must sit right of label {label.geometry()}"
+    # M8 右侧面板化（DEC-06 按图推翻）：纵向布局——人员下拉在标签下方。
+    assert combo.geometry().top() >= label.geometry().bottom(), (
+        f"combo {combo.geometry()} must sit below label {label.geometry()}"
     )
 
 
