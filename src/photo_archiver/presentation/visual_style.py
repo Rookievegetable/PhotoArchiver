@@ -39,7 +39,7 @@ light AND dark themes; buttons paint through a different path where
 from enum import Enum
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import QColor, QIcon, QPalette
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -81,6 +81,15 @@ BANNER_OBJECT_NAME = "Banner"
 SEVERITY_PROPERTY = "severity"
 BADGE_SEVERITIES = ("success", "warning", "danger", "info", "neutral")
 BANNER_SEVERITIES = ("info", "warning", "danger")
+# ── 五大界面视觉统一（Owner 2026-10-30 参考图基线裁决；派生选择器行）──
+# 仅新增 objectName 挂点与 token 选择器行，P0-1 冻结 token 表与既有冻结
+# 选择器取值域零改动（P0-4 §3.2 机制）。
+PAGE_TITLE_OBJECT_NAME = "PageTitle"
+PAGE_SUBTITLE_OBJECT_NAME = "PageSubtitle"
+SECTION_TITLE_OBJECT_NAME = "SectionTitle"
+STAT_VALUE_OBJECT_NAME = "StatValue"
+GLYPH_OBJECT_NAME = "Glyph"
+CARD_LIST_OBJECT_NAME = "CardList"
 
 # ── 主题（阶段 1，P0-2 冻结）─────────────────────────────────────────────
 
@@ -443,6 +452,87 @@ QStatusBar QProgressBar {
 QStatusBar QProgressBar::chunk {
     background-color: palette(Highlight);
 }
+QLabel#PageTitle {
+    font-size: 20px;
+    font-weight: 600;
+    color: ${pa-text-primary};
+    background: transparent;
+    border: none;
+}
+QLabel#PageSubtitle {
+    font-size: 12px;
+    color: ${pa-text-secondary};
+    background: transparent;
+    border: none;
+}
+QLabel#SectionTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: ${pa-text-primary};
+    background: transparent;
+    border: none;
+}
+QLabel#StatValue {
+    font-size: 18px;
+    font-weight: 600;
+    color: ${pa-text-primary};
+    background: transparent;
+    border: none;
+}
+QLabel#Glyph {
+    font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets";
+    font-size: 14px;
+    color: ${pa-text-secondary};
+    background: transparent;
+    border: none;
+}
+QTableWidget {
+    background-color: ${pa-bg-surface};
+    alternate-background-color: rgba(127, 127, 127, 0.06);
+    gridline-color: ${pa-border};
+    border: 1px solid ${pa-border};
+    border-radius: 6px;
+    selection-background-color: palette(Highlight);
+    selection-color: palette(HighlightedText);
+}
+QTableWidget::item {
+    padding: 4px 8px;
+    border: none;
+}
+QHeaderView::section {
+    background-color: ${pa-bg-surface};
+    color: ${pa-text-secondary};
+    border: none;
+    border-bottom: 1px solid ${pa-border};
+    padding: 6px 8px;
+    font-weight: 600;
+}
+QTableCornerButton::section {
+    background-color: ${pa-bg-surface};
+    border: none;
+}
+QListWidget#CardList {
+    background: transparent;
+    border: none;
+}
+QListWidget#CardList::item {
+    background-color: ${pa-bg-surface};
+    border: 1px solid ${pa-border};
+    border-radius: 6px;
+    margin: 4px 2px;
+    padding: 8px;
+    color: ${pa-text-primary};
+}
+QListWidget#CardList::item:selected {
+    border: 1px solid palette(Highlight);
+    color: ${pa-text-primary};
+}
+QComboBox, QDateTimeEdit {
+    background-color: ${pa-bg-surface};
+    border: 1px solid ${pa-border};
+    border-radius: 4px;
+    padding: 3px 8px;
+}
 """
 
 
@@ -616,3 +706,138 @@ def mark_searchable_combo(combo: QComboBox) -> None:
     indicator = combo.style().pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth)
     combo.setMinimumWidth(indicator * 4)
     _repolish(combo)
+
+
+# ── Fluent 图标（Owner 2026-10-30 裁决：DEC-10=A 按参考图推翻，按图实施）──
+# 零新增运行时依赖（DEC-13=A）：仅使用 Windows 系统自带图标字体
+# （Segoe Fluent Icons / Segoe MDL2 Assets）离线渲染位图；两字体均缺失时
+# 优雅降级（调用方保留文字，仅无图标），绝不崩溃。码位经 offscreen 渲染
+# 探针逐一目检（round-1 dev 取证）。
+ICON_FONT_FAMILIES = ("Segoe Fluent Icons", "Segoe MDL2 Assets")
+
+ICONS: dict[str, str] = {
+    "home": "",          # 概览
+    "photo": "",         # 照片库
+    "people": "",        # 人员与分组
+    "review": "",        # 审核中心（对勾）
+    "data": "",          # 数据工具
+    "settings": "",      # 设置
+    "search": "",        # 搜索
+    "add": "",           # 添加
+    "edit": "",          # 编辑
+    "up": "",            # 上移
+    "down": "",          # 下移
+    "delete": "",        # 删除
+    "more": "",          # 更多 …
+    "chevron_down": "",  # 下箭头
+    "chevron_right": "", # 右箭头
+    "calendar": "",      # 日历/拍摄时间
+    "play": "",          # 运行
+    "sync": "",          # 重新解析/刷新
+    "download": "",      # 确认导入
+    "view": "",          # 查看结果（眼睛）
+    "check": "",         # 对勾
+    "info": "",          # 信息
+    "warning": "",       # 警告
+    "history": "",       # 历史记录
+    "chart": "",         # 统计
+    "person": "",        # 单人
+    "filter": "",        # 筛选
+    "document": "",      # 文档/名单文件
+    "save": "",          # 保存/归档
+}
+
+
+def _icon_font_family() -> str | None:
+    """Return the first available system icon font, or ``None``（优雅降级）."""
+    from PySide6.QtGui import QFontDatabase
+
+    families = set(QFontDatabase.families())
+    for family in ICON_FONT_FAMILIES:
+        if family in families:
+            return family
+    return None
+
+
+def icon_font_available() -> bool:
+    """Return True when a system icon font is present (test/QA hook)."""
+    return _icon_font_family() is not None
+
+
+def fluent_icon(
+    name: str,
+    color: str | None = None,
+    size_px: int = 14,
+) -> QIcon:
+    """Render one Fluent glyph as a monochrome QIcon（零依赖图标方案）.
+
+    ``name`` 是 :data:`ICONS` 的键；``color`` 为色值字符串（缺省＝次要文本
+    token 当前主题值）。位图按 2× 渲染并设 devicePixelRatio(2)，高分屏不
+    发虚。字体缺失时返回空 QIcon（按钮/标签仅显示文字）。
+    """
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QFont, QIcon, QPainter, QPixmap
+
+    glyph = ICONS.get(name)
+    if glyph is None:
+        raise KeyError(f"unknown icon glyph {name!r}")
+    family = _icon_font_family()
+    if family is None:
+        return QIcon()
+    ratio = 2.0
+    physical = max(4, int(size_px * ratio))
+    pixmap = QPixmap(physical, physical)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    font = QFont(family)
+    font.setPixelSize(physical)
+    painter.setFont(font)
+    painter.setPen(QColor(color) if color is not None else QColor(token("pa-text-secondary")))
+    painter.drawText(
+        QRectF(0, 0, physical, physical),
+        Qt.AlignmentFlag.AlignCenter, glyph,
+    )
+    painter.end()
+    pixmap.setDevicePixelRatio(ratio)
+    return QIcon(pixmap)
+
+
+def style_page_title(label) -> None:
+    """Tag a QLabel as a page title（QLabel#PageTitle 选择器）."""
+    label.setObjectName(PAGE_TITLE_OBJECT_NAME)
+    _repolish(label)
+
+
+def style_page_subtitle(label) -> None:
+    """Tag a QLabel as a page subtitle（QLabel#PageSubtitle 选择器）."""
+    label.setObjectName(PAGE_SUBTITLE_OBJECT_NAME)
+    _repolish(label)
+
+
+def style_section_title(label) -> None:
+    """Tag a QLabel as a section title（QLabel#SectionTitle 选择器）."""
+    label.setObjectName(SECTION_TITLE_OBJECT_NAME)
+    _repolish(label)
+
+
+def style_stat_value(label) -> None:
+    """Tag a QLabel as a big statistics value（QLabel#StatValue 选择器）."""
+    label.setObjectName(STAT_VALUE_OBJECT_NAME)
+    _repolish(label)
+
+
+def style_glyph_label(label) -> None:
+    """Tag a QLabel as a Fluent glyph carrier（QLabel#Glyph 字体族）."""
+    label.setObjectName(GLYPH_OBJECT_NAME)
+    _repolish(label)
+
+
+def style_card_list(list_widget) -> None:
+    """Tag a QListWidget as a card list（QListWidget#CardList 卡片化列表）."""
+    list_widget.setObjectName(CARD_LIST_OBJECT_NAME)
+    _repolish(list_widget)
+
+
+def assign_button_icon(button, name: str, color: str | None = None) -> None:
+    """Give a QPushButton/QToolButton a Fluent glyph icon（缺失即无图标）."""
+    button.setIcon(fluent_icon(name, color))
