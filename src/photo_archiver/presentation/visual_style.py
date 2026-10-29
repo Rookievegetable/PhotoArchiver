@@ -1,10 +1,21 @@
 """Centralized visual system for the desktop UI (Batch 7, UI-rules §16).
 
 Single source for the cross-widget look: button hierarchy (primary /
-secondary / danger), focus ring, spacing and the empty-state card. Styles are
-applied as ONE application-level stylesheet built here — individual widgets
-never call ``setStyleSheet`` themselves; they opt into a hierarchy role via
-:func:`assign_role` (a dynamic property) or an objectName.
+secondary / danger / success / warning / neutral), focus ring, spacing and
+the empty-state card, plus the Badge / Card / Banner building blocks
+（阶段 1，P0-4）. Styles are applied as ONE application-level stylesheet built
+here — individual widgets never call ``setStyleSheet`` themselves; they opt
+into a hierarchy role via :func:`assign_role` (a dynamic property) or an
+objectName.
+
+Theme support（阶段 1，P0-1/P0-2/P0-3）: the stylesheet is parameterized by a
+theme name (``light`` / ``dark``) resolved from the persisted preference at
+startup only（DEC-02=A 重启生效；DEC-03=A 仅启动评估、不监听 OS 运行中变化）.
+Every theme-dependent color comes from the token tables below — light values
+are the code-frozen现值（P0-1 VERIFIED）；dark values are the P0-1 suggested
+values and stay **UNVERIFIED（待 Owner 对照设计板校准）** until Owner sign-off.
+Derived tokens added to satisfy the frozen P0-6 contrast standard are marked
+inline.
 
 Palette access uses the QSS *function* form — ``palette(Highlight)`` —
 because Qt 6 does not support the ``palette.Highlight`` dot syntax: a single
@@ -23,22 +34,32 @@ light AND dark themes; buttons paint through a different path where
 ``palette(Highlight)`` resolves correctly (probe-verified).
 """
 
-from __future__ import annotations
+from enum import Enum
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QFrame,
+    QLabel,
     QPushButton,
     QSizePolicy,
     QStyle,
     QWidget,
 )
 
+from photo_archiver.application.dtos.settings import DEFAULT_THEME, VALID_THEMES
+
 # Dynamic-property key carrying the visual role on QAbstractButton.
 ROLE_PROPERTY = "styleRole"
 ROLE_PRIMARY = "primary"
 ROLE_DANGER = "danger"
+# 阶段 1 角色扩展（§3.2/P0-4 N7：取值域本轮冻结；落点随各阶段任务书）。
+ROLE_SUCCESS = "success"
+ROLE_WARNING = "warning"
+ROLE_NEUTRAL = "neutral"
+VALID_ROLES = (ROLE_PRIMARY, ROLE_DANGER, ROLE_SUCCESS, ROLE_WARNING, ROLE_NEUTRAL)
 
 # object 属性：可搜索下拉（审核中心身份选择等）——QSS 据此放大展开按钮。
 SEARCHABLE_COMBO_PROPERTY = "searchableCombo"
@@ -49,13 +70,183 @@ EMPTY_STATE_CARD_OBJECT_NAME = "EmptyStateCard"
 # 详图内嵌导航覆盖控件（任务书阶段 C / D4=B1）：样式走单源 QSS。
 NAV_OVERLAY_BUTTON_OBJECT_NAME = "NavOverlayButton"
 NAV_POSITION_LABEL_OBJECT_NAME = "NavPositionLabel"
+# ── 阶段 1 构建块（P0-4 §1/§2 冻结值）──
+BADGE_OBJECT_NAME = "Badge"
+CARD_OBJECT_NAME = "Card"
+BANNER_OBJECT_NAME = "Banner"
+SEVERITY_PROPERTY = "severity"
+BADGE_SEVERITIES = ("success", "warning", "danger", "info", "neutral")
+BANNER_SEVERITIES = ("info", "warning", "danger")
 
-# The only fixed brand color: it must stay recognizable across themes
-# because it marks irreversible actions.
-_DANGER_COLOR = "#c62828"
-_DANGER_BORDER = "#8e1f1c"
+# ── 主题（阶段 1，P0-2 冻结）─────────────────────────────────────────────
 
-_STYLESHEET = """
+THEME_LIGHT = "light"
+THEME_DARK = "dark"
+VALID_THEME_OUTPUTS = (THEME_LIGHT, THEME_DARK)
+
+
+class LightDark(Enum):
+    """平台亮暗状态枚举（P0-2：测试注入用，纯函数不读真实 OS）。"""
+
+    LIGHT = "light"
+    DARK = "dark"
+
+
+def resolve_theme(preference: object, platform_scheme: LightDark) -> str:
+    """Resolve a persisted theme preference into ``light`` / ``dark``（P0-2）.
+
+    纯函数：无 I/O、无 QSettings 访问、不读真实 OS 状态；非法值域唯一来源
+    为 ``dtos.settings.VALID_THEMES``（不硬编码第二份）。回退链：缺失/非法
+    （含 None、""、大小写变体、其他对象）→ ``DEFAULT_THEME``（"system"）→
+    按 ``platform_scheme`` 解析；对非法输入不抛异常，使启动链在偏好缺失/
+    损坏时也能完成（DEC-03=A：评估时刻＝应用启动）。
+    """
+    value = preference if isinstance(preference, str) else None
+    if value not in VALID_THEMES:
+        value = DEFAULT_THEME
+    if value == THEME_LIGHT:
+        return THEME_LIGHT
+    if value == THEME_DARK:
+        return THEME_DARK
+    return THEME_LIGHT if platform_scheme is LightDark.LIGHT else THEME_DARK
+
+
+def detect_platform_scheme(app: QApplication) -> LightDark:
+    """Read the OS light/dark state once at startup（DEC-03=A：仅启动评估）.
+
+    ``Unknown``（平台未报告或 offscreen 测试环境）回落 ``LIGHT``。
+    不安装任何监听——运行中 OS 亮暗变化不影响主题，下次启动才评估。
+    """
+    scheme = app.styleHints().colorScheme()
+    if scheme == Qt.ColorScheme.Dark:
+        return LightDark.DARK
+    return LightDark.LIGHT
+
+
+# ── Token 表（P0-1 冻结值；浅色=现值起步 VERIFIED，深色=建议值 UNVERIFIED）──
+#
+# 所有 token 只在本模块单源 QSS 中消费（DEC-01=A）。深色列与后加的派生
+# token 均为 UNVERIFIED（待 Owner 对照设计板校准，U-3 规则）；为满足 P0-6
+# 冻结对比度标准而调整/新增的值在行内注明。
+
+LIGHT_TOKENS: dict[str, str] = {
+    # 1.1 背景与表面
+    "pa-bg-window": "#f0f0f0",  # 参考（QSS 保持 palette(Window)/系统现值，VERIFIED）
+    "pa-bg-surface": "#ffffff",  # UNVERIFIED（设计板图面）
+    "pa-card-fill-empty": "rgba(127, 127, 127, 0.12)",  # 现值 VERIFIED，跨主题中性
+    # 1.2 文本
+    "pa-text-primary": "#1a1a1a",  # UNVERIFIED
+    # R6/B-3 校准基线：现值 #808080 对窗口底 3.47:1 不达 4.5:1，验收基线=
+    # 校准值 #5c5c5c（实算 5.87:1）；深色 UNVERIFIED。
+    "pa-text-secondary": "#5c5c5c",
+    # 1.3 边框与分隔
+    "pa-border": "#e0e0e0",  # UNVERIFIED
+    "pa-border-empty": "rgba(127, 127, 127, 0.45)",  # 现值 VERIFIED，跨主题中性
+    # 1.5 语义色（C4 danger 浅色=现值不变；C1 三级 span 浅色=现值不变）
+    "pa-danger-fg": "#c62828",
+    "pa-danger-border": "#8e1f1c",
+    "pa-danger-text": "#ffffff",  # 现值（对 #c62828 实算 5.62:1，P0-6 N-4）
+    "pa-alert-fg": "#B3261E",  # C1 强冲突（现值）
+    "pa-alert-bg": "#F9DEDC",  # C1 强冲突（现值）
+    "pa-warning-fg": "#8A5A00",  # C1 弱（现值）
+    "pa-warning-bg": "#FBEEC9",  # C1 弱（现值）
+    "pa-warning-border": "#8A5A00",  # 派生（=fg），UNVERIFIED
+    "pa-warning-text": "#ffffff",  # 派生（按钮字/底 5.93:1），UNVERIFIED
+    "pa-info-fg": "#1F4E79",  # C1 信息（现值）
+    "pa-info-bg": "#DEEAF6",  # C1 信息（现值）
+    "pa-info-border": "#1F4E79",  # 派生（=fg），UNVERIFIED
+    # 全新角色（P0-1 §1.5 建议值起步）；success-fg：Owner 裁决 2026-10-29
+    # 采用 #107c10（合成淡绿底实测 4.52:1，达 WCAG AA 4.5:1），
+    # 原"3.65:1 不达标"深化依据作废；其余 token 维持 UNVERIFIED 待 Owner 校准。
+    "pa-success-fg": "#107c10",
+    "pa-success-bg": "rgba(16, 124, 16, 0.12)",
+    "pa-success-border": "#0b5e0b",
+    "pa-success-solid": "#107c10",  # 按钮实底（P0-1 建议值；白字 5.37:1）
+    "pa-success-text": "#ffffff",
+    "pa-neutral-fg": "#5c5c5c",  # P0-1 建议值；按钮白字 6.69:1
+    "pa-neutral-border": "#c8c8c8",  # P0-1 建议值（按钮描边，装饰性）
+    "pa-neutral-text": "#ffffff",  # 派生
+}
+
+DARK_TOKENS: dict[str, str] = {
+    # 深色列全部为 P0-1 建议值 UNVERIFIED（待 Owner 对照设计板校准）；
+    # 红系色相必须保留（C4 契约：danger 标记不可逆操作）。
+    "pa-bg-window": "#202020",
+    "pa-bg-surface": "#2b2b2b",
+    "pa-card-fill-empty": "rgba(127, 127, 127, 0.12)",  # 跨主题中性（现值起步）
+    "pa-text-primary": "#ffffff",
+    "pa-text-secondary": "#c8c8c8",
+    "pa-border": "#3d3d3d",
+    "pa-border-empty": "rgba(127, 127, 127, 0.45)",  # 跨主题中性（现值起步）
+    "pa-danger-fg": "#d13438",
+    "pa-danger-border": "#e37d7d",
+    "pa-danger-text": "#ffffff",  # 对 #d13438 实算 4.93:1 ≥4.5（P0-6）
+    "pa-alert-fg": "#F79C97",
+    "pa-alert-bg": "rgba(249, 222, 220, 0.10)",
+    "pa-warning-fg": "#F2C063",
+    "pa-warning-bg": "rgba(251, 238, 201, 0.10)",
+    "pa-warning-border": "#F2C063",
+    "pa-warning-text": "#3d2e00",  # 派生：浅琥珀底上的深墨（7.87:1）；白字仅 1.6:1
+    "pa-info-fg": "#8CBEDF",
+    "pa-info-bg": "rgba(222, 234, 246, 0.10)",
+    "pa-info-border": "#8CBEDF",
+    "pa-success-fg": "#6ccb5f",
+    "pa-success-bg": "rgba(108, 203, 95, 0.14)",
+    "pa-success-border": "#3fbf3f",
+    "pa-success-solid": "#6ccb5f",
+    "pa-success-text": "#083b08",  # 派生：亮绿底上的深墨（6.31:1）；白字仅 2.0:1
+    "pa-neutral-fg": "#c8c8c8",
+    "pa-neutral-border": "#5c5c5c",
+    "pa-neutral-text": "#2b2b2b",  # 派生（P0-4 <pa-bg-surface>*）
+}
+
+_TOKENS: dict[str, dict[str, str]] = {
+    THEME_LIGHT: LIGHT_TOKENS,
+    THEME_DARK: DARK_TOKENS,
+}
+
+_ACTIVE_THEME = THEME_LIGHT
+# Captured once so light restores the platform palette verbatim and repeated
+# apply calls never stack modifications.
+_DEFAULT_PALETTE: QPalette | None = None
+
+
+def theme_tokens(theme: str) -> dict[str, str]:
+    """Return a copy of the token table for ``theme``（测试/校准用）."""
+    try:
+        return dict(_TOKENS[theme])
+    except KeyError as error:
+        raise ValueError(f"unknown theme {theme!r}") from error
+
+
+def active_theme() -> str:
+    """Return the theme of the currently installed visual system."""
+    return _ACTIVE_THEME
+
+
+def set_active_theme(theme: str) -> None:
+    """Point token resolution at ``theme``（apply_visual_system 内部调用；
+    公开供纯 token 级测试在不安装样式表时切换）。"""
+    if theme not in _TOKENS:
+        raise ValueError(f"unknown theme {theme!r}")
+    global _ACTIVE_THEME
+    _ACTIVE_THEME = theme
+
+
+def token(name: str, theme: str | None = None) -> str:
+    """Return the value of token ``name`` for ``theme``（缺省＝当前激活主题）.
+
+    C1/C2 迁移（P0-8）的取值入口：富文本 span / QBrush 前景在调用时按当前
+    主题解析，不缓存模块级定值。
+    """
+    table = _TOKENS[theme] if theme is not None else _TOKENS[_ACTIVE_THEME]
+    try:
+        return table[name]
+    except KeyError as error:
+        raise KeyError(f"unknown visual token {name!r}") from error
+
+
+_STYLESHEET_TEMPLATE = """
 QPushButton { padding: 4px 14px; }
 QPushButton[styleRole="primary"] {
     background-color: palette(Highlight);
@@ -65,10 +256,31 @@ QPushButton[styleRole="primary"] {
     padding: 5px 18px;
 }
 QPushButton[styleRole="danger"] {
-    background-color: #c62828;
-    color: #ffffff;
-    border: 1px solid #8e1f1c;
+    background-color: ${pa-danger-fg};
+    color: ${pa-danger-text};
+    border: 1px solid ${pa-danger-border};
     font-weight: 600;
+    padding: 5px 18px;
+}
+QPushButton[styleRole="success"] {
+    background-color: ${pa-success-solid};
+    color: ${pa-success-text};
+    border: 1px solid ${pa-success-border};
+    font-weight: 600;
+    padding: 5px 18px;
+}
+QPushButton[styleRole="warning"] {
+    background-color: ${pa-warning-fg};
+    color: ${pa-warning-text};
+    border: 1px solid ${pa-warning-border};
+    font-weight: 600;
+    padding: 5px 18px;
+}
+QPushButton[styleRole="neutral"] {
+    background-color: ${pa-neutral-fg};
+    color: ${pa-neutral-text};
+    border: 1px solid ${pa-neutral-border};
+    font-weight: 400;
     padding: 5px 18px;
 }
 QPushButton[styleRole="primary"]:disabled {
@@ -121,17 +333,136 @@ QLabel#NavPositionLabel {
     border-radius: 4px;
     padding: 2px 8px;
 }
+QLabel#Badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+QLabel#Badge[severity="success"] {
+    color: ${pa-success-fg};
+    background-color: ${pa-success-bg};
+    border: 1px solid ${pa-success-border};
+}
+QLabel#Badge[severity="warning"] {
+    color: ${pa-warning-fg};
+    background-color: ${pa-warning-bg};
+    border: 1px solid ${pa-warning-border};
+}
+QLabel#Badge[severity="danger"] {
+    color: ${pa-alert-fg};
+    background-color: ${pa-alert-bg};
+    border: 1px solid ${pa-danger-border};
+}
+QLabel#Badge[severity="info"] {
+    color: ${pa-info-fg};
+    background-color: ${pa-info-bg};
+    border: 1px solid ${pa-info-border};
+}
+QLabel#Badge[severity="neutral"] {
+    color: ${pa-text-secondary};
+    background-color: ${pa-card-fill-empty};
+    border: 1px solid ${pa-border};
+}
+QFrame#Card {
+    background-color: ${pa-bg-surface};
+    border: 1px solid ${pa-border};
+    border-radius: 6px;
+}
+QFrame#Banner {
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+QFrame#Banner[severity="info"] {
+    color: ${pa-info-fg};
+    background-color: ${pa-info-bg};
+    border: 1px solid ${pa-info-border};
+}
+QFrame#Banner[severity="warning"] {
+    color: ${pa-warning-fg};
+    background-color: ${pa-warning-bg};
+    border: 1px solid ${pa-warning-border};
+}
+QFrame#Banner[severity="danger"] {
+    color: ${pa-alert-fg};
+    background-color: ${pa-alert-bg};
+    border: 1px solid ${pa-danger-border};
+}
 """
 
 
-def build_stylesheet() -> str:
-    """Return the application-level stylesheet (single replacement point)."""
-    return _STYLESHEET
+def build_stylesheet(theme: str = THEME_LIGHT) -> str:
+    """Return the application-level stylesheet for ``theme``（唯一替换点）."""
+    if theme not in _TOKENS:
+        raise ValueError(f"unknown theme {theme!r}")
+    qss = _STYLESHEET_TEMPLATE
+    for name, value in _TOKENS[theme].items():
+        qss = qss.replace("${" + name + "}", value)
+    if "${" in qss:
+        leftover = qss[qss.index("${"):qss.index("${") + 40]
+        raise AssertionError(f"unresolved QSS token placeholder near {leftover!r}")
+    return qss
 
 
-def apply_visual_system(app: QApplication) -> None:
-    """Install the visual system once, right after QApplication creation."""
-    app.setStyleSheet(_STYLESHEET)
+def apply_visual_system(app: QApplication, theme: str = THEME_LIGHT) -> None:
+    """Install the visual system once, right after QApplication creation.
+
+    ``theme`` 由启动链经 ``resolve_theme`` 解析（P0-2/P0-3）；深色主题另按
+    token 建立应用级 QPalette（§6.3 覆盖范围：应用级 QSS＋QApplication
+    palette）。浅色恢复捕获的平台默认 palette（P0-1 pa-bg-window 浅色＝
+    palette(Window) 现值）。
+    """
+    global _ACTIVE_THEME, _DEFAULT_PALETTE
+    if theme not in _TOKENS:
+        raise ValueError(f"unknown theme {theme!r}")
+    if _DEFAULT_PALETTE is None:
+        _DEFAULT_PALETTE = QPalette(app.palette())
+    app.setStyleSheet(build_stylesheet(theme))
+    if theme == THEME_DARK:
+        app.setPalette(_dark_palette(_DEFAULT_PALETTE))
+    else:
+        app.setPalette(QPalette(_DEFAULT_PALETTE))
+    _ACTIVE_THEME = theme
+
+
+def _dark_palette(base: QPalette) -> QPalette:
+    """Build the dark application palette from P0-1 dark tokens（UNVERIFIED）.
+
+    Highlight / HighlightedText / Link 保留系统角色（P0-1 pa-accent VERIFIED
+    ＝palette 角色，palette() 函数形式红线 §10-12）。
+    """
+    palette = QPalette(base)
+    t = DARK_TOKENS
+
+    def c(name: str) -> QColor:
+        return QColor(t[name])
+
+    palette.setColor(QPalette.ColorRole.Window, c("pa-bg-window"))
+    palette.setColor(QPalette.ColorRole.WindowText, c("pa-text-primary"))
+    palette.setColor(QPalette.ColorRole.Base, c("pa-bg-surface"))
+    palette.setColor(QPalette.ColorRole.AlternateBase, c("pa-bg-window"))
+    palette.setColor(QPalette.ColorRole.Text, c("pa-text-primary"))
+    palette.setColor(QPalette.ColorRole.Button, c("pa-bg-surface"))
+    palette.setColor(QPalette.ColorRole.ButtonText, c("pa-text-primary"))
+    palette.setColor(QPalette.ColorRole.ToolTipBase, c("pa-bg-surface"))
+    palette.setColor(QPalette.ColorRole.ToolTipText, c("pa-text-primary"))
+    palette.setColor(QPalette.ColorRole.PlaceholderText, c("pa-text-secondary"))
+    palette.setColor(QPalette.ColorRole.Mid, c("pa-border"))
+    # UNVERIFIED（派生明暗梯度，Owner 校准项）
+    palette.setColor(QPalette.ColorRole.Light, QColor("#4a4a4a"))
+    palette.setColor(QPalette.ColorRole.Dark, QColor("#141414"))
+    disabled = QPalette.ColorGroup.Disabled
+    palette.setColor(disabled, QPalette.ColorRole.WindowText, c("pa-text-secondary"))
+    palette.setColor(disabled, QPalette.ColorRole.Text, c("pa-text-secondary"))
+    palette.setColor(disabled, QPalette.ColorRole.ButtonText, c("pa-text-secondary"))
+    return palette
+
+
+def repolish(widget: QWidget) -> None:
+    """Public restyle helper: force QSS re-evaluation（§3.2 规则 2）.
+
+    每次 ``setProperty()`` 之后必须调用；Badge/Card/Banner 构建块的
+    ``set_*_severity`` helper 内部已调用，动态改属性的其他调用方复用本函数。
+    """
+    _repolish(widget)
 
 
 def assign_role(button: QPushButton, role: str) -> None:
@@ -145,6 +476,46 @@ def _repolish(widget: QWidget) -> None:
     style = widget.style()
     style.unpolish(widget)
     style.polish(widget)
+
+
+def style_badge(label: QLabel, severity: str) -> None:
+    """Tag a QLabel as a Badge building block（P0-4：objectName＋severity）。"""
+    set_badge_severity(label, severity)
+
+
+def set_badge_severity(label: QLabel, severity: str) -> None:
+    """Set (or change) a Badge's severity and repolish（取值域外＝无样式）。"""
+    if severity not in BADGE_SEVERITIES:
+        raise ValueError(
+            f"badge severity {severity!r} not in {BADGE_SEVERITIES}"
+        )
+    label.setObjectName(BADGE_OBJECT_NAME)
+    label.setProperty(SEVERITY_PROPERTY, severity)
+    _repolish(label)
+
+
+def style_card(frame: QFrame) -> None:
+    """Tag a QFrame as a Card building block（WA_StyledBackground 必需）。"""
+    frame.setObjectName(CARD_OBJECT_NAME)
+    frame.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    _repolish(frame)
+
+
+def style_banner(frame: QFrame, severity: str) -> None:
+    """Tag a QFrame as a Banner building block（P0-4：info/warning/danger）。"""
+    set_banner_severity(frame, severity)
+
+
+def set_banner_severity(frame: QFrame, severity: str) -> None:
+    """Set (or change) a Banner's severity and repolish（取值域外＝无样式）。"""
+    if severity not in BANNER_SEVERITIES:
+        raise ValueError(
+            f"banner severity {severity!r} not in {BANNER_SEVERITIES}"
+        )
+    frame.setObjectName(BANNER_OBJECT_NAME)
+    frame.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    frame.setProperty(SEVERITY_PROPERTY, severity)
+    _repolish(frame)
 
 
 def style_nav_overlay_button(button: QPushButton) -> None:

@@ -195,41 +195,58 @@ def test_warning_severity_classification_matches_semantics() -> None:
 
 
 def test_warning_severity_styles_are_pairwise_distinct() -> None:
-    """三级的（符号, 前景, 背景）两两可区分；未知样式不与三级混淆。"""
-    from photo_archiver.presentation import ui_text as text
+    """三级的（符号, 前景, 背景）两两可区分；未知样式不与三级混淆。
+
+    阶段 1 双主题化（P0-8 C1）：色值经 token 按主题解析，浅/深各验一遍。
+    """
+    from photo_archiver.presentation import ui_text as text, visual_style
     from photo_archiver.presentation.views.import_preview_dialog import (
         _IMPORT_WARNING_DEFAULT_STYLE,
-        _IMPORT_WARNING_STYLES,
+        import_warning_style,
     )
 
-    styles = [
-        _IMPORT_WARNING_STYLES[sev] for sev in (
-            text.IMPORT_WARNING_SEVERITY_STRONG,
-            text.IMPORT_WARNING_SEVERITY_WEAK,
-            text.IMPORT_WARNING_SEVERITY_INFO,
-        )
-    ]
-    assert len(set(styles)) == 3
-    assert all(fg is not None and bg is not None for _sym, fg, bg in styles)
+    for theme in visual_style.VALID_THEME_OUTPUTS:
+        previous = visual_style.active_theme()
+        visual_style.set_active_theme(theme)
+        try:
+            styles = [
+                import_warning_style(sev) for sev in (
+                    text.IMPORT_WARNING_SEVERITY_STRONG,
+                    text.IMPORT_WARNING_SEVERITY_WEAK,
+                    text.IMPORT_WARNING_SEVERITY_INFO,
+                )
+            ]
+            assert len(set(styles)) == 3
+            assert all(fg is not None and bg is not None for _sym, fg, bg in styles)
+            # 三级前景两两可区分（明度排序语义不变）。
+            assert len({fg for _sym, fg, _bg in styles}) == 3
+        finally:
+            visual_style.set_active_theme(previous)
     assert _IMPORT_WARNING_DEFAULT_STYLE[1] is None  # 默认样式无配色
 
 
 def test_build_warning_label_renders_each_severity_distinctly() -> None:
-    """每类 code 的图标 + 配色可区分；文本保留完整文案。"""
-    from photo_archiver.presentation import ui_text as text
+    """每类 code 的图标 + 配色可区分；文本保留完整文案（浅/深双主题）。"""
+    from photo_archiver.presentation import ui_text as text, visual_style
     from photo_archiver.presentation.views.import_preview_dialog import (
-        _IMPORT_WARNING_STYLES,
         build_warning_label,
         classify_import_warning,
+        import_warning_style,
     )
 
-    for code in text.IMPORT_WARNING_SEVERITIES:
-        symbol, fg, bg = _IMPORT_WARNING_STYLES[classify_import_warning(code)]
-        label = build_warning_label([(code, "明细")])
-        assert symbol in label.text()
-        assert fg in label.text() and bg in label.text()  # 前景/背景配色上墙
-        assert "background-color" in label.text()
-        assert text.IMPORT_WARNING_TEXTS[code].split("（")[0].split("{")[0] in label.text()
+    for theme in visual_style.VALID_THEME_OUTPUTS:
+        previous = visual_style.active_theme()
+        visual_style.set_active_theme(theme)
+        try:
+            for code in text.IMPORT_WARNING_SEVERITIES:
+                symbol, fg, bg = import_warning_style(classify_import_warning(code))
+                label = build_warning_label([(code, "明细")])
+                assert symbol in label.text()
+                assert fg in label.text() and bg in label.text()  # 前景/背景配色上墙
+                assert "background-color" in label.text()
+                assert text.IMPORT_WARNING_TEXTS[code].split("（")[0].split("{")[0] in label.text()
+        finally:
+            visual_style.set_active_theme(previous)
 
 
 def test_build_warning_label_unknown_code_falls_back_without_crash() -> None:
@@ -262,8 +279,8 @@ def test_build_warning_label_escapes_html_and_joins_lines() -> None:
 def test_dialog_renders_graded_warning_cells(tmp_path: Path, qtbot) -> None:
     """对话框告警列：分级 QLabel 单元格（强/弱/提示三码同屏可区分）。"""
     from photo_archiver.presentation.views.import_preview_dialog import (
-        _IMPORT_WARNING_STYLES,
         classify_import_warning,
+        import_warning_style,
     )
 
     from photo_archiver.domain import Person
@@ -293,7 +310,7 @@ def test_dialog_renders_graded_warning_cells(tmp_path: Path, qtbot) -> None:
             seen.add(code)
             widget = dialog._table.cellWidget(row_index, 5)
             assert isinstance(widget, QLabel)
-            symbol, fg, _bg = _IMPORT_WARNING_STYLES[classify_import_warning(code)]
+            symbol, fg, _bg = import_warning_style(classify_import_warning(code))
             assert symbol in widget.text()
             assert fg in widget.text()
     assert seen == expected_codes

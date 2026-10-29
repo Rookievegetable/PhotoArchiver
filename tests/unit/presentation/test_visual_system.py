@@ -33,10 +33,12 @@ import pytest
 pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QSize, qInstallMessageHandler
+from PySide6.QtCore import QSize, Qt, qInstallMessageHandler
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialogButtonBox,
+    QFrame,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QToolButton,
@@ -59,13 +61,27 @@ from photo_archiver.presentation.views.person_deletion_dialog import (
     PersonDeletionDialog,
 )
 from photo_archiver.presentation.visual_style import (
+    BADGE_OBJECT_NAME,
+    BANNER_OBJECT_NAME,
+    CARD_OBJECT_NAME,
     ROLE_DANGER,
+    ROLE_NEUTRAL,
     ROLE_PRIMARY,
+    ROLE_SUCCESS,
+    ROLE_WARNING,
+    SEVERITY_PROPERTY,
+    THEME_DARK,
+    THEME_LIGHT,
     apply_visual_system,
     assign_role,
     build_stylesheet,
     button_role,
+    style_badge,
+    style_banner,
+    style_card,
     style_empty_state_card,
+    theme_tokens,
+    token,
 )
 
 
@@ -80,14 +96,16 @@ def test_stylesheet_declares_hierarchy_focus_and_card() -> None:
     assert "EmptyStateCard" in qss  # shared empty-state card look
 
 
-def test_stylesheet_uses_only_valid_palette_function_form() -> None:
+@pytest.mark.parametrize("theme", [THEME_LIGHT, THEME_DARK])
+def test_stylesheet_uses_only_valid_palette_function_form(theme: str) -> None:
     """AUDIT-UI-001 syntax guard: ``palette(Role)`` only — never dotted.
 
     A single ``palette.Highlight`` style rule makes Qt reject the ENTIRE
     application stylesheet (see the parse-warning test below), so the dot
-    syntax must stay out even inside comments of the shipped QSS.
+    syntax must stay out even inside comments of the shipped QSS. 阶段 1
+    双主题化：两个主题的产物各验一遍（§6.5）。
     """
-    qss = build_stylesheet()
+    qss = build_stylesheet(theme)
     assert "palette(" in qss
     assert not re.search(r"\bpalette\.[A-Za-z_]+", qss)
     # Disabled is a pseudo-state, never a second palette() argument.
@@ -97,18 +115,19 @@ def test_stylesheet_uses_only_valid_palette_function_form() -> None:
 # ── AUDIT-UI-002 layer 1: Qt parse-warning capture ───────────────────────────
 
 
-def test_production_stylesheet_parses_without_qt_warning(qapp) -> None:
+@pytest.mark.parametrize("theme", [THEME_LIGHT, THEME_DARK])
+def test_production_stylesheet_parses_without_qt_warning(qapp, theme: str) -> None:
     """The shipped stylesheet must not trip Qt's stylesheet parser.
 
     With the AUDIT-UI-001 defect, Qt emitted
     ``Could not parse application stylesheet`` here and silently dropped
     every Batch 7 rule — the tests stayed green because they only read the
-    QSS string. This closes that gap.
+    QSS string. This closes that gap. 阶段 1 双主题化：两主题产物都须零告警。
     """
     messages: list[str] = []
     previous = qInstallMessageHandler(lambda _m, _c, msg: messages.append(msg))
     try:
-        qapp.setStyleSheet(build_stylesheet())
+        qapp.setStyleSheet(build_stylesheet(theme))
         probe = QPushButton()
         probe.ensurePolished()
         probe.grab()  # force style resolution
@@ -307,27 +326,47 @@ def test_render_primary_differs_from_normal_button(styled_app) -> None:
     )
 
 
-def test_render_danger_paints_the_danger_color(styled_app) -> None:
-    """Danger must really paint the brand red — recognizably, on every platform.
+@pytest.mark.parametrize("theme", [THEME_LIGHT, THEME_DARK])
+def test_render_danger_paints_the_danger_color(qapp, theme: str) -> None:
+    """Danger must really paint the brand red — recognizably, on every theme.
 
-    The brand red is a stylesheet literal (``_DANGER_COLOR`` in
-    visual_style), so the exact constant is pinned at string level; the
-    render probe then proves it actually paints: red hue family, saturated
-    and bright enough to read as danger, clearly apart from the neutral
-    normal button. Native styles may tint the paint (macOS blended it toward
-    white) — the windows absorb that without admitting neutrals or other hues.
+    The danger red is a token (C4 迁移：浅色 #c62828 现值不变，深色 #d13438
+    UNVERIFIED——红系色相必须保留，P0-8)，so the exact constant is pinned at
+    string level per theme; the render probe then proves it actually paints:
+    red hue family, saturated and bright enough to read as danger, clearly
+    apart from the neutral normal button. Native styles may tint the paint —
+    the windows absorb that without admitting neutrals or other hues.
     """
-    assert re.search(r"background-color:\s*#c62828", build_stylesheet()), (
-        "danger rule must keep the brand red literal #c62828 (visual_style._DANGER_COLOR)"
-    )
+    apply_visual_system(qapp, theme=theme)
+    try:
+        expected_red = token("pa-danger-fg", theme)
+        assert re.search(rf"background-color:\s*{expected_red}", build_stylesheet(theme)), (
+            f"danger rule must keep the {theme} red literal {expected_red} (P0-1 token)"
+        )
 
-    normal = QPushButton()
-    danger = QPushButton()
-    assign_role(danger, ROLE_DANGER)
-    role_sat = _assert_role_paint(
-        _median_color(_interior_colors(danger)), 0.0, DANGER_HUE_TOLERANCE_DEG, "danger",
-    )
-    _assert_distinct_from_normal(role_sat, normal, "danger")
+        normal = QPushButton()
+        danger = QPushButton()
+        assign_role(danger, ROLE_DANGER)
+        role_sat = _assert_role_paint(
+            _median_color(_interior_colors(danger)), 0.0, DANGER_HUE_TOLERANCE_DEG, "danger",
+        )
+        _assert_distinct_from_normal(role_sat, normal, "danger")
+    finally:
+        _restore_default_look(qapp)
+
+
+def _restore_default_look(qapp) -> None:
+    """Drop the probe stylesheet and restore the captured default palette."""
+    apply_visual_system(qapp, theme=THEME_LIGHT)
+    qapp.setStyleSheet("")
+
+
+@pytest.fixture
+def dark_styled_app(qapp):
+    """Dark-theme production stylesheet + dark palette installed, then restored."""
+    apply_visual_system(qapp, theme=THEME_DARK)
+    yield qapp
+    _restore_default_look(qapp)
 
 
 def test_render_disabled_roles_keep_disabled_semantics(styled_app) -> None:
@@ -568,3 +607,127 @@ def test_searchable_combo_arrow_is_enlarged(styled_app, qtbot) -> None:
     indicator = marked.style().pixelMetric(QStyle.PixelMetric.PM_IndicatorWidth)
     assert marked.minimumWidth() >= indicator * 4
     assert plain.minimumWidth() == 0  # 未标记组合框不受影响
+
+
+# ── 阶段 1：Badge / Card / Banner 构建块与角色扩展（P0-4；N1-N7 落点随阶段
+#    2-9 任务书逐点确认，本文件仅冻结约定与渲染探针，views 零新增使用点）──
+
+
+def test_building_blocks_and_new_roles_declared_in_stylesheet() -> None:
+    """P0-4 §2 选择器全文逐组在单源 QSS 中声明（双主题共用模板）。"""
+    for theme in (THEME_LIGHT, THEME_DARK):
+        qss = build_stylesheet(theme)
+        assert "QLabel#Badge {" in qss
+        for severity in ("success", "warning", "danger", "info", "neutral"):
+            assert f'QLabel#Badge[severity="{severity}"]' in qss
+        assert "QFrame#Card {" in qss
+        assert "QFrame#Banner {" in qss
+        for severity in ("info", "warning", "danger"):
+            assert f'QFrame#Banner[severity="{severity}"]' in qss
+        for role in (ROLE_SUCCESS, ROLE_WARNING, ROLE_NEUTRAL):
+            assert f'QPushButton[styleRole="{role}"]' in qss
+
+
+def test_badge_severity_property_and_domain(qtbot) -> None:
+    """Badge：objectName＋severity 动态属性；取值域之外拒绝（§3.2 规则 3）。"""
+    badge = QLabel()
+    qtbot.addWidget(badge)
+    style_badge(badge, "warning")
+    assert badge.objectName() == BADGE_OBJECT_NAME
+    assert badge.property(SEVERITY_PROPERTY) == "warning"
+    style_badge(badge, "info")  # 变更 = setProperty + repolish（§3.2 规则 2）
+    assert badge.property(SEVERITY_PROPERTY) == "info"
+    with pytest.raises(ValueError):
+        style_badge(badge, "critical")
+
+
+def test_card_and_banner_building_blocks(qtbot) -> None:
+    """Card/Banner：WA_StyledBackground＋severity 取值域（info/warning/danger）。"""
+    banner = QFrame()
+    qtbot.addWidget(banner)
+    style_banner(banner, "warning")
+    assert banner.objectName() == BANNER_OBJECT_NAME
+    assert banner.property(SEVERITY_PROPERTY) == "warning"
+    assert banner.testAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+    with pytest.raises(ValueError):
+        style_banner(banner, "success")  # Banner 取值域不含 success/neutral
+
+    card = QFrame()
+    qtbot.addWidget(card)
+    style_card(card)
+    assert card.objectName() == CARD_OBJECT_NAME
+    assert card.testAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+
+
+def _badge_interior(badge: QLabel) -> str:
+    badge.setFixedSize(48, 24)
+    image = badge.grab().toImage()
+    return image.pixelColor(badge.width() // 2, badge.height() // 2).name().lower()
+
+
+@pytest.mark.parametrize("styled", ["styled_app", "dark_styled_app"])
+def test_render_badge_severities_paint_distinctly(styled: str, request) -> None:
+    """五个 severity 徽章真实涂出两两可区分的底色（像素探针，双主题）。"""
+    request.getfixturevalue(styled)  # 安装（浅/深）主题样式表与 palette
+    host = QWidget()
+    layout = QHBoxLayout(host)
+    for severity in ("success", "warning", "danger", "info", "neutral"):
+        badge = QLabel()
+        style_badge(badge, severity)
+        layout.addWidget(badge)
+    host.show()
+    host.grab()  # force style resolution before per-badge grabs
+
+    colors = {
+        severity: _badge_interior(badge)
+        for severity, badge in (
+            (severity, layout.itemAt(index).widget())
+            for index, severity in enumerate(
+                ("success", "warning", "danger", "info", "neutral")
+            )
+        )
+    }
+    assert len(set(colors.values())) == len(colors)
+
+
+@pytest.mark.parametrize("theme", [THEME_LIGHT, THEME_DARK])
+def test_render_new_role_buttons_paint_role_colors(qapp, theme: str) -> None:
+    """success/warning/neutral 按钮角色真实涂色（绿/琥珀/有意消色差灰）。"""
+    apply_visual_system(qapp, theme=theme)
+    try:
+        normal = QPushButton()
+        success = QPushButton()
+        assign_role(success, ROLE_SUCCESS)
+        warning = QPushButton()
+        assign_role(warning, ROLE_WARNING)
+        neutral = QPushButton()
+        assign_role(neutral, ROLE_NEUTRAL)
+
+        success_paint = _median_color(_interior_colors(success))
+        warning_paint = _median_color(_interior_colors(warning))
+        neutral_paint = _median_color(_interior_colors(neutral))
+        _assert_role_paint(success_paint, 118.0, 30.0, "success")
+        _assert_role_paint(warning_paint, 40.0, 25.0, "warning")
+
+        # neutral 走有意的低饱和实底：色调不再是角色色，且与普通按钮的
+        # 中性观感可区分（规则被删/样式表被整体拒绝时塌缩为同一涂色）。
+        _hue, neutral_sat, _value = _hsv(neutral_paint)
+        assert neutral_sat <= 0.12
+        assert neutral_paint != _median_color(_interior_colors(normal))
+        assert len({success_paint.name(), warning_paint.name(), neutral_paint.name()}) == 3
+    finally:
+        _restore_default_look(qapp)
+
+
+def test_theme_tokens_are_frozen_shapes() -> None:
+    """Token 表形状守护：双主题同键集，深色为 P0-1 建议值（UNVERIFIED）。"""
+    light = theme_tokens(THEME_LIGHT)
+    dark = theme_tokens(THEME_DARK)
+    assert set(light) == set(dark)
+    # C4 现值契约：danger 浅色不变、红系色相保留。
+    assert light["pa-danger-fg"] == "#c62828"
+    assert light["pa-danger-border"] == "#8e1f1c"
+    assert dark["pa-danger-fg"] == "#d13438"
+    # R6/B-3 校准基线：C2 目标 pa-text-secondary 浅色 #5c5c5c。
+    assert light["pa-text-secondary"] == "#5c5c5c"
+    assert dark["pa-text-secondary"] == "#c8c8c8"

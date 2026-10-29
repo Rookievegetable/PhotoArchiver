@@ -42,7 +42,7 @@ from photo_archiver.domain.entities import (
     DRAFT_ACTION_MERGE_EXISTING,
     DRAFT_ACTION_SKIP,
 )
-from photo_archiver.presentation import ui_text as text
+from photo_archiver.presentation import ui_text as text, visual_style
 from photo_archiver.presentation.visual_style import ROLE_PRIMARY, assign_role
 
 CONFIRM_SYNC_LIMIT = 500
@@ -54,16 +54,31 @@ _ACTION_LABELS = (
 )
 _FIELDS = ("name", "identity", "department", "note", "group")
 
-# P8 告警分级：每级的（前缀符号, 前景色, 背景色）——三级两两可区分；
-# 未知 code 走 ``_IMPORT_WARNING_DEFAULT_STYLE``（默认样式，不崩溃）。
+# P8 告警分级：每级的（前缀符号, 前景 token, 背景 token）——三级两两可
+# 区分；未知 code 走 ``_IMPORT_WARNING_DEFAULT_STYLE``（默认样式，不崩溃）。
 # 配色以富文本 span 落在告警行内（不经 widget 级 stylesheet，遵循视觉系统
-# 单一样式表约定）。
-_IMPORT_WARNING_STYLES = {
-    text.IMPORT_WARNING_SEVERITY_STRONG: ("⛔", "#B3261E", "#F9DEDC"),
-    text.IMPORT_WARNING_SEVERITY_WEAK: ("⚠", "#8A5A00", "#FBEEC9"),
-    text.IMPORT_WARNING_SEVERITY_INFO: ("ℹ", "#1F4E79", "#DEEAF6"),
+# 单一样式表约定）。色值经 visual_style token 在调用时按当前主题解析
+# （P0-8 C1 迁移：浅色值＝现值冻结 VERIFIED；深色＝P0-1 §1.5 建议值
+# UNVERIFIED，三级明度排序不变）。
+_IMPORT_WARNING_TOKEN_STYLES = {
+    text.IMPORT_WARNING_SEVERITY_STRONG: ("⛔", "pa-alert-fg", "pa-alert-bg"),
+    text.IMPORT_WARNING_SEVERITY_WEAK: ("⚠", "pa-warning-fg", "pa-warning-bg"),
+    text.IMPORT_WARNING_SEVERITY_INFO: ("ℹ", "pa-info-fg", "pa-info-bg"),
 }
 _IMPORT_WARNING_DEFAULT_STYLE: tuple[str, None, None] = ("•", None, None)
+
+
+def import_warning_style(severity: str) -> tuple[str, str | None, str | None]:
+    """Return (前缀符号, 前景色, 背景色)，色值按当前激活主题解析（P0-8 C1）。
+
+    未知 severity 返回默认样式（无配色，不崩溃）；token 名取自 P0-1 冻结表。
+    """
+    symbol, fg_token, bg_token = _IMPORT_WARNING_TOKEN_STYLES.get(
+        severity, _IMPORT_WARNING_DEFAULT_STYLE
+    )
+    if fg_token is None or bg_token is None:
+        return symbol, None, None
+    return symbol, visual_style.token(fg_token), visual_style.token(bg_token)
 # 严重级排序（小 = 更严重）：用于多告警行的 tooltip 排序与整体定级。
 _IMPORT_WARNING_SEVERITY_RANK = {
     text.IMPORT_WARNING_SEVERITY_STRONG: 0,
@@ -98,7 +113,7 @@ def build_warning_label(warnings, parent=None) -> QLabel:  # noqa: ANN001
     lines = []
     for code, detail in warnings:
         severity = classify_import_warning(code)
-        symbol, fg, bg = _IMPORT_WARNING_STYLES.get(severity, _IMPORT_WARNING_DEFAULT_STYLE)
+        symbol, fg, bg = import_warning_style(severity)
         template = text.IMPORT_WARNING_TEXTS.get(code, text.IMPORT_PREVIEW_DEFAULT_WARNING)
         body = html.escape(template.format(code=code, detail=detail))
         if fg is not None and bg is not None:

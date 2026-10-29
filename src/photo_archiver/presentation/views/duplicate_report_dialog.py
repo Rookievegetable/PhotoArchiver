@@ -8,7 +8,7 @@ ArchivePreviewDialog / ExportDialog。
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from photo_archiver.presentation import visual_style
 from photo_archiver.presentation.ui_text import (
     DUPLICATE_DIALOG_TITLE,
     DUPLICATE_DISPOSE_BUTTON,
@@ -124,6 +125,11 @@ class DuplicateReportDialog(QDialog):
                         str(photo.path.raw_path),
                     ],
                 )
-                member_node.setForeground(1, Qt.GlobalColor.darkGray)  # type: ignore[attr-defined]
+                # P0-8 C2 迁移：路径列次要信息前景改从 pa-text-secondary
+                # token 取值（浅色校准值 #5c5c5c 实算 5.87:1 达标；深色
+                # #c8c8c8，P0-1 建议值 UNVERIFIED）——"次要信息"层级不变。
+                member_node.setForeground(
+                    1, QBrush(QColor(visual_style.token("pa-text-secondary")))
+                )
             self._tree.addTopLevelItem(group_node)
         self._tree.expandAll()
