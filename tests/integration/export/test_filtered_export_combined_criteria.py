@@ -157,7 +157,11 @@ def _select_person(window, person_id) -> None:
 
 
 def _select_status(window, index: int) -> None:
-    window._filter_bar._status_combo.setCurrentIndex(index)
+    # M8 面板化（DEC-06 按图推翻）：状态轴复选框；index 语义＝
+    # (0=pending, 1=approved, 2=rejected, 3=unmatched)，与原下拉项序一致。
+    key = ("pending", "approved", "rejected", "unmatched")[index]
+    for status_key, check in window._filter_bar._status_checks.items():
+        check.setChecked(status_key == key)
 
 
 def _set_date(window, *, frm: tuple | None = None, to: tuple | None = None) -> None:

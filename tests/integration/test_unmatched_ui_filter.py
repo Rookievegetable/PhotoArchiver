@@ -58,9 +58,9 @@ def test_unmatched_filter_shows_only_photos_without_recognition_results(
     # 无筛选：照片墙显示全部两张。
     assert window._photo_list_model.rowCount() == 2
 
-    index = window._filter_bar._status_combo.findData("unmatched")
-    assert index >= 0
-    window._filter_bar._status_combo.setCurrentIndex(index)
+    # M8 面板化（DEC-06 按图推翻）：状态轴为复选框——仅勾选"未匹配"。
+    for key, check in window._filter_bar._status_checks.items():
+        check.setChecked(key == "unmatched")
 
     names = {
         window._photo_list_model.index(row, 0).data() for row in range(window._photo_list_model.rowCount())
@@ -68,8 +68,8 @@ def test_unmatched_filter_shows_only_photos_without_recognition_results(
     assert names == {"unmatched.jpg"}
 
     # 切回待审核：只显示有识别结果的照片（AND 语义与哨兵互斥）。
-    pending_index = window._filter_bar._status_combo.findData(MatchStatus.PENDING.value)
-    window._filter_bar._status_combo.setCurrentIndex(pending_index)
+    for key, check in window._filter_bar._status_checks.items():
+        check.setChecked(key == "pending")
     names = {
         window._photo_list_model.index(row, 0).data() for row in range(window._photo_list_model.rowCount())
     }
