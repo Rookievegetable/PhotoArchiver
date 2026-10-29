@@ -25,12 +25,15 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from photo_archiver.application.commands.import_draft import (
@@ -43,7 +46,15 @@ from photo_archiver.domain.entities import (
     DRAFT_ACTION_SKIP,
 )
 from photo_archiver.presentation import ui_text as text, visual_style
-from photo_archiver.presentation.visual_style import ROLE_PRIMARY, assign_role
+from photo_archiver.presentation.visual_style import (
+    ROLE_PRIMARY,
+    assign_role,
+    assign_button_icon,
+    style_card,
+    style_page_subtitle,
+    style_page_title,
+    token,
+)
 
 CONFIRM_SYNC_LIMIT = 500
 
@@ -154,20 +165,45 @@ class ImportPreviewDialog(QDialog):
     # ── UI construction ──────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
-        """Lay out options row, draft table, counts row and buttons."""
+        """Lay out page header, options card, draft table, counts row, buttons.
+
+        参考图视觉对齐（taskbook-8 §4 纯视觉项，Owner 2026-10-30 基线裁决）：
+        页头标题＋副标题、选项行 Card 化、按钮挂 Fluent 图标；差异①-⑥按
+        保守值不实施（无查看映射/查看/…、保留 8 列、无右侧统计面板）。
+        """
         layout = QVBoxLayout(self)
 
+        # 参考图区块 #1：页头标题＋副标题（纯视觉；副标题经 ui_text 新键）。
+        header = QWidget(self)
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(2)
+        title = QLabel(text.IMPORT_PREVIEW_TITLE, header)
+        style_page_title(title)
+        subtitle = QLabel(text.IMPORT_PREVIEW_SUBTITLE, header)
+        style_page_subtitle(subtitle)
+        header_layout.addWidget(title)
+        header_layout.addWidget(subtitle)
+        layout.addWidget(header)
+
+        # 参考图区块 #2：选项行 Card 化（文件/编码/分隔符/表头/工作表/重新解析，
+        # 全部既有控件与语义零变化）。
+        card = QFrame(self)
+        style_card(card)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 10, 12, 10)
         options_row = QHBoxLayout()
+        self._file_label = QLabel(
+            text.IMPORT_PREVIEW_FILE_LABEL + str(self._draft.batch.file_name), card,
+        )
+        options_row.addWidget(self._file_label)
         options_row.addWidget(QLabel(
-            text.IMPORT_PREVIEW_FILE_LABEL + str(self._draft.batch.file_name), self,
+            text.IMPORT_PREVIEW_ENCODING_LABEL + str(self._draft.batch.encoding or "—"), card,
         ))
         options_row.addWidget(QLabel(
-            text.IMPORT_PREVIEW_ENCODING_LABEL + str(self._draft.batch.encoding or "—"), self,
+            text.IMPORT_PREVIEW_DELIMITER_LABEL + str(self._draft.batch.delimiter or "—"), card,
         ))
-        options_row.addWidget(QLabel(
-            text.IMPORT_PREVIEW_DELIMITER_LABEL + str(self._draft.batch.delimiter or "—"), self,
-        ))
-        self._header_check = QCheckBox(text.IMPORT_PREVIEW_HEADER_LABEL, self)
+        self._header_check = QCheckBox(text.IMPORT_PREVIEW_HEADER_LABEL, card)
         self._header_check.setChecked(self._has_header)
         self._header_check.toggled.connect(self._on_options_changed)
         options_row.addWidget(self._header_check)
@@ -175,8 +211,8 @@ class ImportPreviewDialog(QDialog):
         if self._draft.batch.source_type in ("xlsx", "xlsm", "xls"):
             sheet_names = self._services.parse_import_draft.list_sheets(self._source_file)
             if sheet_names:
-                options_row.addWidget(QLabel(text.IMPORT_PREVIEW_SHEET_LABEL, self))
-                self._sheet_combo = QComboBox(self)
+                options_row.addWidget(QLabel(text.IMPORT_PREVIEW_SHEET_LABEL, card))
+                self._sheet_combo = QComboBox(card)
                 self._sheet_combo.addItems(sheet_names)
                 if self._sheet_name:
                     index = self._sheet_combo.findText(self._sheet_name)
@@ -184,13 +220,21 @@ class ImportPreviewDialog(QDialog):
                         self._sheet_combo.setCurrentIndex(index)
                 self._sheet_combo.currentIndexChanged.connect(self._on_options_changed)
                 options_row.addWidget(self._sheet_combo)
-        reparse = QPushButton(text.IMPORT_PREVIEW_REPARSE_BUTTON, self)
+        reparse = QPushButton(text.IMPORT_PREVIEW_REPARSE_BUTTON, card)
         reparse.clicked.connect(self._on_options_changed)
+        assign_button_icon(reparse, "sync", token("pa-text-secondary"))
         options_row.addWidget(reparse)
         options_row.addStretch()
-        layout.addLayout(options_row)
+        card_layout.addLayout(options_row)
+        layout.addWidget(card)
 
         self._table = QTableWidget(0, 8, self)
+        # F-IMP-1 配套：告警列（列 5）Stretch——wordWrap 告警 QLabel 有可用
+        # 宽度，行高自适应后长告警完整可读（不截断、不省略）。
+        self._table.horizontalHeader().setSectionResizeMode(
+            5, QHeaderView.ResizeMode.Stretch,
+        )
+        self._table.setAlternatingRowColors(True)
         self._table.setHorizontalHeaderLabels([
             text.IMPORT_PREVIEW_COL_RAW,
             text.IMPORT_PREVIEW_COL_NAME,
@@ -233,6 +277,7 @@ class ImportPreviewDialog(QDialog):
         cancel.clicked.connect(self.reject)
         confirm = QPushButton(text.IMPORT_PREVIEW_CONFIRM_BUTTON, self)
         assign_role(confirm, ROLE_PRIMARY)
+        assign_button_icon(confirm, "download")
         confirm.clicked.connect(self.accept)
         buttons.addStretch()
         buttons.addWidget(cancel)
@@ -303,6 +348,10 @@ class ImportPreviewDialog(QDialog):
                 split.clicked.connect(lambda _=False, r=row: self._on_split(r))
                 self._table.setCellWidget(row_index, 7, split)
         self._table.blockSignals(False)
+        # F-IMP-1：行高随内容自适应——wordWrap 告警 QLabel 的行全高显示
+        # （不截断、不省略；tooltip 全文保留）。重绘后（拆分/重新解析/动作
+        # 切换路径均经 _repopulate）行高保持正确；⛔/⚠/ℹ 分级与排序零变化。
+        self._table.resizeRowsToContents()
         self._refresh_counts()
 
     @staticmethod
@@ -374,6 +423,7 @@ class ImportPreviewDialog(QDialog):
         """Refresh the will-create/merge/skip/warnings counters."""
         warning_rows = sum(1 for row in self._draft.rows if row.warnings)
         self._counts_label.setText(text.IMPORT_PREVIEW_COUNTS.format(
+            total=len(self._draft.rows),
             create=self._draft.create_count,
             merge=self._draft.merge_count,
             skip=self._draft.skip_count,

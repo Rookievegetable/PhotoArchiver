@@ -46,6 +46,8 @@ STATUS_TASK_COMPLETED = "{label}完成"
 
 # ---- 导入预览与确认（人员导入重设计 阶段 A） ----
 IMPORT_PREVIEW_TITLE = "导入预览与确认"
+# 参考图页头副标题（2026-10-30 视觉对齐，非破坏性新增键）。
+IMPORT_PREVIEW_SUBTITLE = "请在导入前预览各册数据，确认无误后再进行导入。"
 IMPORT_PREVIEW_FILE_LABEL = "文件："
 IMPORT_PREVIEW_ENCODING_LABEL = "编码："
 IMPORT_PREVIEW_DELIMITER_LABEL = "分隔符："
@@ -64,7 +66,7 @@ IMPORT_PREVIEW_ACTION_MERGE = "合并到已有人员"
 IMPORT_PREVIEW_ACTION_SKIP = "跳过"
 IMPORT_PREVIEW_SPLIT_BUTTON = "拆分"
 IMPORT_PREVIEW_SPLIT_NOOP = "未发现多个姓名，无需拆分（如输入了多个姓名，请用、或 , 分隔）。"
-IMPORT_PREVIEW_COUNTS = "将新建 {create} · 合并 {merge} · 跳过 {skip} · 告警 {warnings}"
+IMPORT_PREVIEW_COUNTS = "共 {total} 行 · 将新建 {create} · 合并 {merge} · 跳过 {skip} · 告警 {warnings}"
 IMPORT_PREVIEW_CONFIRM_BUTTON = "确认导入"
 IMPORT_PREVIEW_CANCEL_BUTTON = "取消"
 IMPORT_PREVIEW_EMPTY_FILE = "文件中没有可导入的数据行。"

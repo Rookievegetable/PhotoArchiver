@@ -330,3 +330,61 @@ def test_status_import_draft_parsed_has_no_revisit_hint() -> None:
     assert "丢弃" in text.STATUS_IMPORT_DRAFT_PARSED
     assert "重新选择文件" in text.STATUS_IMPORT_DRAFT_PARSED
     assert "{rows}" not in text.STATUS_IMPORT_DRAFT_PARSED  # 不再需要行数占位
+
+
+# ── F-IMP-1：告警文字完整显示（不截断、不省略）──────────────────────────────
+# 母文档 §7.6 F-IMP-1 已批修复项（阶段 8 验收落点）：wordWrap 告警 QLabel 的
+# 行高必须随内容自适应；重绘（拆分/重新解析路径经 _repopulate）后行高保持。
+
+
+def test_f_imp1_long_warning_row_shows_full_height(parsed, qtbot) -> None:
+    """长告警行全高显示：行高显著大于单行默认高度，且告警 QLabel 高度被容纳。"""
+    dialog, _people = _make_dialog(parsed, qtbot)
+    table = dialog._table
+    # 告警行（多名行）行高必须容纳至少两行文本（默认单行 ≈ 30px）。
+    warning_rows = [
+        index for index, row in enumerate(dialog._draft.rows) if row.warnings
+    ]
+    assert warning_rows
+    for index in warning_rows:
+        assert table.rowHeight(index) >= 44, (
+            f"row {index} height {table.rowHeight(index)} clips wrapped warnings"
+        )
+
+
+def test_f_imp1_row_height_survives_repopulation(parsed, qtbot) -> None:
+    """重绘后（_repopulate）行高保持正确：拆分路径不回退到单行裁剪。"""
+    dialog, _people = _make_dialog(parsed, qtbot)
+    multi = next(
+        row for row in dialog._draft.rows
+        if any(w[0] == "multi_name" for w in row.warnings)
+    )
+    dialog._on_split(multi)  # 触发全量 _repopulate
+    table = dialog._table
+    warning_rows = [
+        index for index, row in enumerate(dialog._draft.rows) if row.warnings
+    ]
+    assert warning_rows
+    for index in warning_rows:
+        assert table.rowHeight(index) >= 44
+
+
+def test_f_imp1_tooltip_keeps_full_text(parsed, qtbot) -> None:
+    """tooltip 全文保留（多告警排序语义不变；P0-5 状态表达维度）。"""
+    dialog, _people = _make_dialog(parsed, qtbot)
+    multi = next(
+        row for row in dialog._draft.rows
+        if any(w[0] == "multi_name" for w in row.warnings)
+    )
+    index = dialog._draft.rows.index(multi)
+    widget = dialog._table.cellWidget(index, 5)
+    assert isinstance(widget, QLabel)
+    assert widget.toolTip() == dialog._warnings_text(multi)
+    assert "；" not in widget.text() or widget.wordWrap()
+
+
+def test_import_counts_line_includes_total(parsed, qtbot) -> None:
+    """汇总行新增「共 N 行」总数（参考图区块 #3；四计数语义零变化）。"""
+    dialog, _people = _make_dialog(parsed, qtbot)
+    counts = next(w for w in dialog.findChildren(QLabel) if "将新建" in w.text())
+    assert f"共 {len(dialog._draft.rows)} 行" in counts.text()
