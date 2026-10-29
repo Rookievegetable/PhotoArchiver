@@ -643,3 +643,63 @@ def test_detail_nav_missing_photo_reports_and_keeps_index(qtbot, tmp_path):
     assert dialog._detail_index == 0  # 未命中不推进索引
     assert dialog._detail_dialog is not None  # 现有详图保持原样
     qtbot.wait(100)  # 同上：解码任务/延迟销毁沉降（PySide6 6.11.1 竞态）
+
+# ── 视觉对齐定向断言（taskbook-5 派生方案 B；Owner 2026-10-30 决策 #4=B）──
+
+
+def test_decision_status_rendered_as_badge_with_severity_mapping(qtbot):
+    """落点 3：配对状态徽章化——文字承载状态（非仅色），severity 五态映射。"""
+    harness = _Harness()
+    person = harness.add_person("张三", 1)
+    photo_a = harness.add_photo("photos/a.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    _, clusters = harness.add_generation([("k|a|000000", [o1])])
+    suggest, workbench, ignore, results, roster = harness.build_services()
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=suggest, workbench_service=workbench,
+        ignore_service=ignore, list_persons=roster,
+    )
+    qtbot.addWidget(dialog)
+
+    # 无指派 → 未匹配（neutral）。
+    assert dialog._decision_badge.text() == text.CLUSTER_PAIRING_UNMATCHED
+    assert dialog._decision_badge.property("severity") == "neutral"
+
+    # 人工指派（confirmed 前= suggested 建议态？assign_person 直接生成 confirmed 行）
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=clusters[0].id, person_id=person.id),
+        actor=HUMAN_ACTOR,
+    )
+    dialog.refresh()
+    assert "张三" in dialog._decision_badge.text()
+    assert dialog._decision_badge.property("severity") in ("success", "warning")
+
+
+def test_pairing_run_status_label_is_neutral_badge(qtbot):
+    """落点 4：run 照片处理状态行单一 neutral 徽章（七计数文本语义不变）。"""
+    harness = _Harness()
+    photo_a = harness.add_photo("photos/a.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    harness.add_generation(
+        [("k|a|000000", [o1])], outcomes={photo_a: "no_face"},
+    )
+    dialog = harness.build_dialog(qtbot)
+
+    assert dialog._run_status_label.property("severity") == "neutral"
+    status = dialog._run_status_label.text()
+    assert "0 脸 1" in status and "有脸 0" in status  # 七计数文本零变化
+
+
+def test_pairing_feedback_row_is_card_contained(qtbot):
+    """落点 5：反馈行 Card 容器化（文字零变化）。"""
+    from photo_archiver.presentation.visual_style import CARD_OBJECT_NAME
+
+    harness = _Harness()
+    photo_a = harness.add_photo("photos/a.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    harness.add_generation([("k|a|000000", [o1])])
+    dialog = harness.build_dialog(qtbot)
+
+    assert dialog._feedback_card.objectName() == CARD_OBJECT_NAME
+    assert dialog._feedback_label.parent() is dialog._feedback_card

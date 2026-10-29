@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -66,6 +67,7 @@ from photo_archiver.presentation.visual_style import (
     ROLE_PRIMARY,
     assign_role,
     set_badge_severity,
+    style_card,
     style_card_list,
 )
 
@@ -83,6 +85,16 @@ _RUN_STATUS_SEVERITY = {
     "completed": "success",
     "failed": "danger",
     "cancelled": "warning",
+}
+
+# 配对决策五态 → Badge severity（taskbook-5 §2.1 派生提案；rejected 态在
+# active 集合外实际不出现，映射仅登记；未知状态回退 neutral 不崩溃）。
+_ASSIGNMENT_SEVERITY = {
+    "suggested": "warning",
+    "auto_confirmed": "info",
+    "confirmed": "success",
+    "rejected": "danger",
+    "unassigned": "neutral",
 }
 
 
@@ -186,15 +198,25 @@ class ClusterResultsDialog(QDialog):
         self._run_status_badge.setVisible(False)
         summary_row.addWidget(self._run_status_badge)
         layout.addLayout(summary_row)
+        # 落点 4（taskbook-5 §5）：run 照片处理状态行单一 neutral 徽章化
+        # （整行不拆分、不可点击 DEC-08=A；七计数文本语义零变化）。
         self._run_status_label = QLabel(self)
+        set_badge_severity(self._run_status_label, "neutral")
         self._run_status_label.setWordWrap(True)
         self._run_status_label.setVisible(self._pairing_active)
         layout.addWidget(self._run_status_label)
         # 批量操作/生成建议的逐项结果反馈（独立于代际摘要，不随刷新清除）。
-        self._feedback_label = QLabel(self)
+        # 落点 5（taskbook-5 §5）：反馈行 Card 容器化（文字零变化）。
+        self._feedback_card = QFrame(self)
+        style_card(self._feedback_card)
+        feedback_layout = QVBoxLayout(self._feedback_card)
+        feedback_layout.setContentsMargins(8, 6, 8, 6)
+        self._feedback_label = QLabel(self._feedback_card)
         self._feedback_label.setWordWrap(True)
         self._feedback_label.setVisible(self._pairing_active)
-        layout.addWidget(self._feedback_label)
+        feedback_layout.addWidget(self._feedback_label)
+        self._feedback_card.setVisible(self._pairing_active)
+        layout.addWidget(self._feedback_card)
 
         body = QHBoxLayout()
         self._cluster_list = QListWidget(self)
@@ -243,6 +265,15 @@ class ClusterResultsDialog(QDialog):
         self._detail_info = QLabel(self)
         self._detail_info.setWordWrap(True)
         layout.addWidget(self._detail_info)
+        # 落点 3（taskbook-5 §5）：配对状态行徽章化——severity 按决策五态映射，
+        # 状态文字保留在徽章内（§10-7 非仅色）；confirmed 扩散通道零触碰。
+        decision_row = QHBoxLayout()
+        decision_row.addWidget(QLabel(text.CLUSTER_PAIRING_DECISION_STATUS_LABEL, pane))
+        self._decision_badge = QLabel(pane)
+        set_badge_severity(self._decision_badge, "neutral")
+        decision_row.addWidget(self._decision_badge)
+        decision_row.addStretch()
+        layout.addLayout(decision_row)
 
         photos_row = QHBoxLayout()
         photos_row.addWidget(QLabel(text.CLUSTER_PAIRING_PHOTOS_LABEL, pane))
@@ -522,10 +553,18 @@ class ClusterResultsDialog(QDialog):
             text.PAIRING_WORKBENCH_ASSIGNMENT_LABEL.get(assignment.status, "?")
             if assignment is not None else text.CLUSTER_PAIRING_UNMATCHED
         )
+        assignment_status = assignment.status if assignment is not None else "unassigned"
         if assignment is not None:
             decision_text = decision_text.format(
                 person=self._person_name(assignment.person_id),
             )
+        # 落点 3：配对状态行徽章化——状态文字整体进徽章（含 person 填充），
+        # severity 按五态映射；忽略照片备注保留在详情信息行（文字承载）。
+        self._decision_badge.setText(decision_text)
+        set_badge_severity(
+            self._decision_badge,
+            _ASSIGNMENT_SEVERITY.get(assignment_status, "neutral"),
+        )
         ignored_set = set(detail.ignored_photo_ids)
         ignored_note = (
             f" · 忽略照片 {len(ignored_set)} 张" if ignored_set else ""
@@ -541,7 +580,7 @@ class ClusterResultsDialog(QDialog):
                 faces=detail.member_count,
             )
             + f"\n{text.CLUSTER_PAIRING_DECISIONS_LABEL.format(count=len(person_ids))}"
-            + f"\n配对状态：{decision_text}{ignored_note}"
+            + ignored_note
         )
         # 照片网格：按 photo 去重（一张照片多脸只显示一行）。
         seen_photos: set[UUID] = set()

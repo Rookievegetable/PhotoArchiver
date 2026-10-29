@@ -42,6 +42,7 @@ from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -63,7 +64,7 @@ from photo_archiver.domain.exceptions import (
     ValidationError,
 )
 from photo_archiver.presentation import ui_text as text
-from photo_archiver.presentation.visual_style import mark_searchable_combo
+from photo_archiver.presentation.visual_style import mark_searchable_combo, style_banner
 from photo_archiver.presentation.ui_text import (
     REVIEW_APPROVE_ALL,
     REVIEW_APPROVE_ALL_CONFIRM,
@@ -169,13 +170,21 @@ class ReviewCenterPage(QWidget):
         # 2026-10-01 引导条（WS1）：两条身份建立路径的分工——冷启动配对链
         # （ordered_suggestion → 人工确认）在本页之外；本页只做 D-1 个别处理。
         # 只做引导，不做任何自动化身份归属（K-3/D-1 冻结语义不变）。
-        guidance = QLabel(REVIEW_GUIDANCE_TEXT, self)
+        # 入口视觉（taskbook-5 §2.4 派生：参考图体系 Banner[info] 容器）——
+        # 引导文字与配对按钮收进 Banner 卡；pairing_requested 接线零改动
+        # （DEC-09=A：按钮维持既有跳转，仅视觉）。
+        guidance_banner = QFrame(self)
+        style_banner(guidance_banner, "info")
+        guidance_layout = QHBoxLayout(guidance_banner)
+        guidance_layout.setContentsMargins(12, 8, 12, 8)
+        guidance = QLabel(REVIEW_GUIDANCE_TEXT, guidance_banner)
         guidance.setWordWrap(True)
-        self._pairing_button = QPushButton(REVIEW_GUIDANCE_PAIRING_BUTTON, self)
+        self._pairing_button = QPushButton(REVIEW_GUIDANCE_PAIRING_BUTTON, guidance_banner)
         self._pairing_button.clicked.connect(self.pairing_requested.emit)
+        guidance_layout.addWidget(guidance, 1)
+        guidance_layout.addWidget(self._pairing_button)
         guidance_row = QHBoxLayout()
-        guidance_row.addWidget(guidance, 1)
-        guidance_row.addWidget(self._pairing_button)
+        guidance_row.addWidget(guidance_banner)
 
         self._status = QLabel(self)
         self._status.setWordWrap(True)

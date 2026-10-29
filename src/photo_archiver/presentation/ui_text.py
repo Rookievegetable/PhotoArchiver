@@ -673,6 +673,8 @@ CLUSTER_PAIRING_DETAIL_NEXT = "下一张"
 CLUSTER_DETAIL_PHOTO_MISSING = "该照片已不在当前结果中，无法查看；请刷新后重试。"
 CLUSTER_PAIRING_PHOTOS_LABEL = "组内照片（可多选后忽略/恢复；双击查看大图）："
 CLUSTER_PAIRING_DECISIONS_LABEL = "当前有效决策涉及人物数：{count}（按决策记录统计，非识别算法人数）"
+# 落点 3（taskbook-5 §5）：配对状态徽章行前缀（非破坏性新增键；状态文字在徽章内）。
+CLUSTER_PAIRING_DECISION_STATUS_LABEL = "配对状态："
 CLUSTER_PAIRING_RUN_STATUS = (
     "本 run 照片处理：共 {total} · 有脸 {faces} · 0 脸 {no_face} · "
     "不可读 {unreadable} · 出错 {error} · 未处理 {not_processed} · 未知 {unknown}"

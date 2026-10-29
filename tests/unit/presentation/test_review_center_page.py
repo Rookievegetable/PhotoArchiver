@@ -71,10 +71,14 @@ def test_queue_header_with_total_sits_above_the_list(qtbot) -> None:
 
     assert dialog._status.text() == text.REVIEW_STATUS_LINE.format(count=2)
     # Header sits above the list (Batch 5 requirement); 2026-10-01 页面化后
-    # 顶部先有引导条行（guidance layout），状态行紧随其后。
+    # 顶部先有引导条行，状态行紧随其后。入口视觉（taskbook-5 §2.4 派生）：
+    # 引导文字＋配对按钮收进 Banner[info] 卡，接线零改动（DEC-09=A）。
     layout = dialog.layout()
-    assert layout.itemAt(0).widget() is None  # itemAt(0) = 引导条 layout
-    assert layout.itemAt(0).layout().indexOf(dialog._pairing_button) >= 0
+    banner = layout.itemAt(0).layout().itemAt(0).widget()
+    from photo_archiver.presentation.visual_style import BANNER_OBJECT_NAME
+
+    assert banner is not None and banner.objectName() == BANNER_OBJECT_NAME
+    assert dialog._pairing_button.parent() is banner
     assert layout.itemAt(1).widget() is dialog._status
     assert layout.indexOf(dialog._list) > layout.indexOf(dialog._status)
 
