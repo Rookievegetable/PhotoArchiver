@@ -163,10 +163,10 @@ def test_page_renders_roster_in_order_with_columns(populated) -> None:
     page, _, _ = populated
     table = page._table
     assert table.rowCount() == 3
-    names = [table.item(row, 2).text() for row in range(table.rowCount())]
+    names = [table.item(row, 3).text() for row in range(table.rowCount())]
     assert names == ["张三", "李四", "王五"]
-    assert [table.item(row, 0).text() for row in range(3)] == ["1", "2", "3"]  # 顺序列
-    assert [table.item(row, 1).text() for row in range(3)] == ["—", "—", "—"]  # 组/序：单组无前缀
+    assert [table.item(row, 1).text() for row in range(3)] == ["1", "2", "3"]  # 顺序列
+    assert [table.item(row, 2).text() for row in range(3)] == ["—", "—", "—"]  # 组/序：单组无前缀
 
 
 def test_move_selected_persists_and_updates_positions(populated, tmp_path: Path) -> None:
@@ -217,8 +217,8 @@ def test_batch_review_switches_hint_and_gates(tmp_path: Path, populated, qtbot) 
     page._batch_combo.setCurrentIndex(index)
     page._on_batch_selected(index)
     assert page._table.rowCount() == 1  # 该批次带入 1 人（名单里的「张三 E001」是新建，不合并无工号的同名人员）
-    assert page._table.item(0, 2).text() == "张三"
-    assert page._table.item(0, 6).text() == "batch.csv"  # 来源批次列可见（组/序插入后右移）
+    assert page._table.item(0, 3).text() == "张三"
+    assert page._table.item(0, 7).text() == "batch.csv"  # 来源批次列可见（组/序插入后右移）
     assert page._batch_hint.isVisible()
     assert page._batch_hint.text() == text.PEOPLE_PAGE_BATCH_FILTER_HINT  # 调序提示
     assert page._table.dragEnabled()  # 批次视图允许拖拽调序
@@ -289,7 +289,7 @@ def _row_payload() -> QMimeData:
 
 def _row_center(table, row: int) -> QPoint:
     """Return a real viewport point inside ``row``'s cells."""
-    return table.visualItemRect(table.item(row, 2)).center()
+    return table.visualItemRect(table.item(row, 3)).center()
 
 
 def test_table_keeps_row_drops_enabled_for_reordering(populated, tmp_path: Path) -> None:
@@ -351,9 +351,9 @@ def test_row_drop_reorders_the_roster_without_a_blank_row(
     ]
     assert [p.roster_order for p in repositories.people.list_all()] == [1, 2, 3, 4, 5, 6]
     assert table.rowCount() == 3
-    assert [table.item(row, 2).text() for row in range(3)] == ["批王", "批张", "批李"]
+    assert [table.item(row, 3).text() for row in range(3)] == ["批王", "批张", "批李"]
     # 界面优化 §4.1：行内操作列已取消（编辑移至工具栏）。
-    assert table.columnCount() == 8  # P4：末尾新增「匹配状态」列
+    assert table.columnCount() == 9  # 复选框列（DEC-06 按图推翻）+ 8 业务列
     assert all(table.cellWidget(row, 6) is None for row in range(3))
     # 落点降级成功：Qt 不会动模型，被拖动的人在自己的新位置保持选中
     assert [index.row() for index in table.selectionModel().selectedRows()] == [0]
@@ -531,7 +531,7 @@ def test_move_buttons_keep_the_person_selected_at_the_new_position(
     assert [p.name for p in repositories.people.list_all()] == [
         "张三", "李四", "王五", "批李", "批张", "批王",
     ]
-    assert page._table.item(1, 2).text() == "批张"
+    assert page._table.item(1, 3).text() == "批张"
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [1]
     assert page._table.currentRow() == 1
     assert page._move_down_button.isEnabled()  # 行 1/3：仍可下移
@@ -555,7 +555,7 @@ def test_move_buttons_keep_the_person_selected_at_the_new_position(
         "张三", "李四", "王五", "批张", "批李", "批王",
     ]
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [0]
-    assert page._table.item(0, 2).text() == "批张"
+    assert page._table.item(0, 3).text() == "批张"
     assert not page._move_up_button.isEnabled()  # 已到开头
 
 
@@ -573,7 +573,7 @@ def test_repeated_move_clicks_move_the_same_person(populated, tmp_path: Path) ->
         "张三", "李四", "王五", "批李", "批王", "批张",
     ]
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [2]
-    assert page._table.item(2, 2).text() == "批张"
+    assert page._table.item(2, 3).text() == "批张"
 
 
 def test_move_buttons_grey_out_at_the_roster_edges(populated, tmp_path: Path) -> None:
@@ -620,11 +620,11 @@ def test_selection_follows_the_person_across_refreshes(
     # 批次筛选在刷新后保持：视图仍是本批次两人，选区跟随 批王
     assert [p.name for p in page.visible_people()] == ["批王", "批孙"]
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [0]
-    assert page._table.item(0, 2).text() == "批王"
+    assert page._table.item(0, 3).text() == "批王"
 
     page.move_row(0, 1)  # 批次视图调序：批王 移到末位，选区跟随
     assert [index.row() for index in page._table.selectionModel().selectedRows()] == [1]
-    assert page._table.item(1, 2).text() == "批王"
+    assert page._table.item(1, 3).text() == "批王"
 
 
 def test_identity_conflict_is_reported_in_chinese(populated, monkeypatch) -> None:
@@ -835,6 +835,7 @@ def test_people_table_renders_group_ordinal_column(tmp_path: Path, qtbot) -> Non
     table = page._table
     headers = [table.horizontalHeaderItem(c).text() for c in range(table.columnCount())]
     assert headers == [
+        "",  # 复选框选择列（DEC-06 按图推翻；无表头文字）
         text.PEOPLE_PAGE_COL_ORDER,
         text.PEOPLE_PAGE_COL_GROUP_ORDINAL,
         text.PEOPLE_PAGE_COL_NAME,
@@ -845,12 +846,12 @@ def test_people_table_renders_group_ordinal_column(tmp_path: Path, qtbot) -> Non
         text.PEOPLE_PAGE_COL_MATCH_STATUS,
     ]
     # 1张三/2李四 → 第 1 组；1王五 → 第 2 组；赵六无前缀 → 序号「—」。
-    assert [table.item(row, 1).text() for row in range(table.rowCount())] == [
+    assert [table.item(row, 2).text() for row in range(table.rowCount())] == [
         "1/1", "1/2", "2/1", "2/—",
     ]
     # 派生依据说明在该列 tooltip（其余列 tooltip 为单元格值本身）。
-    assert table.item(0, 1).toolTip() == text.PEOPLE_PAGE_GROUP_ORDINAL_TOOLTIP
-    assert table.item(0, 2).toolTip() == "1张三"
+    assert table.item(0, 2).toolTip() == text.PEOPLE_PAGE_GROUP_ORDINAL_TOOLTIP
+    assert table.item(0, 3).toolTip() == "1张三"
 
 
 def test_group_ordinal_column_recomputes_after_reorder(populated, tmp_path: Path) -> None:
@@ -862,14 +863,14 @@ def test_group_ordinal_column_recomputes_after_reorder(populated, tmp_path: Path
     ], tag="grp")
     table = page._table
     # 批次视图（按导入序）：序号链 2→1 不接续 → 两个组
-    assert [table.item(row, 1).text() for row in range(table.rowCount())] == [
+    assert [table.item(row, 2).text() for row in range(table.rowCount())] == [
         "1/2", "2/1",
     ]
     page.move_row(0, 1)  # 批次视图内交换：1批甲 移后 → 序号链 1→2 连续 → 单组
-    assert [table.item(row, 2).text() for row in range(table.rowCount())] == [
+    assert [table.item(row, 3).text() for row in range(table.rowCount())] == [
         "1批甲", "2批乙",
     ]
-    assert [table.item(row, 1).text() for row in range(table.rowCount())] == [
+    assert [table.item(row, 2).text() for row in range(table.rowCount())] == [
         "—/1", "—/2",
     ]
 
@@ -1110,15 +1111,15 @@ def test_row_match_status_marks_follow_anchor_generation(
 
     page.refresh_clustering()  # 选中 run 尚无代际
     page.refresh()
-    assert [page._table.item(row, 7).text() for row in range(6)] == ["—"] * 6
-    assert page._table.item(0, 7).toolTip() == text.PEOPLE_PAGE_MATCH_STATUS_TOOLTIP
+    assert [page._table.item(row, 8).text() for row in range(6)] == ["—"] * 6
+    assert page._table.item(0, 8).toolTip() == text.PEOPLE_PAGE_MATCH_STATUS_TOOLTIP
 
     old_gen, old_clusters = world.add_generation(run, [[o1], [o2]], _OLD_GEN_TIME)
     world.add_decision(old_clusters[0], zhang, created_at=_OLD_GEN_TIME)
     world.add_decision(old_clusters[1], wang, created_at=_OLD_GEN_TIME)
     page.refresh()
     marks = {
-        page._table.item(row, 2).text(): page._table.item(row, 7).text()
+        page._table.item(row, 3).text(): page._table.item(row, 8).text()
         for row in range(page._table.rowCount())
     }
     # 锚点 = 旧代际（当时最新）：张三/王五 已匹配。
@@ -1129,7 +1130,7 @@ def test_row_match_status_marks_follow_anchor_generation(
     world.add_decision(new_clusters[0], li)  # 仅李四在新（锚点）代际 active
     page.refresh()
     marks = {
-        page._table.item(row, 2).text(): page._table.item(row, 7).text()
+        page._table.item(row, 3).text(): page._table.item(row, 8).text()
         for row in range(page._table.rowCount())
     }
     # 锚点切到最新代际：李四 已匹配；张三/王五只有旧代际决策 → 未匹配（D3-A）。
@@ -1355,8 +1356,10 @@ def test_stats_panel_is_card_block_with_preserved_title_and_width(populated) -> 
     maxWidth(280) 与既有标签属性名全部保持。"""
     page, _, _ = populated
     cards = page.findChildren(QFrame, CARD_OBJECT_NAME)
-    assert len(cards) == 1
-    card = cards[0]
+    # 视觉对齐（2026-10-30 参考图基线）：统计卡＋人脸聚类区 Card（E1 容器化）
+    # 共两处 Card；统计卡契约（maxWidth/属性名）零变化。
+    assert len(cards) == 2
+    card = next(c for c in cards if c.maximumWidth() == 280)  # 统计卡
     assert card.testAttribute(Qt.WidgetAttribute.WA_StyledBackground)
     assert card.maximumWidth() == 280
     texts = {label.text() for label in card.findChildren(QLabel)}
@@ -1392,9 +1395,10 @@ def test_stats_card_keeps_empty_state_visibility_semantics(
 
 
 def test_toolbar_row_groups_preserve_order_and_roles(populated) -> None:
-    """阶段 3 工具行分组（决策项 #3 保守值）：仅加组间距——七按钮顺序与
-    角色赋值（primary／无角色／danger）零改动；组间距 spacer 恰两处
-    （另有末尾 stretch 一处）。"""
+    """工具行分组＋B4「更多▾」收纳（决策项 #5 按图推翻 2026-10-30）：
+    平铺按钮＝添加(primary)｜编辑/上移/下移(无角色)｜删除所选(danger)｜更多；
+    按批次删除/清空所有人员收入「更多」菜单——按钮角色赋值零变化、菜单项
+    触发既有按钮点击槽（处理器与确认对话框链零变化）。"""
     page, _, _ = populated
     toolbar = None
     for index in range(page.layout().count()):
@@ -1404,17 +1408,25 @@ def test_toolbar_row_groups_preserve_order_and_roles(populated) -> None:
             toolbar = candidate
             break
     assert toolbar is not None
-    buttons = (
+    flat_buttons = (
         page._add_button, page._edit_button, page._move_up_button,
-        page._move_down_button, page._delete_button, page._delete_batch_button,
-        page._clear_all_button,
+        page._move_down_button, page._delete_button,
     )
-    roles = (ROLE_PRIMARY, None, None, None, ROLE_DANGER, ROLE_DANGER, ROLE_DANGER)
-    indices = [toolbar.indexOf(button) for button in buttons]
-    assert indices == sorted(indices)  # 按钮顺序不变
-    for button, role in zip(buttons, roles, strict=True):
+    roles = (ROLE_PRIMARY, None, None, None, ROLE_DANGER)
+    indices = [toolbar.indexOf(button) for button in flat_buttons]
+    assert indices == sorted(indices)  # 平铺按钮顺序不变
+    for button, role in zip(flat_buttons, roles, strict=True):
         assert toolbar.indexOf(button) >= 0
         assert button_role(button) == role
+    # 收纳：两个危险按钮不在工具栏布局中，但角色保持 danger 且可经菜单触达。
+    assert toolbar.indexOf(page._delete_batch_button) == -1
+    assert toolbar.indexOf(page._clear_all_button) == -1
+    assert button_role(page._delete_batch_button) == ROLE_DANGER
+    assert button_role(page._clear_all_button) == ROLE_DANGER
+    menu = page._more_button.menu()
+    actions = [action.text() for action in menu.actions()]
+    assert text.PEOPLE_PAGE_DELETE_BATCH_BUTTON in actions
+    assert text.PEOPLE_PAGE_CLEAR_ALL_BUTTON in actions
     spacers = [
         toolbar.itemAt(index) for index in range(toolbar.count())
         if toolbar.itemAt(index).spacerItem() is not None
@@ -1422,3 +1434,73 @@ def test_toolbar_row_groups_preserve_order_and_roles(populated) -> None:
     assert len(spacers) == 3  # 两组间距＋末尾 stretch
 
 
+
+
+# ── 视觉对齐定向断言（参考图基线 2026-10-30；Owner 五项按图推翻）──────────
+
+
+def test_people_page_header_and_icons_present(tmp_path: Path, qtbot) -> None:
+    """A1/A2 页头＋DEC-10 按图推翻的工具栏图标（缺失字体优雅降级为纯文字）。"""
+    from photo_archiver.presentation.visual_style import (
+        PAGE_SUBTITLE_OBJECT_NAME, PAGE_TITLE_OBJECT_NAME,
+    )
+
+    manage, list_persons, delete_person, runs, results, _stats, _ = _services(tmp_path)
+    page = PeopleAdminPage(manage, list_persons, delete_person, runs, results, _stats)
+    qtbot.addWidget(page)
+
+    title = page.findChild(QLabel, PAGE_TITLE_OBJECT_NAME)
+    subtitle = page.findChild(QLabel, PAGE_SUBTITLE_OBJECT_NAME)
+    assert title is not None and title.text() == text.PEOPLE_PAGE_TITLE
+    assert subtitle is not None and subtitle.text() == text.PEOPLE_PAGE_SUBTITLE
+    # 图标：五按钮挂 Fluent 图标（字体可用时非空 QIcon；缺失时为空 QIcon）。
+    for button in (
+        page._add_button, page._edit_button, page._move_up_button,
+        page._move_down_button, page._delete_button,
+    ):
+        assert not button.icon().isNull() or button.text()  # 文字永在
+
+
+def test_people_checkbox_column_mirrors_selection(tmp_path: Path, qtbot) -> None:
+    """C1 复选框列（DEC-06 按图推翻）：勾选＝选中行；行选中镜像勾选态。"""
+    from PySide6.QtCore import Qt
+
+    manage, list_persons, delete_person, runs, results, _stats, _ = _services(tmp_path)
+    for name in ("张三", "李四"):
+        manage.add_person(AddPersonCommand(name=name))
+    page = PeopleAdminPage(manage, list_persons, delete_person, runs, results, _stats)
+    qtbot.addWidget(page)
+    table = page._table
+    assert table.columnCount() == 9
+
+    # 勾选第 0 行复选框 → 该行进入选中集（「删除所选」语义源不变）。
+    check_item = table.item(0, 0)
+    check_item.setCheckState(Qt.CheckState.Checked)
+    assert [index.row() for index in table.selectionModel().selectedRows()] == [0]
+    # 行选中变化（程序化选择）→ 勾选态镜像。
+    table.selectRow(1)
+    assert table.item(0, 0).checkState() == Qt.CheckState.Unchecked
+    assert table.item(1, 0).checkState() == Qt.CheckState.Checked
+    # 取消勾选 → 行退出选中集。
+    table.item(1, 0).setCheckState(Qt.CheckState.Unchecked)
+    assert [index.row() for index in table.selectionModel().selectedRows()] == []
+
+
+def test_people_clustering_section_is_card_with_danger_entries_in_place(
+    tmp_path: Path, qtbot,
+) -> None:
+    """E1 聚类区 Card 化；D1-A 两个危险入口原位保留（F-PEO 保全）。"""
+    from photo_archiver.presentation.visual_style import CARD_OBJECT_NAME, button_role
+    from PySide6.QtWidgets import QPushButton
+
+    manage, list_persons, delete_person, runs, results, _stats, _ = _services(tmp_path)
+    page = PeopleAdminPage(manage, list_persons, delete_person, runs, results, _stats)
+    qtbot.addWidget(page)
+    cards = page.findChildren(QFrame, CARD_OBJECT_NAME)
+    assert len(cards) == 2  # 统计卡 + 聚类区卡
+    cluster_card = next(c for c in cards if c.maximumWidth() != 280)
+    assert page._cluster_run_button in cluster_card.findChildren(QPushButton)
+    assert page._delete_run_people_button in cluster_card.findChildren(QPushButton)
+    assert page._delete_run_photos_button in cluster_card.findChildren(QPushButton)
+    assert button_role(page._delete_run_people_button) == ROLE_DANGER
+    assert button_role(page._delete_run_photos_button) == ROLE_DANGER

@@ -108,6 +108,13 @@ STATUS_IMPORT_CONFIRMED = "导入完成：新建 {imported} · 合并 {merged} �
 STATUS_IMPORT_CONFIRM_ERRORS = "；{count} 行失败（详情见日志）"
 STATUS_IMPORT_CONFIRM_WORKER = "导入确认已提交后台执行，完成后显示结果。"
 # ---- 人员与分组页（人员导入重设计 阶段 B） ----
+# 参考图 A1/A2 页头（2026-10-30 视觉对齐；非破坏性新增键；原 hint 语义保留）。
+PEOPLE_PAGE_TITLE = "人员与分组"
+PEOPLE_PAGE_SUBTITLE = "管理人员信息、分组关系，并进行批次与聚类操作。"
+# 参考图 B4「⋯ 更多 ▾」收纳按钮（决策项 #5 按图推翻）。
+PEOPLE_PAGE_MORE_BUTTON = "⋯ 更多"
+# 复选框选择列 tooltip（DEC-06 按图推翻）。
+PEOPLE_PAGE_SELECT_TOOLTIP = "勾选＝选中该行（与行点击/Ctrl 多选等效）。"
 PEOPLE_PAGE_HINT = (
     "名单顺序即「照片库」人员筛选下拉的展示顺序。选择某个「来源批次」后，"
     "可拖动行或使用「上移 / 下移」调整该批次成员的名次（改动立即保存）；「全部批次」为只读总览。"

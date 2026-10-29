@@ -22,14 +22,15 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMenu,
     QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -55,7 +56,13 @@ from photo_archiver.presentation.visual_style import (
     ROLE_DANGER,
     ROLE_PRIMARY,
     assign_role,
+    assign_button_icon,
     style_card,
+    style_page_subtitle,
+    style_page_title,
+    style_section_title,
+    style_stat_value,
+    token,
 )
 from photo_archiver.presentation.views.batch_person_deletion_dialog import (
     BatchPersonDeletionDialog,
@@ -87,9 +94,14 @@ _COLUMNS = (
     text.PEOPLE_PAGE_COL_BATCH,
     text.PEOPLE_PAGE_COL_MATCH_STATUS,
 )
-_COLUMN_GROUP_ORDINAL = 1
-_COLUMN_NAME = 2
-_COLUMN_MATCH_STATUS = 7
+# 参考图 C1（Owner 2026-10-30 裁决：D5-A 复选框列按图推翻实施）：首列为
+# 行选择复选框——勾选＝选中该行，与既有 ExtendedSelection/「删除所选」/
+# 多选禁拖拽语义并存（选择模型仍是唯一选择语义源，复选框仅是镜像视图）。
+_COLUMN_CHECK = 0
+_COLUMN_SHIFT = 1
+_COLUMN_GROUP_ORDINAL = 1 + _COLUMN_SHIFT
+_COLUMN_NAME = 2 + _COLUMN_SHIFT
+_COLUMN_MATCH_STATUS = 7 + _COLUMN_SHIFT
 
 # 组内序号取姓名开头的连续数字前缀（如「3张三」→ 3；无前缀 → None）。
 _NAME_ORDINAL_PATTERN = re.compile(r"^\d+")
@@ -299,8 +311,22 @@ class PeopleAdminPage(QWidget):
     # ── UI construction ──────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
-        """Lay out the hint, batch review row, toolbar row, table + stats panel."""
+        """Lay out page header, batch review row, toolbar, table + stats panel."""
         layout = QVBoxLayout(self)
+
+        # 参考图 A1/A2：页头大标题＋副标题（纯视觉容器）；原提示行整段语义
+        # 保留（调序说明在批次提示行常驻，副标题后仍保留原 hint 作为补充说明）。
+        header = QWidget(self)
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(2)
+        title = QLabel(text.PEOPLE_PAGE_TITLE, header)
+        style_page_title(title)
+        subtitle = QLabel(text.PEOPLE_PAGE_SUBTITLE, header)
+        style_page_subtitle(subtitle)
+        header_layout.addWidget(title)
+        header_layout.addWidget(subtitle)
+        layout.addWidget(header)
 
         hint = QLabel(text.PEOPLE_PAGE_HINT, self)
         hint.setWordWrap(True)
@@ -336,9 +362,33 @@ class PeopleAdminPage(QWidget):
         self._clear_all_button = QPushButton(text.PEOPLE_PAGE_CLEAR_ALL_BUTTON, self)
         self._clear_all_button.clicked.connect(self._on_clear_all_clicked)
         assign_role(self._clear_all_button, ROLE_DANGER)
-        # 阶段 3 工具行分组（决策项 #3 保守值）：仅在三组之间加组间距——
-        # 主操作｜次级（编辑/移动）｜危险（删除系）；添加顺序与角色赋值
-        # （:313/:322/:325/:328）零改动。
+        # Fluent 图标（Owner 2026-10-30 裁决：DEC-10=A 按图推翻）——缺失字体
+        # 时优雅降级为纯文字；按钮语义/角色赋值零变化。
+        assign_button_icon(self._add_button, "add")
+        assign_button_icon(self._edit_button, "edit", token("pa-text-secondary"))
+        assign_button_icon(self._move_up_button, "up", token("pa-text-secondary"))
+        assign_button_icon(self._move_down_button, "down", token("pa-text-secondary"))
+        assign_button_icon(self._delete_button, "delete", token("pa-danger-fg"))
+        # 参考图 B4「⋯ 更多 ▾」收纳（决策项 #5 按图推翻）：次级/危险删除入口
+        # 收入更多菜单——两个危险按钮的处理器/对话框链零变化，仅呈现位置
+        # 从平铺改为菜单项（语义无增减；F-PEO 删除披露入口仍全部可达）。
+        self._more_button = QToolButton(self)
+        self._more_button.setText(text.PEOPLE_PAGE_MORE_BUTTON)
+        self._more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        more_menu = QMenu(self._more_button)
+        # 菜单项直接挂既有按钮的点击槽——按钮本体仍由页面持有（处理器/确认
+        # 对话框链零变化），仅呈现位置收入菜单。
+        more_menu.addAction(
+            text.PEOPLE_PAGE_DELETE_BATCH_BUTTON, self._delete_batch_button.click,
+        )
+        more_menu.addAction(
+            text.PEOPLE_PAGE_CLEAR_ALL_BUTTON, self._clear_all_button.click,
+        )
+        # 按钮脱离布局后须显式隐藏，否则会以默认几何悬浮在页面左上角；
+        # .click() 触发不受 hidden 影响（Qt 按钮槽调用不检查可见性）。
+        self._delete_batch_button.hide()
+        self._clear_all_button.hide()
+        self._more_button.setMenu(more_menu)
         toolbar_row.addWidget(self._add_button)
         toolbar_row.addSpacing(_TOOLBAR_GROUP_SPACING)
         toolbar_row.addWidget(self._edit_button)
@@ -346,22 +396,23 @@ class PeopleAdminPage(QWidget):
         toolbar_row.addWidget(self._move_down_button)
         toolbar_row.addSpacing(_TOOLBAR_GROUP_SPACING)
         toolbar_row.addWidget(self._delete_button)
-        toolbar_row.addWidget(self._delete_batch_button)
-        toolbar_row.addWidget(self._clear_all_button)
+        toolbar_row.addWidget(self._more_button)
         toolbar_row.addStretch()
         layout.addLayout(toolbar_row)
 
         body_row = QHBoxLayout()
         self._table = _ReorderableTable(self)
-        self._table.setColumnCount(len(_COLUMNS))
-        self._table.setHorizontalHeaderLabels(list(_COLUMNS))
+        self._table.setColumnCount(len(_COLUMNS) + _COLUMN_SHIFT)
+        self._table.setHorizontalHeaderLabels(["", *list(_COLUMNS)])
         self._table.verticalHeader().setVisible(False)
         self._table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.ResizeToContents,
         )
         self._table.horizontalHeader().setStretchLastSection(True)
+        self._table.setAlternatingRowColors(True)
         self._table.rows_dropped.connect(self._on_rows_dropped)
         self._table.itemSelectionChanged.connect(self._render_action_state)
+        self._table.itemChanged.connect(self._on_check_item_changed)
         body_row.addWidget(self._table, 1)
         body_row.addWidget(self._build_stats_panel(self))
         layout.addLayout(body_row)
@@ -388,6 +439,7 @@ class PeopleAdminPage(QWidget):
         stats_layout.setContentsMargins(12, 10, 12, 10)
         stats_layout.setSpacing(6)
         title = QLabel(text.PEOPLE_PAGE_STATS_TITLE, card)
+        style_section_title(title)
         stats_layout.addWidget(title)
         self._stats_anchor_label = QLabel("", card)
         self._stats_anchor_label.setWordWrap(True)
@@ -403,6 +455,7 @@ class PeopleAdminPage(QWidget):
             self._stats_photo_label, self._stats_face_label,
             self._stats_matched_label, self._stats_unmatched_label,
         ):
+            style_stat_value(label)
             values_layout.addWidget(label)
         stats_layout.addWidget(self._stats_values)
         self._stats_empty_label = QLabel("", card)
@@ -597,6 +650,15 @@ class PeopleAdminPage(QWidget):
             with QSignalBlocker(self._table):
                 self._table.setRowCount(len(people))
                 for row_index, person in enumerate(people):
+                    # 复选框选择列（DEC-06 按图推翻）：勾选态镜像行选中态。
+                    check_item = QTableWidgetItem()
+                    check_item.setFlags(
+                        Qt.ItemFlag.ItemIsEnabled
+                        | Qt.ItemFlag.ItemIsUserCheckable
+                        | Qt.ItemFlag.ItemIsSelectable,
+                    )
+                    check_item.setToolTip(text.PEOPLE_PAGE_SELECT_TOOLTIP)
+                    self._table.setItem(row_index, _COLUMN_CHECK, check_item)
                     values = (
                         str(positions[person.id]),
                         format_group_ordinal(*group_ordinals[row_index]),
@@ -608,7 +670,8 @@ class PeopleAdminPage(QWidget):
                         if person.source_batch_id is not None else text.PEOPLE_PAGE_MANUAL_SOURCE,
                         self._match_status_text(person),
                     )
-                    for column, value in enumerate(values):
+                    for offset, value in enumerate(values):
+                        column = offset + _COLUMN_SHIFT
                         item = QTableWidgetItem(value)
                         # 组/序列的 tooltip 说明派生依据；匹配状态列说明判定口径
                         # （其余列沿用值本身）。
@@ -666,6 +729,38 @@ class PeopleAdminPage(QWidget):
         self._edit_button.setEnabled(single and self._selected_person() is not None)
         self._delete_button.setEnabled(bool(rows))
         self._table.setDragEnabled(self._batch_filter is not None and len(rows) <= 1)
+        self._sync_check_marks(rows)
+        self._more_button.setEnabled(bool(self._batches) or bool(rows))
+
+    def _sync_check_marks(self, selected_rows: list[int]) -> None:
+        """镜像行选中态到复选框列（blockSignals 防回环；DEC-06 按图推翻）."""
+        with QSignalBlocker(self._table):
+            for row_index in range(self._table.rowCount()):
+                item = self._table.item(row_index, _COLUMN_CHECK)
+                if item is None:
+                    continue
+                item.setCheckState(
+                    Qt.CheckState.Checked if row_index in selected_rows
+                    else Qt.CheckState.Unchecked,
+                )
+
+    def _on_check_item_changed(self, item: QTableWidgetItem) -> None:
+        """复选框勾选 → 行选中/取消（与 ExtendedSelection 单一语义源并轨）."""
+        if item.column() != _COLUMN_CHECK:
+            return
+        row_index = item.row()
+        checked = item.checkState() == Qt.CheckState.Checked
+        is_selected = row_index in self._selected_row_indices()
+        if checked and not is_selected:
+            self._table.selectRow(row_index)
+        elif not checked and is_selected:
+            from PySide6.QtCore import QItemSelectionModel
+
+            self._table.selectionModel().select(
+                self._table.model().index(row_index, 0),
+                QItemSelectionModel.SelectionFlag.Deselect
+                | QItemSelectionModel.SelectionFlag.Rows,
+            )
 
     def _selected_row_indices(self) -> list[int]:
         """Return every selected table row (ascending, possibly empty)."""
@@ -896,8 +991,14 @@ class PeopleAdminPage(QWidget):
         页面只发请求信号——运行走主窗口的 TaskCoordinator 管线（互斥/取消/
         状态栏），结果对话框由主窗口打开（父窗口与缩略图通道注入）。
         """
-        group = QGroupBox(text.CLUSTER_PAGE_GROUP, self)
+        # E1（taskbook-3 §3 [V]）：QGroupBox → Card 容器化（纯视觉；全部
+        # 按钮与 D1-A 两个危险入口原位保留）。
+        group = QFrame(self)
+        style_card(group)
         group_layout = QVBoxLayout(group)
+        group_title = QLabel(text.CLUSTER_PAGE_GROUP, group)
+        style_section_title(group_title)
+        group_layout.addWidget(group_title)
         row = QHBoxLayout()
         row.addWidget(QLabel(text.CLUSTER_PAGE_RUN_LABEL, group))
         self._cluster_run_combo = QComboBox(group)
@@ -909,9 +1010,11 @@ class PeopleAdminPage(QWidget):
         self._cluster_run_button = QPushButton(text.CLUSTER_PAGE_RUN_BUTTON, group)
         self._cluster_run_button.clicked.connect(self.cluster_run_requested.emit)
         assign_role(self._cluster_run_button, ROLE_PRIMARY)
+        assign_button_icon(self._cluster_run_button, "play")
         row.addWidget(self._cluster_run_button)
         self._cluster_results_button = QPushButton(text.CLUSTER_PAGE_RESULTS_BUTTON, group)
         self._cluster_results_button.clicked.connect(self.cluster_results_requested.emit)
+        assign_button_icon(self._cluster_results_button, "view", token("pa-text-secondary"))
         row.addWidget(self._cluster_results_button)
         # 批次级删除（识别运行锚点）：两个入口与运行选择器同区——"批次"在这里
         # 指**识别运行**（照片只挂在运行下），与顶部「来源批次」（名单导入）
