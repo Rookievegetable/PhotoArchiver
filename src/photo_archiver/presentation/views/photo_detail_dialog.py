@@ -48,6 +48,7 @@ from PySide6.QtWidgets import (
 from photo_archiver.domain import Photo
 from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.visual_style import (
+    set_badge_severity,
     style_nav_overlay_button,
     style_nav_position_label,
 )
@@ -263,6 +264,9 @@ class PhotoDetailDialog(QDialog):
         layout.addWidget(preview_container)
 
         self._hd_status_label = QLabel(text.PHOTO_DETAIL_HD_FAILED, self)
+        # D5（taskbook-9）：失败提示徽章化——文字承载状态（§10-7 非仅色），
+        # warning severity 走 P0-4 冻结 Badge 选择器；隐藏语义不变。
+        set_badge_severity(self._hd_status_label, "warning")
         self._hd_status_label.setVisible(False)
         layout.addWidget(self._hd_status_label)
 
@@ -274,8 +278,11 @@ class PhotoDetailDialog(QDialog):
         # 元数据标签持有引用：replace_photo（审核预览上一张/下一张）可重绑。
         self._name_label = QLabel(self)
         self._path_label = QLabel(self)
+        self._path_label.setWordWrap(True)  # D2：长路径换行，浅/深均不破版
         self._captured_label = QLabel(self)
         self._badge_label = QLabel(self)
+        # D2：状态行徽章化落点（severity 保守默认 neutral，文字承载状态）。
+        set_badge_severity(self._badge_label, "neutral")
         for label in (self._name_label, self._path_label,
                       self._captured_label, self._badge_label):
             layout.addWidget(label)
@@ -408,10 +415,19 @@ class PhotoDetailDialog(QDialog):
             self._dropped_requests += 1
             return
         if image.isNull():
-            # 失败降级：保留缩略图 + 轻提示，可重试（新 request_id）。
+            # F-IMG-1 修复（母文档 §7.6 已批项；taskbook-9 R-0b）：失败态
+            # 可视化＋可见重试入口——此前导航模式（replace_photo）下按钮已被
+            # 无条件隐藏，失败后仅恢复文字/启用态，重试入口不可见，且无缩略
+            # 图时"加载中"占位永驻。修复＝恢复【查看大图】按钮可见（既有按
+            # 钮的可见性恢复，非新操作）；无缩略图场景把占位文字切换为失败
+            # 提示（退出永驻加载态）。解码线程契约、request_id 过期丢弃、
+            # 恒定包围盒与 sizeHint 契约零变化。
             self._hd_status_label.setVisible(True)
             self._view_full_button.setText(text.PHOTO_DETAIL_VIEW_FULL)
             self._view_full_button.setEnabled(True)
+            self._view_full_button.setVisible(True)  # 显式重试入口（F-IMG-1）
+            if self._preview.pixmap().isNull():
+                self._preview.setText(text.PHOTO_DETAIL_HD_FAILED)
             return
         self._preview.setText("")
         self._preview.setPixmap(QPixmap.fromImage(image))

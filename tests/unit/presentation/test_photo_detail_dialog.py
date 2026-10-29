@@ -437,3 +437,64 @@ def test_navigation_buttons_emit_requests_and_keyboard_registered(qtbot, tmp_pat
     qtbot.mouseClick(next_button, Qt.MouseButton.LeftButton)
 
     assert received == [-1, 1]
+
+
+# ---- F-IMG-1 专项回归（母文档 §7.6 已批修复；taskbook-9 §6 专项验收①-④）----
+
+
+def test_f_img1_navigation_failure_keeps_visible_retry_entry(qtbot, tmp_path) -> None:
+    """①导航模式（replace_photo）解码失败后，界面存在可见重试入口。
+
+    此前 :364 无条件隐藏【查看大图】＋失败路径仅恢复已隐藏按钮 → 重试入口
+    不可见；修复后失败即恢复按钮可见（既有按钮的可见性恢复，非新操作）。
+    """
+    dialog = _make_dialog(qtbot, _photo(tmp_path), _write_thumbnail(tmp_path),
+                          _fake_decoder([_solid_qimage(8, 8, (0, 0, 0)), QImage()]))
+    dialog._on_view_full_size_clicked()  # 首次成功 → 按钮隐藏（T2 钉死项）
+    qtbot.waitUntil(lambda: not dialog._view_full_button.isVisible(), timeout=5000)
+
+    dialog.replace_photo(_photo(tmp_path, "NEXT0031.JPG"))  # 导航模式：按钮隐藏 + 自动解码
+    qtbot.waitUntil(lambda: dialog._hd_status_label.isVisible(), timeout=5000)
+    # 失败后：重试入口可见且可点（不再是死态）。
+    assert dialog._view_full_button.isVisible()
+    assert dialog._view_full_button.isEnabled()
+    assert dialog._view_full_button.text() == text.PHOTO_DETAIL_VIEW_FULL
+    assert dialog._hd_status_label.text() == text.PHOTO_DETAIL_HD_FAILED  # 非仅色：文字承载
+
+
+def test_f_img1_no_thumbnail_failure_exits_eternal_loading(qtbot, tmp_path) -> None:
+    """③无缩略图分支：失败后"加载中"占位退出，预览区显示失败提示。"""
+    dialog = _make_dialog(qtbot, _photo(tmp_path), None,
+                          _fake_decoder([QImage()]))  # 解码失败
+    assert not dialog._view_full_button.isVisible()  # 初始（T7 基线）
+    dialog.replace_photo(_photo(tmp_path, "NEXT0032.JPG"))
+    qtbot.waitUntil(lambda: dialog._hd_status_label.isVisible(), timeout=5000)
+    assert text.PHOTO_DETAIL_HD_LOADING not in dialog._preview.text()
+    assert dialog._preview.text() == text.PHOTO_DETAIL_HD_FAILED
+    # ④重试入口恢复可见。
+    assert dialog._view_full_button.isVisible()
+
+
+def test_f_img1_retry_entry_click_retries_successfully(qtbot, tmp_path) -> None:
+    """②重试成功后预览正常替换（失败→重试→成功全链）。"""
+    dialog = _make_dialog(qtbot, _photo(tmp_path), None,
+                          _fake_decoder([QImage(), _solid_qimage(8, 6, (10, 20, 30))]))
+    dialog.replace_photo(_photo(tmp_path, "NEXT0033.JPG"))
+    qtbot.waitUntil(lambda: dialog._hd_status_label.isVisible(), timeout=5000)
+    assert dialog._view_full_button.isVisible()
+    dialog._view_full_button.click()  # 重试（新 request_id）
+    qtbot.waitUntil(lambda: dialog._view_full_button.isHidden(), timeout=5000)
+    assert not dialog._preview.pixmap().isNull()
+    assert not dialog._hd_status_label.isVisible()
+
+
+def test_f_img1_thumbnail_failure_keeps_thumbnail_and_offers_retry(qtbot, tmp_path) -> None:
+    """③有缩略图分支：失败保留缩略图（不覆盖 pixmap），重试入口可见。"""
+    dialog = _make_dialog(qtbot, _photo(tmp_path), _write_thumbnail(tmp_path),
+                          _fake_decoder([QImage()]))
+    before = dialog._preview.pixmap()
+    assert not before.isNull()
+    dialog._view_full_button.click()
+    qtbot.waitUntil(lambda: dialog._hd_status_label.isVisible(), timeout=5000)
+    assert not dialog._preview.pixmap().isNull()  # 缩略图保留
+    assert dialog._view_full_button.isVisible()
