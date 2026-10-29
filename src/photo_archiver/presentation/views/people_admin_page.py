@@ -21,6 +21,7 @@ from PySide6.QtCore import Qt, QSignalBlocker, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -50,7 +51,12 @@ from photo_archiver.application.services import (
 from photo_archiver.domain import Person
 from photo_archiver.domain.exceptions import ValidationError
 from photo_archiver.presentation import ui_text as text
-from photo_archiver.presentation.visual_style import ROLE_DANGER, ROLE_PRIMARY, assign_role
+from photo_archiver.presentation.visual_style import (
+    ROLE_DANGER,
+    ROLE_PRIMARY,
+    assign_role,
+    style_card,
+)
 from photo_archiver.presentation.views.batch_person_deletion_dialog import (
     BatchPersonDeletionDialog,
     ClearAllPeopleDialog,
@@ -87,6 +93,10 @@ _COLUMN_MATCH_STATUS = 7
 
 # 组内序号取姓名开头的连续数字前缀（如「3张三」→ 3；无前缀 → None）。
 _NAME_ORDINAL_PATTERN = re.compile(r"^\d+")
+
+# 阶段 3 工具行分组（决策项 #3 保守值）：仅主操作｜次级｜危险三组之间加
+# 组间距，不加分隔线、不赋 neutral 角色、按钮顺序零改动。
+_TOOLBAR_GROUP_SPACING = 16
 
 
 def derive_group_ordinals(
@@ -326,12 +336,18 @@ class PeopleAdminPage(QWidget):
         self._clear_all_button = QPushButton(text.PEOPLE_PAGE_CLEAR_ALL_BUTTON, self)
         self._clear_all_button.clicked.connect(self._on_clear_all_clicked)
         assign_role(self._clear_all_button, ROLE_DANGER)
-        for widget in (
-            self._add_button, self._edit_button, self._move_up_button,
-            self._move_down_button, self._delete_button, self._delete_batch_button,
-            self._clear_all_button,
-        ):
-            toolbar_row.addWidget(widget)
+        # 阶段 3 工具行分组（决策项 #3 保守值）：仅在三组之间加组间距——
+        # 主操作｜次级（编辑/移动）｜危险（删除系）；添加顺序与角色赋值
+        # （:313/:322/:325/:328）零改动。
+        toolbar_row.addWidget(self._add_button)
+        toolbar_row.addSpacing(_TOOLBAR_GROUP_SPACING)
+        toolbar_row.addWidget(self._edit_button)
+        toolbar_row.addWidget(self._move_up_button)
+        toolbar_row.addWidget(self._move_down_button)
+        toolbar_row.addSpacing(_TOOLBAR_GROUP_SPACING)
+        toolbar_row.addWidget(self._delete_button)
+        toolbar_row.addWidget(self._delete_batch_button)
+        toolbar_row.addWidget(self._clear_all_button)
         toolbar_row.addStretch()
         layout.addLayout(toolbar_row)
 
@@ -356,18 +372,27 @@ class PeopleAdminPage(QWidget):
 
         self._build_clustering_ui(layout)
 
-    def _build_stats_panel(self, parent: QWidget) -> QGroupBox:
-        """Build the P4 statistics group (anchor, four numbers, caliber note).
+    def _build_stats_panel(self, parent: QWidget) -> QFrame:
+        """Build the P4 statistics card（锚点、四数、口径说明；P0-4 N4 卡组化）.
 
+        阶段 3（P0-4 ``QFrame#Card`` 构建块，style_card）：外壳由 QGroupBox
+        换为统计卡；标题复用既有键（零新键）、不加粗，标签属性名、空态
+        语义与 ``maxWidth(280)`` 全部保持（决策项 #2 保守值）。
         空态（空名单 / 无 run / 无代际 / 读取失败）以 ``_stats_empty_label``
         呈现并隐藏四数字区；四数字区隐藏时面板本身仍可见（口径说明常驻）。
         """
-        group = QGroupBox(text.PEOPLE_PAGE_STATS_TITLE, parent)
-        stats_layout = QVBoxLayout(group)
-        self._stats_anchor_label = QLabel("", group)
+        card = QFrame(parent)
+        style_card(card)
+        stats_layout = QVBoxLayout(card)
+        # 同型参照 overview_page.py 步骤卡（任务书 §4）：卡内边距与行距。
+        stats_layout.setContentsMargins(12, 10, 12, 10)
+        stats_layout.setSpacing(6)
+        title = QLabel(text.PEOPLE_PAGE_STATS_TITLE, card)
+        stats_layout.addWidget(title)
+        self._stats_anchor_label = QLabel("", card)
         self._stats_anchor_label.setWordWrap(True)
         stats_layout.addWidget(self._stats_anchor_label)
-        self._stats_values = QWidget(group)
+        self._stats_values = QWidget(card)
         values_layout = QVBoxLayout(self._stats_values)
         values_layout.setContentsMargins(0, 0, 0, 0)
         self._stats_photo_label = QLabel("", self._stats_values)
@@ -380,15 +405,15 @@ class PeopleAdminPage(QWidget):
         ):
             values_layout.addWidget(label)
         stats_layout.addWidget(self._stats_values)
-        self._stats_empty_label = QLabel("", group)
+        self._stats_empty_label = QLabel("", card)
         self._stats_empty_label.setWordWrap(True)
         stats_layout.addWidget(self._stats_empty_label)
-        note = QLabel(text.PEOPLE_PAGE_STATS_CALIBER_NOTE, group)
+        note = QLabel(text.PEOPLE_PAGE_STATS_CALIBER_NOTE, card)
         note.setWordWrap(True)
         stats_layout.addWidget(note)
         stats_layout.addStretch()
-        group.setMaximumWidth(280)
-        return group
+        card.setMaximumWidth(280)
+        return card
 
     # ── Data + rendering ────────────────────────────────────────────────
 

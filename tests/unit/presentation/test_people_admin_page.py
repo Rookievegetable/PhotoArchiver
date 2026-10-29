@@ -20,7 +20,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QItemSelectionModel, QMimeData, QPoint, QPointF, Qt
 from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
-from PySide6.QtWidgets import QApplication, QLabel, QMessageBox
+from PySide6.QtWidgets import QApplication, QFrame, QLabel, QMessageBox, QWidget
 
 from photo_archiver.app.repositories import build_sqlite_repositories
 from photo_archiver.application.commands import AddPersonCommand
@@ -49,6 +49,12 @@ from photo_archiver.domain.entities.cluster_assignment import (
     ClusterPersonAssignment,
 )
 from photo_archiver.presentation import ui_text as text
+from photo_archiver.presentation.visual_style import (
+    CARD_OBJECT_NAME,
+    ROLE_DANGER,
+    ROLE_PRIMARY,
+    button_role,
+)
 from photo_archiver.presentation.views.people_admin_page import (
     PeopleAdminPage,
     derive_group_ordinals,
@@ -1338,5 +1344,81 @@ def test_multi_person_deletion_dialog_previews_and_deletes_in_transaction(
     assert repositories.cluster_assignments.count_by_person(li.id) == 0  # 决策级联
     assert "已删除 2 名人员" in dialog.last_message()
     assert "决策历史 1 条" in dialog.last_message()
+
+
+# ── 阶段 3：统计卡组（P0-4 QFrame#Card）＋工具行分组 ─────────────────────────
+
+
+def test_stats_panel_is_card_block_with_preserved_title_and_width(populated) -> None:
+    """阶段 3 卡组化（P0-4 N4；决策项 #2 保守值）：统计面板外壳由 QGroupBox
+    换为 QFrame#Card（style_card）；标题/口径说明文本不变（零新键、不加粗）、
+    maxWidth(280) 与既有标签属性名全部保持。"""
+    page, _, _ = populated
+    cards = page.findChildren(QFrame, CARD_OBJECT_NAME)
+    assert len(cards) == 1
+    card = cards[0]
+    assert card.testAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+    assert card.maximumWidth() == 280
+    texts = {label.text() for label in card.findChildren(QLabel)}
+    assert text.PEOPLE_PAGE_STATS_TITLE in texts
+    assert text.PEOPLE_PAGE_STATS_CALIBER_NOTE in texts
+    # 既有统计标签仍挂在卡组下（属性名零变化＝既有用例的访问面不变）；
+    # 四数标签经 ``_stats_values`` 间接挂在卡组下（嵌套关系与原实现一致）。
+    descendants = set(card.findChildren(QWidget))
+    for attribute in (
+        "_stats_anchor_label", "_stats_values", "_stats_photo_label",
+        "_stats_face_label", "_stats_matched_label", "_stats_unmatched_label",
+        "_stats_empty_label",
+    ):
+        assert getattr(page, attribute) in descendants
+
+
+def test_stats_card_keeps_empty_state_visibility_semantics(
+    tmp_path: Path, qtbot,
+) -> None:
+    """空态语义（F-PEO①）：四数区隐藏时卡组本身与口径说明仍常驻。"""
+    page, _repositories, _world = _page_with_stats(tmp_path, qtbot, names=())
+    card = page.findChild(QFrame, CARD_OBJECT_NAME)
+    assert card is not None
+    assert page._stats_empty_label.text() == text.PEOPLE_PAGE_STATS_EMPTY_NO_ROSTER
+    assert page._stats_values.isVisibleTo(page) is False
+    assert page._stats_empty_label.isVisibleTo(card) is True
+    notes = [
+        label for label in card.findChildren(QLabel)
+        if label.text() == text.PEOPLE_PAGE_STATS_CALIBER_NOTE
+    ]
+    assert len(notes) == 1
+    assert notes[0].isVisibleTo(card) is True
+
+
+def test_toolbar_row_groups_preserve_order_and_roles(populated) -> None:
+    """阶段 3 工具行分组（决策项 #3 保守值）：仅加组间距——七按钮顺序与
+    角色赋值（primary／无角色／danger）零改动；组间距 spacer 恰两处
+    （另有末尾 stretch 一处）。"""
+    page, _, _ = populated
+    toolbar = None
+    for index in range(page.layout().count()):
+        item = page.layout().itemAt(index)
+        candidate = item.layout() if item is not None else None
+        if candidate is not None and candidate.indexOf(page._add_button) >= 0:
+            toolbar = candidate
+            break
+    assert toolbar is not None
+    buttons = (
+        page._add_button, page._edit_button, page._move_up_button,
+        page._move_down_button, page._delete_button, page._delete_batch_button,
+        page._clear_all_button,
+    )
+    roles = (ROLE_PRIMARY, None, None, None, ROLE_DANGER, ROLE_DANGER, ROLE_DANGER)
+    indices = [toolbar.indexOf(button) for button in buttons]
+    assert indices == sorted(indices)  # 按钮顺序不变
+    for button, role in zip(buttons, roles, strict=True):
+        assert toolbar.indexOf(button) >= 0
+        assert button_role(button) == role
+    spacers = [
+        toolbar.itemAt(index) for index in range(toolbar.count())
+        if toolbar.itemAt(index).spacerItem() is not None
+    ]
+    assert len(spacers) == 3  # 两组间距＋末尾 stretch
 
 

@@ -823,6 +823,49 @@ def test_render_overview_banner_paints_info_background(qapp, theme: str) -> None
         _restore_default_look(qapp)
 
 
+@pytest.mark.parametrize("theme", [THEME_LIGHT, THEME_DARK])
+def test_render_people_stats_card_paints_surface(qapp, theme: str) -> None:
+    """人员页统计卡（阶段 3 P0-4 QFrame#Card）真实涂出表面底色（双主题探针）。
+
+    卡底须等于该主题 pa-bg-surface token（规则被删/样式表被整体拒绝时塌缩
+    为窗口涂色）；边框须与卡底可区分（1px 边框真实绘制）。
+    """
+    apply_visual_system(qapp, theme=theme)
+    try:
+        host = QWidget()
+        host.resize(360, 240)
+        layout = QVBoxLayout(host)
+        card = QFrame(host)
+        style_card(card)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 10, 12, 10)
+        card_layout.addWidget(QLabel(text.PEOPLE_PAGE_STATS_TITLE, card))
+        layout.addWidget(card)
+        layout.addStretch()
+        host.show()
+        image = host.grab().toImage()
+        rect = card.geometry()
+        # 采样点取卡内右段（避开左侧标题文字与边框圆角）。
+        card_bg = image.pixelColor(
+            int(rect.x() + rect.width() * 0.85),
+            int(rect.y() + rect.height() * 0.5),
+        ).name().lower()
+        assert card_bg == token("pa-bg-surface", theme).lower(), (
+            f"people stats card paints {card_bg}, expected the {theme} "
+            "pa-bg-surface token: card rule likely dropped or stylesheet rejected"
+        )
+        # 边框（左缘中点，非圆角区）与卡底可区分。
+        border = image.pixelColor(
+            rect.x(), int(rect.y() + rect.height() * 0.5),
+        ).name().lower()
+        assert border != card_bg, (
+            f"card border {border} must be distinguishable from the card fill "
+            f"{card_bg}: border rule likely dropped"
+        )
+    finally:
+        _restore_default_look(qapp)
+
+
 def test_overview_page_renders_banner_and_five_step_cards(qtbot) -> None:
     """概览页结构：info 横幅＋五张步骤卡；render_model/set_busy 契约不变。"""
     from photo_archiver.presentation.controllers.overview_presenter import (
