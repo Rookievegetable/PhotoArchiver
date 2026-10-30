@@ -22,7 +22,6 @@ pytest.importorskip("PySide6")
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QToolBar
 
 # Import the app package first so its __init__ finishes initializing before
 # MainWindow pulls app.context.ApplicationContext during its own import
@@ -91,11 +90,10 @@ def _trigger_import(window: MainWindow, path: Path, monkeypatch) -> list:
         lambda *args, **kwargs: (path, _FILTER_DIALOG_TITLE),
     )
     monkeypatch.setattr(main_window_module, "ImportPreviewDialog", _AutoAcceptPreviewDialog)
-    toolbar = window.findChild(QToolBar, "Main")
-    assert toolbar is not None
-    import_action = next(a for a in toolbar.actions() if a.text() == "导入人员")
+    # 真实用户入口（Owner 2026-10-30 入口迁移）：人员与分组页「导入人员」
+    # 按钮 → import_requested → _import_action（同一文件选择/预览/确认链）。
     captured = _capture_terminal_events(window, monkeypatch)
-    import_action.trigger()
+    window._people_admin_page._import_button.click()
     return captured
 
 

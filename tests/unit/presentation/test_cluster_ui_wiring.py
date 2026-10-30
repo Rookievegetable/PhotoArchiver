@@ -56,7 +56,7 @@ def _make_window(qtbot, tmp_path, monkeypatch) -> MainWindow:
     ])
     window = MainWindow(context)
     qtbot.addWidget(window)
-    window._nav_list.setCurrentRow(2)  # 人员与分组页
+    window._nav_list.setCurrentRow(1)  # 人员与分组页（导航调序后行 1）
     return window
 
 

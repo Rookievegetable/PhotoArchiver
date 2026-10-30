@@ -94,7 +94,7 @@ def test_photo_list_renders_real_thumbnail(qtbot, tmp_path: Path) -> None:
     window = MainWindow(context)
     qtbot.addWidget(window)
     window.show()
-    window._nav_list.setCurrentRow(1)  # 照片墙所在页（Batch 3 IA）：grab 需要页面可见
+    window._nav_list.setCurrentRow(2)  # 照片墙所在页（导航调序后行 2）：grab 需要页面可见
 
     model = window._photo_list_model
     window._refresh_photo_list()

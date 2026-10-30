@@ -113,10 +113,10 @@ def test_maintenance_action_lives_on_data_tools_only(qtbot, tmp_path, monkeypatc
     """任务书 D1：主工具栏无识别入口；维护入口在数据工具页且默认可用。"""
     window = _make_window(qtbot, tmp_path, monkeypatch)
     main = window.findChild(QToolBar, "Main")
-    assert [a.text() for a in main.actions()] == [
-        text.ACTION_IMPORT_PEOPLE, text.ACTION_SCAN_FOLDER,
-        text.ACTION_REVIEW_PENDING, text.ACTION_ARCHIVE,
-    ]
+    # Owner 2026-10-30：顶部固定入口栏撤除——主工具栏默认零动作（仅插件
+    # 挂点），流程与维护入口都不再出现在这里。
+    assert main.actions() == []
+    assert main.isHidden()
     # 参考图基线：维护入口呈现为操作卡（QPushButton#ActionCard），QAction
     # 实例与处理器链零变化。
     from PySide6.QtWidgets import QPushButton

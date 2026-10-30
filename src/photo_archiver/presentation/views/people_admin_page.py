@@ -263,6 +263,10 @@ class PeopleAdminPage(QWidget):
     # D-4 聚类入口：页面只发请求信号，运行/对话框由主窗口按既有任务管线处理。
     cluster_run_requested = Signal()
     cluster_results_requested = Signal()
+    # 名单导入入口（Owner 2026-10-30：顶部工具栏撤除后，导入人员移入本页）。
+    # 页面只发请求信号；主窗口接到后经既有 _import_action 触发（任务准入/
+    # 忙碌置灰语义不变）。
+    import_requested = Signal()
 
     def __init__(
         self,
@@ -407,7 +411,16 @@ class PeopleAdminPage(QWidget):
         self._delete_batch_button.hide()
         self._clear_all_button.hide()
         self._more_button.setMenu(more_menu)
+        # 名单导入（Owner 2026-10-30 移入本页）：次级形态 + 文档图标；
+        # 点击只发请求信号，处理器仍走主窗口的 _import_action（准入/置灰链
+        # 零变化）。
+        self._import_button = QPushButton(text.ACTION_IMPORT_PEOPLE, self)
+        self._import_button.setToolTip(text.PEOPLE_PAGE_IMPORT_TOOLTIP)
+        assign_role(self._import_button, ROLE_SECONDARY)
+        assign_button_icon(self._import_button, "document", token("pa-text-secondary"))
+        self._import_button.clicked.connect(self.import_requested.emit)
         toolbar_row.addWidget(self._add_button)
+        toolbar_row.addWidget(self._import_button)
         toolbar_row.addSpacing(_TOOLBAR_GROUP_SPACING)
         toolbar_row.addWidget(self._edit_button)
         toolbar_row.addWidget(self._move_up_button)

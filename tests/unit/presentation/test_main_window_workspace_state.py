@@ -69,7 +69,7 @@ def test_initial_snapshot_queries_effective_root_and_explains_empty_actions(work
     assert window._review_action.toolTip() == text.REVIEW_EMPTY
     assert not window._delete_photos_action.isEnabled()
     assert window._delete_photos_action.toolTip() == text.DELETE_PHOTOS_NO_SELECTION
-    window._nav_list.setCurrentRow(1)  # 照片库页：next 引导按钮的宿主页（Batch 3 IA）
+    window._nav_list.setCurrentRow(2)  # 照片库页（导航调序后行 2）：next 引导按钮宿主页
     # DEC-07 按图推翻（2026-10-30）：引导行合并为单一主按钮；feature 轴优先
     # （EMPTY → 扫描），archive 轴动作仍可经工具栏/导航触达。
     assert isinstance(window._next_step_button, QPushButton)
@@ -94,7 +94,7 @@ def test_refresh_replaces_feature_guidance_and_next_step(
     workspace, status, feature_tooltip, next_action,
 ):
     window = workspace.window
-    window._nav_list.setCurrentRow(1)  # next 引导按钮的宿主页（Batch 3 IA）
+    window._nav_list.setCurrentRow(2)  # next 引导按钮宿主页（导航调序后行 2）
     workspace.state.value = replace(status, archivable_count=0)
     window._refresh_workspace_state()
     assert window._next_step_button.toolTip() == feature_tooltip
@@ -217,7 +217,7 @@ def test_terminal_refresh_restores_latest_not_pre_task_action_state(
     workspace, monkeypatch, kind, initial, latest,
 ):
     window = workspace.window
-    window._nav_list.setCurrentRow(1)  # next 引导按钮的宿主页（Batch 3 IA）
+    window._nav_list.setCurrentRow(2)  # next 引导按钮宿主页（导航调序后行 2）
     workspace.state.value = initial
     window._refresh_workspace_state()
     runnable = Runnable()

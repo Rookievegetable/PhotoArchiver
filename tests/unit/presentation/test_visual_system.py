@@ -531,7 +531,7 @@ def library(qtbot, make_sqlite_context, monkeypatch, tmp_path):
     window = MainWindow(context)
     qtbot.addWidget(window)
     window.show()
-    window._nav_list.setCurrentRow(1)  # 照片库页
+    window._nav_list.setCurrentRow(2)  # 照片库页（Owner 2026-10-30 导航调序后行 2）
     return SimpleNamespace(window=window, state=state)
 
 
@@ -937,7 +937,9 @@ def test_overview_page_renders_banner_and_five_step_cards(qtbot) -> None:
         for i in range(5)
     )
     page.render_model(OverviewModel(steps, "scan", text.OVERVIEW_PRIMARY_SCAN, "tip"))
-    assert not page._primary_button.isHidden()
+    # Owner 2026-10-30：概览页 CTA 恒不显示；引导态数据（文本/tooltip/启用）
+    # 仍按模型跟踪。
+    assert page._primary_button.isHidden()
     assert page._primary_button.text() == text.OVERVIEW_PRIMARY_SCAN
     assert page._primary_button.toolTip() == "tip"
     assert page._primary_button.isEnabled()

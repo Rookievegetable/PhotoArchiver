@@ -121,6 +121,9 @@ class OverviewPage(QWidget):
         self._primary_button = QPushButton(self)
         assign_role(self._primary_button, ROLE_PRIMARY)
         self._primary_button.clicked.connect(self._emit_primary)
+        # Owner 2026-10-30：概览页不再显示该 CTA（构造期即隐藏；render_model
+        # 也恒定 setVisible(False)）。
+        self._primary_button.setVisible(False)
         cta_row.addWidget(self._primary_button)
         layout.addLayout(cta_row)
 
@@ -162,7 +165,10 @@ class OverviewPage(QWidget):
             )
             self._step_details[index].setText(step.detail)
         has_primary = model.primary is not None
-        self._primary_button.setVisible(has_primary)
+        # Owner 2026-10-30：概览页不再显示主 CTA 按钮（指导入口统一在
+        # 照片库页头部「下一步」+ 各页面内）。按钮对象保留以承载引导态数据
+        # （文本/tooltip/启用语义与既有测试核对面不变），恒不显示。
+        self._primary_button.setVisible(False)
         self._primary_button.setText(model.primary_label)
         self._primary_button.setToolTip(model.primary_tooltip)
         self._primary_button.setEnabled(has_primary)

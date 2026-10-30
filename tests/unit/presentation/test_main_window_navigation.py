@@ -58,15 +58,26 @@ def nav(qtbot, make_sqlite_context, monkeypatch, tmp_path):
     return SimpleNamespace(window=window, state=state, query=query, root=root)
 
 
-def test_main_toolbar_holds_primary_flow_in_order(nav) -> None:
+def test_main_toolbar_hosts_plugin_actions_only(nav) -> None:
+    """Owner 2026-10-30：固定入口栏撤除——四个流程动作不再占顶部工具栏。
+
+    工具栏对象保留为插件挂点（ADR-038 findChild "Main"）；默认零插件时
+    工具栏隐藏（界面上完全不出现）。四个固定动作仍存在且可用（入口移入
+    各页面：导入→人员与分组页按钮、扫描→照片库页下一步/空态、审核→导航
+    审核中心、归档→照片库页下一步/批量归档）。
+    """
     window = nav.window
     toolbar = window.findChild(QToolBar, "Main")
     assert toolbar is not None
-    # 任务书 D1：识别并入扫描——主工具栏不再有「运行人脸识别」。
-    assert [action.text() for action in toolbar.actions()] == [
-        text.ACTION_IMPORT_PEOPLE, text.ACTION_SCAN_FOLDER,
-        text.ACTION_REVIEW_PENDING, text.ACTION_ARCHIVE,
-    ]
+    assert toolbar.actions() == []
+    assert toolbar.isHidden()
+    # 四个固定动作仍完整接线：在窗口准入体系内（忙碌置灰集）、可从其入口
+    # 触发（各动作的启用态仍随工作区快照/任务态计算，如归档需配置根目录）。
+    for action in (
+        window._import_action, window._scan_action,
+        window._review_action, window._archive_action,
+    ):
+        assert action in window._conflicting_actions
 
 
 def test_data_tools_page_holds_maintenance_actions(nav) -> None:
@@ -122,7 +133,9 @@ def test_overview_primary_cta_tracks_the_five_states(
     nav.state.value = status
     nav.window._refresh_workspace_state()
     button = nav.window._overview_page._primary_button
-    assert button.isVisible()
+    # Owner 2026-10-30：概览页 CTA 不再显示（按钮对象保留承载引导态数据）；
+    # 文本/模型/启用语义仍逐态跟踪。
+    assert not button.isVisible()
     assert button.text() == expected_label
     assert nav.window._overview_page._model.primary == expected_primary
     assert button.isEnabled()
@@ -137,13 +150,29 @@ def test_overview_cta_routes_through_the_real_scan_picker(nav, monkeypatch) -> N
     assert not nav.window._task_coordinator.is_busy
 
 
+def test_people_page_import_button_routes_through_the_real_file_picker(
+    nav, monkeypatch,
+) -> None:
+    """Owner 2026-10-30：导入人员入口移入人员与分组页——按钮经
+    import_requested → _import_action → 既有文件选择链（准入语义不变）。"""
+    picker = Mock(return_value=("", ""))
+    monkeypatch.setattr(module.QFileDialog, "getOpenFileName", picker)
+    page = nav.window._people_admin_page
+    assert page._import_button.text() == text.ACTION_IMPORT_PEOPLE
+    page._import_button.click()
+    picker.assert_called_once()
+    assert not nav.window._task_coordinator.is_busy
+
+
 def test_navigation_switches_between_the_five_pages(nav) -> None:
+    """导航调序（Owner 2026-10-30）：行 1＝人员与分组、行 2＝照片库；
+    页面栈索引不变（人员页仍在栈位 2、照片库在栈位 1）。"""
     window = nav.window
     assert window._pages.currentIndex() == 0  # 概览是首页
     window._nav_list.setCurrentRow(1)
-    assert window._pages.currentIndex() == 1
-    window._nav_list.setCurrentRow(2)
     assert window._pages.currentIndex() == 2  # 人员与分组（阶段 B 新页）
+    window._nav_list.setCurrentRow(2)
+    assert window._pages.currentIndex() == 1  # 照片库
     window._nav_list.setCurrentRow(3)
     assert window._pages.currentIndex() == 3  # 审核中心（2026-10-01 页面化）
     window._nav_list.setCurrentRow(4)
@@ -206,8 +235,9 @@ def test_busy_disables_data_tools_and_overview_cta_then_restores(nav) -> None:
 def test_nav_entries_carry_the_six_labels(nav) -> None:
     window = nav.window
     labels = [window._nav_list.item(row).text() for row in range(window._nav_list.count())]
+    # Owner 2026-10-30：照片库/人员与分组位置调换。
     assert labels == [
-        text.NAV_OVERVIEW, text.NAV_PHOTO_LIBRARY, text.NAV_PEOPLE,
+        text.NAV_OVERVIEW, text.NAV_PEOPLE, text.NAV_PHOTO_LIBRARY,
         text.NAV_REVIEW_CENTER, text.NAV_DATA_TOOLS, text.NAV_SETTINGS,
     ]
 

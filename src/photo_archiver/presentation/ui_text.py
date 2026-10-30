@@ -170,7 +170,9 @@ PEOPLE_PAGE_GROUP_ORDINAL_TOOLTIP = (
     " +1（仅派生出一组时组号显示「—」）。拖拽排序后自动重算。"
 )
 PEOPLE_PAGE_MANUAL_SOURCE = "手工新增"
-PEOPLE_PAGE_EMPTY = "名单为空。可用「新增人员」手工录入，或用工具栏「导入人员」批量导入名单。"
+PEOPLE_PAGE_EMPTY = "名单为空。可用「新增人员」手工录入，或用「导入人员」批量导入名单。"
+# 导入入口提示（Owner 2026-10-30：入口由顶部工具栏移入本页工具栏）。
+PEOPLE_PAGE_IMPORT_TOOLTIP = "批量导入人员名单文件（xlsx / csv），导入后可调整名次。"
 PEOPLE_PAGE_EMPTY_FILTERED = "该批次没有仍在名单中的人员（人员可能在后续导入中被合并或删除）。"
 PEOPLE_PAGE_DIALOG_ADD_TITLE = "新增人员"
 PEOPLE_PAGE_DIALOG_EDIT_TITLE = "编辑人员"

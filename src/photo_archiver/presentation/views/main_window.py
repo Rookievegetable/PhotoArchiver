@@ -198,18 +198,21 @@ DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
 _PROGRESS_RESOLUTION = 100
 
-# 导航行 ↔ 页面映射：0 概览 / 1 照片库 / 2 人员与分组 / 3 审核中心 / 4 数据工具；
+# 导航行 ↔ 页面映射（Owner 2026-10-30：导航栏 照片库/人员与分组 位置调换）：
+# 导航行 0 概览 / 1 人员与分组 / 2 照片库 / 3 审核中心 / 4 数据工具；
+# 页面栈索引保持 0 概览 / 1 照片库 / 2 人员与分组 / 3 审核中心 / 4 数据工具
+# （页面索引与测试/装配引用解耦于本次纯导航顺序调整）。
 # 2026-10-01 页面化：审核中心由触发式导航项（模态 ReviewDialog）改为常驻页面；
 # 行 5（设置）仍是触发式导航项（打开模态对话框，不切页）。
-_NAV_ROW_TO_PAGE = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4}
+_NAV_ROW_TO_PAGE = {0: 0, 1: 2, 2: 1, 3: 3, 4: 4}
 _PAGE_TO_NAV_ROW = {page: row for row, page in _NAV_ROW_TO_PAGE.items()}
 _NAV_LABELS = (
-    text.NAV_OVERVIEW, text.NAV_PHOTO_LIBRARY, text.NAV_PEOPLE,
+    text.NAV_OVERVIEW, text.NAV_PEOPLE, text.NAV_PHOTO_LIBRARY,
     text.NAV_REVIEW_CENTER, text.NAV_DATA_TOOLS, text.NAV_SETTINGS,
 )
 # 参考图导航 rail 图标（Owner 2026-10-30 裁决：DEC-10=A 按图推翻）；
 # Fluent 系统图标字体离线渲染，缺失时优雅降级为纯文字（visual_style）。
-_NAV_ICON_NAMES = ("home", "photo", "people", "review", "data", "settings")
+_NAV_ICON_NAMES = ("home", "people", "photo", "review", "data", "settings")
 
 
 def _exclusive(label: str) -> Callable:
@@ -374,12 +377,13 @@ class MainWindow(QMainWindow):
         ]
 
     def _build_toolbar(self) -> None:
-        """Create the window-level primary toolbar (frequent flow actions).
+        """Create the plugin-action host bar（Owner 2026-10-30：固定入口栏撤除）.
 
-        The toolbar keeps objectName ``Main`` — the ADR-038 plugin mount
-        contract resolves it via ``findChild(QToolBar, "Main")`` and appends
-        one QAction per plugin action. The toolbar lives on the QMainWindow,
-        so it stays visible on every navigation page.
+        四个固定流程动作不再占用此栏：导入人员移入人员与分组页内按钮；
+        扫描/审核/归档仍可经照片库页「下一步」按钮与导航页面触达。QToolBar
+        对象保留是因为 ADR-038 按 objectName ``Main`` 解析插件挂点——插件
+        动作在 :meth:`_add_plugin_actions` 挂载。无插件动作时此栏隐藏（默认
+        零插件＝界面上完全不出现），挂载出动作后自动显示。
         """
         toolbar = QToolBar("Main", self)
         # P0-1: the constructor string above is the toolbar's windowTitle, not
@@ -387,12 +391,12 @@ class MainWindow(QMainWindow):
         # contract only resolves with an explicit objectName. Without this,
         # plugin actions were silently dropped even once discovery worked.
         toolbar.setObjectName("Main")
-        # 参考图基线：主流程入口＝图标 + 文字（QToolBar 默认在带图标时切
-        # IconOnly，会丢掉用户原有的文字入口形态——显式钉住两种都显示）。
+        # 参考图基线：带图标时显式保持「图标 + 文字」形态（插件动作后续挂载）。
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        toolbar.setVisible(False)
         self.addToolBar(toolbar)
-        # 参考图基线（DEC-10=A 按图推翻）：主流程四入口配 Fluent 图标；字体
-        # 缺失时优雅降级为纯文字。QAction 实例与触发链零变化。
+        # 图标仍挂到 QAction（任何宿主该动作的控件都获得 Fluent 图标；字体
+        # 缺失时优雅降级为纯文字）。QAction 实例与触发链零变化。
         for action, icon_name in (
             (self._import_action, "people"),
             (self._scan_action, "sync"),
@@ -400,11 +404,6 @@ class MainWindow(QMainWindow):
             (self._archive_action, "save"),
         ):
             action.setIcon(fluent_icon(icon_name, token("pa-text-secondary")))
-        for action in (
-            self._import_action, self._scan_action,
-            self._review_action, self._archive_action,
-        ):
-            toolbar.addAction(action)
 
     def _load_plugins(self) -> None:
         """Construct the plugin registry and load the configured plugin directory.
@@ -436,7 +435,11 @@ class MainWindow(QMainWindow):
         )
 
     def _add_plugin_actions(self) -> None:
-        """Add one QAction per plugin action item to the main toolbar."""
+        """Add one QAction per plugin action item to the main toolbar.
+
+        Owner 2026-10-30：固定入口栏撤除后此栏只承载插件动作——挂出任何
+        动作即显示（插件动作保持用户可见，ADR-038 挂点不变）。
+        """
         toolbar = self.findChild(QToolBar, "Main")  # type: ignore[union-attr]
         if toolbar is None:
             return
@@ -450,6 +453,8 @@ class MainWindow(QMainWindow):
                 toolbar.addAction(qaction)
                 self._plugin_actions.append(qaction)
                 self._conflicting_actions.append(qaction)
+        if self._plugin_actions:
+            toolbar.setVisible(True)
 
     @_exclusive(PLUGIN_RESULT_TITLE.format(action_id="…"))
     def _on_plugin_action(self, action_id: str) -> None:
@@ -516,6 +521,11 @@ class MainWindow(QMainWindow):
             self._nav_icons_selected.append(selected_icon)
             self._nav_list.addItem(QListWidgetItem(normal_icon, label))
         self._nav_list.setFixedWidth(150)
+        # Owner 2026-10-30：选中项不再显示系统焦点黑框（Windows 11 样式在
+        # 有焦点的当前项上绘制焦点矩形）——导航 rail 不取键盘焦点；鼠标点击
+        # 选择/currentRowChanged/高亮语义全部不受影响（焦点策略只管制键盘
+        # 焦点获取）。
+        self._nav_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._nav_list.currentRowChanged.connect(self._on_nav_changed)
 
         self._pages = QStackedWidget(self)
@@ -531,8 +541,9 @@ class MainWindow(QMainWindow):
             thumbnail_source=self._photo_list_controller,
         )
         self._review_center_page.review_changed.connect(self._on_review_changed)
+        # 导航调序（Owner 2026-10-30）：人员与分组＝导航行 1。
         self._review_center_page.pairing_requested.connect(
-            lambda: self._nav_list.setCurrentRow(2),
+            lambda: self._nav_list.setCurrentRow(1),
         )
         self._pages.addWidget(self._review_center_page)  # index 3: 审核中心
         self._pages.addWidget(self._build_data_tools_page())  # index 4: 数据工具
@@ -755,6 +766,9 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         page.people_changed.connect(self._on_people_changed)
+        # Owner 2026-10-30：名单导入入口移入本页——请求经既有 _import_action
+        # 触发（任务准入/忙碌置灰/文件选择链零变化）。
+        page.import_requested.connect(self._import_action.trigger)
         # D-4 聚类入口：页面发请求信号，主窗口经 TaskCoordinator 统一准入。
         page.cluster_run_requested.connect(self._on_cluster_run_clicked)
         page.cluster_results_requested.connect(self._on_cluster_results_clicked)

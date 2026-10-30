@@ -22,7 +22,7 @@ pytest.importorskip("openpyxl")
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QComboBox, QToolBar
+from PySide6.QtWidgets import QComboBox
 
 # Import the app package first so its __init__ finishes initializing before
 # MainWindow pulls app.context.ApplicationContext during its own import
@@ -85,11 +85,9 @@ def test_excel_import_from_main_window_persists_and_refreshes_ui(
         main_window_module, "ImportPreviewDialog", _AutoAcceptDialog,
     )
 
-    # Trigger the REAL user entry: the Import People toolbar action.
-    toolbar = window.findChild(QToolBar, "Main")
-    assert toolbar is not None
-    import_action = next(a for a in toolbar.actions() if a.text() == "导入人员")
-    import_action.trigger()
+    # Trigger the REAL user entry (Owner 2026-10-30 入口迁移): the people
+    # page 导入人员 button → import_requested → _import_action.
+    window._people_admin_page._import_button.click()
 
     # Real persistence proof via the repository protocol (not ad-hoc SQL):
     # the synchronous confirm must land both Excel rows in SQLite.
@@ -148,7 +146,7 @@ def test_second_import_refreshes_the_people_page_without_restart(
     window = MainWindow(context)
     qtbot.addWidget(window)
 
-    window._nav_list.setCurrentRow(2)  # 打开「人员与分组」页
+    window._nav_list.setCurrentRow(1)  # 打开「人员与分组」页（导航调序后行 1）
     page = window._people_admin_page
     assert page._table.rowCount() == 0
 
@@ -165,15 +163,13 @@ def test_second_import_refreshes_the_people_page_without_restart(
 
     monkeypatch.setattr(main_window_module, "ImportPreviewDialog", _AutoAcceptDialog)
 
-    toolbar = window.findChild(QToolBar, "Main")
-    assert toolbar is not None
-    import_action = next(a for a in toolbar.actions() if a.text() == "导入人员")
+    import_button = window._people_admin_page._import_button
 
-    import_action.trigger()
+    import_button.click()
     qtbot.waitUntil(lambda: page._table.rowCount() == 2, timeout=15000)
     assert [page._table.item(row, 3).text() for row in range(2)] == ["Alice", "Bob"]  # 姓名列（组/序插入后右移）
 
-    import_action.trigger()  # 第二批：页面必须当场显示 3 人
+    import_button.click()  # 第二批：页面必须当场显示 3 人
     qtbot.waitUntil(lambda: page._table.rowCount() == 3, timeout=15000)
     assert [page._table.item(row, 3).text() for row in range(3)] == [
         "Alice", "Bob", "Carol",

@@ -61,7 +61,7 @@ def library(qtbot, make_sqlite_context, monkeypatch, tmp_path):
     window = MainWindow(context)
     qtbot.addWidget(window)
     window.show()
-    window._nav_list.setCurrentRow(1)  # 照片库页
+    window._nav_list.setCurrentRow(2)  # 照片库页（导航调序后行 2）
     return SimpleNamespace(window=window, state=state, query=query, root=root)
 
 
