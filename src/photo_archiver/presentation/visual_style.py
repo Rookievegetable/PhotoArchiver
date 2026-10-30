@@ -568,6 +568,13 @@ QTableWidget::item {
     padding: 4px 8px;
     border: none;
 }
+/* ::item 一旦有样式规则，选中态的绘制就整体走 QSS——必须显式给出
+   :selected 背景/文字，否则选中行＝无背景＋selection-color 白字 → 白底
+   白字整行「空白」（Owner 实机 2026-10-31 实证）。 */
+QTableWidget::item:selected {
+    background-color: palette(Highlight);
+    color: palette(HighlightedText);
+}
 QHeaderView::section {
     background-color: ${pa-bg-surface};
     color: ${pa-text-secondary};
@@ -840,6 +847,7 @@ ICONS: dict[str, str] = {
     "settings": "",      # 设置
     "search": "",        # 搜索
     "add": "",           # 添加
+    "add_friend": "",    # 添加人员（AddFriend＝人形+加号，语义贴合「新增人员」）
     "edit": "",          # 编辑
     "up": "",            # 上移
     "down": "",          # 下移

@@ -408,6 +408,36 @@ def test_secondary_role_paints_tinted_surface(styled_app) -> None:
     assert color.saturationF() < 0.35  # 中性浅底，非实心 accent
 
 
+def test_table_selected_row_paints_highlight_background(styled_app) -> None:
+    """QTableWidget::item 一旦有规则，选中态必须显式给 :selected 背景/文字。
+
+    Owner 实机 2026-10-31 实证的整行「空白」＝::item 有样式但无 :selected
+    规则 → 选中行无背景（白底）＋ selection-color 白字。回归探针：选中
+    单元格内边距区必须画 Highlight（品牌蓝），未选中行不得画。
+    """
+    from PySide6.QtWidgets import QTableWidgetItem, QTableWidget
+
+    table = QTableWidget(2, 2)
+    table.setItem(0, 0, QTableWidgetItem("甲"))
+    table.setItem(1, 0, QTableWidgetItem("乙"))
+    table.selectRow(0)
+    table.resize(240, 160)
+    # 直接抓 viewport：visualItemRect 坐标与抓取坐标一致（免去表头/框偏移）。
+    image = table.viewport().grab().toImage()
+    highlight = styled_app.palette().color(QPalette.ColorRole.Highlight).name().lower()
+
+    def _sample_point(row: int) -> tuple[int, int]:
+        """右端内边距区采样点（避开文字字形）。"""
+        rect = table.visualItemRect(table.item(row, 0))
+        return rect.right() - 4, rect.center().y()
+
+    # 选中行单元格＝Highlight 背景（回归：::item 有样式而无 :selected 规则
+    # 时选中行＝无背景白底）。
+    assert image.pixelColor(*_sample_point(0)).name().lower() == highlight
+    # 未选中行不得误画选中背景。
+    assert image.pixelColor(*_sample_point(1)).name().lower() != highlight
+
+
 @pytest.fixture
 def dark_styled_app(qapp):
     """Dark-theme production stylesheet + dark palette installed, then restored."""

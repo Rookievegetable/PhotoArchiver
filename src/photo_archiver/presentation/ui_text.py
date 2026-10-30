@@ -117,7 +117,8 @@ PEOPLE_PAGE_MORE_BUTTON = "⋯ 更多"
 PEOPLE_PAGE_SELECT_TOOLTIP = "勾选＝选中该行（与行点击/Ctrl 多选等效）。"
 PEOPLE_PAGE_HINT = (
     "名单顺序即「照片库」人员筛选下拉的展示顺序。选择某个「来源批次」后，"
-    "可拖动行或使用「上移 / 下移」调整该批次成员的名次（改动立即保存）；「全部批次」为只读总览。"
+    "可拖动行或使用「上移 / 下移」调整该批次成员的名次（改动立即保存）；"
+    "「全部批次」视图则以同样方式调整全库名单顺序。"
 )
 PEOPLE_PAGE_ADD_BUTTON = "新增人员"
 PEOPLE_PAGE_EDIT_BUTTON = "编辑"
@@ -130,7 +131,8 @@ PEOPLE_PAGE_BATCH_ALL = "全部批次"
 # 状态（N 人）——库中存在同名批次，纯"文件名（人数）"无法区分且删除入口
 # 有误删风险）。
 PEOPLE_PAGE_BATCH_FILTER_HINT = "单批次视图可调序：拖动行或「上移 / 下移」仅调整本批次成员的名次（其他批次名次不变）。"
-PEOPLE_PAGE_BATCH_READONLY_HINT = "全部批次为只读：调整顺序请先选择某个「来源批次」。"
+# Owner 2026-10-31 推翻 2026-10-28 只读裁决：全部批次视图同样可调序（全库名单顺序）。
+PEOPLE_PAGE_BATCH_READONLY_HINT = "全部批次视图：拖动行或「上移 / 下移」调整全库名单顺序（跨批次）。"
 PEOPLE_PAGE_COL_ORDER = "顺序"
 PEOPLE_PAGE_COL_GROUP_ORDINAL = "组/序"
 PEOPLE_PAGE_COL_NAME = "姓名"

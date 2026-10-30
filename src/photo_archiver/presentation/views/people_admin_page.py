@@ -383,12 +383,13 @@ class PeopleAdminPage(QWidget):
         self._clear_all_button.clicked.connect(self._on_clear_all_clicked)
         assign_role(self._clear_all_button, ROLE_DANGER)
         # Fluent 图标（Owner 2026-10-30 裁决：DEC-10=A 按图推翻）——缺失字体
-        # 时优雅降级为纯文字；按钮语义/角色赋值零变化。
-        assign_button_icon(self._add_button, "add")
+        # 时优雅降级为纯文字；按钮语义/角色赋值零变化。实底按钮上的图标取
+        # 其文字色（Owner 2026-10-31：灰/红图标在实底上不可辨，全部对齐）。
+        assign_button_icon(self._add_button, "add_friend", token("pa-accent-text"))
         assign_button_icon(self._edit_button, "edit", token("pa-text-secondary"))
         assign_button_icon(self._move_up_button, "up", token("pa-text-secondary"))
         assign_button_icon(self._move_down_button, "down", token("pa-text-secondary"))
-        assign_button_icon(self._delete_button, "delete", token("pa-danger-fg"))
+        assign_button_icon(self._delete_button, "delete", token("pa-danger-text"))
         # 参考图 B4「⋯ 更多 ▾」收纳（决策项 #5 按图推翻）：次级/危险删除入口
         # 收入更多菜单——两个危险按钮的处理器/对话框链零变化，仅呈现位置
         # 从平铺改为菜单项（语义无增减；F-PEO 删除披露入口仍全部可达）。
@@ -753,19 +754,19 @@ class PeopleAdminPage(QWidget):
 
         P11（D5-A）：上移/下移/编辑仅在**恰选中 1 行**时可用；「删除所选」
         对 1..n 行可用；拖拽重排与多选互斥——选中数 > 1 时关闭。
-        Owner 裁决（2026-10-28）：调序**仅限批次筛选视图**——「全部批次」
-        为只读（拖拽与移动按钮关闭）。
+        Owner 2026-10-31 推翻 2026-10-28 只读裁决：全部批次视图同样可调序
+        （拖拽与移动按钮随选区启用，语义＝全库名单顺序）。
         """
         rows = self._selected_row_indices()
         single = len(rows) == 1
         index = rows[0] if single else -1
         last_index = self._table.rowCount() - 1
-        reorderable = self._batch_filter is not None and single
+        reorderable = single
         self._move_up_button.setEnabled(reorderable and index > 0)
         self._move_down_button.setEnabled(reorderable and 0 <= index < last_index)
         self._edit_button.setEnabled(single and self._selected_person() is not None)
         self._delete_button.setEnabled(bool(rows))
-        self._table.setDragEnabled(self._batch_filter is not None and len(rows) <= 1)
+        self._table.setDragEnabled(len(rows) <= 1)
         self._sync_check_marks(rows)
         self._more_button.setEnabled(bool(self._batches) or bool(rows))
 
@@ -951,25 +952,24 @@ class PeopleAdminPage(QWidget):
         the selection to the person), so pressing 「上移/下移」 again keeps moving
         the same person instead of whoever the old row index now holds.
         P11：仅恰选中 1 行时执行（多选禁用移动按钮；此处为第二道门）。
-        Owner 裁决（2026-10-28）：调序仅限批次筛选视图——全部批次为只读
-        （此处为第二道门）。
+        Owner 2026-10-31 推翻 2026-10-28 只读裁决：全部批次视图同样可调序
+        （调整的是全库名单顺序）；批次视图仍为批次内槽位置换。
         """
         if len(self._selected_row_indices()) != 1:
             return
         index = self._selected_row_index()
-        if index < 0 or self._batch_filter is None:
+        if index < 0:
             return
         self.move_row(index, index + offset)
 
     def move_row(self, source_index: int, target_index: int) -> None:
-        """Reorder the batch view rows and persist via slot permutation.
+        """Reorder the visible rows and persist the resulting roster order.
 
-        Owner 裁决（2026-10-28）：调序仅发生在批次筛选视图——本批次成员按
-        新序填回它们占有的全局名次槽位（置换语义），其他批次人员的名次与
-        相对位置完全不变。
+        批次筛选视图＝批次内槽位置换（Owner 裁决 2026-10-28：本批次成员按
+        新序填回它们占有的全局名次槽位，其他批次人员的名次与相对位置完全
+        不变）；全部批次视图（Owner 2026-10-31 推翻只读裁决）＝可见列表即
+        全名单，置换结果本身就是全库名单顺序。
         """
-        if self._batch_filter is None:
-            return
         people = self.visible_people()
         if not (0 <= source_index < len(people)) or not (0 <= target_index < len(people)):
             return
@@ -977,7 +977,10 @@ class PeopleAdminPage(QWidget):
             return
         person = people.pop(source_index)
         people.insert(target_index, person)
-        self._persist_batch_order(people)
+        if self._batch_filter is None:
+            self._persist_order(people)
+        else:
+            self._persist_batch_order(people)
 
     def _on_rows_dropped(self, source_row: int, target_row: int) -> None:
         """Handle a table drag: same semantics as the move buttons."""
@@ -1047,7 +1050,7 @@ class PeopleAdminPage(QWidget):
         self._cluster_run_button = QPushButton(text.CLUSTER_PAGE_RUN_BUTTON, group)
         self._cluster_run_button.clicked.connect(self.cluster_run_requested.emit)
         assign_role(self._cluster_run_button, ROLE_PRIMARY)
-        assign_button_icon(self._cluster_run_button, "play")
+        assign_button_icon(self._cluster_run_button, "play", token("pa-accent-text"))
         row.addWidget(self._cluster_run_button)
         self._cluster_results_button = QPushButton(text.CLUSTER_PAGE_RESULTS_BUTTON, group)
         self._cluster_results_button.clicked.connect(self.cluster_results_requested.emit)

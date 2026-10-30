@@ -287,7 +287,7 @@ class ImportPreviewDialog(QDialog):
         cancel.clicked.connect(self.reject)
         confirm = QPushButton(text.IMPORT_PREVIEW_CONFIRM_BUTTON, self)
         assign_role(confirm, ROLE_PRIMARY)
-        assign_button_icon(confirm, "download")
+        assign_button_icon(confirm, "download", token("pa-accent-text"))
         confirm.clicked.connect(self.accept)
         buttons.addStretch()
         buttons.addWidget(cancel)

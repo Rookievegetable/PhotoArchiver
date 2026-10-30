@@ -195,8 +195,8 @@ def test_drop_rows_reorders(populated, tmp_path: Path) -> None:
 
 
 def test_batch_review_switches_hint_and_gates(tmp_path: Path, populated, qtbot) -> None:
-    """Owner 裁决（2026-10-28）：批次视图可调序（拖拽启用+调序提示）、
-    全部批次只读（拖拽关闭+只读提示、移动按钮禁用）。"""
+    """批次视图可调序（拖拽启用+调序提示）；全部批次视图（Owner 2026-10-31
+    推翻 2026-10-28 只读裁决）同样可调序（提示＝全库名单顺序文案）。"""
     page, manage, repositories = populated
     page.show()
     from photo_archiver.application.commands import ConfirmImportCommand, ParseImportDraftCommand
@@ -227,11 +227,12 @@ def test_batch_review_switches_hint_and_gates(tmp_path: Path, populated, qtbot) 
     page._batch_combo.setCurrentIndex(0)
     page._on_batch_selected(0)
     assert page._table.rowCount() == 4
-    assert page._batch_hint.text() == text.PEOPLE_PAGE_BATCH_READONLY_HINT  # 只读提示
-    assert not page._table.dragEnabled()  # 全部批次禁止拖拽
+    # Owner 2026-10-31：全部批次视图可调序（键沿用，值＝全库名单顺序文案）。
+    assert page._batch_hint.text() == text.PEOPLE_PAGE_BATCH_READONLY_HINT
+    assert page._table.dragEnabled()  # 全部批次允许拖拽调序
     page._table.selectRow(0)
-    assert not page._move_up_button.isEnabled()  # 全部批次：移动按钮禁用
-    assert not page._move_down_button.isEnabled()
+    assert not page._move_up_button.isEnabled()  # 首行仍不能上移（边界态）
+    assert page._move_down_button.isEnabled()
 
 
 def test_add_button_opens_dialog_and_appends(populated, monkeypatch) -> None:
@@ -413,22 +414,23 @@ def test_foreign_drag_payload_never_reorders_the_roster(populated) -> None:
     assert [p.name for p in repositories.people.list_all()] == ["张三", "李四", "王五"]
 
 
-def test_all_batches_view_is_readonly(populated) -> None:
-    """Owner 裁决（2026-10-28）：全部批次视图只读——拖拽关闭、移动按钮禁用、
-    move_selected 第二道门 no-op、提示为只读文案。"""
-    page, _, _ = populated
+def test_all_batches_view_supports_global_reorder(populated) -> None:
+    """Owner 2026-10-31 推翻 2026-10-28 只读裁决：全部批次视图同样可调序——
+    拖拽启用、移动按钮随单选区启用、move_selected 持久化全库名单顺序。"""
+    page, _, repositories = populated
     page.show()
     assert page._batch_filter is None
+    # 键沿用（取值已改为「可调序」文案）。
     assert page._batch_hint.text() == text.PEOPLE_PAGE_BATCH_READONLY_HINT
 
-    assert not page._table.dragEnabled()
+    assert page._table.dragEnabled()
     page._table.selectRow(0)
     assert page._edit_button.isEnabled()  # 编辑与顺序无关，仍可用
-    assert not page._move_up_button.isEnabled()
-    assert not page._move_down_button.isEnabled()
+    assert not page._move_up_button.isEnabled()  # 首行不能上移
+    assert page._move_down_button.isEnabled()
 
-    page.move_selected(1)  # 第二道门：全部批次必须 no-op
-    assert [p.name for p in page.visible_people()] == ["张三", "李四", "王五"]
+    page.move_selected(1)  # 张三 下移一位＝全库名单顺序变更
+    assert [p.name for p in repositories.people.list_all()] == ["李四", "张三", "王五"]
 
 
 def test_batch_view_permutation_keeps_other_batches_positions(
@@ -461,20 +463,23 @@ def test_batch_view_permutation_keeps_other_batches_positions(
     assert [p.roster_order for p in repositories.people.list_all()][:4] == [1, 2, 3, 4]
 
 
-def test_batch_review_disables_row_drops(populated) -> None:
-    """全部批次只读：页面渲染即关闭拖拽，拖拽载荷一律不接受。"""
+def test_batch_review_accepts_row_drops_in_all_batches_view(populated) -> None:
+    """Owner 2026-10-31：全部批次视图启用拖拽——本表行拖拽载荷被接受。"""
     page, _, _ = populated
     page.resize(900, 360)
     page.show()
     table = page._table
-    assert not table.dragEnabled()  # 全部批次：_render_action_state 关闭拖拽
+    assert table.dragEnabled()  # 全部批次：拖拽随视图启用
+    # mime 必须由本测试持有引用：QDragEnterEvent 只存指针，内联临时对象被
+    # GC 后 mimeData() 悬垂（旧测试靠 dragEnabled 短路未触碰 mime 才未爆）。
+    mime = _row_payload()
     enter = QDragEnterEvent(
-        _row_center(table, 1), Qt.DropAction.MoveAction, _row_payload(),
+        _row_center(table, 1), Qt.DropAction.MoveAction, mime,
         Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
     )
     QApplication.sendEvent(table.viewport(), enter)
 
-    assert not enter.isAccepted()
+    assert enter.isAccepted()
 
 
 def test_delete_selected_row_preselects_it_in_the_confirm_dialog(populated, monkeypatch) -> None:
@@ -579,7 +584,7 @@ def test_repeated_move_clicks_move_the_same_person(populated, tmp_path: Path) ->
 
 def test_move_buttons_grey_out_at_the_roster_edges(populated, tmp_path: Path) -> None:
     """边界态（批次视图）：首行不能上移、末行不能下移、无选区两个都禁用；
-    全部批次视图：即使有选区，移动按钮也一律禁用（只读）。"""
+    全部批次视图（Owner 2026-10-31）：有单选区即启用移动。"""
     page, _, repositories = populated
     _import_batch_and_select(page, repositories, tmp_path, [
         ("批张", "EA1"), ("批李", "EA2"), ("批王", "EA3"),
@@ -597,12 +602,12 @@ def test_move_buttons_grey_out_at_the_roster_edges(populated, tmp_path: Path) ->
     assert not page._move_down_button.isEnabled()
     assert not page._delete_button.isEnabled()
 
-    # 全部批次视图：只读——有选区也不启用移动
+    # 全部批次视图（Owner 2026-10-31）：有单选区即启用移动
     page._batch_combo.setCurrentIndex(0)
     page._on_batch_selected(0)
     page._table.selectRow(1)
-    assert not page._move_up_button.isEnabled()
-    assert not page._move_down_button.isEnabled()
+    assert page._move_up_button.isEnabled()
+    assert page._move_down_button.isEnabled()
 
 
 def test_selection_follows_the_person_across_refreshes(
