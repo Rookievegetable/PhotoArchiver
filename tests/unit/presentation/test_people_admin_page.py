@@ -53,6 +53,7 @@ from photo_archiver.presentation.visual_style import (
     CARD_OBJECT_NAME,
     ROLE_DANGER,
     ROLE_PRIMARY,
+    ROLE_SECONDARY,
     button_role,
 )
 from photo_archiver.presentation.views.people_admin_page import (
@@ -1396,9 +1397,10 @@ def test_stats_card_keeps_empty_state_visibility_semantics(
 
 def test_toolbar_row_groups_preserve_order_and_roles(populated) -> None:
     """工具行分组＋B4「更多▾」收纳（决策项 #5 按图推翻 2026-10-30）：
-    平铺按钮＝添加(primary)｜编辑/上移/下移(无角色)｜删除所选(danger)｜更多；
-    按批次删除/清空所有人员收入「更多」菜单——按钮角色赋值零变化、菜单项
-    触发既有按钮点击槽（处理器与确认对话框链零变化）。"""
+    平铺按钮＝添加(primary)｜编辑/上移/下移(secondary，参考图基线 2026-10-30
+    次级着色形态)｜删除所选(danger)｜更多；按批次删除/清空所有人员收入
+    「更多」菜单——按钮角色赋值零变化、菜单项触发既有按钮点击槽（处理器与
+    确认对话框链零变化）。"""
     page, _, _ = populated
     toolbar = None
     for index in range(page.layout().count()):
@@ -1412,7 +1414,7 @@ def test_toolbar_row_groups_preserve_order_and_roles(populated) -> None:
         page._add_button, page._edit_button, page._move_up_button,
         page._move_down_button, page._delete_button,
     )
-    roles = (ROLE_PRIMARY, None, None, None, ROLE_DANGER)
+    roles = (ROLE_PRIMARY, ROLE_SECONDARY, ROLE_SECONDARY, ROLE_SECONDARY, ROLE_DANGER)
     indices = [toolbar.indexOf(button) for button in flat_buttons]
     assert indices == sorted(indices)  # 平铺按钮顺序不变
     for button, role in zip(flat_buttons, roles, strict=True):

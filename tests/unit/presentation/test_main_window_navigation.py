@@ -15,7 +15,7 @@ import pytest
 pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QToolBar, QToolButton, QMessageBox
+from PySide6.QtWidgets import QPushButton, QToolBar, QToolButton, QMessageBox
 
 from photo_archiver.application.dtos.workspace import (
     ModelAvailability, WorkspaceStatus,
@@ -70,10 +70,15 @@ def test_main_toolbar_holds_primary_flow_in_order(nav) -> None:
 
 
 def test_data_tools_page_holds_maintenance_actions(nav) -> None:
+    """维护四入口＝数据工具页操作卡（参考图基线：文字按钮行 → 卡片网格）。
+
+    卡片点击经 ``action.trigger()`` 走原处理器链——卡片文本必须与 QAction
+    文本一致，且主工具栏不出现任何维护入口（D1 裁决保持）。
+    """
     window = nav.window
-    tools = window.findChild(QToolBar, "DataTools")
-    assert tools is not None
-    labels = {action.text() for action in tools.actions()}
+    cards = window.findChildren(QPushButton, "ActionCard")
+    assert len(cards) == 4
+    labels = {card.text() for card in cards}
     assert labels == {
         text.ACTION_EXPORT_DATA, text.ACTION_DETECT_DUPLICATES,
         text.ACTION_REANALYZE_ALL, text.ACTION_DELETE_PERSON,
@@ -81,6 +86,24 @@ def test_data_tools_page_holds_maintenance_actions(nav) -> None:
     main = window.findChild(QToolBar, "Main")
     assert main is not None
     assert not labels & {action.text() for action in main.actions()}
+
+
+def test_data_tools_card_triggers_its_action(nav, monkeypatch) -> None:
+    """卡片点击＝对应 QAction.trigger（处理器链/准入语义不变）。
+
+    导出卡点击走真实 `_on_export_clicked` → ExportDialog（模态）——基类
+    QDialog.exec 打桩成立即返回，点击链路完整但不阻塞。
+    """
+    from PySide6.QtWidgets import QDialog
+
+    window = nav.window
+    cards = {card.text(): card for card in window.findChildren(QPushButton, "ActionCard")}
+    export_card = cards[text.ACTION_EXPORT_DATA]
+    assert export_card.toolTip()  # 描述进 tooltip（卡片面＝图标＋动作名）
+    monkeypatch.setattr(
+        QDialog, "exec", lambda self: QDialog.DialogCode.Rejected,
+    )
+    export_card.click()  # 不抛出不阻塞即通过（exec 被桩化）
 
 
 # 任务书 §3：扫描（登记+特征）不再要求名单——空库主 CTA 指向扫描；

@@ -34,7 +34,7 @@ pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QSize, Qt, qInstallMessageHandler
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFrame,
@@ -361,6 +361,51 @@ def _restore_default_look(qapp) -> None:
     """Drop the probe stylesheet and restore the captured default palette."""
     apply_visual_system(qapp, theme=THEME_LIGHT)
     qapp.setStyleSheet("")
+
+
+def test_reference_baseline_accent_ground(qapp) -> None:
+    """参考图基线（Owner 2026-10-30）：品牌蓝 accent 双主题上墙。
+
+    - 两主题 token 表都有 pa-accent 五件套（模板全替换不残留占位符）；
+    - QSS 含 secondary / ActionCard / PhotoWall / NavRail accent 选择器；
+    - 应用级 palette Highlight＝品牌蓝——浅色不再镜像平台调色板（深色
+      系统上曾出现浅色 QSS ＋ 深色调色板的混合渲染，截图实证）。
+    """
+    from photo_archiver.presentation.visual_style import theme_tokens
+
+    for theme in (THEME_LIGHT, THEME_DARK):
+        tokens = theme_tokens(theme)
+        for name in (
+            "pa-accent", "pa-accent-hover", "pa-accent-text",
+            "pa-accent-fg", "pa-accent-soft",
+        ):
+            assert name in tokens, f"{theme} 缺 accent token {name}"
+        qss = build_stylesheet(theme)
+        assert "QPushButton[styleRole=\"secondary\"]" in qss
+        assert "QPushButton#ActionCard" in qss
+        assert "QListView#PhotoWall" in qss
+        assert "${" not in qss
+    apply_visual_system(qapp, theme=THEME_LIGHT)
+    try:
+        palette = qapp.palette()
+        assert palette.color(QPalette.ColorRole.Highlight).name().lower() == "#2563eb"
+        assert palette.color(QPalette.ColorRole.HighlightedText).name().lower() == "#ffffff"
+        assert palette.color(QPalette.ColorRole.Window).name().lower() == "#f0f0f0"
+        assert palette.color(QPalette.ColorRole.Base).name().lower() == "#ffffff"
+    finally:
+        _restore_default_look(qapp)
+
+
+def test_secondary_role_paints_tinted_surface(styled_app) -> None:
+    """secondary＝浅底描边次级形态：饱和度远低于主操作（角色区分可辨）。"""
+    from photo_archiver.presentation.visual_style import ROLE_SECONDARY, assign_role
+
+    secondary = QPushButton("S")
+    assign_role(secondary, ROLE_SECONDARY)
+    secondary.adjustSize()
+    image = secondary.grab().toImage()
+    color = QColor(image.pixelColor(image.width() // 2, image.height() // 2))
+    assert color.saturationF() < 0.35  # 中性浅底，非实心 accent
 
 
 @pytest.fixture

@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
     QFrame,
+    QGridLayout,
     QLabel,
     QHBoxLayout,
     QListWidget,
@@ -161,14 +162,19 @@ from photo_archiver.presentation.views.photo_deletion_confirm_dialog import (
 from photo_archiver.presentation.views.photo_list_delegate import PhotoThumbnailDelegate
 from photo_archiver.presentation.views.photo_detail_dialog import PhotoDetailDialog
 from photo_archiver.presentation.visual_style import (
+    ACTION_CARD_OBJECT_NAME,
     NAV_RAIL_OBJECT_NAME,
     ROLE_DANGER,
     ROLE_PRIMARY,
+    ROLE_SECONDARY,
+    assign_label_icon,
     assign_role,
+    fluent_icon,
     style_card,
     style_empty_state_card,
     style_page_subtitle,
     style_page_title,
+    token,
 )
 from photo_archiver.presentation.views.plugin_report_dialog import PluginReportDialog
 from photo_archiver.presentation.views.cluster_results_dialog import ClusterResultsDialog
@@ -381,7 +387,19 @@ class MainWindow(QMainWindow):
         # contract only resolves with an explicit objectName. Without this,
         # plugin actions were silently dropped even once discovery worked.
         toolbar.setObjectName("Main")
+        # 参考图基线：主流程入口＝图标 + 文字（QToolBar 默认在带图标时切
+        # IconOnly，会丢掉用户原有的文字入口形态——显式钉住两种都显示）。
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.addToolBar(toolbar)
+        # 参考图基线（DEC-10=A 按图推翻）：主流程四入口配 Fluent 图标；字体
+        # 缺失时优雅降级为纯文字。QAction 实例与触发链零变化。
+        for action, icon_name in (
+            (self._import_action, "people"),
+            (self._scan_action, "sync"),
+            (self._review_action, "check"),
+            (self._archive_action, "save"),
+        ):
+            action.setIcon(fluent_icon(icon_name, token("pa-text-secondary")))
         for action in (
             self._import_action, self._scan_action,
             self._review_action, self._archive_action,
@@ -485,12 +503,18 @@ class MainWindow(QMainWindow):
         # 阶段 2 chrome：导航 rail 的 objectName 挂点（QSS 单源选择器
         # QListWidget#NavRail 用）。仅加 objectName，导航映射/回弹行为不变。
         self._nav_list.setObjectName(NAV_RAIL_OBJECT_NAME)
+        # 参考图基线（Owner 2026-10-30）：选中项图标用品牌蓝、未选中用次要
+        # 文本色——图标按行缓存两套，切换时仅换 QIcon（零导航语义变化）。
+        secondary_color = token("pa-text-secondary")
+        accent_color = token("pa-accent-fg")
+        self._nav_icons_normal: list[object] = []
+        self._nav_icons_selected: list[object] = []
         for label, icon_name in zip(_NAV_LABELS, _NAV_ICON_NAMES, strict=True):
-            item = QListWidgetItem(
-                visual_style.fluent_icon(icon_name, visual_style.token("pa-text-secondary")),
-                label,
-            )
-            self._nav_list.addItem(item)
+            normal_icon = visual_style.fluent_icon(icon_name, secondary_color)
+            selected_icon = visual_style.fluent_icon(icon_name, accent_color)
+            self._nav_icons_normal.append(normal_icon)
+            self._nav_icons_selected.append(selected_icon)
+            self._nav_list.addItem(QListWidgetItem(normal_icon, label))
         self._nav_list.setFixedWidth(150)
         self._nav_list.currentRowChanged.connect(self._on_nav_changed)
 
@@ -519,6 +543,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._pages, 1)
         self.setCentralWidget(central)
         self._nav_list.setCurrentRow(0)
+        # 参考图基线：首屏（概览）即以品牌蓝图标配色高亮。
+        self._apply_nav_icons(0)
 
     def _build_photo_library_page(self) -> QWidget:
         """Build the photo-library page (filter bar, photo wall, selection ops).
@@ -536,35 +562,44 @@ class MainWindow(QMainWindow):
         # 参考图 M2：页头「照片库」标题＋全库统计副标题（统计数据经
         # _update_library_stats 回填；M3 全局搜索框＝图有码无的新增交互，
         # 未在 Owner 五项按图推翻清单内——保守值不实施）。
-        header = QWidget(content)
-        header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(2)
-        library_title = QLabel(LIBRARY_PAGE_TITLE, header)
-        style_page_title(library_title)
-        self._library_stats_label = QLabel("", header)
-        style_page_subtitle(self._library_stats_label)
-        header_layout.addWidget(library_title)
-        header_layout.addWidget(self._library_stats_label)
-        layout.addWidget(header)
-
-        # DEC-07 按图推翻：引导行由双按钮合并为单一「下一步」主按钮——
+        # DEC-07 按图推翻 + 参考图基线（Owner 2026-10-30）：单一「下一步」
+        # 主按钮从标题下方独立行移至页头右侧（参考图头部右上角主操作位）；
         # 语义仍由 workspace guidance 驱动（feature 轴优先、archive 轴兜底），
         # 标签/tooltip/next_action 属性机制零变化；被合并的第二引导动作仍可
         # 经窗口工具栏（导入/扫描/审核/归档）触达。
-        guidance_row = QHBoxLayout()
         self._next_step_button = QPushButton(self)
         self._next_step_button.setVisible(False)
         self._next_step_button.clicked.connect(
             lambda checked=False: self._on_workspace_next(self._next_step_button),
         )
         assign_role(self._next_step_button, ROLE_PRIMARY)
-        guidance_row.addWidget(self._next_step_button)
-        guidance_row.addStretch()
-        layout.addLayout(guidance_row)
         # 兼容别名：双按钮时代的测试与调用点迁移至单按钮（DEC-07 按图推翻）。
         self._match_next_button = self._next_step_button
         self._archive_next_button = self._next_step_button
+
+        header = QWidget(content)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(12)
+        library_icon = QLabel(header)
+        assign_label_icon(
+            library_icon, "photo", token("pa-accent-fg"), 22,
+        )
+        title_block = QWidget(header)
+        title_layout = QVBoxLayout(title_block)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(2)
+        library_title = QLabel(LIBRARY_PAGE_TITLE, title_block)
+        style_page_title(library_title)
+        self._library_stats_label = QLabel("", title_block)
+        style_page_subtitle(self._library_stats_label)
+        title_layout.addWidget(library_title)
+        title_layout.addWidget(self._library_stats_label)
+        header_layout.addWidget(library_icon)
+        header_layout.addWidget(title_block)
+        header_layout.addStretch()
+        header_layout.addWidget(self._next_step_button)
+        layout.addWidget(header)
 
         # B2 搜索/筛选：FilterBar（右侧面板形态），发 criteria_changed → 刷新
         # 列表；criteria 空元组/None 时回退 list_all。
@@ -579,10 +614,13 @@ class MainWindow(QMainWindow):
         self._select_all_button = QPushButton(self)
         self._select_all_button.setText(text.SELECT_ALL_PHOTOS)
         self._select_all_button.clicked.connect(self._on_select_all_clicked)
+        # 参考图基线：非主操作用浅底描边的次级形态。
+        assign_role(self._select_all_button, ROLE_SECONDARY)
         selection_row.addWidget(self._select_all_button)
         self._clear_selection_button = QPushButton(self)
         self._clear_selection_button.setText(text.CLEAR_SELECTION)
         self._clear_selection_button.clicked.connect(self._on_clear_selection_clicked)
+        assign_role(self._clear_selection_button, ROLE_SECONDARY)
         self._clear_selection_button.setVisible(False)
         selection_row.addWidget(self._clear_selection_button)
         selection_row.addStretch()
@@ -599,6 +637,9 @@ class MainWindow(QMainWindow):
 
         self._photo_list_model = PhotoListModel(parent=self)
         self._photo_list = QListView(self)
+        # 参考图基线：照片墙墙面用窗口底色（QSS QListView#PhotoWall），
+        # 每格卡片底用 Base——卡片语言需要两级表面色。
+        self._photo_list.setObjectName("PhotoWall")
         self._photo_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._photo_list.setModel(self._photo_list_model)
         self._photo_list.selectionModel().selectionChanged.connect(self._render_workspace_actions)
@@ -743,20 +784,62 @@ class MainWindow(QMainWindow):
         Decision 4 (owner 2026-09-18): export, duplicate detection and person
         deletion leave the primary toolbar and live here; each keeps its
         existing guarded handler and TaskCoordinator admission.
+
+        参考图基线（Owner 2026-10-30 派生）：文字按钮行 → 维护操作卡网格
+        （QSS ``QPushButton#ActionCard``：卡面＝图标＋动作名，描述进
+        tooltip）。四个 QAction 实例与处理器零变化——卡片点击即
+        ``action.trigger()``，置灰/忙碌互斥语义原样生效。
         """
         page = QWidget(self)
         layout = QVBoxLayout(page)
-        bar = QToolBar(self)
-        bar.setObjectName("DataTools")
-        for action in (
-            self._export_action, self._detect_duplicates_action,
-            self._reanalyze_all_action, self._delete_person_action,
-        ):
-            bar.addAction(action)
-        layout.addWidget(bar)
-        hint = QLabel(text.NAV_DATA_TOOLS_HINT, self)
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
+
+        header = QWidget(page)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(12)
+        page_icon = QLabel(header)
+        assign_label_icon(page_icon, "data", token("pa-accent-fg"), 22)
+        title_block = QWidget(header)
+        title_layout = QVBoxLayout(title_block)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(2)
+        title = QLabel(text.NAV_DATA_TOOLS_TITLE, title_block)
+        style_page_title(title)
+        subtitle = QLabel(text.NAV_DATA_TOOLS_HINT, title_block)
+        style_page_subtitle(subtitle)
+        subtitle.setWordWrap(True)
+        title_layout.addWidget(title)
+        title_layout.addWidget(subtitle)
+        header_layout.addWidget(page_icon)
+        header_layout.addWidget(title_block)
+        header_layout.addStretch()
+        layout.addWidget(header)
+
+        card_specs = (
+            (self._export_action, "download", text.DATA_TOOLS_EXPORT_DESC),
+            (self._detect_duplicates_action, "view", text.DATA_TOOLS_DUPLICATES_DESC),
+            (self._reanalyze_all_action, "sync", text.DATA_TOOLS_REANALYZE_DESC),
+            (self._delete_person_action, "delete", text.DATA_TOOLS_DELETE_PERSON_DESC),
+        )
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        for position, (action, icon_name, description) in enumerate(card_specs):
+            card = QPushButton(page)
+            card.setObjectName(ACTION_CARD_OBJECT_NAME)
+            card.setIcon(fluent_icon(icon_name, token("pa-accent-fg")))
+            card.setText(action.text())
+            card.setToolTip(
+                text.DATA_TOOLS_CARD_TOOLTIP.format(
+                    description=description, tooltip=action.toolTip(),
+                )
+                if action.toolTip() else description,
+            )
+            card.clicked.connect(action.trigger)  # type: ignore[arg-type]
+            card.setMinimumHeight(64)
+            grid.addWidget(card, position // 2, position % 2)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        layout.addLayout(grid)
         layout.addStretch()
         return page
 
@@ -778,6 +861,24 @@ class MainWindow(QMainWindow):
         page = _NAV_ROW_TO_PAGE.get(row)
         if page is not None:
             self._pages.setCurrentIndex(page)
+        self._apply_nav_icons(row)
+
+    def _apply_nav_icons(self, active_row: int) -> None:
+        """Swap each rail item's icon between the gray and accent variants.
+
+        参考图基线：选中项＝品牌蓝图标、其余＝次要文本色；纯视觉，导航
+        信号/映射零参与（currentRowChanged 槽尾部调用，blockSignals 场景
+        由 _snap_nav_to_page 自行调用来保持高亮一致）。
+        """
+        icons = self._nav_icons_normal
+        selected = self._nav_icons_selected
+        for row in range(self._nav_list.count()):
+            item = self._nav_list.item(row)
+            if item is None:
+                continue
+            icon = selected[row] if row == active_row else icons[row]
+            if icon is not None:
+                item.setIcon(icon)  # type: ignore[arg-type]
 
     def _snap_nav_to_page(self) -> None:
         """Restore the nav selection to the current page row without re-entry."""
@@ -786,6 +887,7 @@ class MainWindow(QMainWindow):
             return
         with QSignalBlocker(self._nav_list):
             self._nav_list.setCurrentRow(row)
+        self._apply_nav_icons(row)
 
     @Slot(str)
     def _on_overview_primary(self, action_id: str) -> None:

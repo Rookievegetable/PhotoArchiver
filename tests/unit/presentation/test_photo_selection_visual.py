@@ -9,9 +9,11 @@ cells must not. All color assertions compare against the palette object
 handed to the delegate with a deliberately non-default Highlight — never
 fixed RGB (Stage 14-CI contract: local dark+purple palette vs CI light+blue).
 
-Geometry notes (production-accurate): cell = delegate sizeHint 172×190;
-thumbnail box = full cell width × 160; a 400×300 source scales to 172×129
-centered → y offset 15. Badge = 16px circle at pixmap top-left + 4px margin.
+Geometry notes (production-accurate, 参考图基线 2026-10-30 卡片化后): cell =
+delegate sizeHint 172×190; card pad 6 → thumbnail box = 160×min(160,
+190-24-12)=154; a 400×300 source scales to 160×120 centered → y offset 23.
+Badge = 16px circle at pixmap top-left + 4px margin; status pill anchored to
+the pixmap top-right (G-4 → 参考图基线).
 """
 
 import pytest
@@ -23,18 +25,21 @@ pytest.importorskip("PIL")
 from pathlib import Path
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, QPoint, QRect, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPalette
+from PySide6.QtGui import QColor, QFontMetrics, QImage, QPainter, QPalette
 from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
 
 from PIL import Image
 
 from photo_archiver.presentation.views.photo_list_delegate import (
+    _BADGE_PILL_MARGIN,
+    _CARD_PAD,
     _CHECK_BADGE_MARGIN,
     _CHECK_BADGE_SIZE,
     _TEXT_HEIGHT,
     _THUMBNAIL_BOX,
     PhotoThumbnailDelegate,
     name_color,
+    pill_colors,
 )
 from photo_archiver.presentation.views.photo_list_model import (
     STATUS_BADGE_ROLE,
@@ -47,16 +52,18 @@ _SOURCE_COLOR = (196, 42, 88)
 _HIGHLIGHT = QColor(24, 98, 51)
 _HIGHLIGHTED_TEXT = QColor(250, 250, 210)
 
-# 400×300 源图 KeepAspectRatio 装进 172×160 缩略框 → 172×129 居中。
-_SCALED_W, _SCALED_H = 172, 129
+# 400×300 源图 KeepAspectRatio 装进 160×154 缩略框 → 160×120 居中。
+_SCALED_W, _SCALED_H = 160, 120
 
 
 class _StubIndex:
     """Minimal index stand-in: the delegate reads only ``data(role)``."""
 
-    def __init__(self, thumbnail: object, name: str = "LEI00572.JPG"):
+    def __init__(self, thumbnail: object, name: str = "LEI00572.JPG",
+                 badge: object = None) -> None:
         self._thumbnail = thumbnail
         self._name = name
+        self._badge = badge
 
     def data(self, role: int) -> object:
         if role == THUMBNAIL_ROLE:
@@ -64,7 +71,7 @@ class _StubIndex:
         if role == Qt.ItemDataRole.DisplayRole:
             return self._name
         if role == STATUS_BADGE_ROLE:
-            return None
+            return self._badge
         return None
 
 
@@ -82,12 +89,32 @@ def _qt_app(qapp):
 
 def _pixmap_rect() -> QRect:
     """The scaled-pixmap rect exactly as the delegate computes it."""
-    box_height = min(_THUMBNAIL_BOX, max(1, _CELL.height() - _TEXT_HEIGHT))
+    box_left = _CELL.left() + _CARD_PAD
+    box_top = _CELL.top() + _CARD_PAD
+    box_width = _CELL.width() - 2 * _CARD_PAD
+    box_height = min(
+        _THUMBNAIL_BOX,
+        max(1, _CELL.height() - _TEXT_HEIGHT - 2 * _CARD_PAD),
+    )
     return QRect(
-        _CELL.left() + (_CELL.width() - _SCALED_W) // 2,
-        _CELL.top() + (box_height - _SCALED_H) // 2,
+        box_left + (box_width - _SCALED_W) // 2,
+        box_top + (box_height - _SCALED_H) // 2,
         _SCALED_W,
         _SCALED_H,
+    )
+
+
+def _pill_rect(badge_text: str, option: QStyleOptionViewItem) -> QRect:
+    """The status-pill rect exactly as the delegate computes it."""
+    metrics = QFontMetrics(option.font)
+    chip_width = metrics.horizontalAdvance(badge_text) + 2 * 6  # _PADDING
+    chip_height = metrics.height() + 2
+    rect = _pixmap_rect()
+    return QRect(
+        rect.right() - chip_width - _BADGE_PILL_MARGIN,
+        rect.top() + _BADGE_PILL_MARGIN,
+        chip_width,
+        chip_height,
     )
 
 
@@ -111,12 +138,12 @@ def _make_option(selected: bool, hovered: bool = False) -> QStyleOptionViewItem:
     return option
 
 
-def _paint(option: QStyleOptionViewItem, thumbnail: object) -> QImage:
+def _paint(option: QStyleOptionViewItem, thumbnail: object, badge: object = None) -> QImage:
     image = QImage(option.rect.size(), QImage.Format.Format_ARGB32)
     image.fill(Qt.GlobalColor.white)
     painter = QPainter(image)
     try:
-        PhotoThumbnailDelegate().paint(painter, option, _StubIndex(thumbnail))
+        PhotoThumbnailDelegate().paint(painter, option, _StubIndex(thumbnail, badge=badge))
     finally:
         painter.end()
     return image
@@ -208,3 +235,52 @@ def test_name_color_follows_palette() -> None:
         QPalette.ColorRole.HighlightedText
     )
     assert name_color(palette, False) == palette.color(QPalette.ColorRole.Text)
+
+
+# ── G-4 → 参考图基线（Owner 2026-10-30）：状态角标＝缩略图右上角语义胶囊 ──
+
+
+def test_pill_colors_map_semantics_by_text() -> None:
+    """复合串按语义判定：拒绝>通过>待审核>已归档，其余中性。"""
+    assert pill_colors("已拒绝")[0] == QColor("#c62828")
+    assert pill_colors("已通过 · 已归档")[0] == QColor("#107c10")
+    assert pill_colors("待审核")[0] == QColor("#b45309")
+    assert pill_colors("已归档")[0] == QColor("#1f4e79")
+    neutral_bg, neutral_fg = pill_colors("未匹配")
+    assert neutral_fg == QColor("#ffffff")
+    assert neutral_bg.alpha() == 150  # 原黑签语义（半透明中性）
+
+
+def test_status_badge_paints_pill_inside_pixmap(tmp_path: Path) -> None:
+    """状态胶囊贴在实际缩略图右上角（竖图/横图都不再悬浮错位）。"""
+    source = _write_source_image(tmp_path)
+    option = _make_option(selected=False)
+    image = _paint(option, source, badge="待审核")
+    chip = _pill_rect("待审核", option)
+    bg, fg = pill_colors("待审核")
+    # 胶囊底色（取样避开居中文本的字形）＝语义 warning 橙。
+    assert image.pixelColor(chip.left() + 1, chip.center().y()) == bg
+    # 胶囊必须完全落在缩略图矩形内（对齐参考图「内嵌」语义）。
+    pixmap = _pixmap_rect()
+    assert pixmap.contains(chip)
+    # 未选中态：勾选章区域依旧无 Highlight（选中视觉只属于选中态）。
+    badge = _badge_top_left()
+    assert image.pixelColor(badge.x() + 3, badge.y() + 3) != _HIGHLIGHT
+
+
+def test_status_pill_colors_differ_by_status(tmp_path: Path) -> None:
+    """已通过（绿）与已拒绝（红）在照片上画出不同的语义底色。"""
+    source = _write_source_image(tmp_path)
+    option = _make_option(selected=False)
+    approved = _paint(option, source, badge="已通过")
+    rejected = _paint(option, source, badge="已拒绝")
+    approved_chip = _pill_rect("已通过", option)
+    rejected_chip = _pill_rect("已拒绝", option)
+    assert (
+        approved.pixelColor(approved_chip.left() + 1, approved_chip.center().y())
+        == pill_colors("已通过")[0]
+    )
+    assert (
+        rejected.pixelColor(rejected_chip.left() + 1, rejected_chip.center().y())
+        == pill_colors("已拒绝")[0]
+    )

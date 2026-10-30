@@ -259,12 +259,15 @@ def test_resolve_theme_system_follows_injected_platform() -> None:
 
 
 def test_resolve_theme_invalid_falls_back_to_default_theme() -> None:
-    """回退链：非法 → DEFAULT_THEME("system") → 按平台亮暗解析。"""
-    assert DEFAULT_THEME == "system"
+    """回退链：非法 → DEFAULT_THEME("light") → 按平台亮暗解析。
+
+    参考图基线（Owner 2026-10-30）：默认浅色（按图验收基线）。
+    """
+    assert DEFAULT_THEME == "light"
     assert VALID_THEMES == ("system", "light", "dark")
     for bad in ("", "SYSTEM", "Dark", "blue", "auto", 123, None, ["dark"]):
         assert resolve_theme(bad, LightDark.LIGHT) == THEME_LIGHT
-        assert resolve_theme(bad, LightDark.DARK) == THEME_DARK
+        assert resolve_theme(bad, LightDark.DARK) == THEME_LIGHT
 
 
 # ── P0-3：启动读取与应用验收（A-1..A-7；QSettings 隔离＝InMemory store）─────
@@ -339,18 +342,21 @@ def test_a5_invalid_preference_falls_back_without_crash(
 
 
 @pytest.mark.parametrize("platform_scheme", [LightDark.LIGHT, LightDark.DARK])
-def test_a6_missing_preference_defaults_to_system_resolution(
+def test_a6_missing_preference_defaults_to_light(
     clean_app_look, monkeypatch, platform_scheme: LightDark,
 ) -> None:
-    """A-6：无任何持久化偏好 → 按 DEFAULT_THEME=system 解析（两种平台注入）。"""
+    """A-6：无任何持久化偏好 → DEFAULT_THEME（"light"，参考图基线）生效。
+
+    与 system 跟随的旧契约差异：默认值改为 light（Owner 2026-10-30 参考图
+    裁决）——两种平台注入下都解析为浅色；system 仍为显式合法选项（A-3/A-4）。
+    """
     monkeypatch.setattr(
         "photo_archiver.app.application.detect_platform_scheme",
         lambda _app: platform_scheme,
     )
     service, _store = _startup_service(None)
-    expected = THEME_DARK if platform_scheme is LightDark.DARK else THEME_LIGHT
-    assert apply_startup_theme(clean_app_look, service) == expected
-    assert clean_app_look.styleSheet() == build_stylesheet(expected)
+    assert apply_startup_theme(clean_app_look, service) == THEME_LIGHT
+    assert clean_app_look.styleSheet() == build_stylesheet(THEME_LIGHT)
 
 
 def test_a7_saving_preference_does_not_switch_running_theme(clean_app_look) -> None:

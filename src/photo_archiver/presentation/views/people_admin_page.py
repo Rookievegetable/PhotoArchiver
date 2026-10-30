@@ -18,6 +18,7 @@ from uuid import UUID
 
 from loguru import logger
 from PySide6.QtCore import Qt, QSignalBlocker, Signal
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -55,6 +56,8 @@ from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.visual_style import (
     ROLE_DANGER,
     ROLE_PRIMARY,
+    ROLE_SECONDARY,
+    assign_label_icon,
     assign_role,
     assign_button_icon,
     style_card,
@@ -316,17 +319,26 @@ class PeopleAdminPage(QWidget):
 
         # 参考图 A1/A2：页头大标题＋副标题（纯视觉容器）；原提示行整段语义
         # 保留（调序说明在批次提示行常驻，副标题后仍保留原 hint 作为补充说明）。
-        header = QWidget(self)
-        header_layout = QVBoxLayout(header)
+        # 参考图基线（Owner 2026-10-30）：页头加品牌蓝图标，五页同一语言。
+        header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(2)
-        title = QLabel(text.PEOPLE_PAGE_TITLE, header)
+        header_layout.setSpacing(12)
+        page_icon = QLabel(self)
+        assign_label_icon(page_icon, "people", token("pa-accent-fg"), 22)
+        title_block = QWidget(self)
+        header_v = QVBoxLayout(title_block)
+        header_v.setContentsMargins(0, 0, 0, 0)
+        header_v.setSpacing(2)
+        title = QLabel(text.PEOPLE_PAGE_TITLE, title_block)
         style_page_title(title)
-        subtitle = QLabel(text.PEOPLE_PAGE_SUBTITLE, header)
+        subtitle = QLabel(text.PEOPLE_PAGE_SUBTITLE, title_block)
         style_page_subtitle(subtitle)
-        header_layout.addWidget(title)
-        header_layout.addWidget(subtitle)
-        layout.addWidget(header)
+        header_v.addWidget(title)
+        header_v.addWidget(subtitle)
+        header_layout.addWidget(page_icon)
+        header_layout.addWidget(title_block)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
 
         hint = QLabel(text.PEOPLE_PAGE_HINT, self)
         hint.setWordWrap(True)
@@ -347,12 +359,16 @@ class PeopleAdminPage(QWidget):
         self._add_button = QPushButton(text.PEOPLE_PAGE_ADD_BUTTON, self)
         self._add_button.clicked.connect(self._on_add_clicked)
         assign_role(self._add_button, ROLE_PRIMARY)
+        # 参考图基线（Owner 2026-10-30）：编辑/上移/下移＝浅底描边次级形态。
         self._edit_button = QPushButton(text.PEOPLE_PAGE_EDIT_BUTTON, self)
         self._edit_button.clicked.connect(self._on_edit_selected_clicked)
+        assign_role(self._edit_button, ROLE_SECONDARY)
         self._move_up_button = QPushButton(text.PEOPLE_PAGE_MOVE_UP, self)
         self._move_up_button.clicked.connect(lambda: self.move_selected(-1))
+        assign_role(self._move_up_button, ROLE_SECONDARY)
         self._move_down_button = QPushButton(text.PEOPLE_PAGE_MOVE_DOWN, self)
         self._move_down_button.clicked.connect(lambda: self.move_selected(1))
+        assign_role(self._move_down_button, ROLE_SECONDARY)
         self._delete_button = QPushButton(text.PEOPLE_PAGE_DELETE_BUTTON, self)
         self._delete_button.clicked.connect(self._on_delete_clicked)
         assign_role(self._delete_button, ROLE_DANGER)
@@ -374,6 +390,8 @@ class PeopleAdminPage(QWidget):
         # 从平铺改为菜单项（语义无增减；F-PEO 删除披露入口仍全部可达）。
         self._more_button = QToolButton(self)
         self._more_button.setText(text.PEOPLE_PAGE_MORE_BUTTON)
+        # 参考图基线：更多按钮同工具栏次级形态（QToolButton 同一选择器行）。
+        assign_role(self._more_button, ROLE_SECONDARY)
         self._more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         more_menu = QMenu(self._more_button)
         # 菜单项直接挂既有按钮的点击槽——按钮本体仍由页面持有（处理器/确认
@@ -679,6 +697,12 @@ class PeopleAdminPage(QWidget):
                             item.setToolTip(text.PEOPLE_PAGE_GROUP_ORDINAL_TOOLTIP)
                         elif column == _COLUMN_MATCH_STATUS:
                             item.setToolTip(text.PEOPLE_PAGE_MATCH_STATUS_TOOLTIP)
+                            # 参考图基线：匹配状态按语义着色（已匹配=肯定绿、
+                            # 未匹配=提醒琥珀、—=默认次要），文字承载零变化。
+                            if value == text.PEOPLE_PAGE_MATCH_STATUS_MARKED:
+                                item.setForeground(QBrush(QColor(token("pa-success-fg"))))
+                            elif value == text.PEOPLE_PAGE_MATCH_STATUS_UNMATCHED:
+                                item.setForeground(QBrush(QColor(token("pa-warning-fg"))))
                         else:
                             item.setToolTip(value)
                         self._table.setItem(row_index, column, item)
@@ -1014,6 +1038,7 @@ class PeopleAdminPage(QWidget):
         row.addWidget(self._cluster_run_button)
         self._cluster_results_button = QPushButton(text.CLUSTER_PAGE_RESULTS_BUTTON, group)
         self._cluster_results_button.clicked.connect(self.cluster_results_requested.emit)
+        assign_role(self._cluster_results_button, ROLE_SECONDARY)
         assign_button_icon(self._cluster_results_button, "view", token("pa-text-secondary"))
         row.addWidget(self._cluster_results_button)
         # 批次级删除（识别运行锚点）：两个入口与运行选择器同区——"批次"在这里

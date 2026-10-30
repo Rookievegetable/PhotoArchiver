@@ -39,9 +39,10 @@ light AND dark themes; buttons paint through a different path where
 from enum import Enum
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QIcon, QPalette
+from PySide6.QtGui import QColor, QIcon, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QAbstractButton,
     QComboBox,
     QFrame,
     QLabel,
@@ -61,7 +62,13 @@ ROLE_DANGER = "danger"
 ROLE_SUCCESS = "success"
 ROLE_WARNING = "warning"
 ROLE_NEUTRAL = "neutral"
-VALID_ROLES = (ROLE_PRIMARY, ROLE_DANGER, ROLE_SUCCESS, ROLE_WARNING, ROLE_NEUTRAL)
+# 参考图基线（Owner 2026-10-30）：次级着色按钮（编辑/上移/下移/全选等
+# 非主操作的浅底描边形态，参考图工具栏次级钮）。
+ROLE_SECONDARY = "secondary"
+VALID_ROLES = (
+    ROLE_PRIMARY, ROLE_DANGER, ROLE_SUCCESS, ROLE_WARNING, ROLE_NEUTRAL,
+    ROLE_SECONDARY,
+)
 
 # object 属性：可搜索下拉（审核中心身份选择等）——QSS 据此放大展开按钮。
 SEARCHABLE_COMBO_PROPERTY = "searchableCombo"
@@ -69,6 +76,8 @@ SEARCHABLE_COMBO_MARK = "true"
 
 # objectName hooks for non-button building blocks.
 EMPTY_STATE_CARD_OBJECT_NAME = "EmptyStateCard"
+# 数据工具页维护操作卡（Owner 2026-10-30 参考图派生：文字按钮行 → 卡片）。
+ACTION_CARD_OBJECT_NAME = "ActionCard"
 # 详图内嵌导航覆盖控件（任务书阶段 C / D4=B1）：样式走单源 QSS。
 NAV_OVERLAY_BUTTON_OBJECT_NAME = "NavOverlayButton"
 NAV_POSITION_LABEL_OBJECT_NAME = "NavPositionLabel"
@@ -110,7 +119,7 @@ def resolve_theme(preference: object, platform_scheme: LightDark) -> str:
 
     纯函数：无 I/O、无 QSettings 访问、不读真实 OS 状态；非法值域唯一来源
     为 ``dtos.settings.VALID_THEMES``（不硬编码第二份）。回退链：缺失/非法
-    （含 None、""、大小写变体、其他对象）→ ``DEFAULT_THEME``（"system"）→
+    （含 None、""、大小写变体、其他对象）→ ``DEFAULT_THEME``（"light"）→
     按 ``platform_scheme`` 解析；对非法输入不抛异常，使启动链在偏好缺失/
     损坏时也能完成（DEC-03=A：评估时刻＝应用启动）。
     """
@@ -179,6 +188,15 @@ LIGHT_TOKENS: dict[str, str] = {
     "pa-neutral-fg": "#5c5c5c",  # P0-1 建议值；按钮白字 6.69:1
     "pa-neutral-border": "#c8c8c8",  # P0-1 建议值（按钮描边，装饰性）
     "pa-neutral-text": "#ffffff",  # 派生
+    # ── Accent（Owner 2026-10-30 参考图基线裁决：应用自带品牌蓝，不再跟随
+    # 系统强调色——Owner 机器系统 accent 为紫色，截图实证与参考图差距）。
+    # 主蓝 #2563eb 对白字实算 5.17:1 达 WCAG AA；-fg 为浅底上的可读蓝；
+    # -soft 为导航选中/着色表面的半透明底。
+    "pa-accent": "#2563eb",
+    "pa-accent-hover": "#1d4ed8",
+    "pa-accent-text": "#ffffff",
+    "pa-accent-fg": "#1d4ed8",
+    "pa-accent-soft": "rgba(37, 99, 235, 0.10)",
 }
 
 DARK_TOKENS: dict[str, str] = {
@@ -211,6 +229,13 @@ DARK_TOKENS: dict[str, str] = {
     "pa-neutral-fg": "#c8c8c8",
     "pa-neutral-border": "#5c5c5c",
     "pa-neutral-text": "#2b2b2b",  # 派生（P0-4 <pa-bg-surface>*）
+    # 深色 accent（UNVERIFIED 建议值，同参考图蓝色系提亮）：亮蓝实底配深字
+    # （#4f8ef9 对 #0b1220 实算 8.2:1）；-fg 为深底上的可读亮蓝。
+    "pa-accent": "#4f8ef9",
+    "pa-accent-hover": "#6ba3ff",
+    "pa-accent-text": "#0b1220",
+    "pa-accent-fg": "#7ab3ff",
+    "pa-accent-soft": "rgba(79, 142, 249, 0.16)",
 }
 
 _TOKENS: dict[str, dict[str, str]] = {
@@ -262,11 +287,25 @@ def token(name: str, theme: str | None = None) -> str:
 _STYLESHEET_TEMPLATE = """
 QPushButton { padding: 4px 14px; }
 QPushButton[styleRole="primary"] {
-    background-color: palette(Highlight);
-    color: palette(HighlightedText);
-    border: 1px solid palette(Highlight);
+    background-color: ${pa-accent};
+    color: ${pa-accent-text};
+    border: 1px solid ${pa-accent};
     font-weight: 600;
     padding: 5px 18px;
+}
+QPushButton[styleRole="primary"]:hover {
+    background-color: ${pa-accent-hover};
+    border: 1px solid ${pa-accent-hover};
+}
+QPushButton[styleRole="secondary"], QToolButton[styleRole="secondary"] {
+    background-color: ${pa-card-fill-empty};
+    color: ${pa-text-primary};
+    border: 1px solid ${pa-border};
+    font-weight: 400;
+    padding: 5px 14px;
+}
+QPushButton[styleRole="secondary"]:hover, QToolButton[styleRole="secondary"]:hover {
+    border: 1px solid ${pa-accent};
 }
 QPushButton[styleRole="danger"] {
     background-color: ${pa-danger-fg};
@@ -303,6 +342,14 @@ QPushButton[styleRole="primary"]:disabled {
     font-weight: 400;
 }
 QPushButton[styleRole="danger"]:disabled {
+    color: palette(ButtonText);
+    background-color: palette(Button);
+    border: 1px solid palette(Mid);
+    font-weight: 400;
+}
+QPushButton[styleRole="success"]:disabled,
+QPushButton[styleRole="warning"]:disabled,
+QPushButton[styleRole="neutral"]:disabled {
     color: palette(ButtonText);
     background-color: palette(Button);
     border: 1px solid palette(Mid);
@@ -436,8 +483,30 @@ QListWidget#NavRail::item:hover {
     background-color: rgba(127, 127, 127, 0.18);
 }
 QListWidget#NavRail::item:selected {
-    background-color: palette(Highlight);
-    color: palette(HighlightedText);
+    background-color: ${pa-accent-soft};
+    color: ${pa-accent-fg};
+    border-left: 3px solid ${pa-accent};
+}
+QListView#PhotoWall {
+    background-color: ${pa-bg-window};
+    border: none;
+}
+QPushButton#ActionCard {
+    background-color: ${pa-bg-surface};
+    color: ${pa-text-primary};
+    border: 1px solid ${pa-border};
+    border-radius: 8px;
+    padding: 12px 14px;
+    text-align: left;
+    font-size: 13px;
+}
+QPushButton#ActionCard:hover {
+    border: 1px solid ${pa-accent};
+}
+QPushButton#ActionCard:disabled {
+    color: palette(ButtonText);
+    background-color: palette(Button);
+    border: 1px solid palette(Mid);
 }
 QStatusBar {
     background-color: ${pa-bg-surface};
@@ -552,10 +621,11 @@ def build_stylesheet(theme: str = THEME_LIGHT) -> str:
 def apply_visual_system(app: QApplication, theme: str = THEME_LIGHT) -> None:
     """Install the visual system once, right after QApplication creation.
 
-    ``theme`` 由启动链经 ``resolve_theme`` 解析（P0-2/P0-3）；深色主题另按
+    ``theme`` 由启动链经 ``resolve_theme`` 解析（P0-2/P0-3）；两个主题都按
     token 建立应用级 QPalette（§6.3 覆盖范围：应用级 QSS＋QApplication
-    palette）。浅色恢复捕获的平台默认 palette（P0-1 pa-bg-window 浅色＝
-    palette(Window) 现值）。
+    palette）并统一盖上 accent 角色（Highlight/HighlightedText/Link＝品牌
+    蓝，Owner 2026-10-30 参考图基线）。浅色不再恢复平台默认 palette——
+    深色系统上那是深色调色板，会与浅色 QSS 混合渲染（截图实证）。
     """
     global _ACTIVE_THEME, _DEFAULT_PALETTE
     if theme not in _TOKENS:
@@ -564,10 +634,56 @@ def apply_visual_system(app: QApplication, theme: str = THEME_LIGHT) -> None:
         _DEFAULT_PALETTE = QPalette(app.palette())
     app.setStyleSheet(build_stylesheet(theme))
     if theme == THEME_DARK:
-        app.setPalette(_dark_palette(_DEFAULT_PALETTE))
+        app.setPalette(_accent_palette(_dark_palette(_DEFAULT_PALETTE), DARK_TOKENS))
     else:
-        app.setPalette(QPalette(_DEFAULT_PALETTE))
+        app.setPalette(_accent_palette(_light_palette(_DEFAULT_PALETTE), LIGHT_TOKENS))
     _ACTIVE_THEME = theme
+
+
+def _accent_palette(palette: QPalette, table: dict[str, str]) -> QPalette:
+    """Stamp the brand accent onto the palette roles the QSS/delegates read.
+
+    ``palette(Highlight)``（QSS）与委托的活调色板（选中描边/勾选章）都从
+    这两个角色取色——参考图基线（Owner 2026-10-30）下它们必须解析为应用
+    自带品牌蓝，而不是系统强调色。
+    """
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(table["pa-accent"]))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(table["pa-accent-text"]))
+    palette.setColor(QPalette.ColorRole.Link, QColor(table["pa-accent-fg"]))
+    return palette
+
+
+def _light_palette(base: QPalette) -> QPalette:
+    """Build the deterministic light palette from LIGHT_TOKENS（参考图基线）.
+
+    Owner 2026-10-30 裁决推翻「浅色恢复平台默认 palette」：深色系统上平台
+    默认调色板是深色（截图实证＝浅色 QSS 与深色调色板混合渲染，界面发暗）。
+    浅色主题自此按参考图显式建立——任何 OS 亮暗下渲染一致。
+    """
+    t = LIGHT_TOKENS
+    palette = QPalette(base)
+
+    def c(name: str) -> QColor:
+        return QColor(t[name])
+
+    palette.setColor(QPalette.ColorRole.Window, c("pa-bg-window"))
+    palette.setColor(QPalette.ColorRole.WindowText, c("pa-text-primary"))
+    palette.setColor(QPalette.ColorRole.Base, c("pa-bg-surface"))
+    palette.setColor(QPalette.ColorRole.AlternateBase, c("pa-bg-window"))
+    palette.setColor(QPalette.ColorRole.Text, c("pa-text-primary"))
+    palette.setColor(QPalette.ColorRole.Button, c("pa-bg-surface"))
+    palette.setColor(QPalette.ColorRole.ButtonText, c("pa-text-primary"))
+    palette.setColor(QPalette.ColorRole.ToolTipBase, c("pa-bg-surface"))
+    palette.setColor(QPalette.ColorRole.ToolTipText, c("pa-text-primary"))
+    palette.setColor(QPalette.ColorRole.PlaceholderText, c("pa-text-secondary"))
+    palette.setColor(QPalette.ColorRole.Mid, c("pa-border"))
+    palette.setColor(QPalette.ColorRole.Light, QColor("#ffffff"))
+    palette.setColor(QPalette.ColorRole.Dark, QColor("#d9d9d9"))
+    disabled = QPalette.ColorGroup.Disabled
+    palette.setColor(disabled, QPalette.ColorRole.WindowText, c("pa-text-secondary"))
+    palette.setColor(disabled, QPalette.ColorRole.Text, c("pa-text-secondary"))
+    palette.setColor(disabled, QPalette.ColorRole.ButtonText, c("pa-text-secondary"))
+    return palette
 
 
 def _dark_palette(base: QPalette) -> QPalette:
@@ -612,7 +728,7 @@ def repolish(widget: QWidget) -> None:
     _repolish(widget)
 
 
-def assign_role(button: QPushButton, role: str) -> None:
+def assign_role(button: QAbstractButton, role: str) -> None:
     """Tag a button with a visual role and refresh any installed stylesheet."""
     button.setProperty(ROLE_PROPERTY, role)
     _repolish(button)
@@ -764,26 +880,26 @@ def icon_font_available() -> bool:
     return _icon_font_family() is not None
 
 
-def fluent_icon(
+def fluent_pixmap(
     name: str,
     color: str | None = None,
-    size_px: int = 14,
-) -> QIcon:
-    """Render one Fluent glyph as a monochrome QIcon（零依赖图标方案）.
+    size_px: int = 16,
+) -> QPixmap:
+    """Render one Fluent glyph as a monochrome QPixmap（fluent_icon 的位图层）.
 
     ``name`` 是 :data:`ICONS` 的键；``color`` 为色值字符串（缺省＝次要文本
     token 当前主题值）。位图按 2× 渲染并设 devicePixelRatio(2)，高分屏不
-    发虚。字体缺失时返回空 QIcon（按钮/标签仅显示文字）。
+    发虚。字体缺失时返回空 QPixmap（调用方仅无图标，绝不崩溃）。
     """
     from PySide6.QtCore import QRectF
-    from PySide6.QtGui import QFont, QIcon, QPainter, QPixmap
+    from PySide6.QtGui import QFont, QPainter, QPixmap
 
     glyph = ICONS.get(name)
     if glyph is None:
         raise KeyError(f"unknown icon glyph {name!r}")
     family = _icon_font_family()
     if family is None:
-        return QIcon()
+        return QPixmap()
     ratio = 2.0
     physical = max(4, int(size_px * ratio))
     pixmap = QPixmap(physical, physical)
@@ -799,7 +915,19 @@ def fluent_icon(
     )
     painter.end()
     pixmap.setDevicePixelRatio(ratio)
-    return QIcon(pixmap)
+    return pixmap
+
+
+def fluent_icon(
+    name: str,
+    color: str | None = None,
+    size_px: int = 14,
+) -> QIcon:
+    """Render one Fluent glyph as a monochrome QIcon（零依赖图标方案）.
+
+    字体缺失时返回空 QIcon（按钮/标签仅显示文字）。
+    """
+    return QIcon(fluent_pixmap(name, color, size_px))
 
 
 def style_page_title(label) -> None:
@@ -841,3 +969,8 @@ def style_card_list(list_widget) -> None:
 def assign_button_icon(button, name: str, color: str | None = None) -> None:
     """Give a QPushButton/QToolButton a Fluent glyph icon（缺失即无图标）."""
     button.setIcon(fluent_icon(name, color))
+
+
+def assign_label_icon(label, name: str, color: str | None = None, size_px: int = 18) -> None:
+    """Give a QLabel a Fluent glyph pixmap（页头图标等装饰位；缺失即空白）."""
+    label.setPixmap(fluent_pixmap(name, color, size_px))

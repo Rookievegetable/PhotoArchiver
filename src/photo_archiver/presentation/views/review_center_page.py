@@ -38,7 +38,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import QSize, Qt, Signal, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QComboBox,
@@ -64,7 +64,16 @@ from photo_archiver.domain.exceptions import (
     ValidationError,
 )
 from photo_archiver.presentation import ui_text as text
-from photo_archiver.presentation.visual_style import mark_searchable_combo, style_banner
+from photo_archiver.presentation.visual_style import (
+    ROLE_DANGER,
+    ROLE_PRIMARY,
+    ROLE_SUCCESS,
+    assign_role,
+    mark_searchable_combo,
+    style_banner,
+    style_card_list,
+    style_page_subtitle,
+)
 from photo_archiver.presentation.ui_text import (
     REVIEW_APPROVE_ALL,
     REVIEW_APPROVE_ALL_CONFIRM,
@@ -192,13 +201,23 @@ class ReviewCenterPage(QWidget):
         self._list = QListWidget(self)
         self._list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self._list.setWordWrap(True)
+        # 参考图基线（taskbook-5 派生语言）：队列行＝卡片列表（QSS
+        # QListWidget#CardList），行缩略图放大到可辨认（48px）。
+        style_card_list(self._list)
+        self._list.setIconSize(QSize(48, 48))
+        self._list.setSpacing(2)
 
+        # 参考图基线：三个批量动作按语义着色——通过＝肯定绿、拒绝＝危险红、
+        # 全部通过＝主操作蓝；审批语义/确认链零变化。
         self._approve_selected = QPushButton(REVIEW_APPROVE_SELECTED, self)
         self._approve_selected.clicked.connect(self._on_approve_selected)
+        assign_role(self._approve_selected, ROLE_SUCCESS)
         self._reject_selected = QPushButton(REVIEW_REJECT_SELECTED, self)
         self._reject_selected.clicked.connect(self._on_reject_selected)
+        assign_role(self._reject_selected, ROLE_DANGER)
         self._approve_all = QPushButton(REVIEW_APPROVE_ALL, self)
         self._approve_all.clicked.connect(self._on_approve_all)
+        assign_role(self._approve_all, ROLE_PRIMARY)
 
         # Stage 4 D-1：新识别链路的兼容行 person_id 恒 NULL，仅靠「通过」不会
         # 写入身份，批准结果永远进不了归档。这里给审核人一个显式身份选择器，
@@ -215,6 +234,7 @@ class ReviewCenterPage(QWidget):
         self._identity_label = QLabel(REVIEW_IDENTITY_LABEL, self)
         self._identity_hint = QLabel(REVIEW_IDENTITY_HINT, self)
         self._identity_hint.setWordWrap(True)
+        style_page_subtitle(self._identity_hint)
 
         identity_row = QHBoxLayout()
         identity_row.addWidget(self._identity_label)

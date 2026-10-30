@@ -3,7 +3,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_THEME = "system"
+# 参考图基线（Owner 2026-10-30）：验收基线为浅色（按图验收），新装默认
+# 浅色；跟随系统/深色仍为合法显式选项（VALID_THEMES 不变）。
+DEFAULT_THEME = "light"
 VALID_THEMES = ("system", "light", "dark")
 
 DEFAULT_LANGUAGE = "system"

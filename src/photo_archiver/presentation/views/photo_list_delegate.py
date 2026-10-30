@@ -20,11 +20,12 @@ eviction stays Qt-managed — no hand-rolled cache to leak.
 
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRect, QSize, Qt
+from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import (
     QColor,
     QFontMetrics,
     QPainter,
+    QPainterPath,
     QPalette,
     QPen,
     QPixmap,
@@ -38,6 +39,7 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate,
 )
 
+from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.views.photo_list_model import STATUS_BADGE_ROLE, THUMBNAIL_ROLE
 
 # The generation contract keeps thumbnails inside a 256px bounding box
@@ -47,12 +49,47 @@ _THUMBNAIL_BOX = 160
 _TEXT_HEIGHT = 24
 _PADDING = 6
 
-# 2026-09-30 选中态三重反馈：内缘描边 + 左上角几何勾选章 + 文件名高亮。
+# ── 参考图基线（Owner 2026-10-30）：照片墙每格＝圆角卡片 ──
+# 卡片内边距（缩略图/文字与卡片边缘的距离）与两级圆角；底色/描边取活
+# 调色板（Base/半透明中性灰），浅深主题下都与墙面（QSS pa-bg-window）拉开层次。
+_CARD_PAD = 6
+_CARD_RADIUS = 8.0
+_THUMB_RADIUS = 6.0
+_CARD_BORDER = QColor(127, 127, 127, 70)
+
+# 2026-09-30 选中态三重反馈：内缘描边 + 左上角勾选章 + 文件名高亮。
 # 颜色一律取自 option.palette（活调色板），禁止硬编码 RGB——本机深色主题
 # 与 CI 浅色调色板不同，固定色值必然跨平台失真（Stage 14-CI 同一契约）。
 _SELECTION_STROKE_WIDTH = 2
 _CHECK_BADGE_SIZE = 16
 _CHECK_BADGE_MARGIN = 4
+
+# ── G-4 状态角标 → 参考图基线：缩略图右上角内嵌彩色胶囊 ──
+# 胶囊直接画在照片之上，颜色必须跨主题、跨照片底色保持可读，故用固定
+# 实底 + 白字（对比度均 ≥4.5:1，实算见行内）；未匹配沿用原半透明黑签。
+_BADGE_PILL_DANGER = (QColor("#c62828"), QColor("#ffffff"))  # 已拒绝（5.62:1）
+_BADGE_PILL_SUCCESS = (QColor("#107c10"), QColor("#ffffff"))  # 已通过（5.37:1）
+_BADGE_PILL_WARNING = (QColor("#b45309"), QColor("#ffffff"))  # 待审核（4.63:1）
+_BADGE_PILL_INFO = (QColor("#1f4e79"), QColor("#ffffff"))  # 已归档（8.16:1）
+_BADGE_PILL_NEUTRAL = (QColor(0, 0, 0, 150), QColor("#ffffff"))  # 未匹配
+_BADGE_PILL_MARGIN = 4
+
+
+def pill_colors(badge_text: str) -> tuple[QColor, QColor]:
+    """Map a badge text (may be composite, e.g.「已通过 · 已归档」) to pill colors.
+
+    判定序＝拒绝（最需警惕）→ 通过 → 待审核 → 已归档（复合串的后缀态）；
+    其余（含未匹配）＝中性黑签。文本来自 ui_text 冻结键，零硬编码中文。
+    """
+    if text.STATUS_BADGE_REJECTED in badge_text:
+        return _BADGE_PILL_DANGER
+    if text.STATUS_BADGE_APPROVED in badge_text:
+        return _BADGE_PILL_SUCCESS
+    if text.STATUS_BADGE_PENDING in badge_text:
+        return _BADGE_PILL_WARNING
+    if text.STATUS_BADGE_ARCHIVED in badge_text:
+        return _BADGE_PILL_INFO
+    return _BADGE_PILL_NEUTRAL
 
 _CACHE_KEY_PREFIX = "photo-thumbnail:"
 
@@ -88,11 +125,22 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
 
         painter.save()
         rect = option.rect  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
+        # 参考图基线：先画每格圆角卡片底（Base 填充 + 中性描边），缩略图与
+        # 文字都内缩 _CARD_PAD，形成「照片卡片」而非裸缩略图。
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        card_rect = QRectF(rect).adjusted(0.5, 0.5, -0.5, -0.5)
+        painter.setPen(QPen(_CARD_BORDER, 1))
+        painter.setBrush(option.palette.color(QPalette.ColorRole.Base))  # type: ignore[attr-defined]
+        painter.drawRoundedRect(card_rect, _CARD_RADIUS, _CARD_RADIUS)
+
         image_box = QRect(
-            rect.left(),
-            rect.top(),
-            rect.width(),
-            min(_THUMBNAIL_BOX, max(1, rect.height() - _TEXT_HEIGHT)),
+            rect.left() + _CARD_PAD,
+            rect.top() + _CARD_PAD,
+            max(1, rect.width() - 2 * _CARD_PAD),
+            min(
+                _THUMBNAIL_BOX,
+                max(1, rect.height() - _TEXT_HEIGHT - 2 * _CARD_PAD),
+            ),
         )
         scaled = thumbnail.scaled(
             image_box.size(),
@@ -105,47 +153,61 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
             scaled.width(),
             scaled.height(),
         )
+        # 圆角缩略图：按缩略图矩形裁剪（参考图卡片内圆角照片）。
+        thumb_path = QPainterPath()
+        thumb_path.addRoundedRect(
+            QRectF(pixmap_rect), _THUMB_RADIUS, _THUMB_RADIUS,
+        )
+        painter.setClipPath(thumb_path)
         painter.drawPixmap(pixmap_rect, scaled)
+        painter.setClipping(False)
 
         # 选中态：内缘描边 + 左上角勾选章（仅 State_Selected，绘制顺序在
-        # 缩略图之上、状态角标与文件名之前——后者各自重设画笔/画刷）。
+        # 缩略图之上、状态胶囊与文件名之前——后者各自重设画笔/画刷）。
+        # 勾选章前关抗锯齿：几何折线必须像素级锐利（选中态像素探针契约）。
         palette = option.palette  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
         selected = bool(option.state & QStyle.StateFlag.State_Selected)  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
         if selected:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             self._draw_selection_stroke(painter, palette, pixmap_rect)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
             self._draw_check_badge(painter, palette, pixmap_rect)
 
-        # G-4：状态角标——识别状态 · 归档，右上角半透明小签（主题无关）。
+        # G-4：状态角标——参考图基线：彩色胶囊内嵌在缩略图右上角（贴实际
+        # 照片矩形，竖图/横图都不再悬浮错位）；颜色按识别/归档状态取语义色。
         badge = index.data(STATUS_BADGE_ROLE)
         if badge:
-            metrics = QFontMetrics(option.font)  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
             badge_text = str(badge)
+            metrics = QFontMetrics(option.font)  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
             chip_width = metrics.horizontalAdvance(badge_text) + 2 * _PADDING
-            chip_height = metrics.height() + 4
+            chip_height = metrics.height() + 2
             chip = QRect(
-                image_box.right() - chip_width,
-                image_box.top() + 2,
+                pixmap_rect.right() - chip_width - _BADGE_PILL_MARGIN,
+                pixmap_rect.top() + _BADGE_PILL_MARGIN,
                 chip_width,
                 chip_height,
             )
+            pill_bg, pill_fg = pill_colors(badge_text)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(0, 0, 0, 160))
-            painter.drawRoundedRect(chip, 4, 4)
-            painter.setPen(QColor("white"))
+            painter.setBrush(pill_bg)
+            radius = chip_height / 2.0
+            painter.drawRoundedRect(QRectF(chip), radius, radius)
+            painter.setPen(pill_fg)
             painter.drawText(chip, Qt.AlignmentFlag.AlignCenter, badge_text)
 
         name = index.data(Qt.ItemDataRole.DisplayRole) or ""
         text_rect = QRect(
-            rect.left() + _PADDING,
-            image_box.bottom() + 1,
-            rect.width() - 2 * _PADDING,
+            rect.left() + _CARD_PAD,
+            image_box.bottom() + 2,
+            rect.width() - 2 * _CARD_PAD,
             _TEXT_HEIGHT,
         )
         elided = QFontMetrics(option.font).elidedText(  # type: ignore[attr-defined]  # PySide6 6.8.3 stubs
             str(name), Qt.TextElideMode.ElideRight, text_rect.width()
         )
         painter.setPen(name_color(palette, selected))
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter, elided)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft, elided)
         painter.restore()
 
     def _draw_selection_stroke(
@@ -153,9 +215,9 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
     ) -> None:
         """选中缩略图的内缘描边（修正 2：内缘绘制，修正 1 审查定稿）。
 
-        画笔中心线落在 pixmap_rect 内缩半个笔宽的矩形上，描边最多覆盖
-        ``_SELECTION_STROKE_WIDTH`` 像素的照片边缘、永不越出 image_box——
-        不依赖单元格留白，也不会在任意纵横比下侵入文件名条。
+        参考图基线：描边走圆角路径，与圆角缩略图同心内缩——画笔中心线落在
+        pixmap_rect 内缩 1px 的圆角矩形上，描边最多覆盖 2 像素的照片边缘、
+        永不越出缩略图（圆角处也不外溢到卡片底上），不依赖单元格留白。
         """
         inset = _SELECTION_STROKE_WIDTH // 2
         if (
@@ -163,11 +225,16 @@ class PhotoThumbnailDelegate(QStyledItemDelegate):
             or pixmap_rect.height() < 2 * _SELECTION_STROKE_WIDTH
         ):
             return
+        stroke_path = QPainterPath()
+        inner = QRectF(pixmap_rect).adjusted(inset, inset, -inset, -inset)
+        stroke_path.addRoundedRect(
+            inner, max(1.0, _THUMB_RADIUS - inset), max(1.0, _THUMB_RADIUS - inset),
+        )
         painter.setPen(
             QPen(palette.color(palette.ColorRole.Highlight), _SELECTION_STROKE_WIDTH)
         )
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRect(pixmap_rect.adjusted(inset, inset, -inset, -inset))
+        painter.drawPath(stroke_path)
 
     def _draw_check_badge(
         self, painter: QPainter, palette: QPalette, pixmap_rect: QRect,

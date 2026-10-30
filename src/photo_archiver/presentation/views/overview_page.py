@@ -30,9 +30,14 @@ from photo_archiver.presentation.controllers.overview_presenter import (
 )
 from photo_archiver.presentation.visual_style import (
     ROLE_PRIMARY,
+    assign_label_icon,
     assign_role,
     style_banner,
     style_card,
+    style_page_subtitle,
+    style_page_title,
+    set_badge_severity,
+    token,
 )
 
 from loguru import logger
@@ -53,8 +58,19 @@ class OverviewPage(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(12)
 
-        self._title = QLabel(text.OVERVIEW_TITLE, self)
-        layout.addWidget(self._title)
+        # 参考图基线（Owner 2026-10-30）：页头＝品牌蓝图标 + 大标题。
+        header = QWidget(self)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(12)
+        page_icon = QLabel(header)
+        assign_label_icon(page_icon, "home", token("pa-accent-fg"), 22)
+        title = QLabel(text.OVERVIEW_TITLE, header)
+        style_page_title(title)
+        header_layout.addWidget(page_icon)
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        layout.addWidget(header)
 
         # 欢迎横幅（P0-4 Banner 构建块；QSS padding 8px 12px 提供内边距）。
         banner = QFrame(self)
@@ -76,18 +92,21 @@ class OverviewPage(QWidget):
             card_layout = QVBoxLayout(card)
             card_layout.setContentsMargins(12, 10, 12, 10)
             card_layout.setSpacing(6)
-            header = QHBoxLayout()
+            card_header = QHBoxLayout()
             title = QLabel(card)
             bold = title.font()
             bold.setBold(True)
             title.setFont(bold)
+            # 参考图基线：步骤状态用语义徽章（已完成＝success、待办＝warning），
+            # 告别「✓ 已完成」裸文本（文案不变，仅容器化）；severity 由
+            # render_model 按步骤态设定（构造期不预置）。
             state = QLabel(card)
-            header.addWidget(title)
-            header.addStretch()
-            header.addWidget(state)
+            card_header.addWidget(title)
+            card_header.addStretch()
+            card_header.addWidget(state)
             detail = QLabel(card)
             detail.setWordWrap(True)
-            card_layout.addLayout(header)
+            card_layout.addLayout(card_header)
             card_layout.addWidget(detail)
             layout.addWidget(card)
             self._step_cards.append(card)
@@ -96,14 +115,18 @@ class OverviewPage(QWidget):
             self._step_details.append(detail)
 
         layout.addStretch()
+        # 参考图基线：主 CTA 右对齐常规尺寸（不再全宽横贯页面）。
+        cta_row = QHBoxLayout()
+        cta_row.addStretch()
         self._primary_button = QPushButton(self)
         assign_role(self._primary_button, ROLE_PRIMARY)
         self._primary_button.clicked.connect(self._emit_primary)
-        layout.addWidget(self._primary_button)
-        layout.addStretch()
+        cta_row.addWidget(self._primary_button)
+        layout.addLayout(cta_row)
 
         privacy = QLabel(text.OVERVIEW_PRIVACY_NOTE, self)
         privacy.setWordWrap(True)
+        style_page_subtitle(privacy)
         layout.addWidget(privacy)
         self._model = OverviewModel((), None, "", "")
 
@@ -134,6 +157,9 @@ class OverviewPage(QWidget):
             state = text.OVERVIEW_STEP_DONE if step.done else text.OVERVIEW_STEP_TODO
             self._step_titles[index].setText(step.label)
             self._step_states[index].setText(f"{mark} {state}")
+            set_badge_severity(
+                self._step_states[index], "success" if step.done else "warning",
+            )
             self._step_details[index].setText(step.detail)
         has_primary = model.primary is not None
         self._primary_button.setVisible(has_primary)

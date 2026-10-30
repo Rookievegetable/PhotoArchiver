@@ -821,6 +821,13 @@ NAV_REVIEW_CENTER = "审核中心"
 NAV_DATA_TOOLS = "数据工具"
 NAV_SETTINGS = "设置"
 NAV_DATA_TOOLS_HINT = "维护操作：导出数据、检测重复照片、删除人员等低频操作集中于此。"
+# 参考图基线（Owner 2026-10-30 派生）：维护操作卡网格的页头标题与逐卡描述。
+NAV_DATA_TOOLS_TITLE = "数据工具"
+DATA_TOOLS_EXPORT_DESC = "把照片库、人员与归属关系导出为文件，便于备份或在其他机器迁移。"
+DATA_TOOLS_DUPLICATES_DESC = "扫描整库找出内容重复的照片并生成报告，可按报告清理。"
+DATA_TOOLS_REANALYZE_DESC = "对全部照片重新运行登记、特征提取与识别（耗时任务，慎用）。"
+DATA_TOOLS_DELETE_PERSON_DESC = "删除人员及其归属关系，涉及归档数据，不可逆，需逐项确认。"
+DATA_TOOLS_CARD_TOOLTIP = "{description}\n{tooltip}"
 
 # ---- 主窗口 · 概览页（流程驱动工作台） ----
 OVERVIEW_TITLE = "归档工作台"

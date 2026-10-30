@@ -117,8 +117,12 @@ def test_maintenance_action_lives_on_data_tools_only(qtbot, tmp_path, monkeypatc
         text.ACTION_IMPORT_PEOPLE, text.ACTION_SCAN_FOLDER,
         text.ACTION_REVIEW_PENDING, text.ACTION_ARCHIVE,
     ]
-    tools = window.findChild(QToolBar, "DataTools")
-    assert text.ACTION_REANALYZE_ALL in {a.text() for a in tools.actions()}
+    # 参考图基线：维护入口呈现为操作卡（QPushButton#ActionCard），QAction
+    # 实例与处理器链零变化。
+    from PySide6.QtWidgets import QPushButton
+
+    cards = window.findChildren(QPushButton, "ActionCard")
+    assert text.ACTION_REANALYZE_ALL in {card.text() for card in cards}
     assert window._reanalyze_all_action.isEnabled()
 
 
