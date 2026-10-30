@@ -21,17 +21,16 @@ from PySide6.QtCore import Qt, QSignalBlocker, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QMenu,
     QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -108,6 +107,26 @@ _COLUMN_MATCH_STATUS = 7 + _COLUMN_SHIFT
 
 # 组内序号取姓名开头的连续数字前缀（如「3张三」→ 3；无前缀 → None）。
 _NAME_ORDINAL_PATTERN = re.compile(r"^\d+")
+
+# Owner 2026-10-31：复选框列固定宽度——ResizeToContents 对空文本复选框列
+# 的重算在重渲染后可能漂移（实机报告「移动后第一列偏移」），固定后恒定；
+# 表头全选框几何随之稳定。
+_CHECK_COLUMN_WIDTH = 40
+_HEADER_CHECK_MARGIN = 8
+
+
+class _HeaderSelectAll(QCheckBox):
+    """表头全选框：用户点击＝请求全选/全不选（三态仅用于显示部分选中）。
+
+    覆盖 ``nextCheckState``——用户点击不再本地翻转三态，而是向页面发
+    ``toggled_all``（页面据此 selectAll/clearSelection，选择模型仍是唯一
+    语义源）；显示态由页面按选区程序化设置（含 PartiallyChecked）。
+    """
+
+    toggled_all = Signal(bool)
+
+    def nextCheckState(self) -> None:  # noqa: N802  # Qt 虚函数名
+        self.toggled_all.emit(self.checkState() != Qt.CheckState.Checked)
 
 # 阶段 3 工具行分组（决策项 #3 保守值）：仅主操作｜次级｜危险三组之间加
 # 组间距，不加分隔线、不赋 neutral 角色、按钮顺序零改动。
@@ -390,28 +409,9 @@ class PeopleAdminPage(QWidget):
         assign_button_icon(self._move_up_button, "up", token("pa-text-secondary"))
         assign_button_icon(self._move_down_button, "down", token("pa-text-secondary"))
         assign_button_icon(self._delete_button, "delete", token("pa-danger-text"))
-        # 参考图 B4「⋯ 更多 ▾」收纳（决策项 #5 按图推翻）：次级/危险删除入口
-        # 收入更多菜单——两个危险按钮的处理器/对话框链零变化，仅呈现位置
-        # 从平铺改为菜单项（语义无增减；F-PEO 删除披露入口仍全部可达）。
-        self._more_button = QToolButton(self)
-        self._more_button.setText(text.PEOPLE_PAGE_MORE_BUTTON)
-        # 参考图基线：更多按钮同工具栏次级形态（QToolButton 同一选择器行）。
-        assign_role(self._more_button, ROLE_SECONDARY)
-        self._more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        more_menu = QMenu(self._more_button)
-        # 菜单项直接挂既有按钮的点击槽——按钮本体仍由页面持有（处理器/确认
-        # 对话框链零变化），仅呈现位置收入菜单。
-        more_menu.addAction(
-            text.PEOPLE_PAGE_DELETE_BATCH_BUTTON, self._delete_batch_button.click,
-        )
-        more_menu.addAction(
-            text.PEOPLE_PAGE_CLEAR_ALL_BUTTON, self._clear_all_button.click,
-        )
-        # 按钮脱离布局后须显式隐藏，否则会以默认几何悬浮在页面左上角；
-        # .click() 触发不受 hidden 影响（Qt 按钮槽调用不检查可见性）。
-        self._delete_batch_button.hide()
-        self._clear_all_button.hide()
-        self._more_button.setMenu(more_menu)
+        # Owner 2026-10-31：「⋯ 更多 ▾」收纳撤除——两个批量危险入口平铺回
+        # 工具栏（图标/角色/处理器/确认对话框链零变化），菜单样式破碎问题
+        # 随之消失。
         # 名单导入（Owner 2026-10-30 移入本页）：次级形态 + 文档图标；
         # 点击只发请求信号，处理器仍走主窗口的 _import_action（准入/置灰链
         # 零变化）。
@@ -428,7 +428,8 @@ class PeopleAdminPage(QWidget):
         toolbar_row.addWidget(self._move_down_button)
         toolbar_row.addSpacing(_TOOLBAR_GROUP_SPACING)
         toolbar_row.addWidget(self._delete_button)
-        toolbar_row.addWidget(self._more_button)
+        toolbar_row.addWidget(self._delete_batch_button)
+        toolbar_row.addWidget(self._clear_all_button)
         toolbar_row.addStretch()
         layout.addLayout(toolbar_row)
 
@@ -440,11 +441,23 @@ class PeopleAdminPage(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.ResizeToContents,
         )
+        # Owner 2026-10-31：首列固定宽度（见 _CHECK_COLUMN_WIDTH 注）。
+        self._table.horizontalHeader().setSectionResizeMode(
+            _COLUMN_CHECK, QHeaderView.ResizeMode.Fixed,
+        )
+        self._table.setColumnWidth(_COLUMN_CHECK, _CHECK_COLUMN_WIDTH)
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.setAlternatingRowColors(True)
         self._table.rows_dropped.connect(self._on_rows_dropped)
         self._table.itemSelectionChanged.connect(self._render_action_state)
         self._table.itemChanged.connect(self._on_check_item_changed)
+        # 表头全选框（Owner 2026-10-31）：覆盖首列表头区块，点击＝全选/全不选。
+        self._header_check = _HeaderSelectAll(self._table.horizontalHeader())
+        self._header_check.setToolTip(text.PEOPLE_PAGE_HEADER_CHECK_TOOLTIP)
+        self._header_check.toggled_all.connect(self._on_header_select_all)
+        self._table.horizontalHeader().sectionResized.connect(
+            lambda *_: self._sync_header_check_geometry(),
+        )
         body_row.addWidget(self._table, 1)
         body_row.addWidget(self._build_stats_panel(self))
         layout.addLayout(body_row)
@@ -736,6 +749,7 @@ class PeopleAdminPage(QWidget):
         finally:
             self._table.setUpdatesEnabled(True)
         self._render_action_state()
+        self._sync_header_check_geometry()
 
     def _match_status_text(self, person: Person) -> str:
         """P4/D3-A：人员行的匹配状态显示值。
@@ -766,9 +780,13 @@ class PeopleAdminPage(QWidget):
         self._move_down_button.setEnabled(reorderable and 0 <= index < last_index)
         self._edit_button.setEnabled(single and self._selected_person() is not None)
         self._delete_button.setEnabled(bool(rows))
+        # Owner 2026-10-31：两个批量危险入口平铺后按各自可用性置灰（原更多
+        # 菜单的门＝有批次或选区任一）。
+        self._delete_batch_button.setEnabled(bool(self._batches))
+        self._clear_all_button.setEnabled(bool(self._rows))
         self._table.setDragEnabled(len(rows) <= 1)
         self._sync_check_marks(rows)
-        self._more_button.setEnabled(bool(self._batches) or bool(rows))
+        self._sync_header_check_state()
 
     def _sync_check_marks(self, selected_rows: list[int]) -> None:
         """镜像行选中态到复选框列（blockSignals 防回环；DEC-06 按图推翻）."""
@@ -781,6 +799,47 @@ class PeopleAdminPage(QWidget):
                     Qt.CheckState.Checked if row_index in selected_rows
                     else Qt.CheckState.Unchecked,
                 )
+
+    # ── 表头全选框（Owner 2026-10-31）────────────────────────────────────
+
+    def _on_header_select_all(self, select: bool) -> None:
+        """表头全选框点击：全选/清空选择（选择模型仍是唯一语义源）。"""
+        if select:
+            self._table.selectAll()
+        else:
+            self._table.clearSelection()
+
+    def _sync_header_check_state(self) -> None:
+        """镜像选区到表头全选框（全选=✓、部分=半态、无=空；零行=禁用）。"""
+        total = self._table.rowCount()
+        with QSignalBlocker(self._header_check):
+            self._header_check.setEnabled(total > 0)
+            if total == 0:
+                self._header_check.setCheckState(Qt.CheckState.Unchecked)
+                return
+            selected = len(self._selected_row_indices())
+            if selected == 0:
+                state = Qt.CheckState.Unchecked
+            elif selected == total:
+                state = Qt.CheckState.Checked
+            else:
+                state = Qt.CheckState.PartiallyChecked
+            self._header_check.setCheckState(state)
+
+    def _sync_header_check_geometry(self) -> None:
+        """把全选框摆进首列表头区块（首列固定宽后几何恒定）。"""
+        header = self._table.horizontalHeader()
+        width = header.sectionSize(_COLUMN_CHECK)
+        if width <= 0:
+            self._header_check.hide()
+            return
+        self._header_check.setGeometry(
+            _HEADER_CHECK_MARGIN,
+            0,
+            max(16, width - _HEADER_CHECK_MARGIN),
+            max(16, header.height()),
+        )
+        self._header_check.show()
 
     def _on_check_item_changed(self, item: QTableWidgetItem) -> None:
         """复选框勾选 → 行选中/取消（与 ExtendedSelection 单一语义源并轨）."""

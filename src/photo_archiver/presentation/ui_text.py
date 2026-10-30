@@ -115,6 +115,8 @@ PEOPLE_PAGE_SUBTITLE = "管理人员信息、分组关系，并进行批次与�
 PEOPLE_PAGE_MORE_BUTTON = "⋯ 更多"
 # 复选框选择列 tooltip（DEC-06 按图推翻）。
 PEOPLE_PAGE_SELECT_TOOLTIP = "勾选＝选中该行（与行点击/Ctrl 多选等效）。"
+# 表头全选框 tooltip（Owner 2026-10-31）。
+PEOPLE_PAGE_HEADER_CHECK_TOOLTIP = "全选 / 全不选（方块＝部分选中）"
 PEOPLE_PAGE_HINT = (
     "名单顺序即「照片库」人员筛选下拉的展示顺序。选择某个「来源批次」后，"
     "可拖动行或使用「上移 / 下移」调整该批次成员的名次（改动立即保存）；"

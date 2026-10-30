@@ -20,7 +20,14 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QItemSelectionModel, QMimeData, QPoint, QPointF, Qt
 from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
-from PySide6.QtWidgets import QApplication, QFrame, QLabel, QMessageBox, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QWidget,
+)
 
 from photo_archiver.app.repositories import build_sqlite_repositories
 from photo_archiver.application.commands import AddPersonCommand
@@ -57,6 +64,7 @@ from photo_archiver.presentation.visual_style import (
     button_role,
 )
 from photo_archiver.presentation.views.people_admin_page import (
+    _CHECK_COLUMN_WIDTH,
     PeopleAdminPage,
     derive_group_ordinals,
     format_group_ordinal,
@@ -1401,11 +1409,10 @@ def test_stats_card_keeps_empty_state_visibility_semantics(
 
 
 def test_toolbar_row_groups_preserve_order_and_roles(populated) -> None:
-    """工具行分组＋B4「更多▾」收纳（决策项 #5 按图推翻 2026-10-30）：
-    平铺按钮＝添加(primary)｜编辑/上移/下移(secondary，参考图基线 2026-10-30
-    次级着色形态)｜删除所选(danger)｜更多；按批次删除/清空所有人员收入
-    「更多」菜单——按钮角色赋值零变化、菜单项触发既有按钮点击槽（处理器与
-    确认对话框链零变化）。"""
+    """工具行分组（Owner 2026-10-31：「⋯ 更多 ▾」收纳撤除，两个批量危险
+    入口平铺回工具栏）：平铺按钮＝添加(primary)｜导入(secondary)｜
+    编辑/上移/下移(secondary)｜删除所选/按批次删除/清空所有人员(danger)；
+    按钮角色赋值与处理器/确认对话框链零变化。"""
     page, _, _ = populated
     toolbar = None
     for index in range(page.layout().count()):
@@ -1416,29 +1423,72 @@ def test_toolbar_row_groups_preserve_order_and_roles(populated) -> None:
             break
     assert toolbar is not None
     flat_buttons = (
-        page._add_button, page._edit_button, page._move_up_button,
-        page._move_down_button, page._delete_button,
+        page._add_button, page._import_button, page._edit_button,
+        page._move_up_button, page._move_down_button, page._delete_button,
+        page._delete_batch_button, page._clear_all_button,
     )
-    roles = (ROLE_PRIMARY, ROLE_SECONDARY, ROLE_SECONDARY, ROLE_SECONDARY, ROLE_DANGER)
+    roles = (
+        ROLE_PRIMARY, ROLE_SECONDARY, ROLE_SECONDARY, ROLE_SECONDARY,
+        ROLE_SECONDARY, ROLE_DANGER, ROLE_DANGER, ROLE_DANGER,
+    )
     indices = [toolbar.indexOf(button) for button in flat_buttons]
     assert indices == sorted(indices)  # 平铺按钮顺序不变
     for button, role in zip(flat_buttons, roles, strict=True):
         assert toolbar.indexOf(button) >= 0
         assert button_role(button) == role
-    # 收纳：两个危险按钮不在工具栏布局中，但角色保持 danger 且可经菜单触达。
-    assert toolbar.indexOf(page._delete_batch_button) == -1
-    assert toolbar.indexOf(page._clear_all_button) == -1
+    # 两个批量危险入口按各自可用性置灰（替代原「更多」菜单的门）。
     assert button_role(page._delete_batch_button) == ROLE_DANGER
     assert button_role(page._clear_all_button) == ROLE_DANGER
-    menu = page._more_button.menu()
-    actions = [action.text() for action in menu.actions()]
-    assert text.PEOPLE_PAGE_DELETE_BATCH_BUTTON in actions
-    assert text.PEOPLE_PAGE_CLEAR_ALL_BUTTON in actions
+    assert not hasattr(page, "_more_button")
     spacers = [
         toolbar.itemAt(index) for index in range(toolbar.count())
         if toolbar.itemAt(index).spacerItem() is not None
     ]
     assert len(spacers) == 3  # 两组间距＋末尾 stretch
+
+
+def test_header_check_selects_and_clears_all_rows(populated) -> None:
+    """Owner 2026-10-31：表头全选框——点击＝全选/全不选；显示态随选区
+    同步（部分选中＝半态）；选择模型仍是唯一语义源。"""
+    page, _, _ = populated
+    page.resize(900, 400)
+    page.show()
+    check = page._header_check
+    page._sync_header_check_geometry()
+    assert check.isEnabled()
+    assert check.checkState() == Qt.CheckState.Unchecked
+
+    check.toggled_all.emit(True)  # 用户点击（nextCheckState 语义）
+    assert len(page._table.selectionModel().selectedRows()) == 3
+    assert page._header_check.checkState() == Qt.CheckState.Checked
+    # 行复选框镜像全选。
+    assert all(
+        page._table.item(row, 0).checkState() == Qt.CheckState.Checked
+        for row in range(3)
+    )
+
+    check.toggled_all.emit(False)
+    assert page._table.selectionModel().selectedRows() == []
+    assert page._header_check.checkState() == Qt.CheckState.Unchecked
+
+    # 部分选中 → 表头显示半态；再点全选框＝全选（非三态循环）。
+    page._table.selectRow(0)
+    assert page._header_check.checkState() == Qt.CheckState.PartiallyChecked
+    check.toggled_all.emit(True)
+    assert len(page._table.selectionModel().selectedRows()) == 3
+
+
+def test_check_column_has_fixed_width(populated) -> None:
+    """Owner 2026-10-31：首列（复选框列）固定宽度——重渲染/调序后不得漂移
+    （实机报告「移动后第一列偏移」）。"""
+    page, _, _ = populated
+    table = page._table
+    width = table.columnWidth(0)
+    assert width == _CHECK_COLUMN_WIDTH
+    assert table.horizontalHeader().sectionResizeMode(0) == QHeaderView.ResizeMode.Fixed
+    table.selectRow(0)
+    page.move_selected(1)
+    assert table.columnWidth(0) == _CHECK_COLUMN_WIDTH
 
 
 
