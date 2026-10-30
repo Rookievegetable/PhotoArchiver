@@ -19,7 +19,8 @@ from __future__ import annotations
 import html
 from uuid import UUID
 
-from PySide6.QtCore import Qt
+import shiboken6
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -228,11 +229,20 @@ class ImportPreviewDialog(QDialog):
         card_layout.addLayout(options_row)
         layout.addWidget(card)
 
+        self._height_probe = QLabel()  # F-IMP-1 行高度量用（不挂父、不显示）
+        self._height_probe.setWordWrap(True)  # heightForWidth 需开启换行
+        self._row_height_resize_pending = False  # F-IMP-1 延迟重算去重
         self._table = QTableWidget(0, 8, self)
         # F-IMP-1 配套：告警列（列 5）Stretch——wordWrap 告警 QLabel 有可用
         # 宽度，行高自适应后长告警完整可读（不截断、不省略）。
         self._table.horizontalHeader().setSectionResizeMode(
             5, QHeaderView.ResizeMode.Stretch,
+        )
+        # F-IMP-1 N3：窗口缩小或用户拖宽他列时，Stretch 告警列随之变窄 →
+        # wordWrap 换行行数增加，行高必须按新列宽重算，否则长告警再次被
+        # 裁剪（resizeRowsToContents 只在 (re)populate 时算一次）。
+        self._table.horizontalHeader().sectionResized.connect(
+            self._on_table_section_resized,
         )
         self._table.setAlternatingRowColors(True)
         self._table.setHorizontalHeaderLabels([
@@ -283,6 +293,66 @@ class ImportPreviewDialog(QDialog):
         buttons.addWidget(cancel)
         buttons.addWidget(confirm)
         layout.addLayout(buttons)
+
+    def _on_table_section_resized(self, logical_index: int, _old: int, _new: int) -> None:
+        """F-IMP-1 N3：告警列宽度变化时重算行高（窄列/窗口缩小不裁剪）。
+
+        只响应告警列（列 5）；信号回调时列宽可能仍是过渡值，统一延迟到
+        事件循环内按最终列宽度量；行高重算不改列宽，无级联回环。
+        """
+        if logical_index == 5 and self._table.rowCount() > 0:
+            self._schedule_row_height_resize()
+
+    def resizeEvent(self, event) -> None:  # noqa: ANN001
+        """F-IMP-1 N3：窗口尺寸变化（Stretch 列随之变宽/变窄）后重算行高。"""
+        super().resizeEvent(event)
+        self._schedule_row_height_resize()
+
+    def _schedule_row_height_resize(self) -> None:
+        """延迟到事件循环内重算行高（等待列宽分布/过渡值最终稳定）。"""
+        if self._row_height_resize_pending:
+            return
+        self._row_height_resize_pending = True
+        # NB-1：以 self 为连接上下文的单发定时器——对话框销毁后连接随对象
+        # 一并失效，已排队的回调不再触发；回调内另有 shiboken6.isValid
+        # 守卫双保险：无论经哪条路径在销毁后被调用，都安全退出，不访问
+        # 已销毁的 Qt 对象（不吞 RuntimeError 掩盖生命周期问题）。
+        QTimer.singleShot(0, self, self._run_deferred_row_height_resize)
+
+    def _run_deferred_row_height_resize(self) -> None:
+        """NB-1：事件循环内的延迟行高重算；对话框已销毁时安全退出。"""
+        if not shiboken6.isValid(self):
+            return
+        self._row_height_resize_pending = False
+        self._resize_rows_to_content()
+
+    def _resize_rows_to_content(self) -> None:
+        """F-IMP-1：行高 = 告警富文本按当前告警列宽换行后的完整高度。
+
+        ``resizeRowsToContents`` 依据 widget 的 sizeHint（按其自身提示宽度
+        折算），在窄告警列下会低估换行行数导致残余裁剪；已挂载 QLabel 的
+        ``heightForWidth`` 又受内部文档布局状态影响可能返回旧值。这里用
+        独立的隐藏 QLabel（每次 setText 后度量，无挂载状态）按当前告警
+        列宽度量告警富文本的换行高度（F-IMP-1 验收：告警文字完整可读），
+        并与整行其他内容的 sizeHint 取大者，不裁剪动作列等既有内容。
+        度量不可用（≤0）或非告警行回退 Qt 默认计算。调用时机经
+        :meth:`_schedule_row_height_resize` 延迟到事件循环内，保证按
+        稳定后的最终列宽度量。
+        """
+        table = self._table
+        available_width = max(table.columnWidth(5) - 2, 1)
+        probe = self._height_probe
+        for row_index in range(table.rowCount()):
+            needed = table.sizeHintForRow(row_index)
+            widget = table.cellWidget(row_index, 5)
+            if isinstance(widget, QLabel) and widget.wordWrap():
+                probe.setFont(widget.font())
+                probe.setText(widget.text())
+                wrapped = probe.heightForWidth(available_width)
+                if wrapped > 0:
+                    needed = max(needed, wrapped)
+            if needed > 0:
+                table.setRowHeight(row_index, needed)
 
     # ── Data plumbing ────────────────────────────────────────────────────
 
@@ -351,7 +421,7 @@ class ImportPreviewDialog(QDialog):
         # F-IMP-1：行高随内容自适应——wordWrap 告警 QLabel 的行全高显示
         # （不截断、不省略；tooltip 全文保留）。重绘后（拆分/重新解析/动作
         # 切换路径均经 _repopulate）行高保持正确；⛔/⚠/ℹ 分级与排序零变化。
-        self._table.resizeRowsToContents()
+        self._schedule_row_height_resize()
         self._refresh_counts()
 
     @staticmethod

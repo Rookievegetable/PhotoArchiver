@@ -539,7 +539,7 @@ def test_single_criteria_call_keeps_legacy_mirror(library, monkeypatch) -> None:
 
 def test_status_counts_backfilled_from_shared_axes(library, monkeypatch) -> None:
     """参考图 M8：状态复选框计数按当前人员/时间轴逐状态回填。"""
-    from photo_archiver.domain import MatchStatus, PhotoSearchCriteria
+    from photo_archiver.domain import PhotoSearchCriteria
 
     window = library.window
     seen: list[PhotoSearchCriteria] = []

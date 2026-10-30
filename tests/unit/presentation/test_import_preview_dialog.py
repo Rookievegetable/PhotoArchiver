@@ -17,6 +17,7 @@ from photo_archiver.application.commands.import_draft import ParseImportDraftCom
 from photo_archiver.presentation.views.import_preview_dialog import (
     CONFIRM_SYNC_LIMIT,
     ImportPreviewDialog,
+    build_warning_label,
 )
 from tests.integration.test_import_draft_flow import _services  # noqa: F401  (reuse wiring)
 
@@ -337,40 +338,88 @@ def test_status_import_draft_parsed_has_no_revisit_hint() -> None:
 # 行高必须随内容自适应；重绘（拆分/重新解析路径经 _repopulate）后行高保持。
 
 
-def test_f_imp1_long_warning_row_shows_full_height(parsed, qtbot) -> None:
-    """长告警行全高显示：行高显著大于单行默认高度，且告警 QLabel 高度被容纳。"""
-    dialog, _people = _make_dialog(parsed, qtbot)
+def _required_row_height(dialog, row_index: int) -> int:
+    """当前平台字体度量下告警单元格完整显示所需行高（平台无关验收口径）。
+
+    用独立全新的告警 QLabel（与产品同源 build_warning_label，无挂载状态、
+    无内部布局缓存）按当前告警列宽（减单元格内边距）量 ``heightForWidth``
+    ——即该宽度下逐行换行后的完整高度。CI offscreen 与 Windows 原生字体
+    度量不同，固定像素阈值会把平台差异误判为产品缺陷，故按运行时度量
+    计算预期；两种环境验证同一验收：告警文字完整显示、不截断。
+    """
     table = dialog._table
-    # 告警行（多名行）行高必须容纳至少两行文本（默认单行 ≈ 30px）。
+    widget = table.cellWidget(row_index, 5)
+    assert isinstance(widget, QLabel)
+    oracle = build_warning_label(dialog._draft.rows[row_index].warnings)
+    needed = oracle.heightForWidth(max(table.columnWidth(5) - 2, 1))
+    if needed <= 0:  # 环境不支持 heightForWidth 时退回 sizeHint 高度
+        needed = oracle.sizeHint().height()
+    return needed
+
+
+def test_f_imp1_long_warning_row_shows_full_height(parsed, qtbot) -> None:
+    """告警行全高显示：行高容纳告警 QLabel 按当前列宽换行后的实际高度。"""
+    dialog, _people = _make_dialog(parsed, qtbot)
+    qtbot.wait(10)  # 等待延迟行高重算按最终列宽执行（产品行为）
+    table = dialog._table
     warning_rows = [
         index for index, row in enumerate(dialog._draft.rows) if row.warnings
     ]
     assert warning_rows
     for index in warning_rows:
-        assert table.rowHeight(index) >= 44, (
-            f"row {index} height {table.rowHeight(index)} clips wrapped warnings"
+        needed = _required_row_height(dialog, index)
+        assert needed > 0
+        assert table.rowHeight(index) >= needed, (
+            f"row {index} height {table.rowHeight(index)} clips warnings "
+            f"(needs {needed}px at width {table.columnWidth(5)})"
         )
 
 
 def test_f_imp1_row_height_survives_repopulation(parsed, qtbot) -> None:
-    """重绘后（_repopulate）行高保持正确：拆分路径不回退到单行裁剪。"""
+    """重绘后（拆分路径经全量 _repopulate）行高保持换行自适应。
+
+    重绘后预置超长告警明细，保证多行换行路径在两种平台都被覆盖：所需
+    高度 ≥ 两行文本（按当前平台字体度量），行高必须容纳该所需高度——
+    自适应若失效回退默认单行行高，两种平台都会真实失败。
+    """
     dialog, _people = _make_dialog(parsed, qtbot)
     multi = next(
         row for row in dialog._draft.rows
         if any(w[0] == "multi_name" for w in row.warnings)
     )
-    dialog._on_split(multi)  # 触发全量 _repopulate
+    dialog._on_split(multi)  # 触发全量 _repopulate（服务重载草稿）
+    dialog._draft.rows[0].warnings = (
+        ("mystery_code", "超长告警明细逐字换行" * 40),
+    )
+    dialog._repopulate()
+    qtbot.wait(10)
     table = dialog._table
+    line_height = table.fontMetrics().height()
+    needed = _required_row_height(dialog, 0)
+    assert needed >= 2 * line_height  # 长告警确实换行为多行
+    assert table.rowHeight(0) >= needed, (
+        f"row 0 height {table.rowHeight(0)} clips warnings "
+        f"(needs {needed}px at width {table.columnWidth(5)})"
+    )
     warning_rows = [
         index for index, row in enumerate(dialog._draft.rows) if row.warnings
     ]
     assert warning_rows
     for index in warning_rows:
-        assert table.rowHeight(index) >= 44
+        needed = _required_row_height(dialog, index)
+        assert table.rowHeight(index) >= needed, (
+            f"row {index} height {table.rowHeight(index)} clips warnings "
+            f"(needs {needed}px at width {table.columnWidth(5)})"
+        )
 
 
 def test_f_imp1_tooltip_keeps_full_text(parsed, qtbot) -> None:
-    """tooltip 全文保留（多告警排序语义不变；P0-5 状态表达维度）。"""
+    """tooltip 全文保留（多告警排序语义不变；P0-5 状态表达维度）。
+
+    NB-2 恢复：重绘（_repopulate）前后 tooltip 都必须等于
+    ``_warnings_text`` 的完整拼接文案（"；" 连接、逐条完整模板），不因
+    告警列改为分级 QLabel 而丢失全文。
+    """
     dialog, _people = _make_dialog(parsed, qtbot)
     multi = next(
         row for row in dialog._draft.rows
@@ -382,9 +431,92 @@ def test_f_imp1_tooltip_keeps_full_text(parsed, qtbot) -> None:
     assert widget.toolTip() == dialog._warnings_text(multi)
     assert "；" not in widget.text() or widget.wordWrap()
 
+    # 多告警行：tooltip 逐条保留完整模板文案（"；" 连接全文，不截断）。
+    multi.warnings = (("multi_name", "3"), ("group_title", "2组"))
+    dialog._repopulate()
+    widget = dialog._table.cellWidget(index, 5)
+    assert isinstance(widget, QLabel)
+    assert widget.toolTip() == dialog._warnings_text(dialog._draft.rows[index])
+    for _code, detail in dialog._draft.rows[index].warnings:
+        assert detail in widget.toolTip()
+
+
+def test_f_imp1_narrow_column_and_window_shrink_recompute_heights(parsed, qtbot) -> None:
+    """N3：告警列宽变化（拖宽/收窄他列、窗口缩放）后行高随新列宽重算。
+
+    他列收窄 → Stretch 告警列变宽 → 所需行高变小且实际行高同步回落
+    （不残留旧高度、不空占）；他列恢复 → 所需行高回升且行高跟上。
+    窗口缩小/恢复走同一重算入口。断言基于运行时 heightForWidth 度量，
+    offscreen 与原生 Windows 等价；若列宽变化后不重算，行高残留旧值，
+    两种平台都会真实失败。
+    """
+    dialog, _people = _make_dialog(parsed, qtbot)
+    dialog._draft.rows[0].warnings = (
+        ("mystery_code", "超长告警明细逐字换行" * 40),
+    )
+    dialog._repopulate()
+    qtbot.wait(10)
+    table = dialog._table
+    header = table.horizontalHeader()
+
+    wide_width = table.columnWidth(5)
+    wide_needed = _required_row_height(dialog, 0)
+    assert table.rowHeight(0) >= wide_needed
+
+    header.resizeSection(0, 40)  # 他列收窄 → 告警列变宽
+    qtbot.wait(10)
+    grown_width = table.columnWidth(5)
+    assert grown_width > wide_width
+    grown_needed = _required_row_height(dialog, 0)
+    assert grown_needed < wide_needed  # 列变宽 → 所需行高变小
+    assert table.rowHeight(0) <= wide_needed  # 行高回落（不残留旧高度）
+    assert table.rowHeight(0) >= grown_needed  # 仍完整容纳换行文本
+
+    header.resizeSection(0, 100)  # 恢复他列 → 告警列回落
+    qtbot.wait(10)
+    assert table.columnWidth(5) == wide_width
+    assert table.rowHeight(0) >= _required_row_height(dialog, 0)
+    assert table.rowHeight(0) <= wide_needed  # 回到宽列所需高度
+
+    dialog.resize(700, 560)  # 窗口缩小场景
+    qtbot.wait(10)
+    assert table.rowHeight(0) >= _required_row_height(dialog, 0)
+    dialog.resize(960, 560)  # 窗口恢复尺寸场景
+    qtbot.wait(10)
+    assert table.rowHeight(0) >= _required_row_height(dialog, 0)
+
 
 def test_import_counts_line_includes_total(parsed, qtbot) -> None:
     """汇总行新增「共 N 行」总数（参考图区块 #3；四计数语义零变化）。"""
     dialog, _people = _make_dialog(parsed, qtbot)
     counts = next(w for w in dialog.findChildren(QLabel) if "将新建" in w.text())
     assert f"共 {len(dialog._draft.rows)} 行" in counts.text()
+
+
+def test_f_imp1_deferred_row_height_callback_safe_after_destroy(parsed, qtbot) -> None:
+    """NB-1：行高重算排队后对话框被销毁，延迟回调不访问已销毁对象。
+
+    复现审核证据时序：_repopulate() 排队 singleShot 后对话框被同步销毁
+    （如排队后立即关闭），回调随后触发。守卫缺失时回调访问已销毁的
+    QTableWidget，确定性抛 RuntimeError（Internal C++ object already
+    deleted）；修复后守卫安全退出、已排队回调随对象销毁失效。
+    """
+    import shiboken6
+
+    draft, parse, confirm, people, tmp_path = parsed
+    dialog = ImportPreviewDialog(
+        draft, SimpleNamespaceService(parse, confirm), tmp_path / "roster.csv",
+    )
+    dialog.show()
+    dialog._repopulate()  # 排队延迟行高重算（审核证据触发路径）
+    assert dialog._row_height_resize_pending
+
+    shiboken6.delete(dialog)  # 同步销毁 C++ 对象（排队后立即关闭的销毁时序）
+    assert not shiboken6.isValid(dialog)
+
+    # 直接以销毁后状态调用延迟回调：修复前此处确定性 RuntimeError。
+    dialog._run_deferred_row_height_resize()  # 守卫生效：安全返回，无异常
+
+    # 事件循环路径：已排队的单发回调（以 self 为连接上下文）随对象销毁
+    # 失效；即便触发也不得访问已销毁对象。
+    qtbot.wait(10)

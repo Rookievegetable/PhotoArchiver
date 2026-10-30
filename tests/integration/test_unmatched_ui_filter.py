@@ -14,7 +14,6 @@ pytest.importorskip("PySide6")
 
 from photo_archiver.domain import (
     Folder,
-    MatchStatus,
     Person,
     Photo,
     PhotoPath,
