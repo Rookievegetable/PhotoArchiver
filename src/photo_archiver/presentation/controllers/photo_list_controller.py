@@ -57,9 +57,22 @@ class _ThumbnailJob(QRunnable):
             thumb_path = self._controller._thumbnail_generator.generate(
                 self._path, _DEFAULT_THUMBNAIL_SIZE,
             )
-            self._controller.thumbnail_loaded.emit(self._pid, thumb_path)
+            self._emit_loaded(thumb_path)
+        except RuntimeError:
+            # 控制器 QObject 已销毁（应用/窗口关闭与在飞缩略图任务的关闭
+            # 竞态）——事件无处投递，随风而去；与生成异常分属两类处理。
+            # 注意：except 分支的兜底发射同样要过 _emit_loaded（源删除时
+            # 两次发射都会抛 RuntimeError，裸兜底会二次炸出）。
+            pass
         except Exception:  # noqa: BLE001 - UI must not crash on one bad photo
-            self._controller.thumbnail_loaded.emit(self._pid, None)
+            self._emit_loaded(None)
+
+    def _emit_loaded(self, thumb_path) -> None:
+        """Emit ``thumbnail_loaded`` guarding against a destroyed controller."""
+        try:
+            self._controller.thumbnail_loaded.emit(self._pid, thumb_path)
+        except RuntimeError:
+            pass
         finally:
             self._controller._in_flight.discard(self._pid)
 
