@@ -521,6 +521,20 @@ QStatusBar QProgressBar {
 QStatusBar QProgressBar::chunk {
     background-color: palette(Highlight);
 }
+/* 批量终审进度条（Owner 2026-10-31）：聚类结果对话框内、执行期显示。 */
+QProgressBar#BatchProgress {
+    background-color: ${pa-card-fill-empty};
+    border: 1px solid ${pa-border};
+    border-radius: 4px;
+    text-align: center;
+    color: ${pa-text-primary};
+    min-height: 16px;
+    max-height: 18px;
+}
+QProgressBar#BatchProgress::chunk {
+    background-color: ${pa-accent};
+    border-radius: 3px;
+}
 QLabel#PageTitle {
     font-size: 20px;
     font-weight: 600;

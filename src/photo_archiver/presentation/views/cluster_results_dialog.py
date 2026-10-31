@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -262,6 +263,13 @@ class ClusterResultsDialog(QDialog):
         feedback_layout.addWidget(self._feedback_label)
         self._feedback_card.setVisible(self._pairing_active)
         layout.addWidget(self._feedback_card)
+        # 批量终审进度条（Owner 2026-10-31）：执行期显示（started→可见，
+        # 首个进度前＝脉冲未知态；completed/failed/cancelled→隐藏）。
+        self._batch_progress = QProgressBar(self)
+        self._batch_progress.setObjectName("BatchProgress")
+        self._batch_progress.setFormat("%v / %m（%p%）")
+        self._batch_progress.setVisible(False)
+        layout.addWidget(self._batch_progress)
 
         body = QHBoxLayout()
         self._cluster_list = QListWidget(self)
@@ -1086,6 +1094,9 @@ class ClusterResultsDialog(QDialog):
     def _on_batch_started(self, _event: TaskStarted) -> None:
         self.set_busy(True)
         self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_RUNNING)
+        # 首个进度事件前总数未知＝脉冲未知态（min/max 互换的 busy bar）。
+        self._batch_progress.setRange(0, 0)
+        self._batch_progress.setVisible(True)
 
     def _on_batch_progress(self, event: TaskProgress) -> None:
         if event.current is None or event.total is None:
@@ -1095,13 +1106,17 @@ class ClusterResultsDialog(QDialog):
                 current=event.current, total=event.total, message=event.message,
             )
         )
+        self._batch_progress.setRange(0, event.total)
+        self._batch_progress.setValue(event.current)
 
     def _on_batch_completed(self, event: TaskCompleted) -> None:
         self.set_busy(False)
+        self._batch_progress.setVisible(False)
         self._apply_batch_outcome(event.result)
 
     def _on_batch_failed(self, event: TaskFailed) -> None:
         self.set_busy(False)
+        self._batch_progress.setVisible(False)
         self._feedback_label.setText(
             f"{text.CLUSTER_PAIRING_BATCH_FAILED}：{event.error}"
         )
@@ -1110,6 +1125,7 @@ class ClusterResultsDialog(QDialog):
 
     def _on_batch_cancelled(self, _event: TaskCancelled) -> None:
         self.set_busy(False)
+        self._batch_progress.setVisible(False)
         self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_CANCELLED)
         self.refresh()
 

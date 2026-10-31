@@ -384,6 +384,7 @@ def test_reference_baseline_accent_ground(qapp) -> None:
         assert "QPushButton[styleRole=\"secondary\"]" in qss
         assert "QPushButton#ActionCard" in qss
         assert "QListView#PhotoWall" in qss
+        assert "QProgressBar#BatchProgress" in qss
         assert "${" not in qss
     apply_visual_system(qapp, theme=THEME_LIGHT)
     try:

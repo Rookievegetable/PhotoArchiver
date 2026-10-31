@@ -1026,3 +1026,43 @@ def test_batch_pass_runs_through_task_pipeline(tmp_path, qtbot, monkeypatch):
     assert not dialog._busy
     latest = dialog._assignments_by_cluster()[clusters[0].id]
     assert latest.status == ASSIGNMENT_STATUS_CONFIRMED
+
+
+def test_batch_progress_bar_lifecycle(qtbot):
+    """Owner 2026-10-31：批量终审进度条——started 可见（总数未知＝脉冲态）、
+    progress 定值、终态（完成）隐藏。"""
+    from photo_archiver.workers.events import (
+        TaskCompleted,
+        TaskProgress,
+        TaskStarted,
+    )
+    from photo_archiver.workers.application_tasks import PairingBatchOutcome
+
+    harness = _Harness()
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=_suggest, workbench_service=workbench,
+        ignore_service=_ignore, list_persons=roster,
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    dialog._on_batch_started(TaskStarted("pairing_batch"))
+    assert dialog._batch_progress.isVisible()
+    assert dialog._batch_progress.minimum() == 0
+    assert dialog._batch_progress.maximum() == 0  # 总数未知＝脉冲未知态
+
+    dialog._on_batch_progress(TaskProgress(
+        "pairing_batch", current=1, total=3, message="第 1 组",
+    ))
+    assert dialog._batch_progress.maximum() == 3
+    assert dialog._batch_progress.value() == 1
+
+    dialog._on_batch_completed(TaskCompleted(
+        "pairing_batch",
+        result=PairingBatchOutcome(
+            action="批量通过", succeeded=1, skipped=0, failed=0, outcomes=(),
+        ),
+    ))
+    assert not dialog._batch_progress.isVisible()
