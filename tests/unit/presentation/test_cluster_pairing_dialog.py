@@ -13,10 +13,13 @@ pytest.importorskip("PySide6")
 
 import math
 from datetime import datetime
+
+from PySide6.QtWidgets import QMessageBox
 from uuid import uuid4
 
 from photo_archiver.application.commands.photo_ignore import (
     IgnorePhotosCommand,
+    RestorePhotosCommand,
 )
 from photo_archiver.application.services import (
     ClusterResultsService,
@@ -44,7 +47,13 @@ from photo_archiver.domain import (
     RecognitionRun,
     RunPhotoSnapshot,
 )
-from photo_archiver.domain.entities.cluster_assignment import HUMAN_ACTOR
+from photo_archiver.domain.entities.cluster_assignment import (
+    ASSIGNMENT_SOURCE_ORDERED_AUTO_CONFIRM,
+    ASSIGNMENT_SOURCE_ORDERED_SUGGESTION,
+    ASSIGNMENT_STATUS_AUTO_CONFIRMED,
+    ClusterPersonAssignment,
+    HUMAN_ACTOR,
+)
 from photo_archiver.infrastructure import (
     InMemoryClusterPersonAssignmentRepository,
     InMemoryFaceClusterRepository,
@@ -445,34 +454,28 @@ def test_batch_reject_reports_skip_reasons(qtbot, monkeypatch):
 # ── 照片忽略 / 恢复（逐项反馈 + 标记） ──────────────────────────────────────
 
 
-def test_ignore_and_restore_photos_via_grid(qtbot, monkeypatch):
+def test_ignore_marks_render_after_service_and_refresh(qtbot):
+    """忽略/恢复经代际作用域服务执行（面板按钮已撤，入口=照片详情）；
+    刷新后组内照片行携带「（已忽略）」标记，恢复后标记消失。"""
     harness = _Harness()
     person = harness.add_person("张三", 1)
     photo_a = harness.add_photo("photos/a.jpg")
     photo_b = harness.add_photo("photos/b.jpg")
     o1 = harness.add_observation(photo_a, 0, 0.0)
     o2 = harness.add_observation(photo_b, 0, 0.0)
-    cluster_run, cluster = harness.add_generation([("k|a|000000", [o1, o2])])
-    cluster = cluster[0]
-    harness.build_services()[1].assign_person(
-        AssignClusterPersonCommand(cluster_id=cluster.id, person_id=person.id),
+    cluster_run, clusters = harness.add_generation([("k|a|000000", [o1, o2])])
+    _suggest, workbench, ignore, _results, _roster = harness.build_services()
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=clusters[0].id, person_id=person.id),
         actor=HUMAN_ACTOR,
     )
     dialog = harness.build_dialog(qtbot)
     dialog.refresh()
     dialog._cluster_list.setCurrentRow(0)
 
-    # 仅选中 photo_a 所在行并忽略。
-    dialog._photo_grid.item(0).setSelected(True)
-    monkeypatch.setattr(
-        "photo_archiver.presentation.views.cluster_results_dialog.QMessageBox.exec",
-        lambda self: __import__("PySide6").QtWidgets.QMessageBox.StandardButton.Ok,
-    )
-    dialog._on_ignore_clicked()
-
-    summary = dialog._feedback_label.text()
-    assert "成功 1" in summary
-    assert "撤销投影 1 条" in summary
+    ignore.ignore_photos(IgnorePhotosCommand(
+        cluster_run_id=cluster_run.id, photo_ids=(photo_a,),
+    ))
     dialog.refresh()
     dialog._cluster_list.setCurrentRow(0)
     texts = [dialog._photo_grid.item(i).text()
@@ -480,11 +483,147 @@ def test_ignore_and_restore_photos_via_grid(qtbot, monkeypatch):
     assert any("（已忽略）" in t for t in texts)
     assert harness.ignores.find(cluster_run.id, photo_a) is not None
 
-    # 恢复：标记消失，状态行删除。
-    dialog._photo_grid.item(0).setSelected(True)
-    dialog._on_restore_clicked()
-    assert "成功 1" in dialog._feedback_label.text()
+    ignore.restore_photos(RestorePhotosCommand(
+        cluster_run_id=cluster_run.id, photo_ids=(photo_a,),
+    ))
+    dialog.refresh()
+    dialog._cluster_list.setCurrentRow(0)
+    texts = [dialog._photo_grid.item(i).text()
+             for i in range(dialog._photo_grid.count())]
+    assert not any("（已忽略）" in t for t in texts)
     assert harness.ignores.find(cluster_run.id, photo_a) is None
+
+
+# ── Owner 2026-10-31：批量通过（组级人工终审） ───────────────────────────────
+
+
+def test_batch_pass_button_enabled_only_with_selection(qtbot):
+    """批量通过＝左侧簇列表多选后启用（0 选区禁用）。"""
+    harness = _Harness()
+    photo_a = harness.add_photo("photos/a.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    harness.add_generation([("k|a|000000", [o1])])
+    dialog = harness.build_dialog(qtbot)
+    dialog.refresh()
+    dialog._cluster_list.clearSelection()
+    assert not dialog._batch_pass_button.isEnabled()
+    dialog._cluster_list.setCurrentRow(0)
+    assert dialog._batch_pass_button.isEnabled()
+
+
+def test_batch_pass_confirms_selected_clusters(qtbot, monkeypatch):
+    """批量通过：suggested→confirm；auto_confirmed→按本组指派人人工终审；
+    未指派组跳过。确认前预演各组信息，执行后反馈统计并刷新。"""
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    bob = harness.add_person("2李四", 2)
+    harness.add_person("3王五", 3)
+    photo_a = harness.add_photo("photos/a.jpg")
+    photo_b = harness.add_photo("photos/b.jpg")
+    photo_c = harness.add_photo("photos/c.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    o2 = harness.add_observation(photo_b, 0, 180.0)
+    o3 = harness.add_observation(photo_c, 0, 90.0)
+    _cluster_run, clusters = harness.add_generation([
+        ("k|a|000000", [o1]),
+        ("k|b|000001", [o2]),
+        ("k|c|000002", [o3]),
+    ])
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    now = datetime.now()
+    # 组 1＝建议行（suggested）；组 2＝位置自动确认行（auto_confirmed，待人工终审）；
+    # 组 3＝未指派（跳过）。
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=clusters[0].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=now,
+        ),
+        ClusterPersonAssignment(
+            cluster_id=clusters[1].id, person_id=bob.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_AUTO_CONFIRM, created_at=now,
+            status=ASSIGNMENT_STATUS_AUTO_CONFIRMED,
+        ),
+    ])
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=_suggest, workbench_service=workbench,
+        ignore_service=_ignore, list_persons=roster,
+    )
+    qtbot.addWidget(dialog)
+    dialog.refresh()
+    dialog._cluster_list.clearSelection()
+    assert not dialog._batch_pass_button.isEnabled()
+
+    dialog._cluster_list.selectAll()
+    assert dialog._batch_pass_button.isEnabled()
+    # 预演对话框：确认（Ok）继续。
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.cluster_results_dialog.QMessageBox.exec",
+        lambda self: QMessageBox.StandardButton.Ok,
+    )
+    dialog._on_batch_pass_clicked()
+
+    summary = dialog._feedback_label.text()
+    assert "成功 2" in summary
+    assert "跳过 1" in summary
+    # 组 1：建议行 → confirmed。
+    assert dialog._assignments_by_cluster()[clusters[0].id].status == "confirmed"
+    # 组 2：自动确认行 → 人工终审 confirmed（同一人）。
+    promoted = dialog._assignments_by_cluster()[clusters[1].id]
+    assert promoted.status == "confirmed" and promoted.person_id == bob.id
+    # 组 3：未指派 → 仍无有效指派。
+    assert clusters[2].id not in dialog._assignments_by_cluster()
+
+
+def test_batch_pass_plan_dialog_lists_cluster_info(qtbot, monkeypatch):
+    """确认前预演＝各组信息（标签）＋跳过原因；取消（Cancel）零写入。"""
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    photo_a = harness.add_photo("photos/a.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    _cluster_run, clusters = harness.add_generation([("k|a|000000", [o1])])
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=clusters[0].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=datetime.now(),
+        ),
+    ])
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=_suggest, workbench_service=workbench,
+        ignore_service=_ignore, list_persons=roster,
+    )
+    qtbot.addWidget(dialog)
+    dialog.refresh()
+    dialog._cluster_list.setCurrentRow(0)
+
+    shown: list[str] = []
+
+    class _PlanBox:
+        StandardButton = QMessageBox.StandardButton
+
+        def __init__(self, parent=None):
+            pass
+        def setWindowTitle(self, title):
+            pass
+        def setText(self, body_text):
+            shown.append(body_text)
+        def setStandardButtons(self, *_args):
+            pass
+        def setDefaultButton(self, *_args):
+            pass
+        def exec(self):
+            return QMessageBox.StandardButton.Cancel  # 取消＝零写入
+
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.cluster_results_dialog.QMessageBox",
+        _PlanBox,
+    )
+    dialog._on_batch_pass_clicked()
+    assert any("批量通过" in body_text and "第 1 组" in body_text for body_text in shown)
+    # 取消 → 零写入（仍为 suggested）。
+    assert dialog._assignments_by_cluster()[clusters[0].id].status == "suggested"
 
 
 def test_ignore_command_scope_and_projection_revocation(qtbot):

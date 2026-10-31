@@ -819,6 +819,11 @@ REVIEW_EMPTY = "暂无待审核结果。扫描照片时会对单脸照片自动�
 WORKSPACE_CANCEL_IDLE = "当前没有可取消的活动任务。"
 WORKSPACE_CANCEL_READY = "请求取消当前任务；已完成的结果会保留。"
 
+# ── 批量通过（Owner 2026-10-31：组级人工终审，多选簇→预演→确认）──────────
+CLUSTER_PAIRING_BATCH_PASS_BUTTON = "批量通过"
+CLUSTER_PAIRING_PASS_SKIP_CONFIRMED = "已确认，无需重复"
+CLUSTER_PAIRING_PASS_SKIP_UNASSIGNED = "未指派人员，无法直接通过"
+
 # ---- 照片详情 · 忽略/恢复（Owner 2026-10-31；聚类结果对话框注入后可见）----
 CLUSTER_DETAIL_IGNORE_BUTTON = "忽略此照片"
 CLUSTER_DETAIL_RESTORE_BUTTON = "恢复此照片"

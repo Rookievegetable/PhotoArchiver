@@ -65,6 +65,7 @@ from photo_archiver.presentation.views.photo_detail_dialog import PhotoDetailDia
 from photo_archiver.presentation.visual_style import (
     ROLE_DANGER,
     ROLE_PRIMARY,
+    ROLE_SUCCESS,
     assign_role,
     set_badge_severity,
     style_card,
@@ -320,13 +321,18 @@ class ClusterResultsDialog(QDialog):
         layout.addWidget(self._photo_grid, 1)
 
         photo_actions = QHBoxLayout()
-        self._ignore_button = QPushButton(text.CLUSTER_PAIRING_IGNORE_BUTTON, pane)
-        self._ignore_button.clicked.connect(self._on_ignore_clicked)
-        assign_role(self._ignore_button, ROLE_DANGER)
-        self._restore_button = QPushButton(text.CLUSTER_PAIRING_RESTORE_BUTTON, pane)
-        self._restore_button.clicked.connect(self._on_restore_clicked)
-        photo_actions.addWidget(self._ignore_button)
-        photo_actions.addWidget(self._restore_button)
+        # Owner 2026-10-31：忽略/恢复面板按钮撤除（详情内入口保留）；本行
+        # 改为「批量通过」——左侧簇列表多选后启用，确认前预演各组信息。
+        self._batch_pass_button = QPushButton(
+            text.CLUSTER_PAIRING_BATCH_PASS_BUTTON, pane,
+        )
+        self._batch_pass_button.clicked.connect(self._on_batch_pass_clicked)
+        assign_role(self._batch_pass_button, ROLE_SUCCESS)
+        self._batch_pass_button.setEnabled(False)
+        self._cluster_list.itemSelectionChanged.connect(
+            self._render_batch_pass_state,
+        )
+        photo_actions.addWidget(self._batch_pass_button)
         photo_actions.addStretch()
         layout.addLayout(photo_actions)
 
@@ -592,9 +598,21 @@ class ClusterResultsDialog(QDialog):
         )
         assignment_status = assignment.status if assignment is not None else "unassigned"
         if assignment is not None:
-            decision_text = decision_text.format(
-                person=self._person_name(assignment.person_id),
-            )
+            # 建议行模板携带来源与分值占位（实机曾因缺 kwargs 渲染崩溃）。
+            if assignment.status == "suggested":
+                decision_text = decision_text.format(
+                    source=text.PAIRING_WORKBENCH_SOURCE_LABELS.get(
+                        assignment.source, assignment.source,
+                    ),
+                    score=(
+                        f"{assignment.score:.2f}"
+                        if assignment.score is not None else "—"
+                    ),
+                )
+            else:
+                decision_text = decision_text.format(
+                    person=self._person_name(assignment.person_id),
+                )
         # 落点 3：配对状态行徽章化——状态文字整体进徽章（含 person 填充），
         # severity 按五态映射；忽略照片备注保留在详情信息行（文字承载）。
         self._decision_badge.setText(decision_text)
@@ -895,53 +913,89 @@ class ClusterResultsDialog(QDialog):
     def _detail_info_missing_target(self) -> None:
         self._feedback_label.setText(text.CLUSTER_PAIRING_NO_TARGET)
 
-    # ── 忽略 / 恢复（照片级，逐项提交） ──────────────────────────────────
+    # ── 批量通过（Owner 2026-10-31：组级人工终审）────────────────────────
 
-    def _selected_photo_ids(self) -> list[UUID]:
-        return [
-            item.data(Qt.ItemDataRole.UserRole)
-            for item in self._photo_grid.selectedItems()
-            if isinstance(item.data(Qt.ItemDataRole.UserRole), UUID)
-        ]
+    def _render_batch_pass_state(self) -> None:
+        """批量通过随簇多选启用/禁用（0 选区＝禁用）。"""
+        self._batch_pass_button.setEnabled(bool(self._selected_cluster_ids()))
 
-    def _on_ignore_clicked(self) -> None:
-        """忽略所选照片（代际作用域；同步撤销既有投影，逐项反馈）。"""
-        cluster_run_id = self._generation_combo.currentData()
-        photo_ids = self._selected_photo_ids()
-        if cluster_run_id is None or not photo_ids:
-            self._feedback_label.setText(
-                text.CLUSTER_PAIRING_NO_SELECTION if cluster_run_id is not None
-                else text.CLUSTER_RESULTS_EMPTY
+    def _plan_batch_pass(
+        self, cluster_ids: list[UUID],
+    ) -> list[tuple[UUID, str, str, str | None]]:
+        """批量通过预演（§3.3：操作前显示将执行与跳过的组）。
+
+        每组：suggested → confirm（确认建议行）；auto_confirmed → 按本组
+        当前指派人 assign_person（人工明确选择＝终审，同批量确认对自动确认
+        行的既有路径）；confirmed / 未指派 / 已拒绝 → 跳过（原因进预演）。
+        条目 = (cluster_id, 展示标签, 动作, 附加信息)——confirm 携建议行 id、
+        promote 携本组指派人 id（字符串形态），skip 携原因。
+        """
+        assignments = self._assignments_by_cluster()
+        cluster_labels = self._cluster_labels()
+        plan: list[tuple[UUID, str, str, str | None]] = []
+        for cluster_id in cluster_ids:
+            label = cluster_labels.get(cluster_id, str(cluster_id))
+            assignment = assignments.get(cluster_id)
+            if assignment is not None and assignment.status == "confirmed":
+                plan.append((cluster_id, label, "skip",
+                             text.CLUSTER_PAIRING_PASS_SKIP_CONFIRMED))
+            elif (
+                assignment is not None
+                and assignment.status == "suggested"
+                and assignment.id is not None
+            ):
+                plan.append((cluster_id, label, "confirm", str(assignment.id)))
+            elif (
+                assignment is not None
+                and assignment.status == "auto_confirmed"
+                and assignment.person_id is not None
+            ):
+                plan.append((cluster_id, label, "promote", str(assignment.person_id)))
+            else:
+                plan.append((cluster_id, label, "skip",
+                             text.CLUSTER_PAIRING_PASS_SKIP_UNASSIGNED))
+        return plan
+
+    def _on_batch_pass_clicked(self) -> None:
+        """批量通过：把选中各组标记为人工处理完成（逐项提交；允许部分成功）。
+
+        确认前经 _show_batch_plan 预演各组信息；执行后统计进反馈行并刷新。
+        """
+        cluster_ids = self._selected_cluster_ids()
+        if not cluster_ids:
+            self._feedback_label.setText(text.CLUSTER_PAIRING_NO_SELECTION)
+            return
+        plan = self._plan_batch_pass(cluster_ids)
+        if not self._show_batch_plan(plan, text.CLUSTER_PAIRING_BATCH_PASS_BUTTON):
+            return
+        outcomes: list[str] = []
+        succeeded = skipped = failed = 0
+        for cluster_id, label, action, payload in plan:
+            try:
+                if action == "confirm" and payload is not None:
+                    self._workbench_service.confirm(
+                        ConfirmAssignmentCommand(UUID(payload)),
+                    )
+                elif action == "promote" and payload is not None:
+                    self._workbench_service.assign_person(
+                        AssignClusterPersonCommand(
+                            cluster_id=cluster_id, person_id=UUID(payload),
+                        ),
+                        actor=HUMAN_ACTOR,
+                    )
+                else:
+                    skipped += 1
+                    continue
+                succeeded += 1
+            except Exception as exc:  # noqa: BLE001 - per-item boundary（§3.3）
+                failed += 1
+                outcomes.append(f"失败[{label}]: {exc}")
+        self._feedback_label.setText(
+            text.CLUSTER_PAIRING_BATCH_DONE.format(
+                succeeded=succeeded, skipped=skipped, failed=failed,
             )
-            return
-        if not self._confirm_scope(
-            text.CLUSTER_PAIRING_IGNORE_SCOPE.format(count=len(photo_ids)),
-        ):
-            return
-        result = self._ignore_service.ignore_photos(
-            IgnorePhotosCommand(cluster_run_id=cluster_run_id, photo_ids=tuple(photo_ids)),
+            + ("；" + "；".join(outcomes) if outcomes else "")
         )
-        self._report_ignore_result(result, verb="忽略")
-        self.refresh()
-
-    def _on_restore_clicked(self) -> None:
-        """恢复所选照片（只恢复参与资格，不回溯投影；逐项反馈）。"""
-        cluster_run_id = self._generation_combo.currentData()
-        photo_ids = self._selected_photo_ids()
-        if cluster_run_id is None or not photo_ids:
-            self._feedback_label.setText(
-                text.CLUSTER_PAIRING_NO_SELECTION if cluster_run_id is not None
-                else text.CLUSTER_RESULTS_EMPTY
-            )
-            return
-        if not self._confirm_scope(
-            text.CLUSTER_PAIRING_RESTORE_SCOPE.format(count=len(photo_ids)),
-        ):
-            return
-        result = self._ignore_service.restore_photos(
-            RestorePhotosCommand(cluster_run_id=cluster_run_id, photo_ids=tuple(photo_ids)),
-        )
-        self._report_ignore_result(result, verb="恢复")
         self.refresh()
 
     def _confirm_scope(self, message: str) -> bool:
