@@ -26,6 +26,9 @@ from photo_archiver.application.dtos import (
     ScanAndRegisterPhotosResult,
     ScanRegisterAnalyzeResult,
 )
+from photo_archiver.application.services.pairing_batch_context import (
+    PairingBatchContext,
+)
 from photo_archiver.application.services.pairing_workbench_service import (
     PairingWorkbenchService,
 )
@@ -338,15 +341,19 @@ class PairingBatchFinalizeTask(WorkerTask[PairingBatchOutcome]):
         workbench: PairingWorkbenchService,
         items: Sequence[PairingBatchItem],
         action: str,
+        context: "PairingBatchContext | None" = None,
     ) -> None:
         super().__init__("pairing_batch")
         self._workbench = workbench
         self._items = tuple(items)
         self._action = action
+        # 对话框级共享快照（Owner 2026-10-31 加速）：单次确认与批量全程共用
+        # 一次加载；None＝任务自建（既有测试路径）。
+        self._context = context
 
     def execute(self) -> PairingBatchOutcome:
         """Run every plan item with a shared snapshot and per-item progress."""
-        context = self._workbench.create_batch_context()
+        context = self._context or self._workbench.create_batch_context()
         succeeded = skipped = failed = 0
         outcomes: list[str] = []
         total = len(self._items)

@@ -312,6 +312,24 @@ class PairingWorkbenchService:
     ) -> PairingOperationResult:
         """Manually assign a person; the explicit choice is a confirmation.
 
+        LOGIC-03/DATA-01 同型（Owner 2026-10-31 批量加速）：注入
+        ``transaction_runner`` 时整条改派链（回收→建行→终审→样本/投影）在
+        单个 IMMEDIATE 事务内执行——消逐调用连接churn（实机测量 promote
+        6.5-8s/簇 → 事务内 ≈0.1s/簇），并保证改派原子性。
+        """
+        if self._transaction_runner is not None:
+            return self._transaction_runner(
+                lambda _connection: self._assign_in_scope(command, actor, context))
+        return self._assign_in_scope(command, actor, context)
+
+    def _assign_in_scope(
+        self,
+        command: AssignClusterPersonCommand,
+        actor: str,
+        context: PairingBatchContext | None = None,
+    ) -> PairingOperationResult:
+        """Manually assign a person; the explicit choice is a confirmation.
+
         ``actor`` **必填**（AUD-032 选项：无缺省值——省略参数不再隐式获得人工
         权限，与 reject/unassign 同型）。人工 UI 路径显式传
         :data:`HUMAN_ACTOR`；机器侧调用必须显式传 :data:`MACHINE_ACTOR`。

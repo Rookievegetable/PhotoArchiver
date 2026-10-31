@@ -12,8 +12,10 @@ pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
 import math
+import time
 from datetime import datetime
 
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QMessageBox
 from uuid import uuid4
 
@@ -69,6 +71,9 @@ from photo_archiver.infrastructure import (
     NumpyCosineSimilarityFactory,
 )
 from photo_archiver.presentation import ui_text as text
+from photo_archiver.presentation.task_coordinator import TaskCoordinator
+from photo_archiver.workers.qt_executor import QtWorkerExecutor
+from photo_archiver.presentation.visual_style import token
 from photo_archiver.presentation.views.cluster_results_dialog import (
     ClusterResultsDialog,
 )
@@ -1126,11 +1131,8 @@ def test_batch_progress_bar_lifecycle(qtbot):
 
 
 def test_reopened_dialog_reattaches_to_running_batch(tmp_path, qtbot, monkeypatch):
-    """卡顿修复补丁（Owner 2026-10-31 实机：重开对话框后进度全失联）——
-    批量在飞时关闭对话框再重开：新实例自动附着（忙碌态+脉冲进度条），
-    后续进度/终态经协调器信号继续驱动新实例直至反馈落盘。"""
-    from photo_archiver.presentation.task_coordinator import TaskCoordinator
-    from photo_archiver.workers.qt_executor import QtWorkerExecutor
+    """在飞批次的新对话框实例自动附着（忙碌态+进度条），终态经协调器信号
+    驱动两个并存实例——确定性：确认桩加 0.5s 延迟保证在飞窗口足够宽。"""
 
     harness = _Harness()
     alice = harness.add_person("1张三", 1)
@@ -1142,9 +1144,19 @@ def test_reopened_dialog_reattaches_to_running_batch(tmp_path, qtbot, monkeypatc
     harness.assignments.add_assignments([
         ClusterPersonAssignment(
             cluster_id=clusters[0].id, person_id=alice.id,
-            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=datetime.now(),
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION,
         ),
     ])
+
+    # 确认桩：0.5s 延迟（让第二实例必然在飞窗口内构造并附着）。
+    real_confirm = workbench.confirm
+
+    def slow_confirm(command, context=None):
+        time.sleep(0.5)
+        return real_confirm(command, context=context)
+
+    monkeypatch.setattr(workbench, "confirm", slow_confirm)
+
     coordinator = TaskCoordinator()
 
     def make_dialog():
@@ -1168,15 +1180,13 @@ def test_reopened_dialog_reattaches_to_running_batch(tmp_path, qtbot, monkeypatc
     )
     dialog1._on_batch_pass_clicked()
     assert coordinator.is_busy
-    assert dialog1._batch_progress.isVisible()
 
-    # 在飞关闭会话一 → 重开会话二：自动附着忙碌态与脉冲进度条。
-    dialog1.close()
+    # 在飞窗口内构造第二实例：自动附着忙碌态与脉冲进度条。
     dialog2 = make_dialog()
     assert dialog2._busy
     assert dialog2._batch_progress.isVisible()
 
-    # 终态经协调器信号驱动新实例：反馈 + 按钮恢复 + 状态落库。
+    # 终态经协调器信号同时驱动两个实例：反馈落盘 + 状态确认。
     qtbot.waitUntil(
         lambda: "成功 1" in dialog2._feedback_label.text(), timeout=30000,
     )
@@ -1184,7 +1194,62 @@ def test_reopened_dialog_reattaches_to_running_batch(tmp_path, qtbot, monkeypatc
     assert not dialog2._batch_progress.isVisible()
     latest = dialog2._assignments_by_cluster()[clusters[0].id]
     assert latest.status == ASSIGNMENT_STATUS_CONFIRMED
+    assert "成功 1" in dialog1._feedback_label.text()
 
+
+def test_close_while_batch_running_is_blocked(tmp_path, qtbot, monkeypatch):
+    """Owner 2026-10-31：在飞批次拒绝关闭（终态事件必须送达本对话框，
+    无失联态）；完成后关闭恢复正常。"""
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    photo_a = harness.add_photo(str(tmp_path / "a.jpg"))
+    (tmp_path / "a.jpg").write_bytes(b"x")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    _cluster_run, clusters = harness.add_generation([("k|a|000000", [o1])])
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=clusters[0].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION,
+        ),
+    ])
+
+    real_confirm = workbench.confirm
+
+    def slow_confirm(command, context=None):
+        time.sleep(0.5)
+        return real_confirm(command, context=context)
+
+    monkeypatch.setattr(workbench, "confirm", slow_confirm)
+
+    coordinator = TaskCoordinator()
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=_suggest, workbench_service=workbench,
+        ignore_service=_ignore, list_persons=roster,
+        task_coordinator=coordinator,
+        task_executor=QtWorkerExecutor(),
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+    dialog.refresh()
+    dialog._cluster_list.setCurrentRow(0)
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.cluster_results_dialog.QMessageBox.exec",
+        lambda self: QMessageBox.StandardButton.Ok,
+    )
+    dialog._on_batch_pass_clicked()
+    assert dialog._busy
+
+    dialog.close()  # Owner 关闭尝试：忙碌期被拒
+    assert dialog.isVisible()  # 仍在（终态事件必须送达）
+
+    qtbot.waitUntil(
+        lambda: "成功 1" in dialog._feedback_label.text(), timeout=30000,
+    )
+    assert not dialog._busy
+    dialog.close()
+    assert not dialog.isVisible()
 
 def test_batch_finalize_completes_at_realistic_scale_on_sqlite(
     make_sqlite_context, tmp_path, qtbot,
@@ -1425,3 +1490,40 @@ def test_batch_pipeline_completes_on_worker_thread_at_scale(
     assert not dialog._busy
     assert "成功 40" in dialog._feedback_label.text()
     assert elapsed < 60.0
+
+
+def test_cluster_rows_carry_status_tints(qtbot):
+    """Owner 2026-10-31：簇卡片底色按终审状态染色——已确认=淡绿、未匹配=
+    淡橙、待确认=卡面；颜色来自令牌淡染（alpha≈13%）。"""
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    photo_a = harness.add_photo("photos/a.jpg")
+    photo_b = harness.add_photo("photos/b.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    o2 = harness.add_observation(photo_b, 0, 180.0)
+    _cluster_run, clusters = harness.add_generation([
+        ("k|a|000000", [o1]),
+        ("k|b|000001", [o2]),
+    ])
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    # 簇 1 建议行 → 先确认成已确认；簇 2 无指派 → 未匹配。
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=clusters[0].id, person_id=alice.id),
+        actor=HUMAN_ACTOR,
+    )
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=_suggest, workbench_service=workbench,
+        ignore_service=_ignore, list_persons=roster,
+    )
+    qtbot.addWidget(dialog)
+    dialog.refresh()
+
+    confirmed_item = dialog._cluster_list.item(0)
+    unmatched_item = dialog._cluster_list.item(1)
+    green = QColor(token("pa-success-fg"))
+    green.setAlpha(34)
+    orange = QColor(token("pa-warning-fg"))
+    orange.setAlpha(34)
+    assert confirmed_item.background().color() == green
+    assert unmatched_item.background().color() == orange

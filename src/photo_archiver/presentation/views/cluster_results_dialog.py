@@ -49,9 +49,13 @@ from photo_archiver.application.commands.photo_ignore import (
     IgnorePhotosCommand,
     RestorePhotosCommand,
 )
+from PySide6.QtGui import QColor
 from loguru import logger
 from photo_archiver.application.dtos.cluster_results import ClusterRunResults
 from photo_archiver.application.services import ClusterResultsService
+from photo_archiver.application.services.pairing_batch_context import (
+    PairingBatchContext,
+)
 from photo_archiver.presentation.task_coordinator import TaskCoordinator
 from photo_archiver.workers.application_tasks import (
     PairingBatchFinalizeTask,
@@ -78,6 +82,7 @@ from photo_archiver.presentation.views.calibration_annotation_panel import (
 from photo_archiver.presentation.views.photo_detail_dialog import PhotoDetailDialog
 from photo_archiver.presentation.visual_style import (
     ROLE_DANGER,
+    token,
     ROLE_PRIMARY,
     ROLE_SUCCESS,
     assign_role,
@@ -182,6 +187,10 @@ class ClusterResultsDialog(QDialog):
         self._ignore_service = ignore_service
         self._list_persons = list_persons
         self._pairing_active = suggest_service is not None and workbench_service is not None
+        # 批量终审共享快照（Owner 2026-10-31 加速）：成员/观测/忽略名单在
+        # 对话框生命周期内不变——本批一次加载、单次确认与批量全程复用；
+        # 忽略/恢复与代际切换时置 None 重建。
+        self._batch_context: PairingBatchContext | None = None
         # 批量终审后台化（Owner 2026-10-31 卡顿修复·A）：注入协调器+执行器后
         # 批量确认/批量通过走任务管线（进度/取消/忙碌准入）；缺省 None 保持
         # 同步回退路径（既有测试与独立使用零变化）。
@@ -483,6 +492,7 @@ class ClusterResultsDialog(QDialog):
         """Load the selected generation's clusters and re-render members."""
         # P6：切换代际 = 照片快照整体失效——先关闭已打开的详图（若在），再
         # 重载；消除 _detail_photos/_detail_index 与新代际的失步。
+        self._invalidate_batch_context()
         self._close_detail()
         self._update_generate_button_state()
         cluster_run_id = self._generation_combo.currentData()
@@ -566,6 +576,11 @@ class ClusterResultsDialog(QDialog):
                 )
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, detail.cluster_id)
+            # Owner 2026-10-31：终审状态染色（已确认=淡绿/未匹配=淡橙/其余=卡面）。
+            assignment = assignments.get(detail.cluster_id)
+            item.setBackground(self._cluster_item_background(
+                assignment.status if assignment is not None else None,
+            ))
             self._cluster_list.addItem(item)
         self._cluster_list.blockSignals(False)
         self._cluster_list.setCurrentRow(0)
@@ -607,6 +622,8 @@ class ClusterResultsDialog(QDialog):
                     det=member.det_score,
                     conf=member.confidence,
                 ))
+            item.setBackground(QColor(token("pa-bg-surface")))
+            item.setBackground(QColor(token("pa-bg-surface")))
             self._member_list.addItem(item)
             self._request_row_thumbnail(item, member)
 
@@ -705,6 +722,7 @@ class ClusterResultsDialog(QDialog):
             ))
             item.setData(Qt.ItemDataRole.UserRole, member.photo_id)
             item.setToolTip(member.photo_path)
+            item.setBackground(QColor(token("pa-bg-surface")))
             self._photo_grid.addItem(item)
             self._request_row_thumbnail(item, member)
 
@@ -1077,7 +1095,10 @@ class ClusterResultsDialog(QDialog):
         # 按钮仍可点，二次点击会撞出「已有批量终审在执行」提示）。
         self._show_batch_running_state()
         runnable = self._task_executor.submit(
-            PairingBatchFinalizeTask(self._workbench_service, items, action),  # type: ignore[arg-type]  # WorkerTask[PairingBatchOutcome] vs [object] generics variance
+            PairingBatchFinalizeTask(
+                self._workbench_service, items, action,
+                context=self._get_batch_context(),
+            ),  # type: ignore[arg-type]  # WorkerTask[PairingBatchOutcome] vs [object] generics variance
         )
         self._task_coordinator.bind(runnable, self._connect_batch_route)
 
@@ -1116,6 +1137,7 @@ class ClusterResultsDialog(QDialog):
         )
         outcome = PairingBatchFinalizeTask(
             self._workbench_service, items, action,
+            context=self._get_batch_context(),
         ).execute()
         self._apply_batch_outcome(outcome)
 
@@ -1143,6 +1165,42 @@ class ClusterResultsDialog(QDialog):
             widget.setEnabled(not busy)
         if not busy:
             self._render_batch_pass_state()
+
+    def _get_batch_context(self) -> PairingBatchContext | None:
+        """Lazy per-dialog shared snapshot（成员/观测/忽略名单整批复用）."""
+        if self._batch_context is None and self._workbench_service is not None:
+            self._batch_context = self._workbench_service.create_batch_context()
+        return self._batch_context
+
+    def _invalidate_batch_context(self) -> None:
+        """忽略/恢复与代际切换后丢弃快照（下次访问重建）."""
+        self._batch_context = None
+
+    def _cluster_item_background(self, assignment_status: str | None) -> QColor:
+        """Owner 2026-10-31：簇卡片底色按终审状态染色（淡绿/淡橙/卡面）。"""
+        if assignment_status == "confirmed":
+            color = QColor(token("pa-success-fg"))
+        elif assignment_status in ("unassigned", None):
+            color = QColor(token("pa-warning-fg"))
+        else:
+            return QColor(token("pa-bg-surface"))
+        color.setAlpha(34)  # ≈13% 淡染，浅/深主题皆可读
+        return color
+
+    def closeEvent(self, event) -> None:  # noqa: N802  # Qt 虚函数名
+        """批量终审在飞时拒绝关闭——终态事件必须送达本对话框（无失联态）."""
+        if self._busy:
+            self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_RUNNING)
+            event.ignore()
+            return
+        event.accept()
+
+    def reject(self) -> None:  # noqa: N802  # Qt 虚函数名
+        """Esc/X 的取消路径同样受忙碌门保护。"""
+        if self._busy:
+            self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_RUNNING)
+            return
+        super().reject()
 
     def _is_pairing_batch_event(
         self,
@@ -1280,6 +1338,8 @@ class ClusterResultsDialog(QDialog):
         selected_cluster_id = (
             current_detail.cluster_id if current_detail is not None else None
         )
+        # 忽略/恢复改变忽略名单——共享快照作废（下次访问重建）。
+        self._invalidate_batch_context()
         self._current = self._results_service.results(cluster_run_id)
         self._render_run_status(cluster_run_id)
         self._render_clusters()

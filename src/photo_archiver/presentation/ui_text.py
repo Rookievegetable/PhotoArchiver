@@ -825,6 +825,7 @@ WORKSPACE_CANCEL_READY = "请求取消当前任务；已完成的结果会保留
 TASK_LABELS["pairing_batch"] = "批量终审"
 CLUSTER_PAIRING_BATCH_BUSY = "已有批量终审在执行，请稍候。"
 CLUSTER_PAIRING_BATCH_RUNNING = "批量终审进行中…"
+CLUSTER_PAIRING_CLOSE_BLOCKED = "批量终审进行中，完成后本窗口才会关闭。"
 CLUSTER_PAIRING_BATCH_PROGRESS = "批量终审 {current}/{total}：{message}"
 CLUSTER_PAIRING_BATCH_FAILED = "批量终审失败"
 CLUSTER_PAIRING_BATCH_CANCELLED = "批量终审已取消。"

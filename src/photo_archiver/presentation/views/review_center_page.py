@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from PySide6.QtCore import QSize, Qt, Signal, Slot
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -73,6 +73,7 @@ from photo_archiver.presentation.visual_style import (
     style_banner,
     style_card_list,
     style_page_subtitle,
+    token,
 )
 from photo_archiver.presentation.ui_text import (
     REVIEW_APPROVE_ALL,
@@ -333,6 +334,9 @@ class ReviewCenterPage(QWidget):
         )))
         item.setData(Qt.ItemDataRole.UserRole, result.id)
         item.setData(RESULT_DATA_ROLE, result)
+        # Owner 2026-10-31：CardList 背景改由条目自带（状态染色体系）——
+        # 队列行显式卡面底色，观感与 QSS 时代一致。
+        item.setBackground(QColor(token("pa-bg-surface")))
         self._request_row_thumbnail(item, result)
         return item
 
