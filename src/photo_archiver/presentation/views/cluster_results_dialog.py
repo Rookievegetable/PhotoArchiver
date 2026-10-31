@@ -320,22 +320,7 @@ class ClusterResultsDialog(QDialog):
         self._photo_grid.itemDoubleClicked.connect(self._on_photo_double_clicked)
         layout.addWidget(self._photo_grid, 1)
 
-        photo_actions = QHBoxLayout()
-        # Owner 2026-10-31：忽略/恢复面板按钮撤除（详情内入口保留）；本行
-        # 改为「批量通过」——左侧簇列表多选后启用，确认前预演各组信息。
-        self._batch_pass_button = QPushButton(
-            text.CLUSTER_PAIRING_BATCH_PASS_BUTTON, pane,
-        )
-        self._batch_pass_button.clicked.connect(self._on_batch_pass_clicked)
-        assign_role(self._batch_pass_button, ROLE_SUCCESS)
-        self._batch_pass_button.setEnabled(False)
-        self._cluster_list.itemSelectionChanged.connect(
-            self._render_batch_pass_state,
-        )
-        photo_actions.addWidget(self._batch_pass_button)
-        photo_actions.addStretch()
-        layout.addLayout(photo_actions)
-
+        # Owner 2026-10-31：忽略/恢复面板按钮撤除（详情内入口保留）。
         person_row = QHBoxLayout()
         person_row.addWidget(QLabel(text.CLUSTER_PAIRING_PERSON_LABEL, pane))
         self._person_combo = QComboBox(pane)
@@ -347,8 +332,20 @@ class ClusterResultsDialog(QDialog):
         self._reject_button = QPushButton(text.CLUSTER_PAIRING_REJECT_BUTTON, pane)
         self._reject_button.clicked.connect(self._on_reject_clicked)
         assign_role(self._reject_button, ROLE_DANGER)
+        # 批量通过（Owner 2026-10-31 移至本行右侧标记位）：左侧簇列表多选后
+        # 启用，确认前预演各组信息。
+        self._batch_pass_button = QPushButton(
+            text.CLUSTER_PAIRING_BATCH_PASS_BUTTON, pane,
+        )
+        self._batch_pass_button.clicked.connect(self._on_batch_pass_clicked)
+        assign_role(self._batch_pass_button, ROLE_SUCCESS)
+        self._batch_pass_button.setEnabled(False)
+        self._cluster_list.itemSelectionChanged.connect(
+            self._render_batch_pass_state,
+        )
         person_row.addWidget(self._confirm_button)
         person_row.addWidget(self._reject_button)
+        person_row.addWidget(self._batch_pass_button)
         person_row.addStretch()
         layout.addLayout(person_row)
 
