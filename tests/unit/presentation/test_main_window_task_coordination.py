@@ -459,7 +459,6 @@ def test_cluster_results_dialog_open_does_not_reserve(
         ),
     ])
     window._people_admin_page.refresh()
-    monkey = __import__("unittest.mock", fromlist=["Mock"]).Mock()
     import photo_archiver.presentation.views.cluster_results_dialog as crd
 
     real_exec = crd.ClusterResultsDialog.exec
