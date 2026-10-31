@@ -16,7 +16,8 @@ from __future__ import annotations
 from datetime import datetime
 
 # ---- 主窗口 · 工具栏 ----
-MAIN_WINDOW_TITLE = "PhotoArchiver"
+APP_VERSION = "2.9.0"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+MAIN_WINDOW_TITLE = f"PhotoArchiver v{APP_VERSION}"
 ACTION_IMPORT_PEOPLE = "导入人员"
 ACTION_SCAN_FOLDER = "扫描文件夹"
 ACTION_REVIEW_PENDING = "审核待处理"

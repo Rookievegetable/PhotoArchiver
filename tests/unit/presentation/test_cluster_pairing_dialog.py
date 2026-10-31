@@ -1296,3 +1296,132 @@ def test_batch_finalize_completes_at_realistic_scale_on_sqlite(
     assert outcome.failed == 0
     print(f"[SCALE] 40 簇 x 5 脸批量终审耗时 {elapsed:.2f}s（真实 SQLite + run_immediate）")
     assert elapsed < 60.0, f"批量终审在真实 SQLite 上耗时 {elapsed:.1f}s（护栏 60s）"
+
+
+def test_batch_pipeline_completes_on_worker_thread_at_scale(
+    make_sqlite_context, tmp_path, qtbot, monkeypatch,
+):
+    """Owner 2026-10-31「卡住 0%」复现探针：真实 SQLite + 真实 QThreadPool
+    工作线程 + 对话框派发全链路，40 簇 × 28 脸（1120 观测 / 200 照片）。
+    若管线在该组合下会挂，本测试将超时——通过即证明管线健康，
+    实机异常＝运行了旧构建。"""
+    import time
+
+    from photo_archiver.domain import (
+        FaceBox,
+        FaceCluster,
+        FaceClusterMember,
+        FaceClusterRun,
+        FaceEmbedding,
+        FaceObservation,
+        Photo,
+        PhotoPath,
+        PhotoPathBase,
+    )
+    from photo_archiver.presentation.task_coordinator import TaskCoordinator
+    from photo_archiver.workers.application_tasks import PairingBatchItem
+    from photo_archiver.workers.qt_executor import QtWorkerExecutor
+
+    context = make_sqlite_context(db_name="pairing_worker_scale.db")
+    services = context.services
+    repos = context.repositories
+
+    from photo_archiver.domain import RecognitionRun
+
+    run = RecognitionRun(parameters={})
+    repos.recognition_runs.add_run(run)
+    cluster_run = FaceClusterRun(recognition_run_id=run.id, algorithm_version="v1")
+    repos.face_clusters.add_cluster_run(cluster_run)
+
+    persons = [
+        services.manage_people.add_person(
+            AddPersonCommand(name=f"{index + 1}人员", identity=f"E{index:03d}"),
+        )
+        for index in range(40)
+    ]
+
+    observations = repos.face_observations
+    clusters = []
+    for cluster_index in range(40):
+        cluster = FaceCluster(
+            cluster_run_id=cluster_run.id,
+            run_id=run.id,
+            ordinal=cluster_index,
+            member_count=28,
+            sort_key=f"k|{cluster_index:04d}",
+        )
+        batch_observations = []
+        for face_index in range(28):
+            photo_file = tmp_path / f"scale_{cluster_index}_{face_index}.jpg"
+            photo_file.write_bytes(b"x")
+            photo = Photo(
+                path=PhotoPath(photo_file, base=PhotoPathBase.ABSOLUTE),
+                original_name=photo_file.name,
+            )
+            repos.photos.add(photo)
+            batch_observations.append(FaceObservation(
+                run_id=run.id,
+                photo_id=photo.id,
+                face_index=0,
+                photo_face_count=1,
+                det_score=0.9,
+                box=FaceBox(0, 0, 10, 10),
+                embedding=FaceEmbedding(tuple(
+                    0.02 * ((cluster_index + face_index + d) % 5) for d in range(8)
+                )),
+                scope_verdict="in_selected_scope",
+            ))
+        observations.add_many(batch_observations)
+        repos.face_clusters.add_clusters([cluster])
+        repos.face_clusters.add_members([
+            FaceClusterMember(
+                cluster_id=cluster.id,
+                observation_id=observation.id,
+                confidence=0.9,
+            )
+            for observation in batch_observations
+        ])
+        clusters.append(cluster)
+    cluster_run.start()
+    cluster_run.complete(40, 1120, 0)
+    repos.face_clusters.update_cluster_run(cluster_run)
+
+    items = [
+        PairingBatchItem(
+            action="promote",
+            cluster_id=cluster.id,
+            label=f"第 {index + 1} 组 · {persons[index].name}",
+            payload=str(persons[index].id),
+        )
+        for index, cluster in enumerate(clusters)
+    ]
+
+    coordinator = TaskCoordinator()
+    dialog = ClusterResultsDialog(
+        services.cluster_results, run.id,
+        suggest_service=services.suggest_pairings,
+        workbench_service=services.pairing_workbench,
+        ignore_service=services.photo_ignore,
+        list_persons=services.list_persons,
+        task_coordinator=coordinator,
+        task_executor=QtWorkerExecutor(),
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+    dialog.refresh()
+
+    started = time.monotonic()
+    dialog._dispatch_batch(
+        "批量通过", tuple(items),
+    )
+    assert coordinator.is_busy
+    assert dialog._batch_progress.isVisible()  # 分发期即显示（脉冲）
+
+    qtbot.waitUntil(
+        lambda: not coordinator.is_busy, timeout=120000,
+    )
+    elapsed = time.monotonic() - started
+    print(f"[SCALE-WORKER] 40 簇 x 28 脸经工作线程完成，耗时 {elapsed:.2f}s")
+    assert not dialog._busy
+    assert "成功 40" in dialog._feedback_label.text()
+    assert elapsed < 60.0
