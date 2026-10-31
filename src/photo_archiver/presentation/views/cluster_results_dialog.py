@@ -49,6 +49,7 @@ from photo_archiver.application.commands.photo_ignore import (
     IgnorePhotosCommand,
     RestorePhotosCommand,
 )
+from loguru import logger
 from photo_archiver.application.dtos.cluster_results import ClusterRunResults
 from photo_archiver.application.services import ClusterResultsService
 from photo_archiver.presentation.task_coordinator import TaskCoordinator
@@ -1047,14 +1048,26 @@ class ClusterResultsDialog(QDialog):
         照片墙与工作区状态。
         """
         if self._busy:
+            logger.info(
+                "PairingBatch dispatch ignored (busy): action={}", action,
+            )
             return
         if self._task_coordinator is None or self._task_executor is None:
+            logger.info(
+                "PairingBatch sync fallback: action={} items={}", action, len(items),
+            )
             self._execute_batch_now(action, items, person_name)
             return
         reservation = self._task_coordinator.reserve(action)
         if reservation is None:
+            logger.warning(
+                "PairingBatch REFUSED at admission: action={} items={}", action, len(items),
+            )
             self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_BUSY)
             return
+        logger.info(
+            "PairingBatch admitted: action={} items={}", action, len(items),
+        )
         self._batch_person_suffix = (
             f" → {person_name}"
             if action == text.CLUSTER_PAIRING_CONFIRM_BUTTON and person_name

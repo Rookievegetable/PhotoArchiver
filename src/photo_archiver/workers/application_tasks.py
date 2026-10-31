@@ -1,9 +1,11 @@
 """Worker task wrappers for application use cases."""
 
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import UUID
 
+from loguru import logger
 from photo_archiver.application.commands import (
     ArchivePhotosCommand,
     ImportPeopleCommand,
@@ -348,9 +350,14 @@ class PairingBatchFinalizeTask(WorkerTask[PairingBatchOutcome]):
         succeeded = skipped = failed = 0
         outcomes: list[str] = []
         total = len(self._items)
+        loop_started = time.monotonic()
         for index, item in enumerate(self._items, start=1):
             self.raise_if_cancelled()
             self.report_progress(item.label, current=index, total=total)
+            logger.info(
+                "PairingBatch item {}/{}: action={} {}",
+                index, total, item.action, item.label,
+            )
             try:
                 if item.action == "confirm" and item.payload is not None:
                     self._workbench.confirm(
@@ -379,9 +386,18 @@ class PairingBatchFinalizeTask(WorkerTask[PairingBatchOutcome]):
                     skipped += 1
                     continue
                 succeeded += 1
+                logger.info(
+                    "PairingBatch item {}/{} ({} · {}) done, elapsed={:.2f}s",
+                    index, total, item.label, item.action,
+                    time.monotonic() - loop_started,
+                )
             except Exception as exc:  # noqa: BLE001 - per-item boundary（§3.3）
                 failed += 1
                 outcomes.append(f"失败[{item.label}]: {exc}")
+                logger.warning(
+                    "PairingBatch item {}/{} FAILED: {}",
+                    index, total, exc,
+                )
         return PairingBatchOutcome(
             action=self._action,
             succeeded=succeeded,

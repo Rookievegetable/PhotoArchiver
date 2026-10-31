@@ -5,8 +5,9 @@ Reservations cover modal/nested dispatch as well as worker submission. Only
 QObject-bound slots consume worker signals, on the coordinator's GUI thread.
 """
 
+import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from weakref import ref
 
 from loguru import logger
@@ -30,6 +31,7 @@ class _Reservation:
     task_id: str = ""
     cancelling: bool = False
     terminal: bool = False
+    created_monotonic: float = field(default_factory=time.monotonic)
 
 
 class _TaskRoute(QObject):
@@ -94,9 +96,20 @@ class TaskCoordinator(QObject):
     def reserve(self, label: str) -> _Reservation | None:
         """Admit an operation, or refuse without touching the current operation."""
         if self.is_busy:
+            # Owner 2026-10-31「已有批量终审在执行」溯源：拒绝时记录当前占用者
+            # （label/task_id/在飞时长），让每次拒绝都可归因。
+            current = self._reservation
+            assert current is not None  # is_busy 契约
+            logger.warning(
+                "TaskCoordinator REFUSED {!r}: held by {!r} (task_id={}, "
+                "age={:.1f}s, terminal={})",
+                label, current.label, current.task_id or "-",
+                time.monotonic() - current.created_monotonic, current.terminal,
+            )
             return None
         self._reservation = _Reservation(label)
         self.changed.emit()
+        logger.info("TaskCoordinator admitted {!r}", label)
         return self._reservation
 
     def release(self, reservation: _Reservation) -> None:
@@ -174,6 +187,10 @@ class TaskCoordinator(QObject):
                         route.deleteLater()
                 self._reservation = None
                 self.changed.emit()
+                logger.info(
+                    "TaskCoordinator released {!r} (task_id={})",
+                    reservation.label, reservation.task_id or "-",
+                )
         elif isinstance(event, TaskStarted):
             self.started.emit(event)
         elif isinstance(event, TaskProgress):
