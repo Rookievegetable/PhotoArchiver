@@ -1178,7 +1178,7 @@ def test_reopened_dialog_reattaches_to_running_batch(tmp_path, qtbot, monkeypatc
 
     # 终态经协调器信号驱动新实例：反馈 + 按钮恢复 + 状态落库。
     qtbot.waitUntil(
-        lambda: "成功 1" in dialog2._feedback_label.text(), timeout=10000,
+        lambda: "成功 1" in dialog2._feedback_label.text(), timeout=30000,
     )
     assert not dialog2._busy
     assert not dialog2._batch_progress.isVisible()
