@@ -208,6 +208,15 @@ class ClusterResultsDialog(QDialog):
             # per-row connect would multiply every arriving signal.
             thumbnail_source.thumbnail_loaded.connect(self._attach_thumbnail)
         self.refresh()
+        # Owner 2026-10-31：批量终审 UX 挂协调器信号（单一来源、可重连）——
+        # 模态对话框关闭后任务继续在后台执行，重开对话框自动重新附着到
+        # 在跑批次（此前 UX 连在 runnable 信号上，重开即全部失联：进度条
+        # 不显示 + 点击只剩准入拒绝提示）。
+        if self._task_coordinator is not None:
+            self._task_coordinator.started.connect(self._on_batch_started)
+            self._task_coordinator.progress.connect(self._on_batch_progress)
+            self._task_coordinator.terminal.connect(self._on_batch_terminal)
+            self._reattach_running_batch()
 
     # ── UI construction ──────────────────────────────────────────────────
 
@@ -1050,15 +1059,15 @@ class ClusterResultsDialog(QDialog):
             if action == text.CLUSTER_PAIRING_CONFIRM_BUTTON and person_name
             else ""
         )
-        # 防呆：reserve 成功即同步置忙（不等 started 事件——那之间按钮仍可点，
-        # 二次点击会撞出「已有批量终审在执行」提示）。
-        self.set_busy(True)
+        # 防呆：reserve 成功即同步置忙并显示进度（不等 started 事件——那之间
+        # 按钮仍可点，二次点击会撞出「已有批量终审在执行」提示）。
+        self._show_batch_running_state()
         runnable = self._task_executor.submit(
             PairingBatchFinalizeTask(self._workbench_service, items, action),  # type: ignore[arg-type]  # WorkerTask[PairingBatchOutcome] vs [object] generics variance
         )
-        self._task_coordinator.bind(runnable, self._connect_batch_signals)
+        self._task_coordinator.bind(runnable, self._connect_batch_route)
 
-    def _connect_batch_signals(
+    def _connect_batch_route(
         self,
         runnable: QtWorkerRunnable,
         started,
@@ -1067,20 +1076,17 @@ class ClusterResultsDialog(QDialog):
         failed,
         cancelled=None,
     ) -> None:
-        """Wire worker events to the coordinator route AND the dialog's UX slots."""
+        """Wire worker events to the coordinator route only.
+
+        对话框 UX 一律经协调器信号（构造期连接、事件带 task_name 过滤）——
+        对话框关闭重开也能重新附着在跑批次；不走 runnable 直连。
+        """
         runnable.signals.started.connect(started)
         runnable.signals.progress.connect(progress)
         runnable.signals.completed.connect(completed)
         runnable.signals.failed.connect(failed)
         if cancelled is not None:
             runnable.signals.cancelled.connect(cancelled)
-        # 对话框本地 UX（忙碌态/进度进反馈行/终态刷新）：
-        runnable.signals.started.connect(self._on_batch_started)
-        runnable.signals.progress.connect(self._on_batch_progress)
-        runnable.signals.completed.connect(self._on_batch_completed)
-        runnable.signals.failed.connect(self._on_batch_failed)
-        if cancelled is not None:
-            runnable.signals.cancelled.connect(self._on_batch_cancelled)
 
     def _execute_batch_now(
         self,
@@ -1124,14 +1130,41 @@ class ClusterResultsDialog(QDialog):
         if not busy:
             self._render_batch_pass_state()
 
-    def _on_batch_started(self, _event: TaskStarted) -> None:
+    def _is_pairing_batch_event(
+        self,
+        event: TaskStarted | TaskProgress | TaskCompleted | TaskFailed | TaskCancelled,
+    ) -> bool:
+        """协调器承载全部窗口任务——UX 只消费批量终审事件。"""
+        return event.task_name == "pairing_batch"
+
+    def _show_batch_running_state(self) -> None:
+        """忙碌态 + 脉冲进度条 + 进行中文案（分发期/重附着共用）。"""
         self.set_busy(True)
         self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_RUNNING)
-        # 首个进度事件前总数未知＝脉冲未知态（min/max 互换的 busy bar）。
+        # 首个进度事件前总数未知＝脉冲未知态（min=max=0 的 busy bar）。
         self._batch_progress.setRange(0, 0)
         self._batch_progress.setVisible(True)
 
+    def _reattach_running_batch(self) -> None:
+        """构造期检测：协调器正被批量终审占用（前一个对话框会话派发）→
+        立即附着忙碌态；后续进度/终态经协调器信号继续驱动本对话框。"""
+        coordinator = self._task_coordinator
+        if coordinator is None:
+            return
+        if coordinator.is_busy and coordinator.label in (
+            text.CLUSTER_PAIRING_CONFIRM_BUTTON,
+            text.CLUSTER_PAIRING_BATCH_PASS_BUTTON,
+        ):
+            self._show_batch_running_state()
+
+    def _on_batch_started(self, event: TaskStarted) -> None:
+        if not self._is_pairing_batch_event(event):
+            return
+        self._show_batch_running_state()
+
     def _on_batch_progress(self, event: TaskProgress) -> None:
+        if not self._is_pairing_batch_event(event):
+            return
         if event.current is None or event.total is None:
             return
         self._feedback_label.setText(
@@ -1142,25 +1175,25 @@ class ClusterResultsDialog(QDialog):
         self._batch_progress.setRange(0, event.total)
         self._batch_progress.setValue(event.current)
 
-    def _on_batch_completed(self, event: TaskCompleted) -> None:
+    def _on_batch_terminal(
+        self, event: TaskCompleted | TaskFailed | TaskCancelled,
+    ) -> None:
+        if not self._is_pairing_batch_event(event):
+            return
         self.set_busy(False)
         self._batch_progress.setVisible(False)
-        self._apply_batch_outcome(event.result)
-
-    def _on_batch_failed(self, event: TaskFailed) -> None:
-        self.set_busy(False)
-        self._batch_progress.setVisible(False)
-        self._feedback_label.setText(
-            f"{text.CLUSTER_PAIRING_BATCH_FAILED}：{event.error}"
-        )
-        # 部分项可能已提交——刷新到真实状态。
-        self.refresh()
-
-    def _on_batch_cancelled(self, _event: TaskCancelled) -> None:
-        self.set_busy(False)
-        self._batch_progress.setVisible(False)
-        self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_CANCELLED)
-        self.refresh()
+        if isinstance(event, TaskCompleted):
+            # result 为 PairingBatchOutcome（任务层契约）。
+            self._apply_batch_outcome(event.result)
+        elif isinstance(event, TaskFailed):
+            self._feedback_label.setText(
+                f"{text.CLUSTER_PAIRING_BATCH_FAILED}：{event.error}"
+            )
+            # 部分项可能已提交——刷新到真实状态。
+            self.refresh()
+        else:
+            self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_CANCELLED)
+            self.refresh()
 
     def _confirm_scope(self, message: str) -> bool:
         box = QMessageBox(self)

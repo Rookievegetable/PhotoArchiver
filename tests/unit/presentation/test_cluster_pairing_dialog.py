@@ -1115,10 +1115,71 @@ def test_batch_progress_bar_lifecycle(qtbot):
     assert dialog._batch_progress.maximum() == 3
     assert dialog._batch_progress.value() == 1
 
-    dialog._on_batch_completed(TaskCompleted(
+    dialog._on_batch_terminal(TaskCompleted(
         "pairing_batch",
         result=PairingBatchOutcome(
             action="批量通过", succeeded=1, skipped=0, failed=0, outcomes=(),
         ),
     ))
     assert not dialog._batch_progress.isVisible()
+
+
+def test_reopened_dialog_reattaches_to_running_batch(tmp_path, qtbot, monkeypatch):
+    """卡顿修复补丁（Owner 2026-10-31 实机：重开对话框后进度全失联）——
+    批量在飞时关闭对话框再重开：新实例自动附着（忙碌态+脉冲进度条），
+    后续进度/终态经协调器信号继续驱动新实例直至反馈落盘。"""
+    from photo_archiver.presentation.task_coordinator import TaskCoordinator
+    from photo_archiver.workers.qt_executor import QtWorkerExecutor
+
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    photo_a = harness.add_photo(str(tmp_path / "a.jpg"))
+    (tmp_path / "a.jpg").write_bytes(b"x")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    _cluster_run, clusters = harness.add_generation([("k|a|000000", [o1])])
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=clusters[0].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=datetime.now(),
+        ),
+    ])
+    coordinator = TaskCoordinator()
+
+    def make_dialog():
+        dialog = ClusterResultsDialog(
+            results, harness.recognition_run.id,
+            suggest_service=_suggest, workbench_service=workbench,
+            ignore_service=_ignore, list_persons=roster,
+            task_coordinator=coordinator,
+            task_executor=QtWorkerExecutor(),
+        )
+        qtbot.addWidget(dialog)
+        dialog.show()
+        return dialog
+
+    dialog1 = make_dialog()
+    dialog1.refresh()
+    dialog1._cluster_list.setCurrentRow(0)
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.cluster_results_dialog.QMessageBox.exec",
+        lambda self: QMessageBox.StandardButton.Ok,
+    )
+    dialog1._on_batch_pass_clicked()
+    assert coordinator.is_busy
+    assert dialog1._batch_progress.isVisible()
+
+    # 在飞关闭会话一 → 重开会话二：自动附着忙碌态与脉冲进度条。
+    dialog1.close()
+    dialog2 = make_dialog()
+    assert dialog2._busy
+    assert dialog2._batch_progress.isVisible()
+
+    # 终态经协调器信号驱动新实例：反馈 + 按钮恢复 + 状态落库。
+    qtbot.waitUntil(
+        lambda: "成功 1" in dialog2._feedback_label.text(), timeout=10000,
+    )
+    assert not dialog2._busy
+    assert not dialog2._batch_progress.isVisible()
+    latest = dialog2._assignments_by_cluster()[clusters[0].id]
+    assert latest.status == ASSIGNMENT_STATUS_CONFIRMED
