@@ -17,6 +17,7 @@ from datetime import datetime
 from PySide6.QtWidgets import QMessageBox
 from uuid import uuid4
 
+from photo_archiver.application.commands import AddPersonCommand
 from photo_archiver.application.commands.photo_ignore import (
     IgnorePhotosCommand,
     RestorePhotosCommand,
@@ -1183,3 +1184,115 @@ def test_reopened_dialog_reattaches_to_running_batch(tmp_path, qtbot, monkeypatc
     assert not dialog2._batch_progress.isVisible()
     latest = dialog2._assignments_by_cluster()[clusters[0].id]
     assert latest.status == ASSIGNMENT_STATUS_CONFIRMED
+
+
+def test_batch_finalize_completes_at_realistic_scale_on_sqlite(
+    make_sqlite_context, tmp_path, qtbot,
+):
+    """Owner 2026-10-31「卡住 0%」排查：真实 SQLite + run_immediate 事务链，
+    40 簇 × 5 脸的批量终审必须完整执行（排除事务路径真卡死）；同时验证
+    逐项提交后的 confirmed 落库与快照复用下的耗时上限（宽裕 60s 护栏）。"""
+    import time
+
+    from photo_archiver.domain import (
+        FaceBox,
+        FaceCluster,
+        FaceClusterMember,
+        FaceClusterRun,
+        FaceEmbedding,
+        FaceObservation,
+    )
+    from photo_archiver.workers.application_tasks import (
+        PairingBatchFinalizeTask,
+        PairingBatchItem,
+    )
+
+    context = make_sqlite_context(db_name="pairing_scale.db")
+    services = context.services
+    # 识别运行 + 观测/簇/代际全部走真实仓储（与应用同一条 SQLite 装配）。
+    from photo_archiver.domain import RecognitionRun
+
+    run = RecognitionRun(parameters={})
+    repos = context.repositories
+    repos.recognition_runs.add_run(run)
+    cluster_run = FaceClusterRun(recognition_run_id=run.id, algorithm_version="v1")
+    repos.face_clusters.add_cluster_run(cluster_run)
+
+    observations = repos.face_observations
+    persons = []
+    for index in range(40):
+        person = services.manage_people.add_person(
+            AddPersonCommand(name=f"{index + 1}人员", identity=f"E{index:03d}"),
+        )
+        persons.append(person)
+
+    from photo_archiver.domain import Photo, PhotoPath, PhotoPathBase
+
+    clusters = []
+    items: list[PairingBatchItem] = []
+    for cluster_index in range(40):
+        cluster = FaceCluster(
+            cluster_run_id=cluster_run.id,
+            run_id=run.id,
+            ordinal=cluster_index,
+            member_count=5,
+            sort_key=f"k|{cluster_index:04d}",
+        )
+        # 每簇 5 张照片 × 1 脸（实机形状：组照单脸）：真实照片行满足 FK。
+        batch_observations = []
+        for face_index in range(5):
+            photo_file = tmp_path / f"scale_{cluster_index}_{face_index}.jpg"
+            photo_file.write_bytes(b"x")
+            photo = Photo(
+                path=PhotoPath(photo_file, base=PhotoPathBase.ABSOLUTE),
+                original_name=photo_file.name,
+            )
+            repos.photos.add(photo)
+            observation = FaceObservation(
+                run_id=run.id,
+                photo_id=photo.id,
+                face_index=0,
+                photo_face_count=1,
+                det_score=0.9,
+                box=FaceBox(0, 0, 10, 10),
+                embedding=FaceEmbedding(tuple(
+                    0.02 * ((cluster_index + face_index + d) % 5) for d in range(8)
+                )),
+                scope_verdict="in_selected_scope",
+            )
+            observations.add_many([observation])
+            batch_observations.append(observation)
+        repos.face_clusters.add_clusters([cluster])
+        repos.face_clusters.add_members([
+            FaceClusterMember(
+                cluster_id=cluster.id,
+                observation_id=observation.id,
+                confidence=0.9,
+            )
+            for observation in batch_observations
+        ])
+        clusters.append(cluster)
+    cluster_run.start()
+    cluster_run.complete(40, 200, 0)
+    repos.face_clusters.update_cluster_run(cluster_run)
+    items = [
+        PairingBatchItem(
+            action="promote",
+            cluster_id=cluster.id,
+            label=f"第 {index + 1} 组 · {persons[index].name}",
+            payload=str(persons[index].id),
+        )
+        for index, cluster in enumerate(clusters)
+    ]
+
+    task = PairingBatchFinalizeTask(
+        services.pairing_workbench, tuple(items), "批量通过",
+    )
+    started = time.monotonic()
+    outcome = task.execute()
+    elapsed = time.monotonic() - started
+
+    assert outcome.succeeded == 40
+    assert outcome.failed == 0
+    print(f"[SCALE] 40 簇 x 5 脸批量终审耗时 {elapsed:.2f}s（真实 SQLite + run_immediate）")
+    assert elapsed < 60.0, f"批量终审在真实 SQLite 上耗时 {elapsed:.1f}s（护栏 60s）"

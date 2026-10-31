@@ -266,19 +266,20 @@ class ClusterResultsDialog(QDialog):
         style_card(self._feedback_card)
         feedback_layout = QVBoxLayout(self._feedback_card)
         feedback_layout.setContentsMargins(8, 6, 8, 6)
+        # 批量终审进度条（Owner 2026-10-31：移入反馈卡＝「已有批量终审在
+        # 执行…」同一位置）：执行期显示（started→可见，首个进度前＝脉冲
+        # 未知态；completed/failed/cancelled→隐藏），文字行在其下方。
+        self._batch_progress = QProgressBar(self._feedback_card)
+        self._batch_progress.setObjectName("BatchProgress")
+        self._batch_progress.setFormat("%v / %m（%p%）")
+        self._batch_progress.setVisible(False)
+        feedback_layout.addWidget(self._batch_progress)
         self._feedback_label = QLabel(self._feedback_card)
         self._feedback_label.setWordWrap(True)
         self._feedback_label.setVisible(self._pairing_active)
         feedback_layout.addWidget(self._feedback_label)
         self._feedback_card.setVisible(self._pairing_active)
         layout.addWidget(self._feedback_card)
-        # 批量终审进度条（Owner 2026-10-31）：执行期显示（started→可见，
-        # 首个进度前＝脉冲未知态；completed/failed/cancelled→隐藏）。
-        self._batch_progress = QProgressBar(self)
-        self._batch_progress.setObjectName("BatchProgress")
-        self._batch_progress.setFormat("%v / %m（%p%）")
-        self._batch_progress.setVisible(False)
-        layout.addWidget(self._batch_progress)
 
         body = QHBoxLayout()
         self._cluster_list = QListWidget(self)
