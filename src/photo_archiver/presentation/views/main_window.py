@@ -1852,9 +1852,15 @@ class MainWindow(QMainWindow):
         )
         self._connect_task_signals(runnable, self._cluster_controller.connect_signals)
 
-    @_exclusive(text.CLUSTER_RESULTS_TITLE)
     def _on_cluster_results_clicked(self) -> None:
-        """Open the read-only cluster results dialog for the selected run."""
+        """Open the read-only cluster results dialog for the selected run.
+
+        Owner 2026-10-31「已有批量终审在执行」全链根因修复：本入口不再
+        ``@_exclusive`` 占位——模态对话框存活期间该预留永不释放，对话框内
+        的确认/批量通过准入会被它全部拒绝（日志实证 held by '人脸聚类结果'）。
+        对话框自身经协调器准入批量终审（refuse 语义保留）；模态期间用户本就
+        无法触达其他窗口动作，此占位纯冗余。
+        """
         run_id = self._people_admin_page.selected_recognition_run_id()
         if run_id is None:
             self._status_label.setText(text.CLUSTER_PAGE_NO_RUNS)

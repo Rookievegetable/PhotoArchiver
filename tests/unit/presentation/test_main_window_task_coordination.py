@@ -382,3 +382,107 @@ def test_pairing_batch_uses_dedicated_pool_isolated_from_global(window) -> None:
     executor = getattr(window, "_pairing_batch_executor", None)
     assert isinstance(executor, QtWorkerExecutor)
     assert executor.thread_pool is not QThreadPool.globalInstance()
+
+
+def test_cluster_results_dialog_open_does_not_reserve(
+    window, qtbot, tmp_path, monkeypatch,
+) -> None:
+    """Owner 2026-10-31「已有批量终审在执行」全链根因：_on_cluster_results_clicked
+    曾 @_exclusive 占位——模态对话框存活期间预留永不释放，对话框内批量准入
+    全部被拒。修复后：打开不占位（协调器保持空闲），批量准入在对话框内完成。"""
+    # 最小聚类种子：识别运行 + 1 簇（1 观测）+ 建议行，让对话框可打开。
+    from photo_archiver.domain import (
+        FaceBox,
+        FaceCluster,
+        FaceClusterMember,
+        FaceClusterRun,
+        FaceEmbedding,
+        FaceObservation,
+        Photo,
+        PhotoPath,
+        PhotoPathBase,
+        RecognitionRun,
+    )
+    from photo_archiver.domain.entities.cluster_assignment import (
+        ClusterPersonAssignment,
+    )
+
+    repos = window._context.repositories
+    run = RecognitionRun(parameters={})
+    repos.recognition_runs.add_run(run)
+    cluster_run = FaceClusterRun(recognition_run_id=run.id, algorithm_version="v1")
+    repos.face_clusters.add_cluster_run(cluster_run)
+    person = window._context.services.manage_people.add_person(
+        __import__(
+            "photo_archiver.application.commands", fromlist=["AddPersonCommand"],
+        ).AddPersonCommand(name="甲", identity="E900"),
+    )
+    photo_file = tmp_path / "seed.jpg"
+    photo_file.write_bytes(b"x")
+    photo = Photo(
+        path=PhotoPath(photo_file, base=PhotoPathBase.ABSOLUTE),
+        original_name="seed.jpg",
+    )
+    repos.photos.add(photo)
+    observation = FaceObservation(
+        run_id=run.id,
+        photo_id=photo.id,
+        face_index=0,
+        photo_face_count=1,
+        det_score=0.9,
+        box=FaceBox(0, 0, 10, 10),
+        embedding=FaceEmbedding((0.1, 0.2)),
+        scope_verdict="in_selected_scope",
+    )
+    repos.face_observations.add_many([observation])
+    cluster = FaceCluster(
+        cluster_run_id=cluster_run.id,
+        run_id=run.id,
+        ordinal=0,
+        member_count=1,
+        sort_key="k|0000",
+    )
+    repos.face_clusters.add_clusters([cluster])
+    repos.face_clusters.add_members([
+        FaceClusterMember(
+            cluster_id=cluster.id, observation_id=observation.id, confidence=0.9,
+        ),
+    ])
+    cluster_run.start()
+    cluster_run.complete(1, 1, 0)
+    repos.face_clusters.update_cluster_run(cluster_run)
+    repos.cluster_assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=cluster.id,
+            person_id=person.id,
+            source="ordered_suggestion",
+        ),
+    ])
+    window._people_admin_page.refresh()
+    monkey = __import__("unittest.mock", fromlist=["Mock"]).Mock()
+    import photo_archiver.presentation.views.cluster_results_dialog as crd
+
+    real_exec = crd.ClusterResultsDialog.exec
+    captured = {}
+    crd.ClusterResultsDialog.exec = lambda self: (captured.update(dialog=self), 1)[1]
+    try:
+        window._on_cluster_results_clicked()
+    finally:
+        crd.ClusterResultsDialog.exec = real_exec
+    assert not window._task_coordinator.is_busy  # 打开不占位（修复点）
+    dialog = captured.get("dialog")
+    assert dialog is not None
+    qtbot.addWidget(dialog)
+    dialog.show()
+    # 预演弹窗自动 Ok（真实模态链不阻塞测试）。
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.cluster_results_dialog.QMessageBox.exec",
+        lambda self: QMessageBox.StandardButton.Ok,
+    )
+    # 对话框内批量准入现在可达：选区 → 点击 → 协调器 admit。
+    dialog._cluster_list.selectAll()
+    if dialog._batch_pass_button.isEnabled():
+        dialog._on_batch_pass_clicked()
+        assert window._task_coordinator.is_busy  # 批量准入占位（正确语义）
+        window._task_coordinator.cancel()  # 清场：协作式取消
+        qtbot.waitUntil(lambda: not window._task_coordinator.is_busy, timeout=30000)
