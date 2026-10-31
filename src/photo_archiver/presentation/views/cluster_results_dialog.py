@@ -646,6 +646,15 @@ class ClusterResultsDialog(QDialog):
             self._decision_badge,
             _ASSIGNMENT_SEVERITY.get(assignment_status, "neutral"),
         )
+        # Owner 2026-10-31 防呆：已确认组＝确认键变「已确认」且不可点
+        # （改派仍可经目标人员+确认走人工路径？不——confirmed 行的再次确认
+        # 无意义，确认键保持禁用；改派需先经未来「解除」入口，此处不扩权）。
+        if assignment_status == "confirmed":
+            self._confirm_button.setText(text.CLUSTER_PAIRING_CONFIRMED_BUTTON)
+            self._confirm_button.setEnabled(False)
+        else:
+            self._confirm_button.setText(text.CLUSTER_PAIRING_CONFIRM_BUTTON)
+            self._confirm_button.setEnabled(bool(self._persons))
         ignored_set = set(detail.ignored_photo_ids)
         ignored_note = (
             f" · 忽略照片 {len(ignored_set)} 张" if ignored_set else ""
@@ -895,12 +904,23 @@ class ClusterResultsDialog(QDialog):
         条目 = (cluster_id, 展示标签, 动作, 附加信息)——skip 动作的附加信息
         是跳过原因，其余为待操作行 id 的字符串形态（可为 None）。
         """
-        lines = [f"操作：{action}（{len(plan)} 项）"]
+        exec_lines: list[str] = []
+        skip_by_reason: dict[str, list[str]] = {}
         for _cluster_id, label, kind, extra in plan:
             if kind == "skip":
-                lines.append(f"· 跳过 {label}（{extra}）")
+                reason = extra if extra is not None else "—"
+                skip_by_reason.setdefault(reason, []).append(label)
             else:
-                lines.append(f"· 执行 {label}")
+                exec_lines.append(f"· 执行 {label}")
+        lines = [
+            f"操作：{action}（共 {len(plan)} 项：执行 {len(exec_lines)}、"
+            f"跳过 {len(plan) - len(exec_lines)}）",
+        ]
+        lines.extend(exec_lines)
+        # Owner 2026-10-31 防呆：已通过的组按原因归组提示（如「已确认，
+        # 无需重复」＝已通过；「未指派人员」＝无法直接通过），只确认其余。
+        for reason, labels in skip_by_reason.items():
+            lines.append(f"· 跳过（{reason}）：{'、'.join(labels)}")
         if extra_note:
             lines.append(extra_note)
         box = QMessageBox(self)
@@ -918,8 +938,18 @@ class ClusterResultsDialog(QDialog):
     # ── 批量通过（Owner 2026-10-31：组级人工终审）────────────────────────
 
     def _render_batch_pass_state(self) -> None:
-        """批量通过随簇多选启用/禁用（0 选区＝禁用）。"""
-        self._batch_pass_button.setEnabled(bool(self._selected_cluster_ids()))
+        """批量通过随簇多选启用/禁用（0 选区或全为已确认组＝禁用，防呆）。"""
+        selected = self._selected_cluster_ids()
+        if not selected:
+            self._batch_pass_button.setEnabled(False)
+            return
+        assignments = self._assignments_by_cluster()
+        actionable = any(
+            (assignment := assignments.get(cluster_id)) is not None
+            and assignment.status != "confirmed"
+            for cluster_id in selected
+        )
+        self._batch_pass_button.setEnabled(actionable)
 
     def _plan_batch_pass(
         self, cluster_ids: list[UUID],
@@ -1020,6 +1050,9 @@ class ClusterResultsDialog(QDialog):
             if action == text.CLUSTER_PAIRING_CONFIRM_BUTTON and person_name
             else ""
         )
+        # 防呆：reserve 成功即同步置忙（不等 started 事件——那之间按钮仍可点，
+        # 二次点击会撞出「已有批量终审在执行」提示）。
+        self.set_busy(True)
         runnable = self._task_executor.submit(
             PairingBatchFinalizeTask(self._workbench_service, items, action),  # type: ignore[arg-type]  # WorkerTask[PairingBatchOutcome] vs [object] generics variance
         )

@@ -829,6 +829,8 @@ CLUSTER_PAIRING_BATCH_CANCELLED = "批量终审已取消。"
 
 # ── 批量通过（Owner 2026-10-31：组级人工终审，多选簇→预演→确认）──────────
 CLUSTER_PAIRING_BATCH_PASS_BUTTON = "批量通过"
+# Owner 2026-10-31 防呆：已确认组的确认键形态（禁用）。
+CLUSTER_PAIRING_CONFIRMED_BUTTON = "已确认"
 CLUSTER_PAIRING_PASS_SKIP_CONFIRMED = "已确认，无需重复"
 CLUSTER_PAIRING_PASS_SKIP_UNASSIGNED = "未指派人员，无法直接通过"
 

@@ -501,18 +501,74 @@ def test_ignore_marks_render_after_service_and_refresh(qtbot):
 # ── Owner 2026-10-31：批量通过（组级人工终审） ───────────────────────────────
 
 
-def test_batch_pass_button_enabled_only_with_selection(qtbot):
-    """批量通过＝左侧簇列表多选后启用（0 选区禁用）。"""
+def test_batch_pass_button_enabled_only_with_actionable_selection(qtbot):
+    """Owner 2026-10-31 防呆：0 选区禁用；全为已确认组禁用（纯空转）；
+    存在可处理组（建议/自动确认/未指派以外可跳过）即启用。"""
     harness = _Harness()
+    alice = harness.add_person("1张三", 1)
     photo_a = harness.add_photo("photos/a.jpg")
     o1 = harness.add_observation(photo_a, 0, 0.0)
-    harness.add_generation([("k|a|000000", [o1])])
-    dialog = harness.build_dialog(qtbot)
+    _cluster_run, clusters = harness.add_generation([("k|a|000000", [o1])])
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=clusters[0].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=datetime.now(),
+        ),
+    ])
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=_suggest, workbench_service=workbench,
+        ignore_service=_ignore, list_persons=roster,
+    )
+    qtbot.addWidget(dialog)
     dialog.refresh()
     dialog._cluster_list.clearSelection()
     assert not dialog._batch_pass_button.isEnabled()
+
     dialog._cluster_list.setCurrentRow(0)
-    assert dialog._batch_pass_button.isEnabled()
+    assert dialog._batch_pass_button.isEnabled()  # 建议行＝可处理
+
+    # 终审确认后：全部选中组均已确认 → 批量通过禁用（纯空转）。
+    assignment = dialog._assignments_by_cluster()[clusters[0].id]
+    workbench.confirm(ConfirmAssignmentCommand(assignment.id))
+    dialog.refresh()
+    dialog._cluster_list.setCurrentRow(0)
+    assert not dialog._batch_pass_button.isEnabled()
+
+
+def test_confirm_button_shows_confirmed_and_disabled_for_confirmed_cluster(qtbot):
+    """Owner 2026-10-31 防呆：选中已确认组＝确认键变「已确认」且不可点；
+    未确认组恢复「确认」可用。"""
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    photo_a = harness.add_photo("photos/a.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    _cluster_run, clusters = harness.add_generation([("k|a|000000", [o1])])
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=clusters[0].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=datetime.now(),
+        ),
+    ])
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=_suggest, workbench_service=workbench,
+        ignore_service=_ignore, list_persons=roster,
+    )
+    qtbot.addWidget(dialog)
+    dialog.refresh()
+    dialog._cluster_list.setCurrentRow(0)
+    assert dialog._confirm_button.text() == text.CLUSTER_PAIRING_CONFIRM_BUTTON
+    assert dialog._confirm_button.isEnabled()
+
+    assignment = dialog._assignments_by_cluster()[clusters[0].id]
+    workbench.confirm(ConfirmAssignmentCommand(assignment.id))
+    dialog.refresh()
+    dialog._cluster_list.setCurrentRow(0)
+    assert dialog._confirm_button.text() == text.CLUSTER_PAIRING_CONFIRMED_BUTTON
+    assert not dialog._confirm_button.isEnabled()
 
 
 def test_batch_pass_confirms_selected_clusters(qtbot, monkeypatch):
