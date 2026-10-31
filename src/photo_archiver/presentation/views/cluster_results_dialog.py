@@ -41,8 +41,6 @@ from PySide6.QtWidgets import (
 )
 
 from photo_archiver.application.commands.pairing import (
-    AssignClusterPersonCommand,
-    ConfirmAssignmentCommand,
     RejectAssignmentCommand,
     StartSuggestPairingsCommand,
 )
@@ -52,6 +50,20 @@ from photo_archiver.application.commands.photo_ignore import (
 )
 from photo_archiver.application.dtos.cluster_results import ClusterRunResults
 from photo_archiver.application.services import ClusterResultsService
+from photo_archiver.presentation.task_coordinator import TaskCoordinator
+from photo_archiver.workers.application_tasks import (
+    PairingBatchFinalizeTask,
+    PairingBatchItem,
+    PairingBatchOutcome,
+)
+from photo_archiver.workers.events import (
+    TaskCancelled,
+    TaskCompleted,
+    TaskFailed,
+    TaskProgress,
+    TaskStarted,
+)
+from photo_archiver.workers.qt_executor import QtWorkerExecutor, QtWorkerRunnable
 from photo_archiver.application.services.calibration_annotation_service import (
     CalibrationAnnotationService,
 )
@@ -136,6 +148,8 @@ class ClusterResultsDialog(QDialog):
         workbench_service=None,
         ignore_service=None,
         list_persons=None,
+        task_coordinator: TaskCoordinator | None = None,
+        task_executor: QtWorkerExecutor | None = None,
     ) -> None:
         """Build the dialog; ``thumbnail_source`` is the shared async loader.
 
@@ -166,6 +180,13 @@ class ClusterResultsDialog(QDialog):
         self._ignore_service = ignore_service
         self._list_persons = list_persons
         self._pairing_active = suggest_service is not None and workbench_service is not None
+        # 批量终审后台化（Owner 2026-10-31 卡顿修复·A）：注入协调器+执行器后
+        # 批量确认/批量通过走任务管线（进度/取消/忙碌准入）；缺省 None 保持
+        # 同步回退路径（既有测试与独立使用零变化）。
+        self._task_coordinator = task_coordinator
+        self._task_executor = task_executor
+        self._busy = False
+        self._batch_person_suffix = ""
         if self._calibration_active:
             if annotator_id is None or not annotator_id.strip():
                 raise ValueError(text.CALIBRATION_ANNOTATOR_ID_REQUIRED)
@@ -792,37 +813,13 @@ class ClusterResultsDialog(QDialog):
         plan = self._plan_confirm(cluster_ids, person_id)
         if not self._show_batch_plan(plan, text.CLUSTER_PAIRING_CONFIRM_BUTTON):
             return
-        outcomes: list[str] = []
-        succeeded = skipped = failed = 0
-        person_name = self._person_combo.currentText()
-        for cluster_id, label, action, assignment_id in plan:
-            try:
-                if action == "confirm" and assignment_id is not None:
-                    self._workbench_service.confirm(
-                        ConfirmAssignmentCommand(UUID(assignment_id)),
-                    )
-                elif action == "assign":
-                    self._workbench_service.assign_person(
-                        AssignClusterPersonCommand(
-                            cluster_id=cluster_id, person_id=person_id,
-                        ),
-                        actor=HUMAN_ACTOR,
-                    )
-                else:
-                    skipped += 1
-                    continue
-                succeeded += 1
-            except Exception as exc:  # noqa: BLE001 - per-item boundary（§3.3）
-                failed += 1
-                outcomes.append(f"失败[{cluster_id}]: {exc}")
-        self._feedback_label.setText(
-            text.CLUSTER_PAIRING_BATCH_DONE.format(
-                succeeded=succeeded, skipped=skipped, failed=failed,
-            )
-            + f" → {person_name}"
-            + ("；" + "；".join(outcomes) if outcomes else "")
+        # Owner 2026-10-31 卡顿修复·A：批量执行下放后台任务管线（进度/取消/
+        # 忙碌准入）；未注入协调器（测试/独立使用）保持同步回退。
+        self._dispatch_batch(
+            text.CLUSTER_PAIRING_CONFIRM_BUTTON,
+            self._items_from_plan(plan, person_id=str(person_id)),
+            person_name=self._person_combo.currentText(),
         )
-        self.refresh()
 
     def _on_reject_clicked(self) -> None:
         """批量拒绝（§3.3：作用对象是簇×人员配对；保留既有拒绝规则）。"""
@@ -965,34 +962,155 @@ class ClusterResultsDialog(QDialog):
         plan = self._plan_batch_pass(cluster_ids)
         if not self._show_batch_plan(plan, text.CLUSTER_PAIRING_BATCH_PASS_BUTTON):
             return
-        outcomes: list[str] = []
-        succeeded = skipped = failed = 0
-        for cluster_id, label, action, payload in plan:
-            try:
-                if action == "confirm" and payload is not None:
-                    self._workbench_service.confirm(
-                        ConfirmAssignmentCommand(UUID(payload)),
-                    )
-                elif action == "promote" and payload is not None:
-                    self._workbench_service.assign_person(
-                        AssignClusterPersonCommand(
-                            cluster_id=cluster_id, person_id=UUID(payload),
-                        ),
-                        actor=HUMAN_ACTOR,
-                    )
-                else:
-                    skipped += 1
-                    continue
-                succeeded += 1
-            except Exception as exc:  # noqa: BLE001 - per-item boundary（§3.3）
-                failed += 1
-                outcomes.append(f"失败[{label}]: {exc}")
+        self._dispatch_batch(
+            text.CLUSTER_PAIRING_BATCH_PASS_BUTTON,
+            self._items_from_plan(plan),
+        )
+
+    # ── 批量终审执行（Owner 2026-10-31 卡顿修复·A：后台管线 + 同步回退）──
+
+    def _items_from_plan(
+        self,
+        plan: list[tuple[UUID, str, str, str | None]],
+        person_id: str | None = None,
+    ) -> tuple[PairingBatchItem, ...]:
+        """把预演条目转成任务层计划项（action/payload/person_id 同构）。"""
+        return tuple(
+            PairingBatchItem(
+                action=action,
+                cluster_id=cluster_id,
+                label=label,
+                payload=payload,
+                person_id=person_id,
+            )
+            for cluster_id, label, action, payload in plan
+        )
+
+    def _dispatch_batch(
+        self,
+        action: str,
+        items: tuple[PairingBatchItem, ...],
+        person_name: str = "",
+    ) -> None:
+        """执行一批终审项：注入协调器＝后台任务管线，否则同步回退。
+
+        后台路径经 TaskCoordinator 准入（忙碌拒绝）、簇粒度进度进反馈行、
+        终态（完成/失败/取消）后对话框自行刷新；主窗口经既有通用接线刷新
+        照片墙与工作区状态。
+        """
+        if self._busy:
+            return
+        if self._task_coordinator is None or self._task_executor is None:
+            self._execute_batch_now(action, items, person_name)
+            return
+        reservation = self._task_coordinator.reserve(action)
+        if reservation is None:
+            self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_BUSY)
+            return
+        self._batch_person_suffix = (
+            f" → {person_name}"
+            if action == text.CLUSTER_PAIRING_CONFIRM_BUTTON and person_name
+            else ""
+        )
+        runnable = self._task_executor.submit(
+            PairingBatchFinalizeTask(self._workbench_service, items, action),  # type: ignore[arg-type]  # WorkerTask[PairingBatchOutcome] vs [object] generics variance
+        )
+        self._task_coordinator.bind(runnable, self._connect_batch_signals)
+
+    def _connect_batch_signals(
+        self,
+        runnable: QtWorkerRunnable,
+        started,
+        progress,
+        completed,
+        failed,
+        cancelled=None,
+    ) -> None:
+        """Wire worker events to the coordinator route AND the dialog's UX slots."""
+        runnable.signals.started.connect(started)
+        runnable.signals.progress.connect(progress)
+        runnable.signals.completed.connect(completed)
+        runnable.signals.failed.connect(failed)
+        if cancelled is not None:
+            runnable.signals.cancelled.connect(cancelled)
+        # 对话框本地 UX（忙碌态/进度进反馈行/终态刷新）：
+        runnable.signals.started.connect(self._on_batch_started)
+        runnable.signals.progress.connect(self._on_batch_progress)
+        runnable.signals.completed.connect(self._on_batch_completed)
+        runnable.signals.failed.connect(self._on_batch_failed)
+        if cancelled is not None:
+            runnable.signals.cancelled.connect(self._on_batch_cancelled)
+
+    def _execute_batch_now(
+        self,
+        action: str,
+        items: tuple[PairingBatchItem, ...],
+        person_name: str = "",
+    ) -> None:
+        """Synchronous fallback（未注入协调器）：同一任务对象在调用线程执行。"""
+        self._batch_person_suffix = (
+            f" → {person_name}"
+            if action == text.CLUSTER_PAIRING_CONFIRM_BUTTON and person_name
+            else ""
+        )
+        outcome = PairingBatchFinalizeTask(
+            self._workbench_service, items, action,
+        ).execute()
+        self._apply_batch_outcome(outcome)
+
+    def _apply_batch_outcome(self, outcome: PairingBatchOutcome) -> None:
+        """Render one PairingBatchOutcome into the feedback line and refresh."""
         self._feedback_label.setText(
             text.CLUSTER_PAIRING_BATCH_DONE.format(
-                succeeded=succeeded, skipped=skipped, failed=failed,
+                succeeded=outcome.succeeded,
+                skipped=outcome.skipped,
+                failed=outcome.failed,
             )
-            + ("；" + "；".join(outcomes) if outcomes else "")
+            + self._batch_person_suffix
+            + ("；" + "；".join(outcome.outcomes) if outcome.outcomes else "")
         )
+        self.refresh()
+
+    def set_busy(self, busy: bool) -> None:
+        """批量终审在飞时禁用决策面（与窗口级任务准入一致）。"""
+        self._busy = busy
+        for widget in (
+            self._confirm_button, self._reject_button,
+            self._batch_pass_button, self._generate_button,
+            self._person_combo, self._generation_combo,
+        ):
+            widget.setEnabled(not busy)
+        if not busy:
+            self._render_batch_pass_state()
+
+    def _on_batch_started(self, _event: TaskStarted) -> None:
+        self.set_busy(True)
+        self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_RUNNING)
+
+    def _on_batch_progress(self, event: TaskProgress) -> None:
+        if event.current is None or event.total is None:
+            return
+        self._feedback_label.setText(
+            text.CLUSTER_PAIRING_BATCH_PROGRESS.format(
+                current=event.current, total=event.total, message=event.message,
+            )
+        )
+
+    def _on_batch_completed(self, event: TaskCompleted) -> None:
+        self.set_busy(False)
+        self._apply_batch_outcome(event.result)
+
+    def _on_batch_failed(self, event: TaskFailed) -> None:
+        self.set_busy(False)
+        self._feedback_label.setText(
+            f"{text.CLUSTER_PAIRING_BATCH_FAILED}：{event.error}"
+        )
+        # 部分项可能已提交——刷新到真实状态。
+        self.refresh()
+
+    def _on_batch_cancelled(self, _event: TaskCancelled) -> None:
+        self.set_busy(False)
+        self._feedback_label.setText(text.CLUSTER_PAIRING_BATCH_CANCELLED)
         self.refresh()
 
     def _confirm_scope(self, message: str) -> bool:

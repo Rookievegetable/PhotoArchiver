@@ -28,6 +28,9 @@ from photo_archiver.application.services import (
     PhotoIgnoreService,
     SuggestPairingsService,
 )
+from photo_archiver.application.commands.pairing import (
+    ConfirmAssignmentCommand,
+)
 from photo_archiver.application.services.pairing_workbench_service import (
     AssignClusterPersonCommand,
 )
@@ -51,6 +54,7 @@ from photo_archiver.domain.entities.cluster_assignment import (
     ASSIGNMENT_SOURCE_ORDERED_AUTO_CONFIRM,
     ASSIGNMENT_SOURCE_ORDERED_SUGGESTION,
     ASSIGNMENT_STATUS_AUTO_CONFIRMED,
+    ASSIGNMENT_STATUS_CONFIRMED,
     ClusterPersonAssignment,
     HUMAN_ACTOR,
 )
@@ -914,3 +918,111 @@ def test_detail_dialog_toggle_ignore_keeps_detail_open(tmp_path, qtbot):
     detail._ignore_button.click()
     assert harness.ignores.find(cluster_run.id, photo_a) is None
     assert detail._ignore_button.text() == text.CLUSTER_DETAIL_IGNORE_BUTTON
+
+
+# ── Owner 2026-10-31 卡顿修复：A 后台管线 + B 共享快照 ───────────────────────
+
+
+def test_batch_confirm_reuses_shared_snapshot(qtbot):
+    """卡顿修复·B：共享快照下 N 簇批量只加载一次全代际观测——无上下文时每
+    簇 2 次（_sink_confirmation 与 photos_of_cluster 各一次），N 簇即 2N 次。"""
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    bob = harness.add_person("2李四", 2)
+    photo_a = harness.add_photo("photos/a.jpg")
+    photo_b = harness.add_photo("photos/b.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    o2 = harness.add_observation(photo_b, 0, 180.0)
+    _cluster_run, clusters = harness.add_generation([
+        ("k|a|000000", [o1]),
+        ("k|b|000001", [o2]),
+    ])
+    _suggest, workbench, _ignore, _results, _roster = harness.build_services()
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=clusters[0].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=datetime.now(),
+        ),
+        ClusterPersonAssignment(
+            cluster_id=clusters[1].id, person_id=bob.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=datetime.now(),
+        ),
+    ])
+
+    class _CountingObservations:
+        """Delegate everything except list_by_run, which is counted."""
+
+        def __init__(self, inner):
+            self._inner = inner
+            self.list_by_run_calls = 0
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        def list_by_run(self, run_id):
+            self.list_by_run_calls += 1
+            return self._inner.list_by_run(run_id)
+
+    counting = _CountingObservations(harness.observations)
+    workbench._observation_repository = counting
+    context = workbench.create_batch_context()
+
+    for cluster in clusters:
+        assignment = workbench._assignment_repository.list_latest_decision(
+            cluster.id,
+        )
+        workbench.confirm(
+            ConfirmAssignmentCommand(assignment.id), context=context,
+        )
+
+    assert counting.list_by_run_calls == 1  # 整批一次（无上下文＝4 次）
+    for cluster in clusters:
+        latest = workbench._assignment_repository.list_latest_decision(cluster.id)
+        assert latest.status == ASSIGNMENT_STATUS_CONFIRMED
+
+
+def test_batch_pass_runs_through_task_pipeline(tmp_path, qtbot, monkeypatch):
+    """卡顿修复·A：注入协调器+执行器后批量通过走后台任务管线——准入占位、
+    完成后反馈+刷新+按钮恢复，状态落库与同步路径一致。"""
+    from photo_archiver.presentation.task_coordinator import TaskCoordinator
+    from photo_archiver.workers.qt_executor import QtWorkerExecutor
+
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    photo_a = harness.add_photo(str(tmp_path / "a.jpg"))
+    (tmp_path / "a.jpg").write_bytes(b"x")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    _cluster_run, clusters = harness.add_generation([("k|a|000000", [o1])])
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=clusters[0].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=datetime.now(),
+        ),
+    ])
+    coordinator = TaskCoordinator()
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=_suggest, workbench_service=workbench,
+        ignore_service=_ignore, list_persons=roster,
+        task_coordinator=coordinator,
+        task_executor=QtWorkerExecutor(),
+    )
+    qtbot.addWidget(dialog)
+    dialog.refresh()
+    dialog._cluster_list.setCurrentRow(0)
+
+    monkeypatch.setattr(
+        "photo_archiver.presentation.views.cluster_results_dialog.QMessageBox.exec",
+        lambda self: QMessageBox.StandardButton.Ok,
+    )
+    dialog._on_batch_pass_clicked()
+    assert coordinator.is_busy  # 准入占位（窗口级冲突门同源）
+
+    qtbot.waitUntil(
+        lambda: "成功 1" in dialog._feedback_label.text(), timeout=10000,
+    )
+    assert not coordinator.is_busy
+    assert not dialog._busy
+    latest = dialog._assignments_by_cluster()[clusters[0].id]
+    assert latest.status == ASSIGNMENT_STATUS_CONFIRMED

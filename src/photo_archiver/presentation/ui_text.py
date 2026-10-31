@@ -819,6 +819,14 @@ REVIEW_EMPTY = "暂无待审核结果。扫描照片时会对单脸照片自动�
 WORKSPACE_CANCEL_IDLE = "当前没有可取消的活动任务。"
 WORKSPACE_CANCEL_READY = "请求取消当前任务；已完成的结果会保留。"
 
+# ── 批量终审后台任务（Owner 2026-10-31 卡顿修复·A）────────────────────────
+TASK_LABELS["pairing_batch"] = "批量终审"
+CLUSTER_PAIRING_BATCH_BUSY = "已有批量终审在执行，请稍候。"
+CLUSTER_PAIRING_BATCH_RUNNING = "批量终审进行中…"
+CLUSTER_PAIRING_BATCH_PROGRESS = "批量终审 {current}/{total}：{message}"
+CLUSTER_PAIRING_BATCH_FAILED = "批量终审失败"
+CLUSTER_PAIRING_BATCH_CANCELLED = "批量终审已取消。"
+
 # ── 批量通过（Owner 2026-10-31：组级人工终审，多选簇→预演→确认）──────────
 CLUSTER_PAIRING_BATCH_PASS_BUTTON = "批量通过"
 CLUSTER_PAIRING_PASS_SKIP_CONFIRMED = "已确认，无需重复"

@@ -1,5 +1,9 @@
 """Worker task wrappers for application use cases."""
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+from uuid import UUID
+
 from photo_archiver.application.commands import (
     ArchivePhotosCommand,
     ImportPeopleCommand,
@@ -8,6 +12,10 @@ from photo_archiver.application.commands import (
     StartRecognitionRunCommand,
     ScanAndRegisterPhotosCommand,
 )
+from photo_archiver.application.commands.pairing import (
+    AssignClusterPersonCommand,
+    ConfirmAssignmentCommand,
+)
 from photo_archiver.application.dtos import (
     ArchiveResult,
     ImportConfirmResult,
@@ -15,6 +23,9 @@ from photo_archiver.application.dtos import (
     MatchResult,
     ScanAndRegisterPhotosResult,
     ScanRegisterAnalyzeResult,
+)
+from photo_archiver.application.services.pairing_workbench_service import (
+    PairingWorkbenchService,
 )
 from photo_archiver.application.use_cases import (
     ArchivePhotosUseCase,
@@ -25,6 +36,7 @@ from photo_archiver.application.use_cases import (
     ScanAndRegisterPhotosUseCase,
 )
 from photo_archiver.domain import FaceClusterRun, RecognitionRun
+from photo_archiver.domain.entities.cluster_assignment import HUMAN_ACTOR
 from photo_archiver.workers.task import WorkerTask
 
 
@@ -281,3 +293,99 @@ class ArchivePhotosTask(WorkerTask[ArchiveResult]):
             total=result.planned_count,
         )
         return result
+
+# ── 批量终审（Owner 2026-10-31 卡顿修复·A：批量确认/批量通过下放后台线程）──
+
+
+@dataclass(frozen=True)
+class PairingBatchItem:
+    """One plan entry（与对话框 _plan_confirm/_plan_batch_pass 条目同构）.
+
+    ``action``：confirm（payload=建议行 id）/ promote（payload=本组当前指派
+    人 id）/ assign（person_id=批量目标人员）/ skip（payload=原因）。
+    """
+
+    action: str
+    cluster_id: UUID
+    label: str
+    payload: str | None = None
+    person_id: str | None = None
+
+
+@dataclass
+class PairingBatchOutcome:
+    """逐项提交后的批量结果（部分成功如实呈现，§3.3）。"""
+
+    action: str
+    succeeded: int
+    skipped: int
+    failed: int
+    outcomes: tuple[str, ...]
+
+
+class PairingBatchFinalizeTask(WorkerTask[PairingBatchOutcome]):
+    """Execute a pairing batch (confirm / promote / assign) off the UI thread.
+
+    每项独立提交（允许部分成功，§3.3 边界）；项间为协作式取消检查点；整批
+    共享一个 :class:`PairingBatchContext` 读快照（Owner 2026-10-31 卡顿修复
+    ·B：成员/观测/忽略名单一次加载，消 O(簇数×代际) 重载放大）。
+    """
+
+    def __init__(
+        self,
+        workbench: PairingWorkbenchService,
+        items: Sequence[PairingBatchItem],
+        action: str,
+    ) -> None:
+        super().__init__("pairing_batch")
+        self._workbench = workbench
+        self._items = tuple(items)
+        self._action = action
+
+    def execute(self) -> PairingBatchOutcome:
+        """Run every plan item with a shared snapshot and per-item progress."""
+        context = self._workbench.create_batch_context()
+        succeeded = skipped = failed = 0
+        outcomes: list[str] = []
+        total = len(self._items)
+        for index, item in enumerate(self._items, start=1):
+            self.raise_if_cancelled()
+            self.report_progress(item.label, current=index, total=total)
+            try:
+                if item.action == "confirm" and item.payload is not None:
+                    self._workbench.confirm(
+                        ConfirmAssignmentCommand(UUID(item.payload)),
+                        context=context,
+                    )
+                elif item.action == "promote" and item.payload is not None:
+                    self._workbench.assign_person(
+                        AssignClusterPersonCommand(
+                            cluster_id=item.cluster_id,
+                            person_id=UUID(item.payload),
+                        ),
+                        actor=HUMAN_ACTOR,
+                        context=context,
+                    )
+                elif item.action == "assign" and item.person_id is not None:
+                    self._workbench.assign_person(
+                        AssignClusterPersonCommand(
+                            cluster_id=item.cluster_id,
+                            person_id=UUID(item.person_id),
+                        ),
+                        actor=HUMAN_ACTOR,
+                        context=context,
+                    )
+                else:
+                    skipped += 1
+                    continue
+                succeeded += 1
+            except Exception as exc:  # noqa: BLE001 - per-item boundary（§3.3）
+                failed += 1
+                outcomes.append(f"失败[{item.label}]: {exc}")
+        return PairingBatchOutcome(
+            action=self._action,
+            succeeded=succeeded,
+            skipped=skipped,
+            failed=failed,
+            outcomes=tuple(outcomes),
+        )

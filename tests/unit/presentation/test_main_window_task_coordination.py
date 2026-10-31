@@ -143,10 +143,13 @@ def prepare(window, monkeypatch, tmp_path, name, runnable):
 
 # 任务书 D1/§3：match_persons 早已退役；run_recognition 降级为数据工具维护
 # 入口（不在主链参数化内）；scan_and_register_photos 更名为 scan_photos。
+# pairing_batch（批量终审）＝聚类结果对话框级任务：经同一 TaskCoordinator
+# 准入（对话框注入），但无窗口级入口——不在本窗口参数化内（对话框端到端
+# 准入/进度/终态由 test_cluster_pairing_dialog 的异步用例覆盖）。
 _WINDOW_TASK_NAMES = [
     n for n in TASK_LABELS
     if n not in ("import_confirm", "match_persons", "run_recognition",
-                 "scan_and_register_photos")
+                 "scan_and_register_photos", "pairing_batch")
 ]
 
 

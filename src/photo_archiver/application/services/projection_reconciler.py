@@ -29,6 +29,7 @@ reconcile，归档时各生成一份归档副本。
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from loguru import logger
@@ -49,6 +50,11 @@ from photo_archiver.domain.repositories.face_observation_repository import (
     FaceObservationRepository,
 )
 from photo_archiver.domain.exceptions import ValidationError
+
+if TYPE_CHECKING:
+    from photo_archiver.application.services.pairing_batch_context import (
+        PairingBatchContext,
+    )
 from photo_archiver.domain.repositories.recognition_repository import (
     RecognitionRepository,
 )
@@ -182,7 +188,9 @@ class ProjectionReconciler:
             supports.append(latest)
         return tuple(sorted(supports, key=self._support_sort_key))
 
-    def photos_of_cluster(self, cluster: FaceCluster) -> tuple[UUID, ...]:
+    def photos_of_cluster(
+        self, cluster: FaceCluster, context: "PairingBatchContext | None" = None,
+    ) -> tuple[UUID, ...]:
         """Return the cluster's distinct photo ids, in stable order.
 
         Deduplicating by photo (not by observation) is what keeps a multi-face
@@ -190,14 +198,26 @@ class ProjectionReconciler:
 
         界面优化 §3.2：该簇所属代际内被忽略的照片不产出——确认终审不会
         为忽略照片创建投影。
+
+        ``context``（Owner 2026-10-31 卡顿修复·B）：批量终审会话提供成员/
+        观测/忽略名单的共享快照——本方法本应每次全量重载整代际（O(簇数×
+        代际) 放大），注入后改为一次加载全批复用；None 保持逐项原行为。
         """
-        ignored = self._ignored_photo_ids(cluster.cluster_run_id)
-        observations = {
-            observation.id: observation
-            for observation in self._observations.list_by_run(cluster.run_id)
-        }
+        if context is not None:
+            ignored: "set[UUID] | frozenset[UUID]" = context.ignored_photo_ids(
+                cluster.cluster_run_id,
+            )
+            observations = context.observations_by_id(cluster.run_id)
+            run_members = context.members_of_run(cluster.cluster_run_id)
+        else:
+            ignored = self._ignored_photo_ids(cluster.cluster_run_id)
+            observations = {
+                observation.id: observation
+                for observation in self._observations.list_by_run(cluster.run_id)
+            }
+            run_members = self._clusters.list_members(cluster.cluster_run_id)
         photo_ids: list[UUID] = []
-        for member in self._clusters.list_members(cluster.cluster_run_id):
+        for member in run_members:
             if member.cluster_id != cluster.id:
                 continue
             observation = observations.get(member.observation_id)
@@ -208,6 +228,10 @@ class ProjectionReconciler:
             if observation.photo_id not in photo_ids:
                 photo_ids.append(observation.photo_id)
         return tuple(photo_ids)
+
+    def ignored_photo_ids(self, cluster_run_id: UUID) -> set[UUID]:
+        """Public read of one generation's ignored photo ids（批量快照用）."""
+        return self._ignored_photo_ids(cluster_run_id)
 
     # ── 物化 ──────────────────────────────────────────────────────────
 

@@ -1852,6 +1852,8 @@ class MainWindow(QMainWindow):
             self._status_label.setText(text.CLUSTER_PAGE_NO_RUNS)
             return
         # 界面优化 §5：配对功能整合进聚类结果界面（独立工作台入口已移除）。
+        # Owner 2026-10-31 卡顿修复·A：注入协调器+执行器——批量确认/批量通过
+        # 走后台任务管线（进度/取消/忙碌准入），对话框关独立使用仍同步回退。
         ClusterResultsDialog(
             self._context.services.cluster_results,
             run_id,
@@ -1861,6 +1863,8 @@ class MainWindow(QMainWindow):
             workbench_service=self._context.services.pairing_workbench,
             ignore_service=self._context.services.photo_ignore,
             list_persons=self._context.services.list_persons,
+            task_coordinator=self._task_coordinator,
+            task_executor=self._context.worker_executor,
         ).exec()
 
     # ------------------------------------------------------------------

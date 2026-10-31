@@ -48,6 +48,9 @@ from photo_archiver.domain.entities.cluster_assignment import (
     HUMAN_ACTOR,
     MANUAL_ASSIGNMENT_SOURCES,
 )
+from photo_archiver.application.services.pairing_batch_context import (
+    PairingBatchContext,
+)
 from photo_archiver.application.services.projection_reconciler import (
     ProjectionReconciler,
 )
@@ -169,22 +172,41 @@ class PairingWorkbenchService:
         """Read one decision row（UI 追溯展示用）。"""
         return self._assignment_repository.get_assignment(assignment_id)
 
+    def create_batch_context(self) -> PairingBatchContext:
+        """Build one batch's shared read snapshot（批量终审任务层用）."""
+        return PairingBatchContext(
+            cluster_repository=self._cluster_repository,
+            observation_repository=self._observation_repository,
+            ignored_provider=self._reconciler.ignored_photo_ids,
+        )
+
     # ── 确认建议 ────────────────────────────────────────────────────────
 
-    def confirm(self, command: ConfirmAssignmentCommand) -> PairingOperationResult:
+    def confirm(
+        self,
+        command: ConfirmAssignmentCommand,
+        context: PairingBatchContext | None = None,
+    ) -> PairingOperationResult:
         """Confirm one suggested assignment; sinks samples + compat results.
 
         LOGIC-03/DATA-01：注入 ``transaction_runner`` 时，整条确认链在单个
         IMMEDIATE 事务内执行——中途任一写入失败整体回滚，不留下"已 confirmed
         但样本/投影缺失"的半程状态；busy 冲突按整 attempt 重试，并发双确认由
         BEGIN IMMEDIATE 串行化（败者在事务内重读状态机被拒，无冗余行）。
+
+        ``context``（Owner 2026-10-31 卡顿修复·B）：批量终审会话快照——成员/
+        观测/忽略名单整批一次加载复用；None 保持逐项原行为。
         """
         if self._transaction_runner is not None:
             return self._transaction_runner(
-                lambda _connection: self._confirm_in_scope(command))
-        return self._confirm_in_scope(command)
+                lambda _connection: self._confirm_in_scope(command, context))
+        return self._confirm_in_scope(command, context)
 
-    def _confirm_in_scope(self, command: ConfirmAssignmentCommand) -> PairingOperationResult:
+    def _confirm_in_scope(
+        self,
+        command: ConfirmAssignmentCommand,
+        context: PairingBatchContext | None = None,
+    ) -> PairingOperationResult:
         """Execute the full confirm chain inside the caller's transaction scope."""
         assignment = self._require_assignment(command.assignment_id)
         if assignment.status != "suggested":
@@ -206,7 +228,7 @@ class PairingWorkbenchService:
             raise ValidationError(
                 f"Assignment {assignment.id} no longer exists (concurrent delete)"
             )
-        result = self._sink_confirmation(assignment, cluster, person.id)
+        result = self._sink_confirmation(assignment, cluster, person.id, context)
         logger.info(
             "PairingWorkbenchService: assignment {} confirmed to person {}",
             assignment.id, person.id,
@@ -283,7 +305,10 @@ class PairingWorkbenchService:
     # ── 人工改派 / 新增指派 ─────────────────────────────────────────────
 
     def assign_person(
-        self, command: AssignClusterPersonCommand, actor: str,
+        self,
+        command: AssignClusterPersonCommand,
+        actor: str,
+        context: PairingBatchContext | None = None,
     ) -> PairingOperationResult:
         """Manually assign a person; the explicit choice is a confirmation.
 
@@ -313,7 +338,7 @@ class PairingWorkbenchService:
             # E-P1-2（E-SG-6 #7）：旧身份的兼容投影与样本随改派同步回收，
             # 不影响其他 (person, photo) 归属（E-SG-6 #4/#7）。
             if active.person_id is not None:
-                self._retract_confirmation(cluster, active.person_id)
+                self._retract_confirmation(cluster, active.person_id, context)
         assignment = ClusterPersonAssignment(
             cluster_id=command.cluster_id,
             person_id=command.person_id,
@@ -334,7 +359,9 @@ class PairingWorkbenchService:
             raise ValidationError(
                 f"Assignment {assignment.id} no longer exists (concurrent delete)"
             )
-        compat, samples = self._sink_confirmation(assignment, cluster, person.id)
+        compat, samples = self._sink_confirmation(
+            assignment, cluster, person.id, context,
+        )
         logger.info(
             "PairingWorkbenchService: cluster {} manually assigned to person {}",
             command.cluster_id, person.id,
@@ -396,20 +423,34 @@ class PairingWorkbenchService:
             return None
         return latest
 
-    def _sink_confirmation(self, assignment, cluster, person_id: UUID) -> tuple[int, int]:
-        """D3 兼容适配 + D4 样本沉淀；返回 (compat_results, samples) 计数。"""
-        members = [
-            member for member in self._cluster_repository.list_members(
+    def _sink_confirmation(
+        self,
+        assignment,
+        cluster,
+        person_id: UUID,
+        context: PairingBatchContext | None = None,
+    ) -> tuple[int, int]:
+        """D3 兼容适配 + D4 样本沉淀；返回 (compat_results, samples) 计数。
+
+        ``context``：批量终审快照（成员/观测整批一次加载）；None 原行为。
+        """
+        if context is not None:
+            run_members = context.members_of_run(cluster.cluster_run_id)
+            observations = context.observations_by_id(cluster.run_id)
+        else:
+            run_members = self._cluster_repository.list_members(
                 cluster.cluster_run_id,
             )
+            observations = {
+                observation.id: observation
+                for observation in self._observation_repository.list_by_run(
+                    cluster.run_id,
+                )
+            }
+        members = [
+            member for member in run_members
             if member.cluster_id == cluster.id
         ]
-        observations = {
-            observation.id: observation
-            for observation in self._observation_repository.list_by_run(
-                cluster.run_id,
-            )
-        }
         member_observations = [
             observations[member.observation_id]
             for member in members
@@ -456,27 +497,37 @@ class PairingWorkbenchService:
         # 真实余弦，为位次配对/人工指派写 NULL（无相似度证据，不是 0.0）。
         compat_written = sum(
             1
-            for photo_id in self._reconciler.photos_of_cluster(cluster)
+            for photo_id in self._reconciler.photos_of_cluster(cluster, context=context)
             if self._reconciler.reconcile_pair(photo_id, person_id).action == "created"
         )
         return compat_written, len(new_samples)
 
-    def _retract_confirmation(self, cluster, person_id: UUID) -> int:
+    def _retract_confirmation(
+        self,
+        cluster,
+        person_id: UUID,
+        context: PairingBatchContext | None = None,
+    ) -> int:
         """E-P1-2（E-SG-6 #7）：回收 (person, 簇成员照片) 的兼容投影并停用样本.
 
         兼容层是当前指派的投影（主事实原则）：改派/解除时移除旧 person 的
         APPROVED 行、停用其样本（历史保留 enabled=0）。其他 (person,
         photo) 归属不受影响。
         """
-        observations = self._observations_by_run(cluster.run_id)
+        if context is not None:
+            observations = context.observations_by_id(cluster.run_id)
+            run_members = context.members_of_run(cluster.cluster_run_id)
+        else:
+            observations = self._observations_by_run(cluster.run_id)
+            run_members = self._cluster_repository.list_members(cluster.cluster_run_id)
         member_observations = [
             observations[member.observation_id]
-            for member in self._cluster_repository.list_members(cluster.cluster_run_id)
+            for member in run_members
             if member.cluster_id == cluster.id
             and member.observation_id in observations
             and observations[member.observation_id].embedding.vector
         ]
-        photo_ids = list(self._reconciler.photos_of_cluster(cluster))
+        photo_ids = list(self._reconciler.photos_of_cluster(cluster, context=context))
         # S1：不再按 (person_id, photo_id) 毯式 DELETE。撤销一个 Assignment 只代表
         # 少了一个支撑；该 pair 若仍被其他 active Assignment 支撑（例如同一照片的
         # 另一张脸落进另一个簇且同指此人），投影必须保留——这正是 P0-1 的成因。
