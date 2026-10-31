@@ -9,6 +9,7 @@ pytest.importorskip("pytestqt")
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QEventLoop, QTimer
+from PySide6.QtCore import QThreadPool
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from photo_archiver.app import bootstrap_application
@@ -370,3 +371,14 @@ def test_submission_exception_releases_reservation(window, monkeypatch, tmp_path
     assert not window._task_coordinator.is_busy
     assert not window._cancel_action.isEnabled()
     _assert_persistent_actions_enabled(window)
+
+
+def test_pairing_batch_uses_dedicated_pool_isolated_from_global(window) -> None:
+    """Owner 2026-10-31「卡住 0%」根因：批量终审与照片墙缩略图管线共用全局
+    QThreadPool——缩略图刷新重排数百任务时批量 runnable 饥饿（0%、无日志、
+    协调器被占）。专用单线程池＝与缩略图饥饿彻底隔离。"""
+    from photo_archiver.workers.qt_executor import QtWorkerExecutor
+
+    executor = getattr(window, "_pairing_batch_executor", None)
+    assert isinstance(executor, QtWorkerExecutor)
+    assert executor.thread_pool is not QThreadPool.globalInstance()

@@ -127,6 +127,11 @@ class QtWorkerExecutor:
         if max_workers is not None:
             self._thread_pool.setMaxThreadCount(max_workers)
 
+    @property
+    def thread_pool(self) -> QThreadPool:
+        """Return the backing pool（测试/QA：专用池隔离断言用）."""
+        return self._thread_pool
+
     def submit(self, task: WorkerTask[object]) -> QtWorkerRunnable:
         """Submit a task for background execution and return its runnable handle."""
         runnable = QtWorkerRunnable(task)

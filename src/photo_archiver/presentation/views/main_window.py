@@ -21,7 +21,7 @@ from pathlib import Path
 from uuid import UUID
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QSignalBlocker, QSize, Qt, Slot
+from PySide6.QtCore import QSignalBlocker, QSize, Qt, QThreadPool, Slot
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -186,6 +186,7 @@ from photo_archiver.presentation.views.review_center_page import ReviewCenterPag
 from photo_archiver.presentation.views.settings_dialog import SettingsDialog
 from photo_archiver.plugins import PluginRegistry
 from photo_archiver.workers import ConfirmImportTask, QtWorkerRunnable
+from photo_archiver.workers.qt_executor import QtWorkerExecutor
 from photo_archiver.workers.events import (
     TaskCancelled,
     TaskCompleted,
@@ -282,6 +283,13 @@ class MainWindow(QMainWindow):
 
     def _build_controllers(self) -> None:
         """Assemble the four controllers from context services + worker executor."""
+        # Owner 2026-10-31「卡住 0%」根因修复：批量终审用**专用单线程池**——
+        # 照片墙缩略图管线直接占全局线程池（每次刷新重新排队数百个缩略图
+        # 任务），批量 runnable 排在队尾永远轮不到（0%、无日志、协调器被
+        # 占、后续点击全被拒）。专用池与缩略图饥饿彻底隔离。
+        self._pairing_batch_executor = QtWorkerExecutor(
+            thread_pool=QThreadPool(), max_workers=1,
+        )
         # 任务书 §3 A1：扫描入口提交组合任务（登记 + 增量特征提取）。
         self._scan_controller = ScanController(
             self._context.services.scan_register_analyze,
@@ -1864,7 +1872,7 @@ class MainWindow(QMainWindow):
             ignore_service=self._context.services.photo_ignore,
             list_persons=self._context.services.list_persons,
             task_coordinator=self._task_coordinator,
-            task_executor=self._context.worker_executor,
+            task_executor=self._pairing_batch_executor,
         ).exec()
 
     # ------------------------------------------------------------------
