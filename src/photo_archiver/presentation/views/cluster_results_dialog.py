@@ -98,6 +98,26 @@ _ASSIGNMENT_SEVERITY = {
 }
 
 
+class _DetailIgnoreController:
+    """详图忽略/恢复控制器（Owner 2026-10-31）。
+
+    把 :class:`PhotoDetailDialog` 的忽略/恢复按钮接到宿主
+    :class:`ClusterResultsDialog` 的代际作用域服务：查询态＝当前选中簇的
+    ignored 集合；切换＝单照片服务调用＋原位重渲染（不关详图）。协议与
+    photo_detail_dialog 的 ``ignore_controller`` 参数对齐。
+    """
+
+    def __init__(self, dialog: "ClusterResultsDialog") -> None:
+        self._dialog = dialog
+
+    def is_ignored(self, photo_id) -> bool:
+        detail = self._dialog.current_cluster_detail()
+        return detail is not None and photo_id in set(detail.ignored_photo_ids)
+
+    def toggle(self, photo_id, ignore: bool) -> str | None:
+        return self._dialog.toggle_detail_ignore(photo_id, ignore)
+
+
 class ClusterResultsDialog(QDialog):
     """Read-only / calibration / integrated-pairing view of one recognition run."""
 
@@ -156,6 +176,9 @@ class ClusterResultsDialog(QDialog):
         self._detail_dialog: PhotoDetailDialog | None = None
         self._detail_photos: list = []
         self._detail_index = 0
+        # Owner 2026-10-31：详图内忽略/恢复——控制器把详图按钮接到本对话框
+        # 的代际作用域服务（未注入忽略服务时按钮自动隐藏）。
+        self._detail_ignore = _DetailIgnoreController(self)
         self._build_ui()
         if thumbnail_source is not None:
             # Connect once — members of many photos register many rows and a
@@ -223,6 +246,9 @@ class ClusterResultsDialog(QDialog):
         self._cluster_list.setMinimumWidth(300)
         # M9（布局重组解释内的容器样式化）：簇列表卡片化（QSS #CardList）。
         style_card_list(self._cluster_list)
+        # Owner 2026-10-31：不取键盘焦点——原生焦点矩形在选中卡片内缘画黑框
+        # （outline:none 双保险于 QSS）；鼠标选择/高亮语义不变。
+        self._cluster_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._cluster_list.currentItemChanged.connect(self._on_cluster_selected)
         if self._pairing_active:
             # 批量确认/拒绝：簇列表支持多选（ExtendedSelection）。
@@ -236,6 +262,7 @@ class ClusterResultsDialog(QDialog):
         else:
             self._member_list = QListWidget(self)
             style_card_list(self._member_list)
+            self._member_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             body.addWidget(self._member_list, 3)
         layout.addLayout(body, 1)
 
@@ -288,6 +315,7 @@ class ClusterResultsDialog(QDialog):
         self._photo_grid.setSelectionMode(
             QAbstractItemView.SelectionMode.ExtendedSelection,
         )
+        self._photo_grid.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._photo_grid.itemDoubleClicked.connect(self._on_photo_double_clicked)
         layout.addWidget(self._photo_grid, 1)
 
@@ -549,6 +577,15 @@ class ClusterResultsDialog(QDialog):
         person_ids = self._results_service.active_person_ids(
             self._generation_combo.currentData(),
         )
+        # Owner 2026-10-31：切簇时目标人员自动跟随该组当前指派（suggested/
+        # auto_confirmed/confirmed）——按 person_id 值扫描选中（QVariant
+        # findData 对 UUID 不可靠，同 _render_batch_combo 教训）；未指派组
+        # 保持当前选择不动。
+        if assignment is not None and assignment.person_id is not None:
+            for index in range(self._person_combo.count()):
+                if self._person_combo.itemData(index) == assignment.person_id:
+                    self._person_combo.setCurrentIndex(index)
+                    break
         decision_text = (
             text.PAIRING_WORKBENCH_ASSIGNMENT_LABEL.get(assignment.status, "?")
             if assignment is not None else text.CLUSTER_PAIRING_UNMATCHED
@@ -937,6 +974,66 @@ class ClusterResultsDialog(QDialog):
             + ("；" + "；".join(details) if details else "")
         )
 
+    # ── 详图内忽略/恢复（Owner 2026-10-31）───────────────────────────────
+
+    def current_cluster_detail(self):
+        """当前选中簇的明细（无选中/无快照＝None；控制器查询态用）。"""
+        current = self._cluster_list.currentItem()
+        cluster_id = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
+        if self._current is None or cluster_id is None:
+            return None
+        return next(
+            (d for d in self._current.clusters if d.cluster_id == cluster_id), None,
+        )
+
+    def is_photo_ignored(self, photo_id) -> bool:
+        """详图查询：当前簇内该照片是否已忽略（_DetailIgnoreController 用）。"""
+        detail = self.current_cluster_detail()
+        return detail is not None and photo_id in set(detail.ignored_photo_ids)
+
+    def toggle_detail_ignore(self, photo_id, ignore: bool) -> str | None:
+        """详图内忽略/恢复单张照片：服务调用＋原位重渲染，不关详图。
+
+        P6 快照失效仅限 refresh/切代际——本路径重载**同一代际**快照并恢复
+        当前簇选中，``_detail_photos`` 集合不变，详图可继续导航。返回反馈
+        文本（成功/跳过/失败；无代际或无服务＝None）。
+        """
+        cluster_run_id = self._generation_combo.currentData()
+        if cluster_run_id is None or self._ignore_service is None:
+            return None
+        if ignore:
+            result = self._ignore_service.ignore_photos(
+                IgnorePhotosCommand(cluster_run_id=cluster_run_id, photo_ids=(photo_id,)),
+            )
+            verb = "忽略"
+        else:
+            result = self._ignore_service.restore_photos(
+                RestorePhotosCommand(cluster_run_id=cluster_run_id, photo_ids=(photo_id,)),
+            )
+            verb = "恢复"
+        current_detail = self.current_cluster_detail()
+        selected_cluster_id = (
+            current_detail.cluster_id if current_detail is not None else None
+        )
+        self._current = self._results_service.results(cluster_run_id)
+        self._render_run_status(cluster_run_id)
+        self._render_clusters()
+        # _render_clusters 会重置到第 0 行——恢复到原选中簇（重触发渲染）。
+        if selected_cluster_id is not None:
+            for row in range(self._cluster_list.count()):
+                item = self._cluster_list.item(row)
+                if item.data(Qt.ItemDataRole.UserRole) == selected_cluster_id:
+                    self._cluster_list.setCurrentRow(row)
+                    break
+        outcome = result.outcomes[0] if result.outcomes else None
+        if outcome is None:
+            return None
+        if outcome.outcome == "skipped":
+            return text.CLUSTER_DETAIL_IGNORE_SKIPPED.format(reason=outcome.reason)
+        if outcome.outcome == "failed":
+            return text.CLUSTER_DETAIL_IGNORE_FAILED.format(reason=outcome.reason)
+        return text.CLUSTER_DETAIL_IGNORE_DONE.format(verb=verb)
+
     # ── 详图（上一张 / 下一张，§5.4） ────────────────────────────────────
 
     def _on_photo_double_clicked(self, item: QListWidgetItem) -> None:
@@ -966,6 +1063,7 @@ class ClusterResultsDialog(QDialog):
                 parent=self,
                 auto_load_hd=True,
                 navigator=self,
+                ignore_controller=self._detail_ignore,
             )
             # P6：详图生命周期绑定导航可用性——任何关闭路径（accept/
             # reject/标题栏/close）经 finished 信号统一回收。
@@ -1024,8 +1122,11 @@ class ClusterResultsDialog(QDialog):
         except Exception:  # noqa: BLE001 - 相对/非法路径不构成详图打开
             return None
         name = member.photo_path.replace("\\", "/").rsplit("/", 1)[-1]
+        # id 必须携带真实 photo_id（Owner 2026-10-31 详图内忽略/恢复依赖它；
+        # 缺省自动生成的 UUID 会让服务按「无本代际成员资格」跳过）。
         return Photo(
-            path=path, original_name=name, captured_at=member.captured_at,
+            id=photo_id, path=path, original_name=name,
+            captured_at=member.captured_at,
         )
 
     def _on_detail_prev_next(self, offset: int) -> None:

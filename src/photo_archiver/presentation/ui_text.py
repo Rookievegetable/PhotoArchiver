@@ -819,6 +819,15 @@ REVIEW_EMPTY = "暂无待审核结果。扫描照片时会对单脸照片自动�
 WORKSPACE_CANCEL_IDLE = "当前没有可取消的活动任务。"
 WORKSPACE_CANCEL_READY = "请求取消当前任务；已完成的结果会保留。"
 
+# ---- 照片详情 · 忽略/恢复（Owner 2026-10-31；聚类结果对话框注入后可见）----
+CLUSTER_DETAIL_IGNORE_BUTTON = "忽略此照片"
+CLUSTER_DETAIL_RESTORE_BUTTON = "恢复此照片"
+CLUSTER_DETAIL_IGNORE_TIP = "把当前照片移出本代际的聚类与配对（撤销既有投影）"
+CLUSTER_DETAIL_RESTORE_TIP = "恢复当前照片的聚类与配对参与资格（不回溯投影）"
+CLUSTER_DETAIL_IGNORE_DONE = "已{verb}该照片。"
+CLUSTER_DETAIL_IGNORE_SKIPPED = "未变更：{reason}"
+CLUSTER_DETAIL_IGNORE_FAILED = "操作失败：{reason}"
+
 # ---- 主窗口 · 导航（Batch 3 信息架构） ----
 NAV_OVERVIEW = "概览"
 NAV_PHOTO_LIBRARY = "照片库"

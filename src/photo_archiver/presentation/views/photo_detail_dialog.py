@@ -25,6 +25,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
+from uuid import UUID
 
 from PySide6.QtCore import (
     QObject,
@@ -48,6 +50,9 @@ from PySide6.QtWidgets import (
 from photo_archiver.domain import Photo
 from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.visual_style import (
+    ROLE_DANGER,
+    ROLE_SECONDARY,
+    assign_role,
     set_badge_severity,
     style_nav_overlay_button,
     style_nav_position_label,
@@ -56,6 +61,18 @@ from photo_archiver.presentation.visual_style import (
 # 固定预览包围盒（logical px）：aspect-fit 显示，缩略图与高清图同一区域，
 # 对话框尺寸不随照片长宽比跳变；解码目标 = 包围盒 × devicePixelRatio（物理空间）。
 _PREVIEW_BOX = QSize(640, 480)
+
+
+class IgnoreController(Protocol):
+    """详图忽略/恢复控制器协议（聚类结果对话框注入 _DetailIgnoreController）。
+
+    ``is_ignored``：当前代际作用域下该照片是否已忽略；``toggle``：切换并
+    返回反馈文本（成功/跳过/失败；无法执行＝None）。
+    """
+
+    def is_ignored(self, photo_id: UUID) -> bool: ...
+
+    def toggle(self, photo_id: UUID, ignore: bool) -> str | None: ...
 
 # 含 90° 旋转分量的变换需要交换宽高（Owner 方案 §4.2：分量掩码判定，禁止
 # 固定枚举值清单）。PySide6 6.11 的 Transformation 位标志仅三个基础位——
@@ -210,6 +227,7 @@ class PhotoDetailDialog(QDialog):
         decoder: Callable[[Path, QSize, float], QImage] | None = None,
         auto_load_hd: bool = False,
         navigator: object | None = None,
+        ignore_controller: IgnoreController | None = None,
     ) -> None:
         """Compose the preview and metadata rows from already-loaded data.
 
@@ -218,6 +236,10 @@ class PhotoDetailDialog(QDialog):
         （审核中心双击场景——审片人需要直出高清，无需再点【查看大图】）；
         默认 False 保持"打开详情零原图 IO"契约。``navigator``：宿主持有
         照片序列（如聚类结果组内照片），注入即启用内嵌导航。
+        ``ignore_controller``（Owner 2026-10-31）：宿主提供忽略/恢复能力
+        （``is_ignored(photo_id)`` / ``toggle(photo_id, ignore) -> str|None``，
+        聚类结果对话框注入）即显示「忽略此照片/恢复此照片」按钮行；未注入
+        （照片库等只读入口）零变化。
         """
         super().__init__(parent)
         self.setWindowTitle(text.PHOTO_DETAIL_TITLE)
@@ -226,6 +248,7 @@ class PhotoDetailDialog(QDialog):
         self._closed = False
         self._request_id = 0
         self._navigator = navigator
+        self._ignore_controller = ignore_controller
         # 测试/QA 钩子：过期/关闭后丢弃的结果计数（T9/T10 契约观测点）。
         self._dropped_requests = 0
         # Worker 只触碰分发器（应用级单例，worker 上 emit 永不触碰对话框——
@@ -286,6 +309,15 @@ class PhotoDetailDialog(QDialog):
         for label in (self._name_label, self._path_label,
                       self._captured_label, self._badge_label):
             layout.addWidget(label)
+        # Owner 2026-10-31：忽略/恢复行（状态行下方；仅注入控制器后可见）。
+        self._ignore_button = QPushButton(self)
+        self._ignore_button.clicked.connect(self._on_ignore_toggle)
+        self._ignore_button.setVisible(False)
+        layout.addWidget(self._ignore_button)
+        self._ignore_feedback = QLabel(self)
+        self._ignore_feedback.setWordWrap(True)
+        self._ignore_feedback.setVisible(False)
+        layout.addWidget(self._ignore_feedback)
         layout.addStretch()
         self._apply_photo_details(photo, badge)
         if auto_load_hd:
@@ -351,6 +383,40 @@ class PhotoDetailDialog(QDialog):
         self._badge_label.setText(text.PHOTO_DETAIL_STATUS.format(
             badge=badge if badge else text.FILTER_STATUS_UNMATCHED,
         ))
+        self._sync_ignore_state()
+
+    # ── 忽略/恢复（Owner 2026-10-31；仅注入控制器后可见）─────────────────
+
+    def _sync_ignore_state(self) -> None:
+        """按当前照片的忽略态切换按钮形态（未注入控制器＝整行隐藏）。"""
+        controller = self._ignore_controller
+        if controller is None or self._photo.id is None:
+            self._ignore_button.setVisible(False)
+            self._ignore_feedback.setVisible(False)
+            return
+        ignored = bool(controller.is_ignored(self._photo.id))
+        self._ignore_feedback.setVisible(False)
+        self._ignore_button.setVisible(True)
+        if ignored:
+            self._ignore_button.setText(text.CLUSTER_DETAIL_RESTORE_BUTTON)
+            self._ignore_button.setToolTip(text.CLUSTER_DETAIL_RESTORE_TIP)
+            assign_role(self._ignore_button, ROLE_SECONDARY)
+        else:
+            self._ignore_button.setText(text.CLUSTER_DETAIL_IGNORE_BUTTON)
+            self._ignore_button.setToolTip(text.CLUSTER_DETAIL_IGNORE_TIP)
+            assign_role(self._ignore_button, ROLE_DANGER)
+
+    def _on_ignore_toggle(self) -> None:
+        """忽略/恢复当前照片：经宿主控制器（代际作用域服务）执行。"""
+        controller = self._ignore_controller
+        if controller is None or self._photo.id is None:
+            return
+        ignore = not controller.is_ignored(self._photo.id)
+        feedback = controller.toggle(self._photo.id, ignore)
+        self._sync_ignore_state()
+        if feedback:
+            self._ignore_feedback.setText(feedback)
+            self._ignore_feedback.setVisible(True)
 
     def replace_photo(
         self,

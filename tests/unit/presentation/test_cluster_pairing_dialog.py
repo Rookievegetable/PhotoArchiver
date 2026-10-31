@@ -703,3 +703,75 @@ def test_pairing_feedback_row_is_card_contained(qtbot):
 
     assert dialog._feedback_card.objectName() == CARD_OBJECT_NAME
     assert dialog._feedback_label.parent() is dialog._feedback_card
+
+
+# ── Owner 2026-10-31：切簇跟随目标人员 / 详图内忽略恢复 ──────────────────────
+
+
+def test_selecting_cluster_follows_its_assigned_person(qtbot):
+    """切簇时目标人员下拉自动跟随该组当前指派（suggested/auto_confirmed/
+    confirmed 均算）；未指派组保持当前选择不动。"""
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    bob = harness.add_person("2李四", 2)
+    photo_a = harness.add_photo("photos/a.jpg")
+    photo_b = harness.add_photo("photos/b.jpg")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    o2 = harness.add_observation(photo_b, 0, 180.0)
+    _cluster_run, clusters = harness.add_generation([
+        ("k|a|000000", [o1]),
+        ("k|b|000001", [o2]),
+    ])
+    suggest, workbench, ignore, results, roster = harness.build_services()
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=clusters[0].id, person_id=alice.id),
+        actor=HUMAN_ACTOR,
+    )
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=clusters[1].id, person_id=bob.id),
+        actor=HUMAN_ACTOR,
+    )
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=suggest, workbench_service=workbench,
+        ignore_service=ignore, list_persons=roster,
+    )
+    qtbot.addWidget(dialog)
+
+    dialog._cluster_list.setCurrentRow(0)
+    assert dialog._person_combo.currentText() == "1张三"
+    dialog._cluster_list.setCurrentRow(1)
+    assert dialog._person_combo.currentText() == "2李四"
+    dialog._cluster_list.setCurrentRow(0)
+    assert dialog._person_combo.currentText() == "1张三"
+
+
+def test_detail_dialog_toggle_ignore_keeps_detail_open(tmp_path, qtbot):
+    """详图内忽略/恢复（Owner 2026-10-31）：单照片服务调用＋原位重渲染——
+    详图不关闭、组内照片行随忽略标记刷新、按钮形态随状态切换。"""
+    harness = _Harness()
+    photo_a = harness.add_photo(str(tmp_path / "a.jpg"))
+    (tmp_path / "a.jpg").write_bytes(b"x")
+    o1 = harness.add_observation(photo_a, 0, 0.0)
+    cluster_run, _clusters = harness.add_generation([("k|a|000000", [o1])])
+    dialog = harness.build_dialog(qtbot)
+    dialog.refresh()
+    dialog._cluster_list.setCurrentRow(0)
+    dialog._on_photo_double_clicked(dialog._photo_grid.item(0))
+    detail = dialog._detail_dialog
+    assert detail is not None
+    assert detail.isVisible()
+    assert detail._ignore_button.text() == text.CLUSTER_DETAIL_IGNORE_BUTTON
+
+    detail._ignore_button.click()
+    assert harness.ignores.find(cluster_run.id, photo_a) is not None
+    assert detail._ignore_button.text() == text.CLUSTER_DETAIL_RESTORE_BUTTON
+    assert detail.isVisible()  # 详图未关（原位重渲染契约）
+    assert any(
+        "（已忽略）" in dialog._photo_grid.item(i).text()
+        for i in range(dialog._photo_grid.count())
+    )
+
+    detail._ignore_button.click()
+    assert harness.ignores.find(cluster_run.id, photo_a) is None
+    assert detail._ignore_button.text() == text.CLUSTER_DETAIL_IGNORE_BUTTON

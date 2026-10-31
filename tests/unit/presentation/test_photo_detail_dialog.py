@@ -498,3 +498,57 @@ def test_f_img1_thumbnail_failure_keeps_thumbnail_and_offers_retry(qtbot, tmp_pa
     qtbot.waitUntil(lambda: dialog._hd_status_label.isVisible(), timeout=5000)
     assert not dialog._preview.pixmap().isNull()  # 缩略图保留
     assert dialog._view_full_button.isVisible()
+
+
+# ── Owner 2026-10-31：详情内忽略/恢复（控制器注入） ──────────────────────────
+
+
+def test_ignore_button_hidden_without_controller(tmp_path: Path, qtbot) -> None:
+    """未注入控制器（照片库等只读入口）＝忽略行整体隐藏（零变化契约）。"""
+    dialog = _make_dialog(qtbot, _photo(tmp_path), None, _fake_decoder([_solid_qimage(4, 4, (1, 2, 3))]))
+    assert not dialog._ignore_button.isVisible()
+
+
+def test_ignore_controller_drives_button_state(tmp_path: Path, qtbot) -> None:
+    """注入控制器：按钮形态随忽略态切换（忽略=danger/恢复=secondary），
+    点击经控制器切换并展示反馈文本；导航换片（replace_photo）后状态重查。"""
+    photo = _photo(tmp_path)
+
+    class _StubController:
+        def __init__(self) -> None:
+            self.ignored = False
+            self.calls: list[tuple[object, bool]] = []
+
+        def is_ignored(self, photo_id: object) -> bool:
+            return self.ignored
+
+        def toggle(self, photo_id: object, ignore: bool) -> str | None:
+            self.calls.append((photo_id, ignore))
+            self.ignored = ignore
+            return text.CLUSTER_DETAIL_IGNORE_DONE.format(verb="忽略")
+
+    controller = _StubController()
+    dialog = PhotoDetailDialog(
+        photo, thumbnail_path=None, decoder=_fake_decoder([_solid_qimage(4, 4, (1, 2, 3))]),
+        ignore_controller=controller,
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+    assert dialog._ignore_button.isVisible()
+    assert dialog._ignore_button.text() == text.CLUSTER_DETAIL_IGNORE_BUTTON
+
+    dialog._ignore_button.click()
+    assert controller.calls == [(photo.id, True)]
+    assert dialog._ignore_button.text() == text.CLUSTER_DETAIL_RESTORE_BUTTON
+    assert dialog._ignore_feedback.isVisible()
+    assert "已忽略" in dialog._ignore_feedback.text()
+
+    dialog._ignore_button.click()
+    assert controller.calls == [(photo.id, True), (photo.id, False)]
+    assert dialog._ignore_button.text() == text.CLUSTER_DETAIL_IGNORE_BUTTON
+
+    # 导航换片（replace_photo）→ 忽略态按新照片重查（反馈随之清除）。
+    other = _photo(tmp_path, name="LEI00875.JPG")
+    dialog.replace_photo(other)
+    assert dialog._ignore_button.text() == text.CLUSTER_DETAIL_IGNORE_BUTTON
+    assert not dialog._ignore_feedback.isVisible()

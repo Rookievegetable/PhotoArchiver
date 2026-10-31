@@ -598,10 +598,14 @@ QListWidget#CardList::item {
     margin: 4px 2px;
     padding: 8px;
     color: ${pa-text-primary};
+    /* Owner 2026-10-31：选中项内缘黑框＝原生焦点矩形（State_HasFocus）
+       叠加在选中描边内——显式关掉 outline（导航 rail 同类问题同解）。 */
+    outline: none;
 }
 QListWidget#CardList::item:selected {
     border: 1px solid palette(Highlight);
     color: ${pa-text-primary};
+    outline: none;
 }
 QComboBox, QDateTimeEdit {
     background-color: ${pa-bg-surface};
