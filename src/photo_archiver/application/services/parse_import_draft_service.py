@@ -46,6 +46,16 @@ _DEFAULT_POSITIONAL_MAPPING = {"name": 0, "identity": 1, "department": 2, "note"
 _FIELDS = ("name", "identity", "department", "note", "group")
 
 
+def split_name_segments(name: str) -> tuple[str, ...]:
+    """Return a name's splittable segments（拆分键显示与拆分执行的同一口径）.
+
+    追加轮 24：拆分按钮的显示判定必须与 :meth:`split_draft_row_with_status`
+    的实际拆分同口径——单段名（含拆分结果行）即使残留 multi_name 警告，
+    也不可再拆、不显示拆分键。
+    """
+    return tuple(s.strip() for s in _SPLIT_RE.split(name) if s.strip())
+
+
 class ParseImportDraftService:
     """Parse one roster file into a persisted, editable draft batch."""
 
@@ -129,7 +139,7 @@ class ParseImportDraftService:
         target = next((row for row in rows if row.id == row_id), None)
         if target is None:
             raise ValueError(f"draft row not found: {row_id}")
-        segments = [segment.strip() for segment in _SPLIT_RE.split(target.parsed_name) if segment.strip()]
+        segments = list(split_name_segments(target.parsed_name))
         if len(segments) <= 1:
             return self._assemble_current(batch_id, rows), False
         rebuilt: list[ImportDraftRow] = []

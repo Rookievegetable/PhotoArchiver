@@ -41,6 +41,9 @@ from photo_archiver.application.commands.import_draft import (
     ReparseImportDraftCommand,
 )
 from photo_archiver.application.dtos.import_draft import ImportDraft
+from photo_archiver.application.services.parse_import_draft_service import (
+    split_name_segments,
+)
 from photo_archiver.domain.entities import (
     DRAFT_ACTION_CREATE,
     DRAFT_ACTION_MERGE_EXISTING,
@@ -391,6 +394,10 @@ class ImportPreviewDialog(QDialog):
         """Rebuild the table from the current draft rows."""
         rows = self._draft.rows
         self._table.blockSignals(True)
+        # 追加轮 24：先清空行集再重建——拆分/重新解析后行数与行位都会变化，
+        # 列 7 的拆分按钮是唯一条件化设置的 cellWidget，复用旧行位会继承上
+        # 一次填充残留的按钮（拆分结果行带出幽灵拆分键——Owner 实机实证）。
+        self._table.setRowCount(0)
         self._table.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
             self._table.setItem(row_index, 0, self._readonly_cell("　".join(row.raw_values)))
@@ -413,7 +420,11 @@ class ImportPreviewDialog(QDialog):
                 lambda index, r=row: self._on_action_changed(r, index),
             )
             self._table.setCellWidget(row_index, 6, action)
-            if any(w[0] == "multi_name" for w in row.warnings):
+            if any(w[0] == "multi_name" for w in row.warnings) and len(
+                split_name_segments(row.parsed_name),
+            ) > 1:
+                # 追加轮 24：显示判定与实际拆分同口径——单段名（拆分结果行）
+                # 即使残留 multi_name 警告也不再显示拆分键（点了也只能 no-op）。
                 split = QPushButton(text.IMPORT_PREVIEW_SPLIT_BUTTON, self)
                 split.clicked.connect(lambda _=False, r=row: self._on_split(r))
                 self._table.setCellWidget(row_index, 7, split)

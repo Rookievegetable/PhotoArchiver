@@ -80,6 +80,33 @@ def test_split_button_splits_row_and_updates_counts(parsed, qtbot) -> None:
     assert "将新建 5" in counts.text()  # 3 拆分行 + 张三 + 李四；组标题跳过
 
 
+def test_split_leaves_no_stale_split_buttons(parsed, qtbot) -> None:
+    """追加轮 24（Owner 实机实证）：拆分结果行不得残留拆分键——列 7 是唯一
+    条件化设置的 cellWidget，行位复用会把上一填充的按钮带给单段名子行。
+    修复＝重填前清空行集 + 显示判定与实际可拆性同口径。"""
+    dialog, _people = _make_dialog(parsed, qtbot)
+    multi = next(row for row in dialog._draft.rows if any(w[0] == "multi_name" for w in row.warnings))
+    dialog._on_split(multi)
+
+    # 拆分后：本夹具唯一的多名行已消解——全表不应存在任何拆分按钮。
+    buttons = [
+        dialog._table.cellWidget(row_index, 7)
+        for row_index in range(dialog._table.rowCount())
+    ]
+    assert all(widget is None for widget in buttons), (
+        f"stale split buttons at rows "
+        f"{[i for i, w in enumerate(buttons) if w is not None]}"
+    )
+
+    # 再拆一次外部不存在的行也不复活按钮：重新填充路径同样干净。
+    dialog._repopulate()
+    buttons = [
+        dialog._table.cellWidget(row_index, 7)
+        for row_index in range(dialog._table.rowCount())
+    ]
+    assert all(widget is None for widget in buttons)
+
+
 def test_split_noop_shows_visible_feedback(parsed, qtbot) -> None:
     """P9：拆分无可拆内容时界面给出可见反馈（此前为静默 no-op）。"""
     dialog, _people = _make_dialog(parsed, qtbot)
