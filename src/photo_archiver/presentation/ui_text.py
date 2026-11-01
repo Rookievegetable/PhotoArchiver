@@ -16,7 +16,8 @@ from __future__ import annotations
 from datetime import datetime
 
 # ---- 主窗口 · 工具栏 ----
-APP_VERSION = "2.9.11"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+APP_VERSION = "2.9.12"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+# 2.9.12＝照片库指定人员归档（单脸未匹配照片 → 指定人员+批次）。
 # 2.9.11＝聚类只用选定照片批次（single_run）+ 建议只匹配选定来源批次人员。
 # 2.9.10＝多选时确认键禁用（批量只走「批量通过」——防整选区误标到最后目标）。
 # 2.9.9＝导入预览处理动作下拉禁滚轮换值（滚轮穿透给表格滚动）。
@@ -666,6 +667,26 @@ CLUSTER_PAIRING_HINT = (
 # 产出为簇-人员配对建议（已确认样本匹配优先→名单顺序一对一→自动确认
 # 准入），幂等且不覆盖既有决策；触发行为与产出语义不变。
 CLUSTER_PAIRING_GENERATE_BUTTON = "按名单顺序生成配对建议"
+# ---- 照片库 · 指定人员归档（追加轮 29，Owner） ----
+MANUAL_ATTRIBUTION_DIALOG_TITLE = "指定人员归档"
+MANUAL_ATTRIBUTION_PREVIEW = "共 {total} 张选中照片，其中 {eligible} 张可指定归档（单人脸且未匹配）。"
+MANUAL_ATTRIBUTION_BLOCKED = (
+    "以下照片不满足条件，将被跳过：\n{reasons}"
+)
+MANUAL_ATTRIBUTION_PERSON_LABEL = "人员姓名："
+MANUAL_ATTRIBUTION_PERSON_PLACEHOLDER = "输入要归档到的人员姓名"
+MANUAL_ATTRIBUTION_BATCH_LABEL = "批次："
+MANUAL_ATTRIBUTION_NEW_BATCH = "新建批次"
+MANUAL_ATTRIBUTION_NEW_BATCH_PLACEHOLDER = "输入新批次名称（如：2026 年春游）"
+MANUAL_ATTRIBUTION_EXISTING_BATCH = "并入已导入批次（同名人员将复用）"
+MANUAL_ATTRIBUTION_EXECUTE_BUTTON = "归档到该人员"
+MANUAL_ATTRIBUTION_DONE = (
+    "已归档 {assigned}/{total} 张照片到「{person}」（批次：{batch}）。"
+)
+MANUAL_ATTRIBUTION_FAILED = (
+    "以下照片未能归档：\n{reasons}"
+)
+
 CLUSTER_PAIRING_ORDER_HINT = (
     "为当前所选聚类代际生成簇与人员的配对建议：先按已确认人脸样本相似度"
     "匹配，其余组按当前名单顺序一对一建议；满足自动确认条件的位置配对会"

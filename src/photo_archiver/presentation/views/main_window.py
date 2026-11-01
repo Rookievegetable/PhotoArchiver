@@ -155,6 +155,9 @@ from photo_archiver.presentation.views.import_preview_dialog import (
     CONFIRM_SYNC_LIMIT,
     ImportPreviewDialog,
 )
+from photo_archiver.presentation.views.manual_attribution_dialog import (
+    ManualAttributionDialog,
+)
 from photo_archiver.presentation.views.person_deletion_dialog import PersonDeletionDialog
 from photo_archiver.presentation.views.run_deletion_dialog import RunPhotosDeletionDialog
 from photo_archiver.presentation.views.people_admin_page import PeopleAdminPage
@@ -677,7 +680,21 @@ class MainWindow(QMainWindow):
         self._bulk_delete_button = QPushButton(self)
         self._bulk_delete_button.clicked.connect(self._on_delete_photos_clicked)
         assign_role(self._bulk_delete_button, ROLE_DANGER)
-        for button in (self._bulk_archive_button, self._bulk_delete_button):
+        # 追加轮 29（Owner）：指定人员归档——单脸未匹配照片批量归到指定人
+        # 员名下（新建批次或并入已导入批次）。
+        self._manual_attribution_button = QPushButton(self)
+        self._manual_attribution_button.setText(text.MANUAL_ATTRIBUTION_EXECUTE_BUTTON)
+        self._manual_attribution_button.setToolTip(
+            text.MANUAL_ATTRIBUTION_DIALOG_TITLE,
+        )
+        self._manual_attribution_button.clicked.connect(
+            self._on_manual_attribution_clicked,
+        )
+        assign_role(self._manual_attribution_button, ROLE_SECONDARY)
+        for button in (
+            self._bulk_archive_button, self._bulk_delete_button,
+            self._manual_attribution_button,
+        ):
             button.setVisible(False)
             selection_row.addWidget(button)
         layout.addLayout(selection_row)
@@ -1061,6 +1078,10 @@ class MainWindow(QMainWindow):
             button.setVisible(count > 0)
             button.setText(template.format(count=count))
             button.setEnabled(count > 0 and not busy)
+        # 追加轮 29：指定人员归档——选区非空即可见（对话框内逐张校验披露
+        # 不满足条件的照片），busy 期间置灰。
+        self._manual_attribution_button.setVisible(count > 0)
+        self._manual_attribution_button.setEnabled(count > 0 and not busy)
 
     @Slot()
     def _on_select_all_clicked(self) -> None:
@@ -1799,6 +1820,31 @@ class MainWindow(QMainWindow):
         self._context.detect_duplicates_controller.detect_and_show()
 
     # ---- Library management (Phase E E-4, ADR-034) ----
+
+    def _on_manual_attribution_clicked(self) -> None:
+        """指定人员归档（追加轮 29）：单脸未匹配照片 → 指定人员 + 批次.
+
+        不占任务准入：模态对话框自身独占交互，服务调用为快速同步路径；
+        忙态下批量栏按钮已置灰（``_update_bulk_bar``）。
+        """
+        selected = self._collect_selected_photo_ids()
+        if not selected:
+            return
+        roster = self._context.services.manage_people.roster()
+        dialog = ManualAttributionDialog(
+            self._context.services.manual_attribution,
+            tuple(selected),
+            roster.batches,
+            parent=self,
+        )
+        if not dialog.exec():
+            return
+        logger.info("Photo library manual attribution executed")
+        self._refresh_photo_list()
+        self._people_admin_page.refresh()
+        self._status_label.setText(
+            self._status_label.text() + " · " + dialog.last_message(),
+        )
 
     @_exclusive(ACTION_DELETE_PHOTOS)
     def _on_delete_photos_clicked(self) -> None:

@@ -21,6 +21,7 @@ from photo_archiver.application import (
     DeleteRunPeopleService,
     DeleteRunPhotosService,
     DeleteRunRecordService,
+    ManualAttributionService,
     PhotoIgnoreService,
     BackfillHistoricalPeopleService,
     ListRecognitionRunsService,
@@ -105,6 +106,7 @@ class ApplicationServices:
     backfill_historical_people: BackfillHistoricalPeopleService
     archive_photos: ArchivePhotosService
     review_recognition: ReviewRecognitionService
+    manual_attribution: ManualAttributionService
     settings: SettingsService
     export: ExportService
     detect_duplicates: DetectDuplicatesService
@@ -280,6 +282,18 @@ def build_application_services(
         repositories.recognition,
         unit_of_work=unit_of_work,
         identity_decision_service=identity_decisions,
+    )
+    # 追加轮 29：照片库指定人员归档（单脸未匹配照片 → 指定人员+批次）。
+    # 身份批准走 review_service 内部决策链（自带事务）——本服务不做外层
+    # 事务包裹（SQLite 不支持嵌套），逐张独立提交、允许部分成功。
+    manual_attribution_service = ManualAttributionService(
+        repositories.photos,
+        repositories.face_observations,
+        repositories.recognition,
+        review_service,
+        repositories.people,
+        repositories.import_batches,
+        run_repository=repositories.recognition_runs,
     )
     settings_service = SettingsService(
         user_settings_store=InMemoryUserSettingsStore(),
@@ -489,6 +503,7 @@ def build_application_services(
         ),
         archive_photos=archive_photos_service,
         review_recognition=review_service,
+        manual_attribution=manual_attribution_service,
         settings=settings_service,
         export=export_service,
         detect_duplicates=detect_duplicates_service,
