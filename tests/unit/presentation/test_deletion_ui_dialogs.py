@@ -259,6 +259,54 @@ def test_batch_person_deletion_dialog_previews_and_executes(qtbot, tmp_path: Pat
     assert "草稿" in dialog.last_message() or "已删除批次" in dialog.last_message()
 
 
+def test_batch_person_deletion_dialog_allows_record_only_cleanup(qtbot, tmp_path: Path):
+    """追加轮 20（Owner 2026-11-01）：0 人残留批次记录可清理——先前空批次
+    无条件禁用确认键，人员删光后批次记录反而永远删不掉（死锁）。现规则：
+    勾选「同时删除批次记录」＝启用确认键，执行后仅删记录+草稿。"""
+    manage, service, batch, provider = _batch_world(tmp_path)
+    from photo_archiver.application.commands.deletion import (
+        DeletePeopleByBatchCommand,
+    )
+    from photo_archiver.infrastructure.database.sqlite_import_batch_repository import (
+        SQLiteImportBatchRepository,
+    )
+    from photo_archiver.presentation.views.batch_person_deletion_dialog import (
+        BatchPersonDeletionDialog,
+    )
+
+    # 复现 Owner 状态：先删光该批次的 2 名人员（保留批次记录）。
+    service.execute_batch(
+        DeletePeopleByBatchCommand(batch_id=batch.id, delete_batch_record=False),
+    )
+    batches = SQLiteImportBatchRepository(provider)
+    assert batches.get_batch(batch.id) is not None  # 记录残留
+
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    dialog = BatchPersonDeletionDialog(manage, service)
+    qtbot.addWidget(dialog)
+    ok = dialog._buttons.button(QDialogButtonBox.StandardButton.Ok)
+
+    assert "没有归属人员" in dialog._impact_label.text()
+    assert "勾选" in dialog._impact_label.text()  # 残留记录提示语
+    assert dialog._cleanup_checkbox.isEnabled()
+    assert not ok.isEnabled()  # 未勾选 → 禁用（防误点空跑）
+
+    dialog._cleanup_checkbox.setChecked(True)
+    assert ok.isEnabled()  # 勾选 → 启用（仅删记录+草稿）
+    assert not dialog._cleanup_warning.isHidden()
+    assert "2 条导入草稿" in dialog._cleanup_warning.text()
+
+    dialog._cleanup_checkbox.setChecked(False)
+    assert not ok.isEnabled()  # 取消勾选 → 重新禁用
+
+    dialog._cleanup_checkbox.setChecked(True)
+    dialog._on_confirm()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    assert batches.get_batch(batch.id) is None  # 记录已删
+    assert "批次记录与 2 条导入草稿已删除" in dialog.last_message()
+
+
 def test_clear_all_people_dialog_requires_explicit_awareness(qtbot, tmp_path: Path):
     """清空对话框：未勾选知悉时确认按钮禁用；勾选后可执行。"""
     manage, service, _batch, _provider = _batch_world(tmp_path)

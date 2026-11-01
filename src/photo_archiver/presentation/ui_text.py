@@ -16,7 +16,8 @@ from __future__ import annotations
 from datetime import datetime
 
 # ---- 主窗口 · 工具栏 ----
-APP_VERSION = "2.9.2"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+APP_VERSION = "2.9.3"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+# 2.9.3＝0 人残留批次记录可经「同时删除批次记录」清理（先前确认键禁用死锁）。
 # 2.9.2＝簇列表状态染色真正上屏（委托补画被 QSS 丢弃的模型底色画笔）。
 # 2.9.1＝专用线程池修复（42bb12f）：批量终审不再被缩略图波次饿死。
 MAIN_WINDOW_TITLE = f"PhotoArchiver v{APP_VERSION}"
@@ -953,6 +954,11 @@ BATCH_DELETE_IMPACT = (
     "归属该批次的人员。"
 )
 BATCH_DELETE_EMPTY = "该批次当前没有归属人员。"
+BATCH_DELETE_EMPTY_RECORD_HINT = (
+    BATCH_DELETE_EMPTY
+    + "残留的批次记录仍在列表中——勾选「同时删除该批次记录和导入草稿」"
+    "即可删除该记录。"
+)
 BATCH_DELETE_CLEANUP_CHECKBOX = "同时删除该批次记录和导入草稿"
 BATCH_DELETE_CLEANUP_WARNING = (
     "勾选后：该批次记录与全部 {draft_row_count} 条导入草稿（含原始导入轨迹）"

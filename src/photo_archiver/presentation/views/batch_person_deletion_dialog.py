@@ -176,9 +176,19 @@ class BatchPersonDeletionDialog(QDialog):
             return
         preview = self._delete_person.preview_batch(batch_id)
         if preview.is_empty:
-            self._impact_label.setText(text.BATCH_DELETE_EMPTY)
-            self._buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
-            self._cleanup_checkbox.setEnabled(True)
+            # 追加轮 20（Owner 2026-11-01）：0 人残留批次必须可清理——先前
+            # 无条件禁用确认键，人员删光后批次记录反而永远删不掉。现规则：
+            # 批次记录存在时勾选「同时删除批次记录」即启用确认键（仅删记录
+            # +草稿）；记录不存在（孤儿 id）时无物可删，保持禁用。
+            record_exists = preview.batch_record_found
+            self._impact_label.setText(
+                text.BATCH_DELETE_EMPTY_RECORD_HINT if record_exists
+                else text.BATCH_DELETE_EMPTY,
+            )
+            self._cleanup_checkbox.setEnabled(record_exists)
+            enabled = record_exists and self._cleanup_checkbox.isChecked()
+            self._buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(enabled)
+            self._set_cleanup_warning(preview, enabled)
             return
         for name in preview.people_names:
             self._members_list.addItem(name)
@@ -195,10 +205,24 @@ class BatchPersonDeletionDialog(QDialog):
     def _on_cleanup_toggled(self, checked: bool) -> None:
         """Show the irreversible-warning when record cleanup is requested."""
         batch_id = self._current_batch_id()
-        if not checked or batch_id is None:
+        if batch_id is None:
             self._cleanup_warning.setVisible(False)
             return
         preview = self._delete_person.preview_batch(batch_id)
+        if preview.is_empty:
+            # 追加轮 20：0 人残留批次——勾选「同时删除批次记录」＝启用确认键
+            # （仅删批次记录+草稿，无人员可删）；未勾选保持禁用防误点空跑。
+            enabled = preview.batch_record_found and checked
+            self._buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(enabled)
+            self._set_cleanup_warning(preview, enabled)
+            return
+        self._set_cleanup_warning(preview, checked)
+
+    def _set_cleanup_warning(self, preview, checked: bool) -> None:
+        """Show (or hide) the irreversible-cleanup warning for this preview."""
+        if not checked:
+            self._cleanup_warning.setVisible(False)
+            return
         self._cleanup_warning.setText(
             "⚠ " + text.BATCH_DELETE_CLEANUP_WARNING.format(
                 draft_row_count=preview.draft_row_count,
