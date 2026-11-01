@@ -192,6 +192,7 @@ class ClusterResultsDialog(QDialog):
         list_persons=None,
         task_coordinator: TaskCoordinator | None = None,
         task_executor: QtWorkerExecutor | None = None,
+        source_batch_id: "UUID | None" = None,
     ) -> None:
         """Build the dialog; ``thumbnail_source`` is the shared async loader.
 
@@ -221,6 +222,8 @@ class ClusterResultsDialog(QDialog):
         self._workbench_service = workbench_service
         self._ignore_service = ignore_service
         self._list_persons = list_persons
+        # 追加轮 28：建议生成的人员批次范围（None＝全库名单）。
+        self._source_batch_id = source_batch_id
         self._pairing_active = suggest_service is not None and workbench_service is not None
         # 批量终审共享快照（Owner 2026-10-31 加速）：成员/观测/忽略名单在
         # 对话框生命周期内不变——本批一次加载、单次确认与批量全程复用；
@@ -817,7 +820,10 @@ class ClusterResultsDialog(QDialog):
             self._feedback_label.setText(text.CLUSTER_PAIRING_NO_PERSONS)
             return
         summary = self._suggest_service.execute(
-            StartSuggestPairingsCommand(cluster_run_id),
+            StartSuggestPairingsCommand(
+                cluster_run_id,
+                source_batch_id=getattr(self, "_source_batch_id", None),
+            ),
         )
         feedback = text.PAIRING_WORKBENCH_SUGGESTED_DONE.format(
             suggestions=summary.suggestions,

@@ -167,16 +167,31 @@ class SuggestPairingsService:
                 member_vector_indices=tuple(member_indices),
             ))
 
-        samples = self._sample_repository.list_enabled()
+        # 追加轮 28：人员批次范围——命令携带 source_batch_id 时，建议的人
+        # 员侧（含样本匹配的样本属主）只取该名单批次的成员（只匹配选定的
+        # 照片批次与人员名单批次）。
+        person_entities = [
+            person for person in self._person_repository.list_all()
+            if person.id is not None
+        ]
+        if command.source_batch_id is not None:
+            person_entities = [
+                person for person in person_entities
+                if person.source_batch_id == command.source_batch_id
+            ]
+        scoped_person_ids = {
+            person.id for person in person_entities if person.id is not None
+        }
+        samples = [
+            sample for sample in self._sample_repository.list_enabled()
+            if command.source_batch_id is None
+            or sample.person_id in scoped_person_ids
+        ]
         sample_owners: list[UUID | None] = []
         for sample in samples:
             sample_owners.append(sample.person_id)
             vectors.append(sample.embedding)
 
-        person_entities = [
-            person for person in self._person_repository.list_all()
-            if person.id is not None
-        ]
         persons = [
             PairingPerson(person_id=person.id, roster_order=person.roster_order)
             for person in person_entities if person.id is not None

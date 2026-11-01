@@ -6,9 +6,15 @@ from uuid import UUID
 
 @dataclass(frozen=True, slots=True)
 class StartSuggestPairingsCommand:
-    """Request one suggestion generation over one clustering generation."""
+    """Request one suggestion generation over one clustering generation.
+
+    追加轮 28（Owner：只匹配选定的照片批次与人员名单批次）：
+    ``source_batch_id`` 非空时，建议的人员侧只取该名单导入批次的成员
+    （样本匹配与位置配对同口径收窄）；``None``＝全库名单（历史行为）。
+    """
 
     cluster_run_id: UUID
+    source_batch_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

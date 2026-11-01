@@ -378,3 +378,36 @@ def test_cross_offset_aware_clusters_positional_pairing_follows_absolute_time():
         assert row.sort_snapshot["sort_key"] == cluster.sort_key
         assert row.sort_snapshot["first_captured_at"] == (
             cluster.first_captured_at.isoformat())
+
+
+# ── 追加轮 28：人员批次范围 ─────────────────────────────────────────────────
+
+
+def test_source_batch_scopes_person_side():
+    """Owner：只匹配选定的照片批次与人员名单批次——source_batch_id 非空时
+    建议人员侧只取该批次成员（跨批次人员不参与位置配对）。"""
+    from uuid import uuid4
+
+    world = _World()
+    batch_a, batch_b = uuid4(), uuid4()
+    # 乙1 排最前（roster_order=1）：不设范围时 2 簇会配到 乙1+甲1——
+    # 设定 batch_a 后必须配到 甲1+甲2（跨批次人员被排除，范围可观测）。
+    b1 = world.add_person("乙1", 1)
+    b1.source_batch_id = batch_b
+    a1 = world.add_person("甲1", 2)
+    a1.source_batch_id = batch_a
+    a2 = world.add_person("甲2", 3)
+    a2.source_batch_id = batch_a
+    generation = world.add_generation(["k|g0|000000", "k|g1|000001"])
+
+    summary = world.build_services().execute(
+        StartSuggestPairingsCommand(generation.id, source_batch_id=batch_a),
+    )
+
+    # 2 簇 = 2 批次内人员 → 准入通过，位置对整批 auto_confirmed。
+    assert summary.auto_confirmed == 2
+    assert summary.suggestions == 0
+    rows = world.active_rows(generation.id)
+    suggested_person_ids = {row.person_id for row in rows}
+    assert suggested_person_ids == {a1.id, a2.id}
+    assert b1.id not in suggested_person_ids

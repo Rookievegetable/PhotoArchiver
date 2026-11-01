@@ -13,7 +13,7 @@ from PySide6.QtCore import QObject, Slot
 
 from photo_archiver.application import ClusterFacesUseCase
 from photo_archiver.application.commands import StartClusteringRunCommand
-from photo_archiver.application.commands.cluster_faces import DATASET_LIBRARY
+from photo_archiver.application.commands.cluster_faces import DATASET_SINGLE_RUN
 from photo_archiver.domain import FaceCountRange
 from photo_archiver.workers import ClusterFacesTask, QtWorkerExecutor, QtWorkerRunnable
 from photo_archiver.presentation.ui_text import CLUSTER_UNAVAILABLE, REFUSAL_CLUSTER_IN_FLIGHT
@@ -47,10 +47,11 @@ class ClusterFacesController(QObject):
     ) -> QtWorkerRunnable | None:
         """Start one clustering execution and return its runnable handle.
 
-        任务书 §3/D5：聚类使用**全库最新特征数据集**（``dataset="library"``，
-        跨运行按照片 latest wins），锚点为传入运行（代际挂靠与历史查看不变）；
-        ``selected_ranges``（D2）为脸数档位，缺省 [1]（单脸照片，与名单顺序
-        配对口径一致）。
+        追加轮 28（Owner：每次聚类只匹配选定的照片批次）：聚类使用**选定
+        运行自己的特征**（``dataset="single_run"``——特征数据下拉选中的运
+        行＝照片批次），不再全库 latest-wins；锚点即该运行（代际挂靠与历
+        史查看不变）。``selected_ranges``（D2）为脸数档位，缺省 [1]（单脸
+        照片，与名单顺序配对口径一致）。
 
         Returns ``None`` — with :attr:`last_refusal_reason` recording why —
         when a clustering task is already in flight or the use case is absent.
@@ -67,7 +68,7 @@ class ClusterFacesController(QObject):
             selected_ranges = (FaceCountRange(1, 1),)
         task = ClusterFacesTask(self._use_case, StartClusteringRunCommand(
             recognition_run_id,
-            dataset=DATASET_LIBRARY,
+            dataset=DATASET_SINGLE_RUN,
             selected_ranges=tuple(selected_ranges),
         ))
         runnable = self._executor.submit(task)  # type: ignore[arg-type]  # generics variance

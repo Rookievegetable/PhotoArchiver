@@ -46,6 +46,21 @@ def test_start_cluster_builds_command_with_run_id():
     assert executor.last_task.name == "face_clustering"
 
 
+def test_start_cluster_uses_selected_run_dataset():
+    """追加轮 28（Owner：每次聚类只匹配选定的照片批次）：聚类口径改为
+    ``single_run``——只用特征数据下拉所选运行自己的特征（锚点=该运行）。"""
+    from photo_archiver.application.commands.cluster_faces import (
+        DATASET_SINGLE_RUN,
+    )
+
+    controller, executor = _make_controller()
+
+    runnable = controller.start_cluster(uuid4())
+
+    assert runnable is not None
+    assert executor.last_command.dataset == DATASET_SINGLE_RUN
+
+
 def test_start_cluster_refuses_while_in_flight_and_releases_on_terminal():
     controller, executor = _make_controller()
     first = controller.start_cluster(uuid4())

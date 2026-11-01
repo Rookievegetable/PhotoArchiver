@@ -1978,6 +1978,9 @@ class MainWindow(QMainWindow):
             list_persons=self._context.services.list_persons,
             task_coordinator=self._task_coordinator,
             task_executor=self._pairing_batch_executor,
+            # 追加轮 28：建议生成的人员侧范围＝人员页当前选定的来源批次
+            # （全部批次视图＝None，回退全库名单口径）。
+            source_batch_id=self._people_admin_page.selected_source_batch_id(),
         ).exec()
 
     # ------------------------------------------------------------------

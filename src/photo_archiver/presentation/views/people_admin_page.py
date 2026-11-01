@@ -1184,6 +1184,14 @@ class PeopleAdminPage(QWidget):
         data = self._cluster_run_combo.currentData()
         return data if isinstance(data, UUID) else None
 
+    def selected_source_batch_id(self) -> UUID | None:
+        """Return the roster batch filter's id（追加轮 28：建议生成的人员侧范围）.
+
+        「全部批次」视图（未选具体批次）返回 ``None``——建议生成回退全库
+        名单口径。
+        """
+        return self._batch_filter
+
     def _selected_run_label(self) -> str:
         """Return the selected run's readable label（对话框标题与披露用）."""
         index = self._cluster_run_combo.currentIndex()
