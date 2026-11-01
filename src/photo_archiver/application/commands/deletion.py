@@ -120,7 +120,11 @@ class DeleteRunPhotosCommand:
     purge_cluster_generations: 同时删除该运行的聚类代际（及其簇、成员与
         **该代际的身份决策行**——级联删除，必须先披露）。默认 False：保留
         运行历史与代际，只删照片与级联记录。
+    delete_run_record: 同时删除运行记录本身（残留代际/观测/快照扫尾 +
+        ``recognition_runs`` 行——批次删除功能 C 并入本命令，追加轮 22）。
+        置 True 时代际必然随记录消失（隐含 purge，无需重复置位）。
     """
 
     run_id: UUID
     purge_cluster_generations: bool = False
+    delete_run_record: bool = False

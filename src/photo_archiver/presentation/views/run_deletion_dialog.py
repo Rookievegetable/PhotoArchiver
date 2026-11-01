@@ -336,7 +336,12 @@ class RunRecordDeletionDialog(_RunDeletionDialogBase):
 
 
 class RunPhotosDeletionDialog(_RunDeletionDialogBase):
-    """Review the cascade of one recognition run's photos and confirm removal."""
+    """Review the cascade of one recognition run's photos and confirm removal.
+
+    ``delete_run_record=True``＝合并模式（追加轮 22，照片库批次入口）：照片
+    级联 + 运行记录清理（B+C）一次确认、单事务执行——purge 复选框隐藏
+    （代际随记录必然清理），披露文案与按钮文案切换为批次语义。
+    """
 
     def __init__(
         self,
@@ -344,6 +349,7 @@ class RunPhotosDeletionDialog(_RunDeletionDialogBase):
         run_id: UUID,
         run_label: str,
         parent: QWidget | None = None,
+        delete_run_record: bool = False,
     ) -> None:
         """Initialize the dialog with the target run.
 
@@ -352,10 +358,16 @@ class RunPhotosDeletionDialog(_RunDeletionDialogBase):
             run_id: 目标识别运行 id。
             run_label: 运行的可读标签（创建时间 · 状态 · 脸数）。
             parent: Optional parent widget.
+            delete_run_record: 合并模式——同时删除运行记录（追加轮 22）。
         """
-        super().__init__(text.RUN_DELETE_PHOTOS_DIALOG_TITLE, run_label, parent)
+        super().__init__(
+            text.RUN_DELETE_BATCH_DIALOG_TITLE if delete_run_record
+            else text.RUN_DELETE_PHOTOS_DIALOG_TITLE,
+            run_label, parent,
+        )
         self._delete_run_photos = delete_run_photos
         self._run_id = run_id
+        self._delete_run_record = delete_run_record
         self._build_ui()
         self._refresh()
 
@@ -391,7 +403,10 @@ class RunPhotosDeletionDialog(_RunDeletionDialogBase):
             self,
         )
         self._ok = self._buttons.button(QDialogButtonBox.StandardButton.Ok)
-        self._ok.setText(text.RUN_DELETE_PHOTOS_BUTTON)
+        self._ok.setText(
+            text.RUN_DELETE_BATCH_BUTTON if self._delete_run_record
+            else text.RUN_DELETE_PHOTOS_BUTTON,
+        )
         assign_role(self._ok, ROLE_DANGER)
         cancel = self._buttons.button(QDialogButtonBox.StandardButton.Cancel)
         cancel.setDefault(True)
@@ -426,7 +441,13 @@ class RunPhotosDeletionDialog(_RunDeletionDialogBase):
             sample_count=preview.sample_count,
             other_run_snapshot_count=preview.other_run_snapshot_count,
         ))
-        self._purge_checkbox.setEnabled(True)
+        if self._delete_run_record:
+            # 合并模式：代际/决策/运行记录必然随之清理——披露并入影响文案。
+            self._impact_label.setText(
+                self._impact_label.text() + text.RUN_DELETE_BATCH_IMPACT_EXTRA,
+            )
+        self._purge_checkbox.setVisible(not self._delete_run_record)
+        self._purge_checkbox.setEnabled(not self._delete_run_record)
         self._on_purge_toggled(self._purge_checkbox.isChecked())
         if preview.is_blocked:
             self._blocked_label.setText(text.RUN_DELETE_BLOCKED.format(
@@ -462,7 +483,11 @@ class RunPhotosDeletionDialog(_RunDeletionDialogBase):
             result = self._delete_run_photos.execute(
                 DeleteRunPhotosCommand(
                     run_id=self._run_id,
-                    purge_cluster_generations=self._purge_checkbox.isChecked(),
+                    purge_cluster_generations=(
+                        self._purge_checkbox.isChecked()
+                        or self._delete_run_record
+                    ),
+                    delete_run_record=self._delete_run_record,
                 ),
             )
         except Exception as exc:  # noqa: BLE001 - UI boundary: show, log the detail
@@ -485,4 +510,6 @@ class RunPhotosDeletionDialog(_RunDeletionDialogBase):
             message += text.RUN_DELETE_PHOTOS_DONE_PURGED.format(
                 generations_purged=result.generations_purged,
             )
+        if self._delete_run_record and result.run_removed:
+            message += text.RUN_DELETE_BATCH_DONE_EXTRA
         self._finish(message)

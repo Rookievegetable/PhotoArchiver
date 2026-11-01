@@ -26,14 +26,13 @@ from photo_archiver.app.repositories import build_sqlite_repositories
 from photo_archiver.application.dtos import (
     RunPeopleDeletionPreview,
     RunPhotosDeletionPreview,
+    RunPhotosDeletionResult,
     RunRecordDeletionPreview,
     RunRecordDeletionResult,
 )
 from photo_archiver.application.services import (
     ClusterResultsService,
     DeletePersonService,
-    DeleteRunPeopleService,
-    DeleteRunPhotosService,
     DeleteRunRecordService,
     ListPersonsService,
     ListRecognitionRunsService,
@@ -95,9 +94,22 @@ class _StubPhotosService:
 
     def __init__(self, preview: RunPhotosDeletionPreview) -> None:
         self._preview = preview
+        self.commands: list = []
 
     def preview(self, _run_id):
         return self._preview
+
+
+    def execute(self, command):
+        self.commands.append(command)
+        return RunPhotosDeletionResult(
+            requested=2, removed=2, missing=0, recognition_cascade=0,
+            archive_cascade=0, observation_cascade=0, sample_cascade=0,
+            member_cascade=0, other_run_snapshot_cascade=0,
+            unassigned_decisions=0, clusters_recounted=0,
+            generations_purged=1, ground_truth_orphaned=0,
+            run_removed=1 if command.delete_run_record else 0,
+        )
 
 
 _RECORD_BLOCKED = RunRecordDeletionPreview(
@@ -223,6 +235,43 @@ def test_photos_dialog_empty_snapshot_shows_explicit_empty_state(qtbot) -> None:
     assert _ok_button(dialog).isEnabled() is False
 
 
+# ── 合并模式（追加轮 22：照片库批次入口＝B+C 一次确认）─────────────────
+
+
+def test_photos_dialog_combined_mode_switches_text_and_hides_purge(qtbot) -> None:
+    """合并模式：标题/按钮切批次语义、purge 复选框隐藏、披露并入影响行。"""
+    dialog = RunPhotosDeletionDialog(
+        _StubPhotosService(_PHOTOS_FREE), "run-1", "2026-10-28 17:07 · 已完成",
+        delete_run_record=True,
+    )
+    qtbot.addWidget(dialog)
+    assert dialog.windowTitle() == text.RUN_DELETE_BATCH_DIALOG_TITLE
+    assert _ok_button(dialog).text() == text.RUN_DELETE_BATCH_BUTTON
+    assert not dialog._purge_checkbox.isVisibleTo(dialog)
+    assert "识别运行记录将删除" in dialog._impact_label.text()
+
+
+def test_photos_dialog_combined_mode_executes_record_deletion(qtbot) -> None:
+    """合并模式确认：命令携带 delete_run_record=True 且 purge 强制置位。"""
+    from photo_archiver.application.commands.deletion import DeleteRunPhotosCommand
+
+    service = _StubPhotosService(_PHOTOS_FREE)
+    dialog = RunPhotosDeletionDialog(
+        service, "run-1", "2026-10-28 17:07 · 已完成",
+        delete_run_record=True,
+    )
+    qtbot.addWidget(dialog)
+    dialog._aware_checkbox.setChecked(True)
+    dialog._on_confirm()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    assert len(service.commands) == 1
+    command = service.commands[0]
+    assert isinstance(command, DeleteRunPhotosCommand)
+    assert command.delete_run_record is True
+    assert command.purge_cluster_generations is True
+    assert "识别运行记录已删除" in dialog.last_message()
+
+
 # ── 记录清理对话框（功能 C，追加轮 21）─────────────────────────────────
 
 
@@ -279,17 +328,6 @@ def _page(tmp_path: Path):
         assignment_repository=repositories.cluster_assignments,
         sample_repository=repositories.person_face_samples,
     )
-    delete_run_people = DeleteRunPeopleService(
-        repositories.recognition_runs, repositories.face_clusters,
-        repositories.cluster_assignments, repositories.people, delete_person,
-        repositories.archive_records, repositories.calibration_annotations,
-    )
-    delete_run_photos = DeleteRunPhotosService(
-        repositories.recognition_runs, repositories.photos, repositories.recognition,
-        repositories.archive_records, repositories.face_observations,
-        repositories.person_face_samples, repositories.face_clusters,
-        repositories.cluster_assignments, repositories.calibration_annotations,
-    )
     delete_run_record = DeleteRunRecordService(
         repositories.recognition_runs, repositories.face_observations,
         repositories.face_clusters, repositories.cluster_assignments,
@@ -310,8 +348,6 @@ def _page(tmp_path: Path):
             repositories.face_observations,
             repositories.cluster_assignments,
         ),
-        delete_run_people=delete_run_people,
-        delete_run_photos=delete_run_photos,
         delete_run_record=delete_run_record,
     )
     return page, repositories
@@ -321,8 +357,6 @@ def test_page_run_delete_buttons_disabled_without_runs(qtbot, tmp_path) -> None:
     """无运行时两个删除入口禁用（不静默无响应）。"""
     page, _repos = _page(tmp_path)
     qtbot.addWidget(page)
-    assert page._delete_run_people_button.isEnabled() is False
-    assert page._delete_run_photos_button.isEnabled() is False
     assert page._delete_run_record_button.isEnabled() is False
 
 

@@ -5,9 +5,14 @@
 交给展示层填充运行选择器。零业务决策。
 """
 
+from typing import TYPE_CHECKING
+
 from loguru import logger
 
 from photo_archiver.domain import RecognitionRun, RecognitionRunRepository
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 
 class ListRecognitionRunsService:
@@ -22,3 +27,17 @@ class ListRecognitionRunsService:
         runs = self._run_repository.list_runs()
         logger.info("ListRecognitionRunsService: {} run(s) available", len(runs))
         return runs
+
+    def list_run_photo_ids(self, run_id: "UUID") -> tuple["UUID", ...]:
+        """Return the run's snapshot photo ids in write order（照片库批次过滤）.
+
+        去重保序——一张照片在快照里只计一次。
+        """
+        seen: set[UUID] = set()
+        ordered: list[UUID] = []
+        for snapshot in self._run_repository.list_run_photos(run_id):
+            if snapshot.photo_id in seen:
+                continue
+            seen.add(snapshot.photo_id)
+            ordered.append(snapshot.photo_id)
+        return tuple(ordered)

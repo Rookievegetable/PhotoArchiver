@@ -238,13 +238,24 @@ class DeleteRunPhotosService(DeleteRunPhotosUseCase):
             recounted = 0
             unassigned = 0
             purged = 0
-            if command.purge_cluster_generations:
+            # 追加轮 22：记录清理隐含代际清理——代际引用运行行，运行行删除前
+            # 代际必须已消失（照片仍在时已硬阻断，此处不涉归档/样本/GT）。
+            if command.purge_cluster_generations or command.delete_run_record:
                 # B2：代际与其决策行即将整体删除——计数回写与空簇迁移都是
                 # 无效功，跳过（结果里如实报 0）。
                 purged = self._purge_generations(scope)
             else:
                 recounted = self._recount_affected_generations(scope)
                 unassigned = self._unassign_empty_clusters(scope)
+
+            # 批次删除功能 C（追加轮 22 并入）：运行记录清理终口——残留观测
+            # /快照兜底扫尾 + 运行行本身（正常路径观测/快照已随照片级联清空，
+            # 扫尾计数如实报 0）。
+            run_removed = 0
+            if command.delete_run_record:
+                self._observations.remove_by_run(command.run_id)
+                self._runs.remove_run_photos_snapshot(command.run_id)
+                run_removed = self._runs.remove_run(command.run_id)
 
             return RunPhotosDeletionResult(
                 requested=preview.photo_count,
@@ -260,6 +271,7 @@ class DeleteRunPhotosService(DeleteRunPhotosUseCase):
                 clusters_recounted=recounted,
                 generations_purged=purged,
                 ground_truth_orphaned=preview.ground_truth_count,
+                run_removed=run_removed,
             )
 
         if self._unit_of_work is not None:
@@ -271,12 +283,14 @@ class DeleteRunPhotosService(DeleteRunPhotosUseCase):
             "AUDIT delete-run-photos actor=local-user run={} removed={} "
             "recognition_cascade={} archive_cascade={} observation_cascade={} "
             "sample_cascade={} member_cascade={} other_run_snapshot_cascade={} "
-            "unassigned_decisions={} clusters_recounted={} generations_purged={}",
+            "unassigned_decisions={} clusters_recounted={} generations_purged={} "
+            "run_removed={}",
             command.run_id, result.removed, result.recognition_cascade,
             result.archive_cascade, result.observation_cascade,
             result.sample_cascade, result.member_cascade,
             result.other_run_snapshot_cascade, result.unassigned_decisions,
             result.clusters_recounted, result.generations_purged,
+            result.run_removed,
         )
         return result
 

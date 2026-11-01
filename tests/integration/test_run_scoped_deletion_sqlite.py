@@ -461,6 +461,28 @@ def _cluster_run_id(repos, run):
 # ── C：删除运行记录（功能 C，追加轮 21）─────────────────────────────────
 
 
+def test_delete_run_photos_combined_removes_photos_and_record(
+    tmp_path: Path,
+) -> None:
+    """追加轮 22：B+C 合并命令——照片级联+代际清理+运行行删除单事务完成。"""
+    repos, run1, run2, photos, _clusters, _person_a, _person_b = _world(
+        tmp_path, with_samples=False,
+    )
+    result = _photos_service(repos).execute(DeleteRunPhotosCommand(
+        run_id=run1.id,
+        purge_cluster_generations=False,  # 显式 False——delete_run_record 隐含
+        delete_run_record=True,
+    ))
+    assert result.removed == 2
+    assert result.generations_purged == 1
+    assert result.run_removed == 1
+    assert repos.recognition_runs.get_run(run1.id) is None
+    assert repos.face_clusters.list_cluster_runs(run1.id) == []
+    assert repos.face_observations.list_by_run(run1.id) == []
+    assert repos.recognition_runs.get_run(run2.id) is not None
+    assert repos.photos.find_by_id(photos[1].id) is None
+
+
 def test_delete_run_record_blocked_while_photos_registered(tmp_path: Path) -> None:
     """照片仍在登记 → 硬阻断（照片有专门的披露级联入口），执行零副作用。"""
     repos, run1, _run2, _photos, _clusters, _person_a, _person_b = _world(

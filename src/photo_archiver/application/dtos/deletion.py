@@ -429,6 +429,7 @@ class RunPhotosDeletionResult:
     clusters_recounted: int
     generations_purged: int
     ground_truth_orphaned: int
+    run_removed: int = 0
 
     @property
     def succeeded(self) -> bool:

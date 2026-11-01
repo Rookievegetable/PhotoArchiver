@@ -76,8 +76,6 @@ from photo_archiver.presentation.views.person_deletion_dialog import (
 )
 from photo_archiver.presentation.views.person_edit_dialog import PersonEditDialog
 from photo_archiver.presentation.views.run_deletion_dialog import (
-    RunPeopleDeletionDialog,
-    RunPhotosDeletionDialog,
     RunRecordDeletionDialog,
 )
 
@@ -296,8 +294,6 @@ class PeopleAdminPage(QWidget):
         list_recognition_runs: ListRecognitionRunsService,
         cluster_results: ClusterResultsService,
         roster_cluster_stats: RosterClusterStatsService,
-        delete_run_people=None,
-        delete_run_photos=None,
         delete_run_record=None,
         parent: QWidget | None = None,
     ) -> None:
@@ -315,8 +311,6 @@ class PeopleAdminPage(QWidget):
                 clustering section's availability and results dialog.
             roster_cluster_stats: P4 read-only statistics use case — the
                 anchor-generation four numbers and per-person match marks.
-            delete_run_people: 运行级名单删除服务（批次删除功能 A）。
-            delete_run_photos: 运行级照片删除服务（批次删除功能 B）。
             delete_run_record: 运行级记录清理服务（批次删除功能 C，追加轮 21）。
             parent: Optional parent widget.
         """
@@ -327,8 +321,6 @@ class PeopleAdminPage(QWidget):
         self._list_recognition_runs = list_recognition_runs
         self._cluster_results = cluster_results
         self._roster_stats = roster_cluster_stats
-        self._delete_run_people = delete_run_people
-        self._delete_run_photos = delete_run_photos
         self._delete_run_record = delete_run_record
         self._rows: list[Person] = []
         self._batches: tuple[ImportBatchSummary, ...] = ()
@@ -1120,26 +1112,9 @@ class PeopleAdminPage(QWidget):
         assign_role(self._cluster_results_button, ROLE_SECONDARY)
         assign_button_icon(self._cluster_results_button, "view", token("pa-text-secondary"))
         row.addWidget(self._cluster_results_button)
-        # 批次级删除（识别运行锚点）：两个入口与运行选择器同区——"批次"在这里
-        # 指**识别运行**（照片只挂在运行下），与顶部「来源批次」（名单导入）
-        # 是两套不同实体。
-        self._delete_run_people_button = QPushButton(
-            text.PEOPLE_PAGE_DELETE_RUN_PEOPLE_BUTTON, group,
-        )
-        self._delete_run_people_button.clicked.connect(
-            self._on_delete_run_people_clicked,
-        )
-        assign_role(self._delete_run_people_button, ROLE_DANGER)
-        row.addWidget(self._delete_run_people_button)
-        self._delete_run_photos_button = QPushButton(
-            text.PEOPLE_PAGE_DELETE_RUN_PHOTOS_BUTTON, group,
-        )
-        self._delete_run_photos_button.clicked.connect(
-            self._on_delete_run_photos_clicked,
-        )
-        assign_role(self._delete_run_photos_button, ROLE_DANGER)
-        row.addWidget(self._delete_run_photos_button)
-        # 批次删除功能 C（追加轮 21）：运行记录清理——A/B 之后的第三级终口。
+        # 批次级删除（识别运行锚点）：「批次」在这里指**识别运行**（照片只
+        # 挂在运行下）。追加轮 22：名单/照片两入口撤除（照片侧合并入口移入
+        # 照片库批次轴），仅保留记录清理终口（功能 C）。
         self._delete_run_record_button = QPushButton(
             text.PEOPLE_PAGE_DELETE_RUN_RECORD_BUTTON, group,
         )
@@ -1197,12 +1172,6 @@ class PeopleAdminPage(QWidget):
         self._cluster_run_button.setEnabled(run_id is not None)
         self._cluster_results_button.setEnabled(has_results)
         # 批次级删除入口：无选中运行 / 服务未注入时禁用（不静默无响应）。
-        self._delete_run_people_button.setEnabled(
-            run_id is not None and self._delete_run_people is not None
-        )
-        self._delete_run_photos_button.setEnabled(
-            run_id is not None and self._delete_run_photos is not None
-        )
         self._delete_run_record_button.setEnabled(
             run_id is not None and self._delete_run_record is not None
         )
@@ -1221,32 +1190,6 @@ class PeopleAdminPage(QWidget):
         if index < 0:
             return "—"
         return self._cluster_run_combo.itemText(index)
-
-    def _on_delete_run_people_clicked(self) -> None:
-        """删除该识别运行的名单及记录（批次删除功能 A）。"""
-        run_id = self.selected_recognition_run_id()
-        if run_id is None or self._delete_run_people is None:
-            return
-        dialog = RunPeopleDeletionDialog(
-            self._delete_run_people, run_id, self._selected_run_label(), parent=self,
-        )
-        if not dialog.exec():
-            return
-        logger.info("People page deleted one recognition run's people")
-        self._after_mutation(dialog.last_message())
-
-    def _on_delete_run_photos_clicked(self) -> None:
-        """删除该识别运行的照片及记录（批次删除功能 B）。"""
-        run_id = self.selected_recognition_run_id()
-        if run_id is None or self._delete_run_photos is None:
-            return
-        dialog = RunPhotosDeletionDialog(
-            self._delete_run_photos, run_id, self._selected_run_label(), parent=self,
-        )
-        if not dialog.exec():
-            return
-        logger.info("People page deleted one recognition run's photos")
-        self._after_mutation(dialog.last_message())
 
     def _on_delete_run_record_clicked(self) -> None:
         """删除该识别运行的残留记录（批次删除功能 C，追加轮 21）。"""

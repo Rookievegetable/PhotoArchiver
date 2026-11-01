@@ -16,7 +16,8 @@ from __future__ import annotations
 from datetime import datetime
 
 # ---- 主窗口 · 工具栏 ----
-APP_VERSION = "2.9.4"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+APP_VERSION = "2.9.5"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+# 2.9.5＝照片库批次查看/删除（B+C 合并）；人脸聚类卡撤「名单/照片」两键。
 # 2.9.4＝运行记录清理（批次删除功能 C）：识别运行残留记录的第三级删除终口。
 # 2.9.3＝0 人残留批次记录可经「同时删除批次记录」清理（先前确认键禁用死锁）。
 # 2.9.2＝簇列表状态染色真正上屏（委托补画被 QSS 丢弃的模型底色画笔）。
@@ -1104,6 +1105,20 @@ RUN_DELETE_RECORD_DONE = (
     "（决策 {decision_cascade} 条级联清除）、观测 {observation_cascade} 条、"
     "输入快照 {snapshot_cascade} 条。"
 )
+
+# 追加轮 22（Owner：两键撤除＋照片库批次查看/删除）：照片库批次轴 +
+# 合并删除（照片及记录＝B+C 并入一次确认、单事务）。
+LIBRARY_RUN_FILTER_LABEL = "特征批次："
+LIBRARY_RUN_FILTER_ALL = "全部照片"
+LIBRARY_DELETE_RUN_BUTTON = "删除该批次…"
+RUN_DELETE_BATCH_DIALOG_TITLE = "删除该识别批次的照片及记录"
+RUN_DELETE_BATCH_BUTTON = "删除该批次照片及记录"
+RUN_DELETE_BATCH_IMPACT_EXTRA = (
+    "\n同时：该批次的聚类代际、簇与身份决策行将一并清理，"
+    "识别运行记录将删除（含残留观测与输入快照扫尾）。\n\n"
+    "仅移除库内登记，磁盘文件一律不动。"
+)
+RUN_DELETE_BATCH_DONE_EXTRA = " 识别运行记录已删除。"
 
 # ---- 重复报告处置（Phase E E-4，ADR-034 D6） ----
 DUPLICATE_DISPOSE_BUTTON = "按建议处置（每组保留最早一张）"

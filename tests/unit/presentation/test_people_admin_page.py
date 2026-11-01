@@ -1557,7 +1557,10 @@ def test_people_clustering_section_is_card_with_danger_entries_in_place(
     assert len(cards) == 2  # 统计卡 + 聚类区卡
     cluster_card = next(c for c in cards if c.maximumWidth() != 280)
     assert page._cluster_run_button in cluster_card.findChildren(QPushButton)
-    assert page._delete_run_people_button in cluster_card.findChildren(QPushButton)
-    assert page._delete_run_photos_button in cluster_card.findChildren(QPushButton)
-    assert button_role(page._delete_run_people_button) == ROLE_DANGER
-    assert button_role(page._delete_run_photos_button) == ROLE_DANGER
+    # 追加轮 22（Owner）：名单/照片两键撤除（照片侧合并入口移入照片库批次
+    # 轴）——卡片上仅保留记录清理终口（功能 C，danger 形态）。
+    buttons = cluster_card.findChildren(QPushButton)
+    assert not hasattr(page, "_delete_run_people_button")
+    assert not hasattr(page, "_delete_run_photos_button")
+    assert page._delete_run_record_button in buttons
+    assert button_role(page._delete_run_record_button) == ROLE_DANGER

@@ -25,6 +25,7 @@ from PySide6.QtCore import QSignalBlocker, QSize, Qt, QThreadPool, Slot
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -155,6 +156,7 @@ from photo_archiver.presentation.views.import_preview_dialog import (
     ImportPreviewDialog,
 )
 from photo_archiver.presentation.views.person_deletion_dialog import PersonDeletionDialog
+from photo_archiver.presentation.views.run_deletion_dialog import RunPhotosDeletionDialog
 from photo_archiver.presentation.views.people_admin_page import PeopleAdminPage
 from photo_archiver.presentation.views.photo_deletion_confirm_dialog import (
     PhotoDeletionConfirmDialog,
@@ -620,6 +622,32 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(self._next_step_button)
         layout.addWidget(header)
 
+        # 追加轮 22（Owner：照片库批次轴）：按识别运行（特征批次）查看照片 +
+        # 删除该批次照片及记录（B+C 合并入口，与人员名单的批次查看/删除
+        # 逻辑同构——下拉筛选 + 单个 danger 入口）。
+        batch_row = QHBoxLayout()
+        batch_label = QLabel(text.LIBRARY_RUN_FILTER_LABEL, content)
+        self._library_run_combo = QComboBox(content)
+        self._library_run_combo.setMinimumWidth(280)
+        self._library_run_combo.addItem(text.LIBRARY_RUN_FILTER_ALL, None)
+        self._library_run_combo.currentIndexChanged.connect(
+            self._on_library_run_changed,
+        )
+        batch_row.addWidget(batch_label)
+        batch_row.addWidget(self._library_run_combo)
+        self._library_delete_run_button = QPushButton(
+            text.LIBRARY_DELETE_RUN_BUTTON, content,
+        )
+        self._library_delete_run_button.clicked.connect(
+            self._on_library_delete_run_clicked,
+        )
+        assign_role(self._library_delete_run_button, ROLE_DANGER)
+        self._library_delete_run_button.setEnabled(False)
+        batch_row.addWidget(self._library_delete_run_button)
+        batch_row.addStretch()
+        layout.addLayout(batch_row)
+        self._library_run_filter_id = None
+
         # B2 搜索/筛选：FilterBar（右侧面板形态），发 criteria_changed → 刷新
         # 列表；criteria 空元组/None 时回退 list_all。
         self._filter_bar = FilterBar(self)
@@ -769,8 +797,6 @@ class MainWindow(QMainWindow):
             self._context.services.list_recognition_runs,
             self._context.services.cluster_results,
             self._context.services.roster_cluster_stats,
-            delete_run_people=self._context.services.delete_run_people,
-            delete_run_photos=self._context.services.delete_run_photos,
             delete_run_record=self._context.services.delete_run_record,
             parent=self,
         )
@@ -1590,6 +1616,8 @@ class MainWindow(QMainWindow):
         surface without a manual refresh. Thumbnails load lazily via the
         PhotoListController when the list view asks for them.
         """
+        # 追加轮 22：批次轴下拉随刷新重填（新扫描产生新运行；值扫描保持选择）。
+        self._refresh_library_runs()
         criteria_list = getattr(self, "_current_criteria_list", ())
         if len(criteria_list) > 1:
             # DEC-06 按图推翻：状态多选 = 各状态查询并集（按首发状态出现序
@@ -1607,6 +1635,19 @@ class MainWindow(QMainWindow):
                 if self._current_criteria is not None
                 else self._photo_list_controller.list_photos()
             )
+        # 追加轮 22：照片库批次轴——选中具体运行时，墙面只显示该运行输入
+        # 快照内的照片（与人员名单的批次筛选同构；快照读 <50ms，可同步）。
+        run_filter = getattr(self, "_library_run_filter_id", None)
+        if run_filter is not None and photos:
+            run_photo_ids = set(
+                self._context.services.list_recognition_runs.list_run_photo_ids(
+                    run_filter,
+                )
+            )
+            photos = [
+                photo for photo in photos
+                if photo.id is not None and photo.id in run_photo_ids
+            ]
         # Batch 4: identity map for the detail dialog + live result count.
         self._photos_by_id = {
             photo.id: photo for photo in photos if photo.id is not None
@@ -1622,6 +1663,60 @@ class MainWindow(QMainWindow):
         self._update_library_stats()
         for photo in photos:
             self._photo_list_controller.load_thumbnail(photo.id, photo.path.raw_path)  # type: ignore[arg-type]  # photo.id is UUID | None, guaranteed set by Photo.__post_init__
+
+    def _refresh_library_runs(self) -> None:
+        """追加轮 22：照片库批次轴下拉重填（值扫描保持当前选择）。"""
+        combo = getattr(self, "_library_run_combo", None)
+        if combo is None:
+            return
+        runs = self._context.services.list_recognition_runs.execute()
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem(text.LIBRARY_RUN_FILTER_ALL, None)
+        for run in runs:
+            combo.addItem(
+                text.CLUSTER_PAGE_RUN_ENTRY.format(
+                    created_at=run.created_at.strftime("%Y-%m-%d %H:%M")
+                    if run.created_at is not None else "—",
+                    status=text.cluster_run_status_label(run.status),
+                    faces=run.face_count,
+                ),
+                run.id,
+            )
+        selected = getattr(self, "_library_run_filter_id", None)
+        if selected is not None:
+            for index in range(combo.count()):
+                if combo.itemData(index) == selected:
+                    combo.setCurrentIndex(index)
+                    break
+        combo.blockSignals(False)
+
+    def _on_library_run_changed(self, index: int) -> None:
+        """批次轴切换：重设运行过滤并刷新照片墙（全部照片＝不过滤）。"""
+        combo = self._library_run_combo
+        self._library_run_filter_id = combo.itemData(index)
+        self._library_delete_run_button.setEnabled(
+            self._library_run_filter_id is not None,
+        )
+        self._refresh_photo_list()
+
+    def _on_library_delete_run_clicked(self) -> None:
+        """删除该批次照片及记录（B+C 合并入口；与人员批次删除同构）。"""
+        run_id = self._library_run_combo.currentData()
+        if run_id is None:
+            return
+        dialog = RunPhotosDeletionDialog(
+            self._context.services.delete_run_photos,
+            run_id,
+            self._library_run_combo.currentText(),
+            parent=self,
+            delete_run_record=True,
+        )
+        if not dialog.exec():
+            return
+        logger.info("Photo library deleted one run batch (photos + record)")
+        self._refresh_photo_list()
+        self._people_admin_page.refresh_clustering()
 
     def _update_status_counts(self) -> None:
         """回填状态复选框计数（参考图 M8；按当前人员/时间轴逐状态查询）.
