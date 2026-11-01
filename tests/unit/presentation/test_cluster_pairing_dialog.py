@@ -1493,22 +1493,42 @@ def test_batch_pipeline_completes_on_worker_thread_at_scale(
 
 
 def test_cluster_rows_carry_status_tints(qtbot):
-    """Owner 2026-10-31：簇卡片底色按终审状态染色——已确认=淡绿、未匹配=
-    淡橙、待确认=卡面；颜色来自令牌淡染（alpha≈13%）。"""
+    """Owner 2026-11-01：簇卡片底色＝右侧配对状态徽章同色系——已确认=淡绿、
+    待确认(suggested)=淡橘黄、自动确认待终审=淡蓝、未匹配=淡灰；颜色来自
+    令牌淡染（alpha≈17%）。"""
     harness = _Harness()
     alice = harness.add_person("1张三", 1)
     photo_a = harness.add_photo("photos/a.jpg")
     photo_b = harness.add_photo("photos/b.jpg")
+    photo_c = harness.add_photo("photos/c.jpg")
+    photo_d = harness.add_photo("photos/d.jpg")
     o1 = harness.add_observation(photo_a, 0, 0.0)
-    o2 = harness.add_observation(photo_b, 0, 180.0)
+    o2 = harness.add_observation(photo_b, 0, 60.0)
+    o3 = harness.add_observation(photo_c, 0, 120.0)
+    o4 = harness.add_observation(photo_d, 0, 180.0)
     _cluster_run, clusters = harness.add_generation([
         ("k|a|000000", [o1]),
         ("k|b|000001", [o2]),
+        ("k|c|000002", [o3]),
+        ("k|d|000003", [o4]),
     ])
     _suggest, workbench, _ignore, results, roster = harness.build_services()
-    # 簇 1 建议行 → 先确认成已确认；簇 2 无指派 → 未匹配。
+    now = datetime.now()
+    # 簇 1=建议行（suggested 淡橘黄）；簇 2=自动确认行（淡蓝）；
+    # 簇 3=人工指派终审（confirmed 淡绿）；簇 4=无指派（未匹配 淡灰）。
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=clusters[0].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=now,
+        ),
+        ClusterPersonAssignment(
+            cluster_id=clusters[1].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_AUTO_CONFIRM, created_at=now,
+            status=ASSIGNMENT_STATUS_AUTO_CONFIRMED,
+        ),
+    ])
     workbench.assign_person(
-        AssignClusterPersonCommand(cluster_id=clusters[0].id, person_id=alice.id),
+        AssignClusterPersonCommand(cluster_id=clusters[2].id, person_id=alice.id),
         actor=HUMAN_ACTOR,
     )
     dialog = ClusterResultsDialog(
@@ -1519,11 +1539,12 @@ def test_cluster_rows_carry_status_tints(qtbot):
     qtbot.addWidget(dialog)
     dialog.refresh()
 
-    confirmed_item = dialog._cluster_list.item(0)
-    unmatched_item = dialog._cluster_list.item(1)
-    green = QColor(token("pa-success-fg"))
-    green.setAlpha(34)
-    orange = QColor(token("pa-warning-fg"))
-    orange.setAlpha(34)
-    assert confirmed_item.background().color() == green
-    assert unmatched_item.background().color() == orange
+    def tinted(token_name):
+        color = QColor(token(token_name))
+        color.setAlpha(44)
+        return color
+
+    assert dialog._cluster_list.item(0).background().color() == tinted("pa-warning-fg")
+    assert dialog._cluster_list.item(1).background().color() == tinted("pa-info-fg")
+    assert dialog._cluster_list.item(2).background().color() == tinted("pa-success-fg")
+    assert dialog._cluster_list.item(3).background().color() == tinted("pa-text-secondary")

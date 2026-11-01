@@ -117,6 +117,18 @@ _ASSIGNMENT_SEVERITY = {
     "unassigned": "neutral",
 }
 
+# 左列簇卡片底色＝右侧配对状态徽章同色系（Owner 2026-11-01：三态区分——
+# 已确认=淡绿/待确认(suggested)=淡橘黄/自动确认待终审(auto_confirmed)=淡蓝/
+# 未匹配(无行或 unassigned)=淡灰/拒绝(rejected)=淡红——active 集合外实际不
+# 出现，映射仅登记。色相取各 severity 徽章同 token，低透明度淡染）。
+_TINT_TOKEN_BY_STATUS = {
+    "confirmed": "pa-success-fg",
+    "suggested": "pa-warning-fg",
+    "auto_confirmed": "pa-info-fg",
+    "rejected": "pa-alert-fg",
+    "unassigned": "pa-text-secondary",
+}
+
 
 class _DetailIgnoreController:
     """详图忽略/恢复控制器（Owner 2026-10-31）。
@@ -576,11 +588,16 @@ class ClusterResultsDialog(QDialog):
                 )
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, detail.cluster_id)
-            # Owner 2026-10-31：终审状态染色（已确认=淡绿/未匹配=淡橙/其余=卡面）。
-            assignment = assignments.get(detail.cluster_id)
-            item.setBackground(self._cluster_item_background(
-                assignment.status if assignment is not None else None,
-            ))
+            # Owner 2026-11-01：终审状态染色（已确认=淡绿/待确认=淡橘黄/
+            # 自动确认待终审=淡蓝/未匹配=淡灰）——仅配对模式；校准模式无
+            # 配对语义，条目保持卡面。
+            if self._pairing_active:
+                assignment = assignments.get(detail.cluster_id)
+                item.setBackground(self._cluster_item_background(
+                    assignment.status if assignment is not None else None,
+                ))
+            else:
+                item.setBackground(QColor(token("pa-bg-surface")))
             self._cluster_list.addItem(item)
         self._cluster_list.blockSignals(False)
         self._cluster_list.setCurrentRow(0)
@@ -1177,14 +1194,14 @@ class ClusterResultsDialog(QDialog):
         self._batch_context = None
 
     def _cluster_item_background(self, assignment_status: str | None) -> QColor:
-        """Owner 2026-10-31：簇卡片底色按终审状态染色（淡绿/淡橙/卡面）。"""
-        if assignment_status == "confirmed":
-            color = QColor(token("pa-success-fg"))
-        elif assignment_status in ("unassigned", None):
-            color = QColor(token("pa-warning-fg"))
-        else:
+        """Owner 2026-11-01：簇卡片底色＝配对状态徽章同色系淡染——已确认=
+        淡绿/待确认=淡橘黄/自动确认待终审=淡蓝/未匹配=淡灰/拒绝=淡红。"""
+        status = "unassigned" if assignment_status is None else assignment_status
+        token_name = _TINT_TOKEN_BY_STATUS.get(status)
+        if token_name is None:  # 未知状态回退卡面（不染色不崩溃）
             return QColor(token("pa-bg-surface"))
-        color.setAlpha(34)  # ≈13% 淡染，浅/深主题皆可读
+        color = QColor(token(token_name))
+        color.setAlpha(44)  # ≈17% 淡染，浅/深主题皆可读
         return color
 
     def closeEvent(self, event) -> None:  # noqa: N802  # Qt 虚函数名

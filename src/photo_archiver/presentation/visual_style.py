@@ -606,8 +606,9 @@ QListWidget#CardList {
     border: none;
 }
 QListWidget#CardList::item {
-    /* Owner 2026-10-31：背景色改由条目自带（setBackground）——簇列表需要
-       按终审状态染色（已确认=淡绿/未匹配=淡橙）；QSS 背景会覆盖模型笔刷。
+    /* Owner 2026-11-01：背景色改由条目自带（setBackground）——簇列表需要
+       按配对状态染色（已确认=淡绿/待确认=淡橘黄/自动确认待终审=淡蓝/
+       未匹配=淡灰）；QSS 背景会覆盖模型笔刷。
        各消费者在渲染时显式给条目设置卡面底色，非染色条目观感不变。 */
     border: 1px solid ${pa-border};
     border-radius: 6px;
