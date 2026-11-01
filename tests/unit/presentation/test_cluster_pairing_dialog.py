@@ -15,8 +15,9 @@ import math
 import time
 from datetime import datetime
 
+from PySide6.QtCore import QPoint
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox
 from uuid import uuid4
 
 from photo_archiver.application.commands import AddPersonCommand
@@ -73,7 +74,7 @@ from photo_archiver.infrastructure import (
 from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.task_coordinator import TaskCoordinator
 from photo_archiver.workers.qt_executor import QtWorkerExecutor
-from photo_archiver.presentation.visual_style import token
+from photo_archiver.presentation.visual_style import build_stylesheet, token
 from photo_archiver.presentation.views.cluster_results_dialog import (
     ClusterResultsDialog,
 )
@@ -1082,8 +1083,8 @@ def test_batch_pass_runs_through_task_pipeline(tmp_path, qtbot, monkeypatch):
     assert coordinator.is_busy  # 准入占位（窗口级冲突门同源）
 
     qtbot.waitUntil(
-        lambda: "成功 1" in dialog._feedback_label.text(), timeout=10000,
-    )
+        lambda: "成功 1" in dialog._feedback_label.text(), timeout=30000,
+    )  # 全量负载下真实线程池启动+事件送达可超 10s（追加轮 13 同类放宽）
     assert not coordinator.is_busy
     assert not dialog._busy
     latest = dialog._assignments_by_cluster()[clusters[0].id]
@@ -1548,3 +1549,110 @@ def test_cluster_rows_carry_status_tints(qtbot):
     assert dialog._cluster_list.item(1).background().color() == tinted("pa-info-fg")
     assert dialog._cluster_list.item(2).background().color() == tinted("pa-success-fg")
     assert dialog._cluster_list.item(3).background().color() == tinted("pa-text-secondary")
+
+
+def test_cluster_rows_render_status_tints(qtbot):
+    """渲染级回归（Owner 2026-11-01「界面依旧没变」实锤）：QSS ``::item``
+    规则存在时样式表引擎丢弃模型 BackgroundRole 画笔——状态染色必须经
+    ``_StatusTintDelegate`` 显式补画才上屏。断言像素而非模型：行内采样色
+    须等于背景色与令牌的 alpha 合成（容差 ±10，跨平台亮度调制模型同
+    test_visual_system 探针）。"""
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    photos = [harness.add_photo(f"photos/{n}.jpg") for n in "abcd"]
+    obs = [harness.add_observation(p, 0, 60.0 * i) for i, p in enumerate(photos)]
+    _cluster_run, clusters = harness.add_generation([
+        (f"k|{n}|{i:06d}", [o]) for i, (n, o) in enumerate(zip("abcd", obs))
+    ])
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    now = datetime.now()
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=clusters[0].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=now,
+        ),
+        ClusterPersonAssignment(
+            cluster_id=clusters[1].id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_AUTO_CONFIRM, created_at=now,
+            status=ASSIGNMENT_STATUS_AUTO_CONFIRMED,
+        ),
+    ])
+    workbench.assign_person(
+        AssignClusterPersonCommand(cluster_id=clusters[2].id, person_id=alice.id),
+        actor=HUMAN_ACTOR,
+    )
+    # 生产观感＝视觉系统 QSS 在场（无 QSS 时原生样式自己画模型底色，与
+    # 委托补画叠加成双重合成——断言必须对着真实样式跑）。
+    qapp = QApplication.instance()
+    qapp.setStyleSheet(build_stylesheet())
+    try:
+        _assert_rendered_tints(qtbot, results, _suggest, workbench,
+                               _ignore, roster, harness)
+    finally:
+        qapp.setStyleSheet("")
+
+
+def _assert_rendered_tints(qtbot, results, _suggest, workbench, _ignore,
+                           roster, harness) -> None:
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=_suggest, workbench_service=workbench,
+        ignore_service=_ignore, list_persons=roster,
+    )
+    qtbot.addWidget(dialog)
+    dialog.resize(1100, 720)
+    dialog.show()
+    for _ in range(10):
+        qtbot.wait(10)
+    dialog._cluster_list.clearSelection()
+    for _ in range(10):
+        qtbot.wait(10)
+
+    image = dialog.grab().toImage()
+    list_widget = dialog._cluster_list
+    origin = list_widget.viewport().mapTo(dialog, QPoint(0, 0))
+
+    def dominant_at(points):
+        """多点采样取众数（文字/圆角等异物被排除，行底色胜出）。"""
+        counts: dict[tuple[int, int, int], int] = {}
+        for px, py in points:
+            color = image.pixelColor(px, py)
+            key = (color.red(), color.green(), color.blue())
+            counts[key] = counts.get(key, 0) + 1
+        return max(counts.items(), key=lambda kv: kv[1])[0]
+
+    def sample(row):
+        rect = list_widget.visualItemRect(list_widget.item(row))
+        return dominant_at([
+            (origin.x() + rect.x() + int(rect.width() * fx),
+             origin.y() + rect.y() + int(rect.height() * fy))
+            for fx in (0.75, 0.85) for fy in (0.35, 0.65)
+        ])
+
+    # 背景参照：列表内、最后一行下方的确定空白带（同行 x 取样避文字）。
+    rect3 = list_widget.visualItemRect(list_widget.item(3))
+    backdrop = dominant_at([
+        (origin.x() + int(list_widget.viewport().width() * fx),
+         origin.y() + rect3.y() + rect3.height() + 12)
+        for fx in (0.5, 0.75, 0.85)
+    ])
+
+    alpha = 44 / 255.0
+    for row, token_name in [
+        (0, "pa-warning-fg"), (1, "pa-info-fg"),
+        (2, "pa-success-fg"), (3, "pa-text-secondary"),
+    ]:
+        fg = QColor(token(token_name))
+        expected = tuple(
+            round(backdrop[i] * (1 - alpha) + channel * alpha)
+            for i, channel in enumerate((fg.red(), fg.green(), fg.blue()))
+        )
+        found = sample(row)
+        assert all(abs(found[i] - expected[i]) <= 10 for i in range(3)), (
+            f"row {row} ({token_name}): sampled {found}, expected ≈{expected} "
+            f"(backdrop {backdrop}) — tint not painted"
+        )
+        # 有意义性守卫：染色必须真的偏离背景（防止全白回归下断言空转）。
+        assert any(abs(found[i] - backdrop[i]) >= 5 for i in range(3)), (
+            f"row {row} ({token_name}): sampled {found} ≈ backdrop {backdrop}"
+        )

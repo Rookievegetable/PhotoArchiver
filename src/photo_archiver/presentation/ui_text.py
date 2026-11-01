@@ -16,7 +16,8 @@ from __future__ import annotations
 from datetime import datetime
 
 # ---- 主窗口 · 工具栏 ----
-APP_VERSION = "2.9.1"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+APP_VERSION = "2.9.2"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+# 2.9.2＝簇列表状态染色真正上屏（委托补画被 QSS 丢弃的模型底色画笔）。
 # 2.9.1＝专用线程池修复（42bb12f）：批量终审不再被缩略图波次饿死。
 MAIN_WINDOW_TITLE = f"PhotoArchiver v{APP_VERSION}"
 ACTION_IMPORT_PEOPLE = "导入人员"

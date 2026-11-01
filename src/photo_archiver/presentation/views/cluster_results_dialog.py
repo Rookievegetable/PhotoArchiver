@@ -23,8 +23,8 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import UUID
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QIcon, QPainter, QPainterPath
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QStyledItemDelegate,
     QVBoxLayout,
     QWidget,
 )
@@ -128,6 +129,28 @@ _TINT_TOKEN_BY_STATUS = {
     "rejected": "pa-alert-fg",
     "unassigned": "pa-text-secondary",
 }
+
+
+class _StatusTintDelegate(QStyledItemDelegate):
+    """把条目自带的状态画笔显式画成圆角底色（Owner 2026-11-01 渲染探针实证）。
+
+    QSS ``::item`` 规则存在时整项由样式表引擎渲染，未写 background-color 的
+    规则会**丢弃**模型 BackgroundRole 画笔（离屏抓图采样实证：状态染色不
+    上屏）——本委托在样式渲染前补画，恢复按配对状态染色。
+    """
+
+    def paint(self, painter, option, index) -> None:
+        brush = index.data(Qt.ItemDataRole.BackgroundRole)
+        if brush is not None and brush.style() != Qt.BrushStyle.NoBrush:
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            path = QPainterPath()
+            path.addRoundedRect(
+                QRectF(option.rect).adjusted(1.0, 1.0, -1.0, -1.0), 6.0, 6.0,
+            )
+            painter.fillPath(path, brush)
+            painter.restore()
+        super().paint(painter, option, index)
 
 
 class _DetailIgnoreController:
@@ -311,6 +334,9 @@ class ClusterResultsDialog(QDialog):
         # Owner 2026-10-31：不取键盘焦点——原生焦点矩形在选中卡片内缘画黑框
         # （outline:none 双保险于 QSS）；鼠标选择/高亮语义不变。
         self._cluster_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        # Owner 2026-11-01：样式表引擎丢模型底色画笔（渲染探针实证）——
+        # 状态染色由委托显式补画（见 _StatusTintDelegate）。
+        self._cluster_list.setItemDelegate(_StatusTintDelegate(self._cluster_list))
         self._cluster_list.currentItemChanged.connect(self._on_cluster_selected)
         if self._pairing_active:
             # 批量确认/拒绝：簇列表支持多选（ExtendedSelection）。
