@@ -69,6 +69,18 @@ _ACTION_LABELS = (
 )
 _FIELDS = ("name", "identity", "department", "note", "group")
 
+
+class _ActionCombo(QComboBox):
+    """处理动作下拉（每行一个）：禁止滚轮切换（Owner 追加轮 26）.
+
+    表格单元格内嵌的下拉在滚轮扫过时会被误换值（默认 WheelFocus 策略）。
+    本类把滚轮事件 **ignore**——不消费即向父级传播，表格照常滚动；换值
+    只允许点击展开后选择。
+    """
+
+    def wheelEvent(self, event) -> None:  # noqa: N802  # Qt 虚函数名
+        event.ignore()
+
 # P8 告警分级：每级的（前缀符号, 前景 token, 背景 token）——三级两两可
 # 区分；未知 code 走 ``_IMPORT_WARNING_DEFAULT_STYLE``（默认样式，不崩溃）。
 # 配色以富文本 span 落在告警行内（不经 widget 级 stylesheet，遵循视觉系统
@@ -411,7 +423,7 @@ class ImportPreviewDialog(QDialog):
             warnings_label = build_warning_label(row.warnings, self)
             warnings_label.setToolTip(self._warnings_text(row))
             self._table.setCellWidget(row_index, 5, warnings_label)
-            action = QComboBox(self)
+            action = _ActionCombo(self)
             for value, label in _ACTION_LABELS:
                 action.addItem(label, value)
             current = _ACTION_LABELS_INDEX.get(row.action, 0)

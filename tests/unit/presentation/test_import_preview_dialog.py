@@ -128,6 +128,38 @@ def test_split_success_clears_feedback(parsed, qtbot) -> None:
     assert dialog._feedback_label.text() == ""
 
 
+def test_action_combo_ignores_wheel(qtbot) -> None:
+    """追加轮 26（Owner）：处理动作下拉禁滚轮换值——滚轮事件被 ignore
+    （穿透给表格滚动），索引不变；原生 QComboBox 对照组会被换值。"""
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtWidgets import QComboBox
+
+    from photo_archiver.presentation.views.import_preview_dialog import (
+        _ActionCombo,
+    )
+
+    def wheel_event():
+        return QWheelEvent(
+            QPointF(5, 5), QPointF(5, 5),
+            QPoint(0, 0), QPoint(0, 120),
+            Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase, False,
+        )
+
+    combo = _ActionCombo()
+    combo.addItems(["新建人员", "合并到既有", "跳过"])
+    combo.setCurrentIndex(1)
+    combo.wheelEvent(wheel_event())
+    assert combo.currentIndex() == 1  # 滚轮不换值
+
+    plain = QComboBox()
+    plain.addItems(["新建人员", "合并到既有", "跳过"])
+    plain.setCurrentIndex(1)
+    plain.wheelEvent(wheel_event())
+    assert plain.currentIndex() == 0  # 对照：原生行为＝滚轮换值（机制实证）
+
+
 def test_action_switch_to_skip_persists(parsed, qtbot) -> None:
     dialog, people = _make_dialog(parsed, qtbot)
     target = next(row for row in dialog._draft.rows if row.parsed_name == "张三")
