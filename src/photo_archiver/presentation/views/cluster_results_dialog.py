@@ -232,6 +232,9 @@ class ClusterResultsDialog(QDialog):
         self._task_coordinator = task_coordinator
         self._task_executor = task_executor
         self._busy = False
+        # 追加轮 27：确认键状态机的当前配对状态（渲染路径写入；选择变化时
+        # 由 _refresh_confirm_button_state 复用，避免重渲染整个详情面板）。
+        self._current_assignment_status: str | None = None
         self._batch_person_suffix = ""
         if self._calibration_active:
             if annotator_id is None or not annotator_id.strip():
@@ -342,6 +345,11 @@ class ClusterResultsDialog(QDialog):
             # 批量确认/拒绝：簇列表支持多选（ExtendedSelection）。
             self._cluster_list.setSelectionMode(
                 QAbstractItemView.SelectionMode.ExtendedSelection,
+            )
+            # 追加轮 27：选中数量变化 → 确认键启停同步（多选＝禁用，批量
+            # 只走「批量通过」）。仅配对模式——校准模式无确认键。
+            self._cluster_list.itemSelectionChanged.connect(
+                self._refresh_confirm_button_state,
             )
         body.addWidget(self._cluster_list, 2)
 
@@ -720,12 +728,10 @@ class ClusterResultsDialog(QDialog):
         # Owner 2026-10-31 防呆：已确认组＝确认键变「已确认」且不可点
         # （改派仍可经目标人员+确认走人工路径？不——confirmed 行的再次确认
         # 无意义，确认键保持禁用；改派需先经未来「解除」入口，此处不扩权）。
-        if assignment_status == "confirmed":
-            self._confirm_button.setText(text.CLUSTER_PAIRING_CONFIRMED_BUTTON)
-            self._confirm_button.setEnabled(False)
-        else:
-            self._confirm_button.setText(text.CLUSTER_PAIRING_CONFIRM_BUTTON)
-            self._confirm_button.setEnabled(bool(self._persons))
+        # 追加轮 27：启停收口到 _refresh_confirm_button_state（多选门+状态机
+        # 单一实现；渲染路径只写入状态并委托）。
+        self._current_assignment_status = assignment_status
+        self._refresh_confirm_button_state()
         ignored_set = set(detail.ignored_photo_ids)
         ignored_note = (
             f" · 忽略照片 {len(ignored_set)} 张" if ignored_set else ""
@@ -889,9 +895,33 @@ class ClusterResultsDialog(QDialog):
                 plan.append((cluster_id, label, "assign", None))
         return plan
 
+    def _refresh_confirm_button_state(self) -> None:
+        """确认键启停状态机（追加轮 27：多选＝禁用，批量只走「批量通过」）.
+
+        多选时确认键会把整选区标到最后一个目标人员名下（历史批量语义与
+        「批量通过」重叠）——禁用并提示；单选恢复按配对状态的状态机
+        （已确认＝「已确认」禁用；其余按人员名单可用性）。
+        """
+        if len(self._cluster_list.selectedItems()) > 1:
+            self._confirm_button.setText(text.CLUSTER_PAIRING_CONFIRM_BUTTON)
+            self._confirm_button.setToolTip(text.CLUSTER_PAIRING_MULTI_SELECT_HINT)
+            self._confirm_button.setEnabled(False)
+            return
+        self._confirm_button.setToolTip("")
+        if self._current_assignment_status == "confirmed":
+            self._confirm_button.setText(text.CLUSTER_PAIRING_CONFIRMED_BUTTON)
+            self._confirm_button.setEnabled(False)
+        else:
+            self._confirm_button.setText(text.CLUSTER_PAIRING_CONFIRM_BUTTON)
+            self._confirm_button.setEnabled(bool(self._persons))
+
     def _on_confirm_clicked(self) -> None:
         """批量确认（逐项提交；允许部分成功；操作前显示计划）。"""
         cluster_ids = self._selected_cluster_ids()
+        if len(self._cluster_list.selectedItems()) > 1:
+            # 追加轮 27：多选入口已由按键禁用兜住——此处防御（批量只走批量通过）。
+            self._feedback_label.setText(text.CLUSTER_PAIRING_MULTI_SELECT_HINT)
+            return
         person_id = self._target_person_id()
         if person_id is None:
             self._detail_info_missing_target()

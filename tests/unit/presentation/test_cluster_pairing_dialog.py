@@ -377,6 +377,11 @@ def test_generate_with_empty_roster_shows_feedback(qtbot, monkeypatch):
 
 
 def test_batch_confirm_skips_confirmed_and_reports_partial_success(qtbot, monkeypatch):
+    """追加轮 27 迁移：确认键＝单选专用（多选禁用，批量只走「批量通过」）。
+
+    本测试改为验证单选确认链（人工明确选择即确认）与 ``_plan_confirm`` 的
+    跳过分类（已确认项携带可读原因，N-1）；多选入口的禁用与防御见
+    ``test_confirm_button_disabled_on_multi_selection``。"""
     harness = _Harness()
     person = harness.add_person("张三", 1)
     photo_a = harness.add_photo("photos/a.jpg")
@@ -393,22 +398,23 @@ def test_batch_confirm_skips_confirmed_and_reports_partial_success(qtbot, monkey
         actor=HUMAN_ACTOR,
     )
     dialog.refresh()
-    dialog._cluster_list.setCurrentRow(0)
-    # 批量选中两簇 + 目标人员张三。
-    for row in range(dialog._cluster_list.count()):
-        dialog._cluster_list.item(row).setSelected(True)
-    index = dialog._person_combo.findData(person.id)
-    dialog._person_combo.setCurrentIndex(index)
 
-    # 预演：第一簇跳过（已确认）、第二簇执行。
+    # 预演分类（模型级，单选确认共用同一实现）：
+    # 已确认 → skip（N-1：skip 项必须携带可读原因，不得展示 None）；未指派 → assign。
     plan = dialog._plan_confirm(
         [clusters[0].id, clusters[1].id], person.id,
     )
     assert [action for _, _, action, _ in plan] == ["skip", "assign"]
-    # N-1：skip 项必须携带可读原因（不得展示 None）。
     from photo_archiver.presentation import ui_text as ui_text_module
 
     assert plan[0][3] == ui_text_module.CLUSTER_PAIRING_CONFIRMED_SKIP
+
+    # 单选簇 2 + 目标人员张三 → 确认键执行人工确认。
+    dialog._cluster_list.clearSelection()
+    dialog._cluster_list.setCurrentRow(1)
+    dialog._cluster_list.item(1).setSelected(True)
+    index = dialog._person_combo.findData(person.id)
+    dialog._person_combo.setCurrentIndex(index)
 
     monkeypatch.setattr(
         "photo_archiver.presentation.views.cluster_results_dialog.QMessageBox.exec",
@@ -417,7 +423,7 @@ def test_batch_confirm_skips_confirmed_and_reports_partial_success(qtbot, monkey
     dialog._on_confirm_clicked()
 
     summary = dialog._feedback_label.text()
-    assert "成功 1" in summary and "跳过 1" in summary and "失败 0" in summary
+    assert "成功 1" in summary and "失败 0" in summary
     active = {
         assignment.cluster_id: assignment
         for assignment in dialog._results_service.assignments_active(cluster_run.id)
@@ -576,6 +582,56 @@ def test_confirm_button_shows_confirmed_and_disabled_for_confirmed_cluster(qtbot
     dialog._cluster_list.setCurrentRow(0)
     assert dialog._confirm_button.text() == text.CLUSTER_PAIRING_CONFIRMED_BUTTON
     assert not dialog._confirm_button.isEnabled()
+
+
+def test_confirm_button_disabled_on_multi_selection(qtbot):
+    """追加轮 27（Owner 实机）：多选时确认键禁用（多选+确认会把整选区标到
+    最后一个目标人员名下——批量处理只走「批量通过」）；单选恢复可用。"""
+    harness = _Harness()
+    alice = harness.add_person("1张三", 1)
+    photos = [harness.add_photo(f"photos/{n}.jpg") for n in "abc"]
+    obs = [harness.add_observation(p, 0, 60.0 * i) for i, p in enumerate(photos)]
+    _cluster_run, clusters = harness.add_generation([
+        (f"k|{n}|{i:06d}", [o]) for i, (n, o) in enumerate(zip("abc", obs))
+    ])
+    _suggest, workbench, _ignore, results, roster = harness.build_services()
+    harness.assignments.add_assignments([
+        ClusterPersonAssignment(
+            cluster_id=cluster.id, person_id=alice.id,
+            source=ASSIGNMENT_SOURCE_ORDERED_SUGGESTION, created_at=datetime.now(),
+        )
+        for cluster in clusters
+    ])
+    dialog = ClusterResultsDialog(
+        results, harness.recognition_run.id,
+        suggest_service=_suggest, workbench_service=workbench,
+        ignore_service=_ignore, list_persons=roster,
+    )
+    qtbot.addWidget(dialog)
+    dialog.refresh()
+
+    # 单选 → 可用
+    dialog._cluster_list.clearSelection()
+    dialog._cluster_list.setCurrentRow(0)
+    assert dialog._confirm_button.isEnabled()
+    assert dialog._confirm_button.toolTip() == ""
+
+    # 多选 → 禁用 + 批量通过提示
+    dialog._cluster_list.selectAll()
+    assert not dialog._confirm_button.isEnabled()
+    assert "批量通过" in dialog._confirm_button.toolTip()
+
+    # 防御层：多选状态下直调处理器 → 拒绝执行（不产生任何指派）
+    dialog._on_confirm_clicked()
+    assert "批量通过" in dialog._feedback_label.text()
+    for cluster in clusters:
+        latest = dialog._assignments_by_cluster()[cluster.id]
+        assert latest.status == "suggested"  # 状态未被改动
+
+    # 回到单选 → 恢复
+    dialog._cluster_list.clearSelection()
+    dialog._cluster_list.setCurrentRow(1)
+    assert dialog._confirm_button.isEnabled()
 
 
 def test_batch_pass_confirms_selected_clusters(qtbot, monkeypatch):

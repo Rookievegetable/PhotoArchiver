@@ -16,7 +16,8 @@ from __future__ import annotations
 from datetime import datetime
 
 # ---- 主窗口 · 工具栏 ----
-APP_VERSION = "2.9.9"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+APP_VERSION = "2.9.10"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+# 2.9.10＝多选时确认键禁用（批量只走「批量通过」——防整选区误标到最后目标）。
 # 2.9.9＝导入预览处理动作下拉禁滚轮换值（滚轮穿透给表格滚动）。
 # 2.9.8＝扫描完成后聚类卡随终态刷新（特征数据下拉不再停在空态）。
 # 2.9.7＝导入预览拆分键幽灵残留修复（行位复用继承旧控件+判定同口径）。
@@ -842,6 +843,9 @@ CLUSTER_PAIRING_BATCH_CANCELLED = "批量终审已取消。"
 CLUSTER_PAIRING_BATCH_PASS_BUTTON = "批量通过"
 # Owner 2026-10-31 防呆：已确认组的确认键形态（禁用）。
 CLUSTER_PAIRING_CONFIRMED_BUTTON = "已确认"
+# 追加轮 27（Owner 实机）：多选时确认键禁用——批量处理只走「批量通过」
+# （多选+确认会把整选区标到最后一个目标人员名下，历史批量语义已由批量通过承担）。
+CLUSTER_PAIRING_MULTI_SELECT_HINT = "已多选：批量处理请使用「批量通过」"
 CLUSTER_PAIRING_PASS_SKIP_CONFIRMED = "已确认，无需重复"
 CLUSTER_PAIRING_PASS_SKIP_UNASSIGNED = "未指派人员，无法直接通过"
 
