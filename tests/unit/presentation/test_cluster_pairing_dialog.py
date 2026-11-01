@@ -1083,8 +1083,9 @@ def test_batch_pass_runs_through_task_pipeline(tmp_path, qtbot, monkeypatch):
     assert coordinator.is_busy  # 准入占位（窗口级冲突门同源）
 
     qtbot.waitUntil(
-        lambda: "成功 1" in dialog._feedback_label.text(), timeout=30000,
-    )  # 全量负载下真实线程池启动+事件送达可超 10s（追加轮 13 同类放宽）
+        lambda: "成功 1" in dialog._feedback_label.text(), timeout=60000,
+    )  # 全量负载下事件送达可超 30s（追加轮 19/25 两次偶发实证；本测试断言
+    # 管线接线而非时延——隔离路径 0.1s，护栏只是抗扰垫）
     assert not coordinator.is_busy
     assert not dialog._busy
     latest = dialog._assignments_by_cluster()[clusters[0].id]

@@ -1246,7 +1246,10 @@ class MainWindow(QMainWindow):
             self._refresh_photo_list()
             if task_name in ("match_persons", "run_recognition"):
                 self._refresh_review_pending()
-            if task_name == "face_clustering":
+            if task_name in ("scan_photos", "run_recognition", "face_clustering"):
+                # 追加轮 25（Owner 实机：扫描完成后特征数据下拉仍空、聚类键
+                # 灰）：扫描即识别（scan_photos）会创建识别运行——聚类卡的
+                # 运行下拉与可用性必须随任务终态重读，否则停在构建期空态。
                 self._people_admin_page.refresh_clustering()
             self._refresh_workspace_state()
         except Exception:  # noqa: BLE001 - terminal feedback must survive read failures

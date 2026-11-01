@@ -470,10 +470,13 @@ def test_version_latest_lexicographic_trap(world: _World) -> None:
     """
     shared = uuid4()
 
-    for version in ("v8", "v9", "v10"):
+    # 追加轮 25：显式递增 created_at——负载下 datetime.now() 同 tick 会让
+    # created_at DESC 出现并列，latest 判定随 tiebreak 摆动（全量偶发实证）。
+    base = datetime(2026, 1, 1, 8, 0, 0)
+    for index, version in enumerate(("v8", "v9", "v10")):
         world.repos.calibration_annotations.add_dataset(CalibrationDataset(
             version=version, cluster_count=0, usable_count=0, excluded_count=0,
-            id=shared,
+            id=shared, created_at=base + timedelta(seconds=index),
         ))
 
     # created_at 由 add_dataset 逐条写入，每条微秒级递增
