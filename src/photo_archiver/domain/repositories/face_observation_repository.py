@@ -36,3 +36,10 @@ class FaceObservationRepository(Protocol):
         跨 run 语义（哪次新、哪次旧）由 ``RecognitionRunRepository.list_runs``
         的 created_at 排序表达；本方法只保证确定性顺序。
         """
+
+    def remove_by_run(self, run_id: UUID) -> int:
+        """Delete the run's residual observations（运行记录清理的残留扫尾）.
+
+        Returns:
+            The number of observation rows removed.
+        """

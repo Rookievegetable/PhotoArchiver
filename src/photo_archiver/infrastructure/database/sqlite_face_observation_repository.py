@@ -94,3 +94,16 @@ class SQLiteFaceObservationRepository(FaceObservationRepository):
                 (str(photo_id),),
             ).fetchall()
         return [face_observation_from_row(row) for row in rows]
+
+    def remove_by_run(self, run_id: UUID) -> int:
+        """Delete the run's residual observations（运行记录清理的残留扫尾）.
+
+        正常路径下观测随照片删除级联清空——本方法只兜底清残留，让运行
+        记录清理的回执如实计数。
+        """
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM face_observations WHERE run_id = ?",
+                (str(run_id),),
+            )
+            return cursor.rowcount

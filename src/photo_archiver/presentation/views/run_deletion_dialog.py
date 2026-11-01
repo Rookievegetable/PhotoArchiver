@@ -37,6 +37,7 @@ from photo_archiver.application.commands.deletion import (
     RUN_PEOPLE_MODE_UNASSIGN,
     DeleteRunPeopleCommand,
     DeleteRunPhotosCommand,
+    DeleteRunRecordCommand,
 )
 from photo_archiver.presentation import ui_text as text
 from photo_archiver.presentation.visual_style import ROLE_DANGER, assign_role
@@ -47,6 +48,9 @@ if TYPE_CHECKING:
     )
     from photo_archiver.application.services.delete_run_photos_service import (
         DeleteRunPhotosService,
+    )
+    from photo_archiver.application.services.delete_run_record_service import (
+        DeleteRunRecordService,
     )
 
 
@@ -224,6 +228,111 @@ class RunPeopleDeletionDialog(_RunDeletionDialogBase):
                 archive_orphaned=result.archive_orphaned,
             )
         self._finish(message)
+
+
+class RunRecordDeletionDialog(_RunDeletionDialogBase):
+    """Review one recognition run's residual record and confirm removal（功能 C）."""
+
+    def __init__(
+        self,
+        delete_run_record: "DeleteRunRecordService",
+        run_id: UUID,
+        run_label: str,
+        parent: QWidget | None = None,
+    ) -> None:
+        """Initialize the dialog with the target run.
+
+        Args:
+            delete_run_record: 运行记录清理服务（预览 + 执行，追加轮 21）。
+            run_id: 目标识别运行 id。
+            run_label: 运行的可读标签（创建时间 · 状态 · 脸数）。
+            parent: Optional parent widget.
+        """
+        super().__init__(text.RUN_DELETE_RECORD_DIALOG_TITLE, run_label, parent)
+        self._delete_run_record = delete_run_record
+        self._run_id = run_id
+        self._build_ui()
+        self._refresh()
+
+    def _build_ui(self) -> None:
+        """Lay out the impact preview, blocked label and aware confirmation."""
+        layout = self.layout()
+        assert isinstance(layout, QVBoxLayout)  # 基类已装配 QVBoxLayout
+
+        self._impact_label = QLabel(self)
+        self._impact_label.setWordWrap(True)
+        layout.addWidget(self._impact_label)
+
+        self._blocked_label = QLabel(self)
+        self._blocked_label.setWordWrap(True)
+        self._blocked_label.setVisible(False)
+        layout.addWidget(self._blocked_label)
+
+        self._aware_checkbox = QCheckBox(text.RUN_DELETE_AWARE_CHECKBOX, self)
+        self._aware_checkbox.toggled.connect(self._on_aware_toggled)
+        layout.addWidget(self._aware_checkbox)
+
+        self._buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        self._ok = self._buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self._ok.setText(text.RUN_DELETE_RECORD_BUTTON)
+        assign_role(self._ok, ROLE_DANGER)
+        cancel = self._buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel.setDefault(True)
+        cancel.setFocus()
+        self._buttons.accepted.connect(self._on_confirm)
+        self._buttons.rejected.connect(self.reject)
+        layout.addWidget(self._buttons)
+
+    def _refresh(self) -> None:
+        """Re-render the residual-record preview."""
+        preview = self._delete_run_record.preview(self._run_id)
+        if not preview.run_found:
+            self._impact_label.setText(text.RUN_DELETE_EMPTY)
+            self._blocked_label.setVisible(False)
+            self._aware_checkbox.setEnabled(False)
+            self._ok.setEnabled(False)
+            return
+        self._impact_label.setText(text.RUN_DELETE_RECORD_IMPACT.format(
+            generation_count=preview.generation_count,
+            cluster_count=preview.cluster_count,
+            decision_count=preview.decision_count,
+            observation_count=preview.observation_count,
+            snapshot_count=preview.snapshot_count,
+        ))
+        if preview.is_blocked:
+            self._blocked_label.setText(text.RUN_DELETE_BLOCKED.format(
+                reasons="\n".join(f"· {reason}" for reason in preview.blocked_reasons),
+            ))
+            self._blocked_label.setVisible(True)
+            self._aware_checkbox.setEnabled(False)
+            self._ok.setEnabled(False)
+            return
+        self._blocked_label.setVisible(False)
+        self._aware_checkbox.setEnabled(True)
+        self._ok.setEnabled(self._aware_checkbox.isChecked())
+
+    def _on_aware_toggled(self, checked: bool) -> None:
+        """The confirm button stays disabled until the user explicitly agrees."""
+        self._ok.setEnabled(checked)
+
+    def _on_confirm(self) -> None:
+        """Execute inside the service's single transaction; report honestly."""
+        try:
+            result = self._delete_run_record.execute(
+                DeleteRunRecordCommand(run_id=self._run_id),
+            )
+        except Exception as exc:  # noqa: BLE001 - UI boundary: show, log the detail
+            self._report_failure(exc)
+            return
+        self._finish(text.RUN_DELETE_RECORD_DONE.format(
+            generations_purged=result.generations_purged,
+            decision_cascade=result.decision_cascade,
+            observation_cascade=result.observation_cascade,
+            snapshot_cascade=result.snapshot_cascade,
+        ))
 
 
 class RunPhotosDeletionDialog(_RunDeletionDialogBase):

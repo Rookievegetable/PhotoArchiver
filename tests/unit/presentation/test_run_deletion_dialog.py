@@ -26,12 +26,15 @@ from photo_archiver.app.repositories import build_sqlite_repositories
 from photo_archiver.application.dtos import (
     RunPeopleDeletionPreview,
     RunPhotosDeletionPreview,
+    RunRecordDeletionPreview,
+    RunRecordDeletionResult,
 )
 from photo_archiver.application.services import (
     ClusterResultsService,
     DeletePersonService,
     DeleteRunPeopleService,
     DeleteRunPhotosService,
+    DeleteRunRecordService,
     ListPersonsService,
     ListRecognitionRunsService,
     ManagePeopleService,
@@ -43,6 +46,7 @@ from photo_archiver.presentation.views.people_admin_page import PeopleAdminPage
 from photo_archiver.presentation.views.run_deletion_dialog import (
     RunPeopleDeletionDialog,
     RunPhotosDeletionDialog,
+    RunRecordDeletionDialog,
 )
 
 _PEOPLE_BLOCKED = RunPeopleDeletionPreview(
@@ -94,6 +98,43 @@ class _StubPhotosService:
 
     def preview(self, _run_id):
         return self._preview
+
+
+_RECORD_BLOCKED = RunRecordDeletionPreview(
+    run_found=True, run_created_at=None, run_status="completed",
+    photo_count=2, generation_count=1, cluster_count=2, decision_count=2,
+    ground_truth_count=0, observation_count=0, snapshot_count=2,
+    blocked_reasons=("该运行仍有 2 张照片登记——请先使用「删除该运行照片…」"
+                    "清理照片及其级联数据",),
+)
+_RECORD_FREE = RunRecordDeletionPreview(
+    run_found=True, run_created_at=None, run_status="completed",
+    photo_count=0, generation_count=1, cluster_count=2, decision_count=2,
+    ground_truth_count=0, observation_count=0, snapshot_count=0,
+)
+_RECORD_GONE = RunRecordDeletionPreview(
+    run_found=False, run_created_at=None, run_status="",
+    photo_count=0, generation_count=0, cluster_count=0, decision_count=0,
+    ground_truth_count=0, observation_count=0, snapshot_count=0,
+)
+
+
+class _StubRecordService:
+    """预览/执行可编排的记录清理服务替身（对话框纯展示 + 执行断言）。"""
+
+    def __init__(self, preview: RunRecordDeletionPreview) -> None:
+        self._preview = preview
+        self.executed_run_ids: list = []
+
+    def preview(self, _run_id):
+        return self._preview
+
+    def execute(self, command):
+        self.executed_run_ids.append(command.run_id)
+        return RunRecordDeletionResult(
+            run_removed=1, generations_purged=1, decision_cascade=2,
+            observation_cascade=0, snapshot_cascade=0,
+        )
 
 
 def _ok_button(dialog) -> QPushButton:
@@ -182,6 +223,51 @@ def test_photos_dialog_empty_snapshot_shows_explicit_empty_state(qtbot) -> None:
     assert _ok_button(dialog).isEnabled() is False
 
 
+# ── 记录清理对话框（功能 C，追加轮 21）─────────────────────────────────
+
+
+def test_record_dialog_blocks_execution_while_photos_registered(qtbot) -> None:
+    """照片仍在登记 → 阻断原因展示 + 知悉勾选与执行按钮禁用。"""
+    dialog = RunRecordDeletionDialog(
+        _StubRecordService(_RECORD_BLOCKED), "run-1", "2026-10-28 17:07 · 已完成",
+    )
+    qtbot.addWidget(dialog)
+    assert _ok_button(dialog).isEnabled() is False
+    assert dialog._aware_checkbox.isEnabled() is False
+    assert "删除该运行照片" in dialog._blocked_label.text()
+
+
+def test_record_dialog_gates_ok_on_aware_checkbox(qtbot) -> None:
+    """知悉勾选前确认按钮禁用；勾选后启用并披露残留代际/决策计数。"""
+    service = _StubRecordService(_RECORD_FREE)
+    dialog = RunRecordDeletionDialog(
+        service, "run-1", "2026-10-28 17:07 · 已完成",
+    )
+    qtbot.addWidget(dialog)
+    assert _ok_button(dialog).isEnabled() is False
+    assert "残留聚类代际 1 个" in dialog._impact_label.text()
+    assert "身份决策 2 条" in dialog._impact_label.text()
+
+    dialog._aware_checkbox.setChecked(True)
+    assert _ok_button(dialog).isEnabled() is True
+
+    dialog._on_confirm()
+    assert dialog.result() == dialog.DialogCode.Accepted
+    assert service.executed_run_ids == ["run-1"]
+    assert "残留代际 1 个" in dialog.last_message()
+    assert "决策 2 条级联清除" in dialog.last_message()
+
+
+def test_record_dialog_unknown_run_shows_empty_state(qtbot) -> None:
+    """运行不存在（已被删除）→ 空态文案 + 执行按钮禁用。"""
+    dialog = RunRecordDeletionDialog(
+        _StubRecordService(_RECORD_GONE), "run-1", "2026-10-28 17:07 · 已完成",
+    )
+    qtbot.addWidget(dialog)
+    assert "没有任何可删除的对象" in dialog._impact_label.text()
+    assert _ok_button(dialog).isEnabled() is False
+
+
 # ── 名册页入口 + D10 标签 ───────────────────────────────────────────────
 
 
@@ -204,6 +290,11 @@ def _page(tmp_path: Path):
         repositories.person_face_samples, repositories.face_clusters,
         repositories.cluster_assignments, repositories.calibration_annotations,
     )
+    delete_run_record = DeleteRunRecordService(
+        repositories.recognition_runs, repositories.face_observations,
+        repositories.face_clusters, repositories.cluster_assignments,
+        repositories.calibration_annotations,
+    )
     page = PeopleAdminPage(
         ManagePeopleService(repositories.people, repositories.import_batches),
         ListPersonsService(repositories.people),
@@ -221,6 +312,7 @@ def _page(tmp_path: Path):
         ),
         delete_run_people=delete_run_people,
         delete_run_photos=delete_run_photos,
+        delete_run_record=delete_run_record,
     )
     return page, repositories
 
@@ -231,6 +323,7 @@ def test_page_run_delete_buttons_disabled_without_runs(qtbot, tmp_path) -> None:
     qtbot.addWidget(page)
     assert page._delete_run_people_button.isEnabled() is False
     assert page._delete_run_photos_button.isEnabled() is False
+    assert page._delete_run_record_button.isEnabled() is False
 
 
 def test_page_batch_label_carries_time_and_status(qtbot, tmp_path) -> None:

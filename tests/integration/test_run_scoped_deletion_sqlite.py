@@ -24,10 +24,12 @@ from photo_archiver.application.commands.deletion import (
     RUN_PEOPLE_MODE_UNASSIGN,
     DeleteRunPeopleCommand,
     DeleteRunPhotosCommand,
+    DeleteRunRecordCommand,
 )
 from photo_archiver.application.services import (
     DeleteRunPeopleService,
     DeleteRunPhotosService,
+    DeleteRunRecordService,
 )
 from photo_archiver.domain import (
     ArchiveRecord,
@@ -195,6 +197,16 @@ def _photos_service(repos) -> DeleteRunPhotosService:
         repos.archive_records,
         repos.face_observations,
         repos.person_face_samples,
+        repos.face_clusters,
+        repos.cluster_assignments,
+        repos.calibration_annotations,
+    )
+
+
+def _record_service(repos) -> DeleteRunRecordService:
+    return DeleteRunRecordService(
+        repos.recognition_runs,
+        repos.face_observations,
         repos.face_clusters,
         repos.cluster_assignments,
         repos.calibration_annotations,
@@ -444,3 +456,84 @@ def _observations_of(repos, run) -> list:
 
 def _cluster_run_id(repos, run):
     return repos.face_clusters.list_cluster_runs(run.id)[0].id
+
+
+# ── C：删除运行记录（功能 C，追加轮 21）─────────────────────────────────
+
+
+def test_delete_run_record_blocked_while_photos_registered(tmp_path: Path) -> None:
+    """照片仍在登记 → 硬阻断（照片有专门的披露级联入口），执行零副作用。"""
+    repos, run1, _run2, _photos, _clusters, _person_a, _person_b = _world(
+        tmp_path, with_samples=False,
+    )
+    service = _record_service(repos)
+
+    preview = service.preview(run1.id)
+    assert preview.is_blocked is True
+    assert preview.photo_count == 2
+    assert "删除该运行照片" in preview.blocked_reasons[0]
+    with pytest.raises(ValidationError):
+        service.execute(DeleteRunRecordCommand(run_id=run1.id))
+    assert repos.recognition_runs.get_run(run1.id) is not None  # 零副作用
+
+
+def test_delete_run_record_blocked_by_ground_truth(tmp_path: Path) -> None:
+    """D5 一致：残留代际簇上有 GT 裁定 → 拒绝执行且零副作用。"""
+    repos, run1, _run2, _photos, clusters, person_a, _person_b = _world(
+        tmp_path, with_samples=False,
+    )
+    repos.calibration_annotations.add_ground_truth(CalibrationGroundTruth(
+        cluster_id=clusters[0].id,
+        verdict="person",
+        resolution="expert",
+        source_annotation_ids=(uuid4(),),
+        annotator_count=1,
+        person_id=person_a.id,
+    ))
+    service = _record_service(repos)
+
+    preview = service.preview(run1.id)
+    assert preview.is_blocked is True
+    assert preview.ground_truth_count == 1
+    with pytest.raises(ValidationError):
+        service.execute(DeleteRunRecordCommand(run_id=run1.id))
+    assert repos.recognition_runs.get_run(run1.id) is not None  # 零副作用
+
+
+def test_delete_run_record_removes_run_and_residuals(tmp_path: Path) -> None:
+    """A1+B 删完后的残留运行：记录清理带走代际/未指派决策/运行行。"""
+    repos, run1, run2, photos, _clusters, person_a, person_b = _world(
+        tmp_path, with_samples=False,
+    )
+    # A1（解除匹配保留人员）+ B（照片删除，B1 默认保留代际）→ 残留：
+    # 空代际 + 未指派决策行 + 运行行。照片仍在 → 记录清理先被硬阻断。
+    _people_service(repos, with_pairing=True).execute(DeleteRunPeopleCommand(
+        run_id=run1.id, mode=RUN_PEOPLE_MODE_UNASSIGN,
+    ))
+    _photos_service(repos).execute(DeleteRunPhotosCommand(run_id=run1.id))
+    assert repos.recognition_runs.get_run(run1.id) is not None  # 运行仍残留
+
+    service = _record_service(repos)
+    preview = service.preview(run1.id)
+    assert preview.is_blocked is False
+    assert preview.photo_count == 0
+    assert preview.generation_count == 1
+    assert preview.cluster_count == 2
+    assert preview.decision_count == 2  # D6 迁为未指派的决策行（历史保留）
+    assert preview.observation_count == 0  # 观测已随照片级联清空
+    assert preview.snapshot_count == 0
+
+    result = service.execute(DeleteRunRecordCommand(run_id=run1.id))
+    assert result.run_removed == 1
+    assert result.generations_purged == 1
+    assert result.decision_cascade == 2
+    assert result.observation_cascade == 0
+    assert result.snapshot_cascade == 0
+
+    assert repos.recognition_runs.get_run(run1.id) is None
+    assert repos.face_clusters.list_cluster_runs(run1.id) == []
+    assert repos.face_observations.list_by_run(run1.id) == []
+    # 其它运行（run2）与其照片不受影响
+    assert repos.recognition_runs.get_run(run2.id) is not None
+    assert repos.photos.find_by_id(photos[0].id) is None  # 已随 B 删除
+    assert person_a.id and person_b.id  # A1 保留人员

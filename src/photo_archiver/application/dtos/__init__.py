@@ -20,6 +20,8 @@ from photo_archiver.application.dtos.deletion import (
     RunPeopleDeletionPreview,
     RunPeopleDeletionResult,
     RunPhotosDeletionPreview,
+    RunRecordDeletionPreview,
+    RunRecordDeletionResult,
     RunPhotosDeletionResult,
 )
 from photo_archiver.application.dtos.duplicates import DuplicateGroup, DuplicateReport
@@ -127,6 +129,8 @@ __all__ = [
     "RunPeopleDeletionPreview",
     "RunPeopleDeletionResult",
     "RunPhotosDeletionPreview",
+    "RunRecordDeletionPreview",
+    "RunRecordDeletionResult",
     "RunPhotosDeletionResult",
     "PersonDeletionPreview",
     "PersonDeletionResult",

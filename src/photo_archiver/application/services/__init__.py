@@ -15,6 +15,9 @@ from photo_archiver.application.services.delete_run_people_service import (
 from photo_archiver.application.services.delete_run_photos_service import (
     DeleteRunPhotosService,
 )
+from photo_archiver.application.services.delete_run_record_service import (
+    DeleteRunRecordService,
+)
 from photo_archiver.application.services.detect_duplicates_service import DetectDuplicatesService
 from photo_archiver.application.services.parse_import_draft_service import ParseImportDraftService
 from photo_archiver.application.services.dispose_duplicates_service import DisposeDuplicatesService
@@ -69,6 +72,7 @@ __all__ = [
     "DeletePhotosService",
     "DeleteRunPeopleService",
     "DeleteRunPhotosService",
+    "DeleteRunRecordService",
     "DetectDuplicatesService",
     "DisposeDuplicatesService",
     "ConfirmImportService",

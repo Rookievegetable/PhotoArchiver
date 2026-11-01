@@ -16,7 +16,8 @@ from __future__ import annotations
 from datetime import datetime
 
 # ---- 主窗口 · 工具栏 ----
-APP_VERSION = "2.9.3"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+APP_VERSION = "2.9.4"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+# 2.9.4＝运行记录清理（批次删除功能 C）：识别运行残留记录的第三级删除终口。
 # 2.9.3＝0 人残留批次记录可经「同时删除批次记录」清理（先前确认键禁用死锁）。
 # 2.9.2＝簇列表状态染色真正上屏（委托补画被 QSS 丢弃的模型底色画笔）。
 # 2.9.1＝专用线程池修复（42bb12f）：批量终审不再被缩略图波次饿死。
@@ -1086,6 +1087,22 @@ RUN_DELETE_PHOTOS_DONE_EXTRA = (
 )
 RUN_DELETE_PHOTOS_DONE_PURGED = (
     " 已清理 {generations_purged} 个聚类代际（其中的身份决策行随之级联删除）。"
+)
+
+# 追加轮 21（批次删除功能 C）：运行记录清理——A/B 之后的第三级终口。
+PEOPLE_PAGE_DELETE_RUN_RECORD_BUTTON = "删除该运行记录…"
+RUN_DELETE_RECORD_DIALOG_TITLE = "删除该识别运行的残留记录"
+RUN_DELETE_RECORD_IMPACT = (
+    "将删除该运行的残留记录：识别运行 1 条；残留聚类代际 {generation_count} 个"
+    "（含簇 {cluster_count} 个、身份决策 {decision_count} 条，随代际级联删除）；"
+    "残留观测 {observation_count} 条；输入快照 {snapshot_count} 条。\n\n"
+    "人员、照片登记与磁盘文件一律不动。"
+)
+RUN_DELETE_RECORD_BUTTON = "删除该运行记录"
+RUN_DELETE_RECORD_DONE = (
+    "已删除识别运行记录：残留代际 {generations_purged} 个"
+    "（决策 {decision_cascade} 条级联清除）、观测 {observation_cascade} 条、"
+    "输入快照 {snapshot_cascade} 条。"
 )
 
 # ---- 重复报告处置（Phase E E-4，ADR-034 D6） ----

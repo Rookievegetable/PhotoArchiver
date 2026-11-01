@@ -78,6 +78,7 @@ from photo_archiver.presentation.views.person_edit_dialog import PersonEditDialo
 from photo_archiver.presentation.views.run_deletion_dialog import (
     RunPeopleDeletionDialog,
     RunPhotosDeletionDialog,
+    RunRecordDeletionDialog,
 )
 
 # 界面优化 §4.1：取消行内操作列——编辑移至工具栏（选中行生效），
@@ -297,6 +298,7 @@ class PeopleAdminPage(QWidget):
         roster_cluster_stats: RosterClusterStatsService,
         delete_run_people=None,
         delete_run_photos=None,
+        delete_run_record=None,
         parent: QWidget | None = None,
     ) -> None:
         """Initialize the page with its Application services.
@@ -315,6 +317,7 @@ class PeopleAdminPage(QWidget):
                 anchor-generation four numbers and per-person match marks.
             delete_run_people: 运行级名单删除服务（批次删除功能 A）。
             delete_run_photos: 运行级照片删除服务（批次删除功能 B）。
+            delete_run_record: 运行级记录清理服务（批次删除功能 C，追加轮 21）。
             parent: Optional parent widget.
         """
         super().__init__(parent)
@@ -326,6 +329,7 @@ class PeopleAdminPage(QWidget):
         self._roster_stats = roster_cluster_stats
         self._delete_run_people = delete_run_people
         self._delete_run_photos = delete_run_photos
+        self._delete_run_record = delete_run_record
         self._rows: list[Person] = []
         self._batches: tuple[ImportBatchSummary, ...] = ()
         self._batch_filter: UUID | None = None
@@ -1135,6 +1139,15 @@ class PeopleAdminPage(QWidget):
         )
         assign_role(self._delete_run_photos_button, ROLE_DANGER)
         row.addWidget(self._delete_run_photos_button)
+        # 批次删除功能 C（追加轮 21）：运行记录清理——A/B 之后的第三级终口。
+        self._delete_run_record_button = QPushButton(
+            text.PEOPLE_PAGE_DELETE_RUN_RECORD_BUTTON, group,
+        )
+        self._delete_run_record_button.clicked.connect(
+            self._on_delete_run_record_clicked,
+        )
+        assign_role(self._delete_run_record_button, ROLE_DANGER)
+        row.addWidget(self._delete_run_record_button)
         row.addStretch()
         group_layout.addLayout(row)
         hint = QLabel(text.CLUSTER_PAGE_HINT, group)
@@ -1190,6 +1203,9 @@ class PeopleAdminPage(QWidget):
         self._delete_run_photos_button.setEnabled(
             run_id is not None and self._delete_run_photos is not None
         )
+        self._delete_run_record_button.setEnabled(
+            run_id is not None and self._delete_run_record is not None
+        )
         self._cluster_hint.setText(
             "" if run_id is not None else text.CLUSTER_PAGE_NO_RUNS
         )
@@ -1230,6 +1246,19 @@ class PeopleAdminPage(QWidget):
         if not dialog.exec():
             return
         logger.info("People page deleted one recognition run's photos")
+        self._after_mutation(dialog.last_message())
+
+    def _on_delete_run_record_clicked(self) -> None:
+        """删除该识别运行的残留记录（批次删除功能 C，追加轮 21）。"""
+        run_id = self.selected_recognition_run_id()
+        if run_id is None or self._delete_run_record is None:
+            return
+        dialog = RunRecordDeletionDialog(
+            self._delete_run_record, run_id, self._selected_run_label(), parent=self,
+        )
+        if not dialog.exec():
+            return
+        logger.info("People page deleted one recognition run's residual record")
         self._after_mutation(dialog.last_message())
 
     def _on_cluster_run_changed(self, _index: int) -> None:

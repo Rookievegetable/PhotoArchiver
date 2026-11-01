@@ -20,6 +20,7 @@ from photo_archiver.application import (
     DeletePersonService,
     DeleteRunPeopleService,
     DeleteRunPhotosService,
+    DeleteRunRecordService,
     PhotoIgnoreService,
     BackfillHistoricalPeopleService,
     ListRecognitionRunsService,
@@ -115,6 +116,7 @@ class ApplicationServices:
     delete_person: DeletePersonService
     delete_run_people: DeleteRunPeopleService
     delete_run_photos: DeleteRunPhotosService
+    delete_run_record: DeleteRunRecordService
     prune_missing_photos: PruneMissingPhotosService
     dispose_duplicates: DisposeDuplicatesService
     cleanup_thumbnails: CleanupThumbnailCacheService
@@ -380,6 +382,16 @@ def build_application_services(
         repositories.calibration_annotations,
         unit_of_work=unit_of_work,
     )
+    # 批次删除功能 C（追加轮 21）：运行记录清理——A/B 删完后的第三级，
+    # 残留代际/观测/快照与运行行本身的终口（照片仍在时硬阻断）。
+    delete_run_record_service = DeleteRunRecordService(
+        repositories.recognition_runs,
+        repositories.face_observations,
+        repositories.face_clusters,
+        repositories.cluster_assignments,
+        repositories.calibration_annotations,
+        unit_of_work=unit_of_work,
+    )
 
     return ApplicationServices(
         # P0-3: extension dispatch routes .xlsx/.xlsm to the openpyxl reader —
@@ -488,6 +500,7 @@ def build_application_services(
         delete_person=delete_person_service,
         delete_run_people=delete_run_people_service,
         delete_run_photos=delete_run_photos_service,
+        delete_run_record=delete_run_record_service,
         prune_missing_photos=prune_missing_photos_service,
         dispose_duplicates=dispose_duplicates_service,
         cleanup_thumbnails=CleanupThumbnailCacheService(

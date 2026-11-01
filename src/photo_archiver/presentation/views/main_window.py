@@ -771,6 +771,7 @@ class MainWindow(QMainWindow):
             self._context.services.roster_cluster_stats,
             delete_run_people=self._context.services.delete_run_people,
             delete_run_photos=self._context.services.delete_run_photos,
+            delete_run_record=self._context.services.delete_run_record,
             parent=self,
         )
         page.people_changed.connect(self._on_people_changed)

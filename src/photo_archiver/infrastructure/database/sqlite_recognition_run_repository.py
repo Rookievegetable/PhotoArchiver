@@ -207,6 +207,35 @@ class SQLiteRecognitionRunRepository(RecognitionRunRepository):
             ).fetchall()
         return [FaceCountRange(row["min_count"], row["max_count"]) for row in rows]
 
+    def remove_run(self, run_id: UUID) -> int:
+        """Delete the run row itself（批次删除功能 C：运行记录清理终口）.
+
+        前置：该运行的残留代际/观测/快照已由调用方显式清除——本方法只删
+        ``recognition_runs`` 行本身。
+
+        Returns:
+            1 on hit, 0 when the run id is missing.
+        """
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM recognition_runs WHERE id = ?",
+                (str(run_id),),
+            )
+            return cursor.rowcount
+
+    def remove_run_photos_snapshot(self, run_id: UUID) -> int:
+        """Delete the run's input snapshot rows（运行记录清理的残留扫尾）.
+
+        正常路径下照片删除已把快照行级联清空——本方法只兜底清残留，让
+        运行记录清理的回执如实计数。
+        """
+        with self._connection_provider.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM recognition_run_photos WHERE run_id = ?",
+                (str(run_id),),
+            )
+            return cursor.rowcount
+
     def count_other_run_snapshots(
         self, photo_ids: Sequence[UUID], exclude_run_id: UUID,
     ) -> int:

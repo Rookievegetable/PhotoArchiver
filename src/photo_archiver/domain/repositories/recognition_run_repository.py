@@ -59,6 +59,22 @@ class RecognitionRunRepository(Protocol):
     def list_run_scopes(self, run_id: UUID) -> list[FaceCountRange]:
         """Return the run's selected face-count ranges ordered by ``ordinal``."""
 
+    def remove_run(self, run_id: UUID) -> int:
+        """Delete the run row itself（批次删除功能 C：运行记录清理终口）.
+
+        前置：该运行的残留代际/观测/快照已由调用方显式清除。
+
+        Returns:
+            1 on hit, 0 when the run id is missing.
+        """
+
+    def remove_run_photos_snapshot(self, run_id: UUID) -> int:
+        """Delete the run's input snapshot rows（运行记录清理的残留扫尾）.
+
+        Returns:
+            The number of snapshot rows removed.
+        """
+
     def count_other_run_snapshots(
         self, photo_ids: Sequence[UUID], exclude_run_id: UUID,
     ) -> int:

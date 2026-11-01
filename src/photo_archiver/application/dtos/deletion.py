@@ -434,3 +434,47 @@ class RunPhotosDeletionResult:
     def succeeded(self) -> bool:
         """Return whether every requested photo was removed or absent."""
         return self.removed + self.missing == self.requested
+
+
+@dataclass(frozen=True, slots=True)
+class RunRecordDeletionPreview:
+    """删除某识别运行"残留记录"的确认预览（功能 C，追加轮 21）。
+
+    可达前提＝该运行照片登记已清空（``photo_count == 0``）——照片有专门
+    的披露级联入口（D4-B）。计数口径：
+
+    - ``generation_count`` / ``cluster_count`` / ``decision_count``：残留
+      聚类代际及其簇与决策行——随记录删除级联清除（D4-B2 同语义）；
+    - ``ground_truth_count``：残留代际簇上的 GT 裁定——**硬阻断**（D5：
+      校准侧无删除口，阻断避免不可恢复的证据损失）；
+    - ``observation_count`` / ``snapshot_count``：残留观测与输入快照行
+      （正常路径为 0，兜底扫尾如实计数）。
+    """
+
+    run_found: bool
+    run_created_at: datetime | None
+    run_status: str
+    photo_count: int
+    generation_count: int
+    cluster_count: int
+    decision_count: int
+    ground_truth_count: int
+    observation_count: int
+    snapshot_count: int
+    blocked_reasons: tuple[str, ...] = ()
+
+    @property
+    def is_blocked(self) -> bool:
+        """Return whether irrecoverable evidence blocks the deletion."""
+        return bool(self.blocked_reasons)
+
+
+@dataclass(frozen=True, slots=True)
+class RunRecordDeletionResult:
+    """确认后的运行记录清理结果。"""
+
+    run_removed: int
+    generations_purged: int
+    decision_cascade: int
+    observation_cascade: int
+    snapshot_cascade: int

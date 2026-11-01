@@ -45,6 +45,18 @@ class ClearAllPeopleCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class DeleteRunRecordCommand:
+    """Request removal of one recognition run's residual record（功能 C）.
+
+    运行记录清理 = 残留聚类代际（决策行随簇级联）+ 残留观测 + 输入快照
+    残留 + ``recognition_runs`` 行本身。照片仍在登记时被硬阻断——照片有
+    专门的披露级联入口（D4-B），不走本命令。
+    """
+
+    run_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
 class PruneMissingCommand:
     """Request pruning of confirmed missing-on-disk registrations (D5).
 
