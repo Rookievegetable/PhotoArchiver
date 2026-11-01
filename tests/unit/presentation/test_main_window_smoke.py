@@ -27,7 +27,7 @@ def test_main_window_constructs_with_context(qtbot, tmp_path: Path) -> None:
     context = bootstrap_application(settings)
     window = MainWindow(context)
     qtbot.addWidget(window)
-    assert window.windowTitle() == "PhotoArchiver v2.9.5"  # 版本上墙＝运行构建防呆标识
+    assert window.windowTitle() == "PhotoArchiver v2.9.6"  # 版本上墙＝运行构建防呆标识
     assert window.centralWidget() is not None
 
 

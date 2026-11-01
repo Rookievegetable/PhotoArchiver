@@ -975,16 +975,12 @@ def test_overview_page_renders_banner_and_five_step_cards(qtbot) -> None:
     assert page._primary_button.toolTip() == "tip"
     assert page._primary_button.isEnabled()
     assert not any(card.isHidden() for card in cards)
-    # 状态＝符号＋文字（非仅色，§10-7）；正文＝模型 detail。
+    # 追加轮 23（Owner）：状态徽章撤除——卡片只含步骤标题与说明文字。
     first_labels = {label.text() for label in cards[0].findChildren(QLabel)}
-    assert first_labels == {
-        "步骤0", f"{text.OVERVIEW_STEP_DONE_MARK} {text.OVERVIEW_STEP_DONE}", "说明0",
+    assert first_labels == {"步骤0", "说明0"}
+    assert {label.text() for label in cards[1].findChildren(QLabel)} == {
+        "步骤1", "说明1",
     }
-    assert text.OVERVIEW_STEP_TODO_MARK in cards[1].findChildren(QLabel)[1].text()
-    assert (
-        f"{text.OVERVIEW_STEP_TODO_MARK} {text.OVERVIEW_STEP_TODO}"
-        in {label.text() for label in cards[1].findChildren(QLabel)}
-    )
 
     page.set_busy(True, "扫描")
     assert not page._primary_button.isEnabled()
