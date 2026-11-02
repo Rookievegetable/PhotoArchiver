@@ -85,7 +85,10 @@ def test_wall_gate_disables_attribution_for_multi_face_selection(
     qtbot.addWidget(window)
     window._refresh_photo_list()
 
+    from photo_archiver.presentation.visual_style import ROLE_SUCCESS, button_role
+
     button = window._manual_attribution_button
+    assert button_role(button) == ROLE_SUCCESS  # 追加轮 32：可用态绿色
     single_row = _row_of(window, photos["single.jpg"].id)
     multi_row = _row_of(window, photos["multi.jpg"].id)
 

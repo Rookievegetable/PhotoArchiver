@@ -172,6 +172,7 @@ from photo_archiver.presentation.visual_style import (
     ROLE_DANGER,
     ROLE_PRIMARY,
     ROLE_SECONDARY,
+    ROLE_SUCCESS,
     assign_label_icon,
     assign_role,
     fluent_icon,
@@ -690,7 +691,9 @@ class MainWindow(QMainWindow):
         self._manual_attribution_button.clicked.connect(
             self._on_manual_attribution_clicked,
         )
-        assign_role(self._manual_attribution_button, ROLE_SECONDARY)
+        # 追加轮 32（Owner）：可用态＝绿色（success，与批量通过同语义色）；
+        # 禁用态由 QSS :disabled 规则自动置灰（追加轮 31 的选区门控制）。
+        assign_role(self._manual_attribution_button, ROLE_SUCCESS)
         for button in (
             self._bulk_archive_button, self._bulk_delete_button,
             self._manual_attribution_button,
