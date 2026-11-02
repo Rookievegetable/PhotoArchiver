@@ -16,7 +16,8 @@ from __future__ import annotations
 from datetime import datetime
 
 # ---- 主窗口 · 工具栏 ----
-APP_VERSION = "2.9.12"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+APP_VERSION = "2.9.13"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+# 2.9.13＝指定人员归档：零可归档禁用确认键 + 批次人员关联搜索。
 # 2.9.12＝照片库指定人员归档（单脸未匹配照片 → 指定人员+批次）。
 # 2.9.11＝聚类只用选定照片批次（single_run）+ 建议只匹配选定来源批次人员。
 # 2.9.10＝多选时确认键禁用（批量只走「批量通过」——防整选区误标到最后目标）。
@@ -674,12 +675,18 @@ MANUAL_ATTRIBUTION_BLOCKED = (
     "以下照片不满足条件，将被跳过：\n{reasons}"
 )
 MANUAL_ATTRIBUTION_PERSON_LABEL = "人员姓名："
-MANUAL_ATTRIBUTION_PERSON_PLACEHOLDER = "输入要归档到的人员姓名"
+MANUAL_ATTRIBUTION_PERSON_PLACEHOLDER = (
+    "输入人员姓名（并入已导入批次时，输入部分姓名自动匹配）"
+)
 MANUAL_ATTRIBUTION_BATCH_LABEL = "批次："
 MANUAL_ATTRIBUTION_NEW_BATCH = "新建批次"
 MANUAL_ATTRIBUTION_NEW_BATCH_PLACEHOLDER = "输入新批次名称（如：2026 年春游）"
 MANUAL_ATTRIBUTION_EXISTING_BATCH = "并入已导入批次（同名人员将复用）"
 MANUAL_ATTRIBUTION_EXECUTE_BUTTON = "归档到该人员"
+MANUAL_ATTRIBUTION_WALL_TOOLTIP = (
+    "指定人员归档——只支持只有一张人脸且未匹配的照片；"
+    "多张人脸的照片无法关联人员，将被跳过"
+)
 MANUAL_ATTRIBUTION_DONE = (
     "已归档 {assigned}/{total} 张照片到「{person}」（批次：{batch}）。"
 )

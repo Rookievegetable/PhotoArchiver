@@ -168,6 +168,23 @@ class ManualAttributionService:
             for photo_id in photo_ids
         }
 
+    def list_batch_person_names(self, batch_id) -> tuple[str, ...]:
+        """批次内人员姓名（追加轮 30：并入已导入批次时的关联搜索数据源）.
+
+        按名单顺序（``roster_order``，缺省排后）——与人员页/建议顺序同口径。
+        """
+        people = [
+            person for person in self._people.list_all()
+            if person.source_batch_id is not None
+            and person.source_batch_id == batch_id
+        ]
+        people.sort(key=lambda person: (
+            person.roster_order is None,
+            person.roster_order if person.roster_order is not None else 0,
+            person.name,
+        ))
+        return tuple(person.name for person in people)
+
     # ── 执行 ──────────────────────────────────────────────────────────
 
     def _resolve_batch(self, command: ManualAttributionCommand) -> ImportBatch:

@@ -221,3 +221,24 @@ def test_preview_reports_eligibility_without_side_effects(tmp_path: Path) -> Non
 
     assert preview[photo.id] == ""  # 可归档
     assert repos.recognition.list_first_by_photo_ids([photo.id]).get(photo.id) is None
+
+
+def test_list_batch_person_names_scoped_and_ordered(tmp_path: Path) -> None:
+    """追加轮 30：批次人员关联搜索数据源——只含该批次成员，按名单序。"""
+    repos = build_sqlite_repositories(tmp_path / "manual6.db")
+    batch_a = ImportBatch(
+        file_name="甲批.txt", file_hash="ha", source_type="txt", status="confirmed",
+    )
+    batch_b = ImportBatch(
+        file_name="乙批.txt", file_hash="hb", source_type="txt", status="confirmed",
+    )
+    repos.import_batches.add_batch(batch_a)
+    repos.import_batches.add_batch(batch_b)
+    repos.people.add(Person(name="丙", source_batch_id=batch_a.id, roster_order=3))
+    repos.people.add(Person(name="乙", source_batch_id=batch_a.id, roster_order=2))
+    repos.people.add(Person(name="甲", source_batch_id=batch_a.id, roster_order=1))
+    repos.people.add(Person(name="外批", source_batch_id=batch_b.id, roster_order=1))
+
+    names = _service(repos).list_batch_person_names(batch_a.id)
+
+    assert names == ("甲", "乙", "丙")  # 名单序；乙批人员被排除

@@ -685,7 +685,7 @@ class MainWindow(QMainWindow):
         self._manual_attribution_button = QPushButton(self)
         self._manual_attribution_button.setText(text.MANUAL_ATTRIBUTION_EXECUTE_BUTTON)
         self._manual_attribution_button.setToolTip(
-            text.MANUAL_ATTRIBUTION_DIALOG_TITLE,
+            text.MANUAL_ATTRIBUTION_WALL_TOOLTIP,
         )
         self._manual_attribution_button.clicked.connect(
             self._on_manual_attribution_clicked,
