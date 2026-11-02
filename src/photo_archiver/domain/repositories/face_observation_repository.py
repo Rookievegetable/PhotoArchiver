@@ -37,6 +37,14 @@ class FaceObservationRepository(Protocol):
         的 created_at 排序表达；本方法只保证确定性顺序。
         """
 
+    def count_faces_by_run_and_photo(
+        self, photo_ids: Sequence[UUID],
+    ) -> list[tuple[UUID, UUID, int]]:
+        """Return ``[(run_id, photo_id, count)]`` face counts without loading embeddings.
+
+        追加轮 31：单脸前置校验的免反序列化读口（一次聚合；空输入 no-op）。
+        """
+
     def remove_by_run(self, run_id: UUID) -> int:
         """Delete the run's residual observations（运行记录清理的残留扫尾）.
 

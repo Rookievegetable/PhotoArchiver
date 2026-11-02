@@ -108,47 +108,46 @@ class ManualAttributionService:
 
     # ── 校验 ──────────────────────────────────────────────────────────
 
-    def _owning_observations_map(self, photo_ids) -> dict:
-        """photo_id → 归属运行（拥有其观测的最新运行）观测列表（一次遍历）.
+    def _owning_face_counts(self, photo_ids) -> dict:
+        """photo_id → 归属运行（拥有其观测的最新运行）的人脸数.
 
-        runs 按 created_at 降序，首见即归属——与特征数据集的 latest-wins
-        归属判定同口径；重复扫描照片的旧运行观测不参与单脸校验。
+        追加轮 31：走免反序列化聚合读口（不加载 512 维嵌入）——照片墙选
+        区变化可挂此校验；runs 按 created_at 降序，首见即归属（与特征数
+        据集的 latest-wins 同口径），重复扫描照片的旧运行观测不计。
         """
-        remaining = set(photo_ids)
+        counts: dict = {}
+        for run_id, photo_id, count in (
+            self._observations.count_faces_by_run_and_photo(tuple(photo_ids))
+        ):
+            counts.setdefault(photo_id, {})[run_id] = count
         owner: dict = {}
         if self._runs is not None:
             for run in self._runs.list_runs():
-                if not remaining:
-                    break
                 if run.id is None:  # pragma: no cover - 实体恒生成 id
                     continue
-                by_photo: dict = {}
-                for observation in self._observations.list_by_run(run.id):
-                    if observation.photo_id in remaining:
-                        by_photo.setdefault(observation.photo_id, []).append(
-                            observation,
-                        )
-                for photo_id, observations in by_photo.items():
-                    owner[photo_id] = observations
-                    remaining.discard(photo_id)
-        for photo_id in remaining:
-            # 未注入 run 仓储时回退按照片直读（测试路径）。
-            owner[photo_id] = (
-                list(self._observations.list_by_photo(photo_id))
-                if self._runs is None else []
-            )
+                for photo_id, per_run in counts.items():
+                    if photo_id in owner:
+                        continue
+                    if run.id in per_run:
+                        owner[photo_id] = per_run[run.id]
+        for photo_id, per_run in counts.items():
+            if photo_id not in owner:
+                # 未注入 run 仓储时回退合计（测试路径；重复扫描按保守拒绝）。
+                owner[photo_id] = sum(per_run.values())
+        for photo_id in photo_ids:
+            owner.setdefault(photo_id, 0)
         return owner
 
     def _validate_photo(self, photo_id, owner_map: dict) -> str:
         """返回空串＝可归档；否则返回拒绝原因（预演与执行同口径）."""
         if self._photos.find_by_id(photo_id) is None:
             return "照片不存在（可能已被删除）"
-        faces = owner_map.get(photo_id, [])
-        if not faces:
+        face_count = owner_map.get(photo_id, 0)
+        if not face_count:
             return "照片没有人脸观测（无法指定人员）"
-        if len(faces) > 1:
+        if face_count > 1:
             return (
-                f"照片包含 {len(faces)} 张人脸——只支持单人脸照片的指定归档"
+                f"照片包含 {face_count} 张人脸——只支持单人脸照片的指定归档"
             )
         first = self._recognition.list_first_by_photo_ids([photo_id]).get(photo_id)
         if first is not None:
@@ -162,7 +161,7 @@ class ManualAttributionService:
 
     def preview(self, photo_ids) -> dict:
         """逐张校验（无副作用）——返回 ``{photo_id: 拒绝原因或""}``."""
-        owner_map = self._owning_observations_map(photo_ids)
+        owner_map = self._owning_face_counts(photo_ids)
         return {
             photo_id: self._validate_photo(photo_id, owner_map)
             for photo_id in photo_ids
@@ -253,7 +252,7 @@ class ManualAttributionService:
         person = self._resolve_person(person_name, batch)
         assert person.id is not None
 
-        owner_map = self._owning_observations_map(command.photo_ids)
+        owner_map = self._owning_face_counts(command.photo_ids)
         outcomes = []
         assigned = 0
         for photo_id in command.photo_ids:

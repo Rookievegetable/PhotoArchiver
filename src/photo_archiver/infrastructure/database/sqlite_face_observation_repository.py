@@ -95,6 +95,29 @@ class SQLiteFaceObservationRepository(FaceObservationRepository):
             ).fetchall()
         return [face_observation_from_row(row) for row in rows]
 
+    def count_faces_by_run_and_photo(self, photo_ids):
+        """Return ``[(run_id, photo_id, count)]`` counts without loading embeddings.
+
+        追加轮 31：单脸前置校验的免反序列化读口——只做一次聚合查询，嵌入
+        向量列不读（照片墙选区变化可挂此校验而不受 512 维 JSON 解析拖累）。
+        空输入 no-op。
+        """
+        ids = list(photo_ids)
+        if not ids:
+            return []
+        placeholders = ",".join("?" for _ in ids)
+        with self._connection_provider.connect() as connection:
+            rows = connection.execute(
+                f"SELECT run_id, photo_id, COUNT(*) FROM face_observations "
+                f"WHERE photo_id IN ({placeholders}) "
+                f"GROUP BY run_id, photo_id",
+                tuple(str(photo_id) for photo_id in ids),
+            ).fetchall()
+        return [
+            (UUID(str(run_id)), UUID(str(photo_id)), int(count))
+            for run_id, photo_id, count in rows
+        ]
+
     def remove_by_run(self, run_id: UUID) -> int:
         """Delete the run's residual observations（运行记录清理的残留扫尾）.
 

@@ -16,7 +16,8 @@ from __future__ import annotations
 from datetime import datetime
 
 # ---- 主窗口 · 工具栏 ----
-APP_VERSION = "2.9.13"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+APP_VERSION = "2.9.14"  # 与 pyproject 同步；标题显示＝运行构建防呆标识（Owner 2026-10-31）。
+# 2.9.14＝单脸硬前提前置到照片墙选区（含多人脸选区直接禁用归档入口）。
 # 2.9.13＝指定人员归档：零可归档禁用确认键 + 批次人员关联搜索。
 # 2.9.12＝照片库指定人员归档（单脸未匹配照片 → 指定人员+批次）。
 # 2.9.11＝聚类只用选定照片批次（single_run）+ 建议只匹配选定来源批次人员。
@@ -686,6 +687,10 @@ MANUAL_ATTRIBUTION_EXECUTE_BUTTON = "归档到该人员"
 MANUAL_ATTRIBUTION_WALL_TOOLTIP = (
     "指定人员归档——只支持只有一张人脸且未匹配的照片；"
     "多张人脸的照片无法关联人员，将被跳过"
+)
+MANUAL_ATTRIBUTION_WALL_BLOCKED = (
+    "选中照片不符合指定归档条件（{reason}）——"
+    "请只选择只有一张人脸且未匹配的照片"
 )
 MANUAL_ATTRIBUTION_DONE = (
     "已归档 {assigned}/{total} 张照片到「{person}」（批次：{batch}）。"

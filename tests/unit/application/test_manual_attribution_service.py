@@ -242,3 +242,31 @@ def test_list_batch_person_names_scoped_and_ordered(tmp_path: Path) -> None:
     names = _service(repos).list_batch_person_names(batch_a.id)
 
     assert names == ("甲", "乙", "丙")  # 名单序；乙批人员被排除
+
+
+def test_rescanned_photo_uses_latest_run_face_count(tmp_path: Path) -> None:
+    """追加轮 31：单脸校验＝归属运行口径——重扫后以最新运行的计数为准
+    （旧运行的多人脸不误伤；旧观测量不参与）。"""
+    repos = build_sqlite_repositories(tmp_path / "manual7.db")
+    photo = _add_photo(repos, tmp_path, "rescan.jpg")
+    # 旧运行：2 张脸（历史扫描）；新运行：1 张脸（重扫修正）→ 归属=新运行。
+    _cluster_photo(repos, photo, faces=2)
+    _cluster_photo(repos, photo, faces=1)
+
+    preview = _service(repos).preview((photo.id,))
+
+    assert preview[photo.id] == ""  # 最新运行单脸 → 可归档
+
+
+def test_count_reader_returns_per_run_counts(tmp_path: Path) -> None:
+    """计数读口：一次聚合返回 (run_id, photo_id, count)，不加载嵌入。"""
+    repos = build_sqlite_repositories(tmp_path / "manual8.db")
+    photo = _add_photo(repos, tmp_path, "a.jpg")
+    _cluster_photo(repos, photo, faces=3)
+
+    rows = repos.face_observations.count_faces_by_run_and_photo((photo.id,))
+
+    assert len(rows) == 1
+    _run_id, photo_id, count = rows[0]
+    assert photo_id == photo.id and count == 3
+    assert repos.face_observations.count_faces_by_run_and_photo(()) == []

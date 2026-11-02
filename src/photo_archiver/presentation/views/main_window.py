@@ -1078,10 +1078,33 @@ class MainWindow(QMainWindow):
             button.setVisible(count > 0)
             button.setText(template.format(count=count))
             button.setEnabled(count > 0 and not busy)
-        # 追加轮 29：指定人员归档——选区非空即可见（对话框内逐张校验披露
-        # 不满足条件的照片），busy 期间置灰。
+        # 追加轮 29：指定人员归档——选区非空即可见。追加轮 31（Owner：
+        # 单脸硬前提前置）：**任一张选中照片不满足条件（多人脸/已归属/
+        # 未聚类等）＝入口直接禁用**（tooltip 说明原因）；计数读口免反序列
+        # 化，可挂在每次选区变化上。
         self._manual_attribution_button.setVisible(count > 0)
-        self._manual_attribution_button.setEnabled(count > 0 and not busy)
+        attribution_ok = count > 0 and not busy
+        if attribution_ok:
+            try:
+                preview = self._context.services.manual_attribution.preview(
+                    tuple(self._collect_selected_photo_ids()),
+                )
+                reasons = [reason for reason in preview.values() if reason]
+            except Exception:  # noqa: BLE001 - 校验失败不得弄断批量栏
+                logger.exception("Manual attribution precheck failed")
+                reasons = ["校验暂不可用"]
+            if reasons:
+                attribution_ok = False
+                self._manual_attribution_button.setToolTip(
+                    text.MANUAL_ATTRIBUTION_WALL_BLOCKED.format(
+                        reason=reasons[0],
+                    ),
+                )
+            else:
+                self._manual_attribution_button.setToolTip(
+                    text.MANUAL_ATTRIBUTION_WALL_TOOLTIP,
+                )
+        self._manual_attribution_button.setEnabled(attribution_ok)
 
     @Slot()
     def _on_select_all_clicked(self) -> None:
